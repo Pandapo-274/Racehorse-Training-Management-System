@@ -1,0 +1,38 @@
+### ==== Frontend (ReactJS) ====
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+### ==== Backend (Java / Spring Boot / Maven) ====
+backend/target/
+backend/.mvn/
+backend/*.class
+backend/*.jar
+backend/*.war
+backend/HELP.md
+
+# File cấu hình chứa thông tin kết nối SQL Server (username/password) - KHÔNG commit
+backend/src/main/resources/application.properties
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application.yml
+
+### ==== IDE / Editor ====
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+### ==== OS ====
+.DS_Store
+Thumbs.db
+
+### ==== Database ====
+*.bak
+*.mdf
+*.ldf
