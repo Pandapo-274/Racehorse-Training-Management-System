@@ -11,7 +11,7 @@ Last Commited: `Sep 29, 2026` at `10:23` by `ArichiAya`
 2. [tqt195](https://github.com/tqt195) - `React App Frontend`
 3. [Pandapo274](https://github.com/Pandapo-274)
 4. [tusandthatsall](https://github.com/tusandthatsall)
-5. //Add yourself here
+5. [DevilJack422](https://github.com/DevilJack422)
 
 ## Commit Rules
 > #### Open your project folder and use this command to clone the project
