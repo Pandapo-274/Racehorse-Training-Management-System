@@ -23,4 +23,4 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
 
 #### `README.md`
-Update the `Last Commited` line as the format showen above
+Update the `Last Commited` line as the format shown above
