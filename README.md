@@ -14,13 +14,13 @@ Last Commited: `Sep 29, 2026` at `09:52` by `ArichiAya`
 5. //Add yourself here
 
 ## Commit Rules
-```
-git add .
+```git add .
 git commit -am "[GithubUsername] <Date>-<Time> <Message>"
 
-example: 
+Example: 
 git add .
-git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"```
+git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
+```
 
 #### `README.md`
 Update the `Last Commited` line as the format showen above
