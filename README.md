@@ -1,11 +1,12 @@
 # Racehorse-Training-Management-System
-Last Commited: `Sep 29, 2026` at `11:06` by `ArichiAya`
+Last Commited: `Sep 29, 2026` at `11:30` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
 
 > ### Frontend: `ReactJS`
 > ### Backend: `Java`
+> ### Database: `SQLServer`
 ## Contributors
 1. [ArichiAya](https://github.com/NekomataRin) - `React App Frontend`
 2. [tqt195](https://github.com/tqt195) - `React App Frontend`
@@ -37,5 +38,6 @@ Add your `Changelog` in the `Changelogs` tab below
 ## Changelogs
 
 > #### `Sep 29, 2026`
+- `[11:30]` `ArichiAya` - Setup Test for Database SQLServer
 - `[11:02]` `ArichiAya` - Update `README.md`
 - `[10:56]` `ArichiAya` - Setup and Test for both Frontend and Backend Project
