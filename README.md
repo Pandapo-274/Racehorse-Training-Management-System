@@ -14,13 +14,20 @@ Last Commited: `Sep 29, 2026` at `09:52` by `ArichiAya`
 5. //Add yourself here
 
 ## Commit Rules
-```git add .
-git commit -am "[GithubUsername] <Date>-<Time> <Message>"
+> #### Open your project folder and use this command to clone the project
+```
+git clone "https://github.com/Pandapo-274/Racehorse-Training-Management-System.git"
+```
+
+> #### After your coding session, please use these commands:
+```
+git add . [use when you have new files added]
+git commit -am "[<GitHub Username>] <Date>-<Time> <Commit Message>"
 
 Example: 
 git add .
 git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
 
-#### `README.md`
+> #### `README.md`
 Update the `Last Commited` line as the format shown above
