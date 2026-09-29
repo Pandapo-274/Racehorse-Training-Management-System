@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Sep 29, 2026` at `11:02` by `ArichiAya`
+Last Commited: `Sep 29, 2026` at `11:06` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -32,6 +32,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 > #### `README.md`
 Update the `Last Commited` line as the format shown above
+Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
 
