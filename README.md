@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Sep 29, 2026` at `10:55` by `ArichiAya`
+Last Commited: `Sep 29, 2026` at `11:02` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -7,7 +7,7 @@ Last Commited: `Sep 29, 2026` at `10:55` by `ArichiAya`
 > ### Frontend: `ReactJS`
 > ### Backend: `Java`
 ## Contributors
-1. [Nekomata Rin (ArichiAya)](https://github.com/NekomataRin) - `React App Frontend`
+1. [ArichiAya](https://github.com/NekomataRin) - `React App Frontend`
 2. [tqt195](https://github.com/tqt195) - `React App Frontend`
 3. [Pandapo274](https://github.com/Pandapo-274)
 4. [tusandthatsall](https://github.com/tusandthatsall)
@@ -36,4 +36,5 @@ Update the `Last Commited` line as the format shown above
 ## Changelogs
 
 > #### `Sep 29, 2026`
-- `[10:56]` `NekomataRin` - Setup and Test for both Frontend and Backend Project
+- `[11:02]` `ArichiAya` - Update `README.md`
+- `[10:56]` `ArichiAya` - Setup and Test for both Frontend and Backend Project
