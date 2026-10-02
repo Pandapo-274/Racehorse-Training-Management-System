@@ -1,0 +1,75 @@
+// src/features/auth/LoginForm.js
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import TextField from "../../components/ui/TextField";
+import Button from "../../components/ui/Button";
+import { login, HOME_BY_ROLE } from "./authService";
+
+export default function LoginForm() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+  const validate = () => {
+    const next = {};
+    if (!form.username.trim()) next.username = "Vui lòng nhập tên đăng nhập";
+    if (!form.password) next.password = "Vui lòng nhập mật khẩu";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const signInAs = async (username, password) => {
+    setLoading(true);
+    setSubmitError("");
+    try {
+      const user = await login(username, password);
+      localStorage.setItem("user", JSON.stringify(user)); // tạm thời
+      navigate(HOME_BY_ROLE[user.role], { replace: true });
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validate()) signInAs(form.username.trim(), form.password);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <TextField id="username" name="username" label="Tên đăng nhập"
+        value={form.username} onChange={handleChange}
+        error={errors.username} autoComplete="username" />
+      <TextField id="password" name="password" type="password" label="Mật khẩu"
+        value={form.password} onChange={handleChange}
+        error={errors.password} autoComplete="current-password" />
+
+      {submitError && <p className="field__error form-error" role="alert">{submitError}</p>}
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "Đang đăng nhập..." : "Vào học viện"}
+      </Button>
+
+      {/* Hai nút demo trong Figma: chỉ hiện khi chạy npm start */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="demo-row">
+          <Button type="button" variant="secondary" disabled={loading}
+            onClick={() => navigate("/access-denied")}>
+            Demo: sai quyền
+          </Button>
+          <Button type="button" variant="secondary" disabled={loading}
+            onClick={() => signInAs("thang.nd", "123456")}>
+            Vào vai HLV
+          </Button>
+        </div>
+      )}
+    </form>
+  );
+}

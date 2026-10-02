@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 2, 2026` at `09:00` by `ArichiAya`
+Last Commited: `Oct 2, 2026` at `11:03` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -38,6 +38,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ## Changelogs
 
 > #### `Oct 2, 2026`
+- `[11:03]` `tqt195` - Login page added
 - `[09:00]` `ArichiAya` - Database Test Initialization, Successfully Test On Local Machine
 
 > #### `Sep 29, 2026`

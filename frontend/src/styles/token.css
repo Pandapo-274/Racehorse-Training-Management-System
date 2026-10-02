@@ -1,0 +1,29 @@
+:root {
+  --navy-950: #0b1229;
+  --navy-900: #16203f;
+  --navy-800: #1b2650;
+  --slate-400: #8e97bd;
+
+  --text-900: #16203f;
+  --text-600: #5c6480;
+  --text-400: #a0a6bc;
+
+  --cream-100: #fbf7ef;   /* nền nửa phải */
+  --cream-50:  #fcfaf5;   /* nền ô nhập */
+  --line:      #e8e1d3;   /* viền ô, viền nút phụ */
+
+  --green-500: #22a85c;
+  --green-700: #13793d;
+  --green-900: #0b5c2c;   /* "gờ" dưới nút chính */
+  --teal-500:  #16c6d4;
+  --gold-500:  #ffc53d;
+  --pink-500:  #ff5c8a;
+
+  --danger: #d6334f;      /* mình tự chọn, màn lỗi (frame 05) mới có màu thật */
+
+  --font-heading: "Baloo 2", system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--text-900); }
