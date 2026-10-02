@@ -374,7 +374,8 @@ CREATE TABLE SUPPLY_STOCK (
     CONSTRAINT CK_SUP_qty      CHECK (current_qty >= 0)
 );
 GO
-CREATE INDEX IX_SUP_needs ON SUPPLY_STOCK(needs_restock) WHERE needs_restock = 1;
+
+CREATE INDEX IX_SUP_needs ON SUPPLY_STOCK(needs_restock);
 GO
 
 /* Đăng ký và kết quả trong cùng một dòng. result NULL = chưa thi đấu. */

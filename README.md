@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Sep 29, 2026` at `11:30` by `ArichiAya`
+Last Commited: `Oct 2, 2026` at `09:00` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -32,10 +32,13 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
 
 > #### `README.md`
-Update the `Last Commited` line as the format shown above
-Add your `Changelog` in the `Changelogs` tab below
+- Update the `Last Commited` line as the format shown above
+- Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
+
+> #### `Oct 2, 2026`
+- `[09:00]` `ArichiAya` - Database Test Initialization, Successfully Test On Local Machine
 
 > #### `Sep 29, 2026`
 - `[11:30]` `ArichiAya` - Setup Test for Database SQLServer
