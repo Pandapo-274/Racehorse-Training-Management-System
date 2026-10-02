@@ -19,15 +19,15 @@ export default function LoginPage() {
           <span className="corner corner--bl" />
           <span className="corner corner--br" />
 
-          <h2 className="login-card__title">Đăng nhập</h2>
-          <p className="login-card__hint">Tài khoản được cấp theo vai trò trong học viện.</p>
+          <h2 className="login-card__title">Sign in</h2>
+          <p className="login-card__hint">Accounts are issued by role within the academy.</p>
 
           <LoginForm />
 
-          <small className="login-card__foot">Quên mật khẩu? Liên hệ quản lý học viện.</small>
+          <small className="login-card__foot">Forgot your password? Contact the academy manager</small>
         </div>
 
-        <Button variant="secondary" type="button" className="portal-btn">Trang cổng</Button>
+        <Button variant="secondary" type="button" className="portal-btn">Landing page</Button>
       </section>
     </main>
   );

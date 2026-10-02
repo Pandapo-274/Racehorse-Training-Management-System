@@ -1,28 +1,23 @@
-/* src/features/auth/auth.css */
 .auth {
   position: relative; overflow: hidden;
   display: grid; grid-template-columns: 780fr 660fr;
-  min-height: 100vh; background: var(--cream-100);
+  min-height: 100vh; background: var(--page);
 }
 
-/* Hai dải màu nghiêng trang trí (xấp xỉ theo Figma) */
 .auth__band { position: absolute; left: -110px; width: 1000px; transform: rotate(12deg); pointer-events: none; z-index: 1; }
 .auth__band--teal { bottom: 162px; height: 200px; opacity: .22;
-  background: linear-gradient(90deg, var(--teal-500), var(--green-500)); }
+  background: linear-gradient(90deg, var(--pink-500), var(--turf-500)); }
 .auth__band--pink { bottom: 131px; left: -100px; height: 90px; opacity: .18;
-  background: linear-gradient(90deg, var(--pink-500), var(--gold-500)); }
+  background: linear-gradient(90deg, var(--rose-500), var(--gold-500)); }
 
-/* Nửa trái */
 .brand {
   position: relative; z-index: 0; padding: 92px 96px; color: #fff;
   background:
-    repeating-linear-gradient(108deg, rgba(22,198,212,.09) 0 4px, transparent 4px 50px),
+    repeating-linear-gradient(108deg, rgba(245,95,169,.09) 0 4px, transparent 4px 50px),
     linear-gradient(180deg, var(--navy-950), var(--navy-900));
 }
 .brand__logo { display: block; }
-.brand__title {
-  margin: 28px 0 0; font: 800 44px/1.18 var(--font-heading); letter-spacing: .88px;
-}
+.brand__title { margin: 28px 0 0; font: 800 44px/1.18 var(--font-heading); letter-spacing: .88px; }
 .brand__rule { position: relative; width: 300px; height: 2px; margin-top: 6px;
   background: var(--gold-500); border-radius: 1px; }
 .brand__rule::after { content: ""; position: absolute; top: 5px; left: 0; width: 114px; height: 1px;
@@ -36,7 +31,6 @@
 .stat strong { display: block; font: 800 28px/1.18 var(--font-heading); }
 .stat span { display: block; margin-top: 3px; font-size: 12px; color: var(--slate-400); }
 
-/* Nửa phải */
 .auth__right { position: relative; z-index: 2; display: flex; flex-direction: column;
   justify-content: center; align-items: flex-start; gap: 36px; padding: 24px 24px 24px 60px; }
 

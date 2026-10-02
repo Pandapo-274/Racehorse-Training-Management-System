@@ -17,8 +17,8 @@ export default function LoginForm() {
 
   const validate = () => {
     const next = {};
-    if (!form.username.trim()) next.username = "Vui lòng nhập tên đăng nhập";
-    if (!form.password) next.password = "Vui lòng nhập mật khẩu";
+    if (!form.username.trim()) next.username = "Please enter your username";
+    if (!form.password) next.password = "Please enter your password";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -44,17 +44,17 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <TextField id="username" name="username" label="Tên đăng nhập"
+      <TextField id="username" name="username" label="Username"
         value={form.username} onChange={handleChange}
         error={errors.username} autoComplete="username" />
-      <TextField id="password" name="password" type="password" label="Mật khẩu"
+      <TextField id="password" name="password" type="password" label="Password"
         value={form.password} onChange={handleChange}
         error={errors.password} autoComplete="current-password" />
 
       {submitError && <p className="field__error form-error" role="alert">{submitError}</p>}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Đang đăng nhập..." : "Vào học viện"}
+        {loading ? "Signing in..." : "Enter academy"}
       </Button>
 
       {/* Hai nút demo trong Figma: chỉ hiện khi chạy npm start */}
