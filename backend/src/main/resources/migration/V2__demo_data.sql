@@ -23,12 +23,12 @@
 INSERT INTO APP_USER (role_id, username, password_hash, full_name, email, phone, status)
 SELECT r.role_id, v.username, v.password_hash, v.full_name, v.email, v.phone, 'ACTIVE'
 FROM (VALUES
-    ('CLUB_MANAGER', 'hoa.tm',   '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Trần Minh Hòa',      'hoa.tm@tenma.vn',   '0901000001'),
-    ('HEAD_TRAINER', 'thang.nd', '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Nguyễn Đức Thắng',  'thang.nd@tenma.vn', '0901000002'),
-    ('HEAD_TRAINER', 'lam.tb',   '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Trần Bảo Lâm',      'lam.tb@tenma.vn',   '0901000003'),
-    ('VETERINARIAN', 'ha.pt',    '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Phạm Thu Hà',       'ha.pt@tenma.vn',    '0901000004'),
-    ('GROOM',        'binh.lv',  '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Lê Văn Bình',       'binh.lv@tenma.vn',  '0901000005'),
-    ('HORSE_OWNER',  'anh.dq',   '$2a$10$demoHashOnlyNotARealPassword000000000000000000000000', N'Đặng Quốc Anh',     'anh.dq@tenma.vn',   '0901000006')
+    ('CLUB_MANAGER', 'hoa.tm',   '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Trần Minh Hòa',      'hoa.tm@tenma.vn',   '0901000001'),
+    ('HEAD_TRAINER', 'thang.nd', '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Nguyễn Đức Thắng',  'thang.nd@tenma.vn', '0901000002'),
+    ('HEAD_TRAINER', 'lam.tb',   '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Trần Bảo Lâm',      'lam.tb@tenma.vn',   '0901000003'),
+    ('VETERINARIAN', 'ha.pt',    '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Phạm Thu Hà',       'ha.pt@tenma.vn',    '0901000004'),
+    ('GROOM',        'binh.lv',  '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Lê Văn Bình',       'binh.lv@tenma.vn',  '0901000005'),
+    ('HORSE_OWNER',  'anh.dq',   '$2b$10$W0zKT4yUrmErFfpx9KvfN.QSGp0t7eA3ueZpY8hnJjsiwfJy.fQ66', N'Đặng Quốc Anh',     'anh.dq@tenma.vn',   '0901000006')
 ) AS v(role_name, username, password_hash, full_name, email, phone)
 JOIN ROLE r ON r.role_name = v.role_name;
 GO

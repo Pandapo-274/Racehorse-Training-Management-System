@@ -1,4 +1,5 @@
 // src/features/auth/LoginPage.js
+import { Link } from "react-router-dom";
 import BrandPanel from "./BrandPanel";
 import LoginForm from "./LoginForm";
 import Button from "../../components/ui/Button";
@@ -25,6 +26,9 @@ export default function LoginPage() {
           <LoginForm />
 
           <small className="login-card__foot">Forgot your password? Contact the academy manager</small>
+          <small className="login-card__foot">
+            No account yet? <Link to="/register">Register as a horse owner</Link>
+          </small>
         </div>
 
         <Button variant="secondary" type="button" className="portal-btn">Landing page</Button>

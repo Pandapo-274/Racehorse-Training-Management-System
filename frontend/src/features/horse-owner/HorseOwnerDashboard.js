@@ -1,6 +1,9 @@
 import React from "react";
 import "./horse-owner.css";
+import { useNavigate } from "react-router-dom";
+import { logout } from "../auth/authService";
 
+// TODO(fetch): trainingStats -> API chỉ số huấn luyện của ngựa (HorseOverview)
 const trainingStats = [
   { name: "Speed", value: 92, icon: "⚡", type: "speed" },
   { name: "Stamina", value: 74, icon: "◉", type: "stamina" },
@@ -9,6 +12,7 @@ const trainingStats = [
   { name: "Wit", value: 80, icon: "●", type: "wit" },
 ];
 
+// TODO(fetch): fitnessData -> API xu hướng thể lực theo tuần (FitnessTrend)
 const fitnessData = [
   { week: "W26", value: 64 },
   { week: "W27", value: 68 },
@@ -20,6 +24,7 @@ const fitnessData = [
   { week: "W33", value: 83 },
 ];
 
+// TODO(fetch): costRows -> API chi phí & tiền thưởng (CostsAndPrizeMoney)
 const costRows = [
   [
     "Keep and stabling",
@@ -56,6 +61,12 @@ const costRows = [
 ===================================================== */
 
 function Sidebar() {
+  const navigate = useNavigate();
+  const handleSignOut = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
@@ -92,7 +103,7 @@ function Sidebar() {
       </nav>
 
       <div className="owner-sidebar-bottom">
-        <button type="button" className="owner-signout">
+        <button type="button" className="owner-signout" onClick={handleSignOut}>
           Sign out
         </button>
 

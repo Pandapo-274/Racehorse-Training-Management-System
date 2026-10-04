@@ -1,5 +1,8 @@
 import "./groom.css";
+import { useNavigate } from "react-router-dom";
+import { logout } from "../auth/authService";
 
+// TODO(fetch): tasks -> API công việc trong ngày của groom (TasksCard)
 const tasks = [
   {
     time: "05:00",
@@ -39,6 +42,7 @@ const tasks = [
   },
 ];
 
+// TODO(fetch): tackItems -> API tình trạng dụng cụ/yên cương (TackCard)
 const tackItems = [
   {
     name: "Exercise saddle",
@@ -59,6 +63,12 @@ const tackItems = [
 ];
 
 function GroomSidebar() {
+  const navigate = useNavigate();
+  const handleSignOut = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <aside className="groom-sidebar">
 
@@ -109,7 +119,7 @@ function GroomSidebar() {
 
       <div className="groom-sidebar-bottom">
 
-        <button className="groom-signout">
+        <button className="groom-signout" onClick={handleSignOut}>
           Sign out
         </button>
 

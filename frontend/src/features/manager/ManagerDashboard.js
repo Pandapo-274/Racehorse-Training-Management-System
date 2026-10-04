@@ -1,5 +1,8 @@
 import "./manager.css";
+import { useNavigate } from "react-router-dom";
+import { logout } from "../auth/authService";
 
+// TODO(fetch): workloadData -> API tải trọng đàn theo tuần (WorkloadChart)
 const workloadData = [
   { week: "W27", value: 62 },
   { week: "W28", value: 75 },
@@ -10,6 +13,7 @@ const workloadData = [
   { week: "W33", value: 101 },
 ];
 
+// TODO(fetch): openItems -> API danh sách việc đang chờ xử lý (OpenItems)
 const openItems = [
   {
     item: "New record awaiting owner assignment",
@@ -54,6 +58,12 @@ const openItems = [
 ];
 
 function ManagerSidebar() {
+  const navigate = useNavigate();
+  const handleSignOut = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <aside className="manager-sidebar">
       <div className="manager-brand">
@@ -99,7 +109,7 @@ function ManagerSidebar() {
       </nav>
 
       <div className="manager-sidebar-bottom">
-      <button type="button" className="manager-signout">Sign out</button>
+      <button type="button" className="manager-signout" onClick={handleSignOut}>Sign out</button>
         <div className="manager-user">
           <div className="manager-avatar">AT</div>
 

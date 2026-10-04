@@ -1,5 +1,8 @@
 import "./vet.css";
+import { useNavigate } from "react-router-dom";
+import { logout } from "../auth/authService";
 
+// TODO(fetch): horses -> API sơ đồ chuồng + trạng thái từng ngựa (StableMap)
 const horses = [
   { stall: "01", name: "Symboli Rudolf", status: "fit" },
   { stall: "02", name: "Gold Ship", status: "fit" },
@@ -26,6 +29,7 @@ const horses = [
   { stall: "20", name: "Maruzensky", status: "fit" },
 ];
 
+// TODO(fetch): waitingHorses -> API ngựa đang chờ khám (WaitingList)
 const waitingHorses = [
   {
     name: "Air Groove",
@@ -45,6 +49,12 @@ const waitingHorses = [
 ];
 
 function VetSidebar() {
+  const navigate = useNavigate();
+  const handleSignOut = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <aside className="vet-sidebar">
 
@@ -87,7 +97,7 @@ function VetSidebar() {
 
       <div className="vet-sidebar-bottom">
 
-        <button className="vet-signout">
+        <button className="vet-signout" onClick={handleSignOut}>
           Sign out
         </button>
 

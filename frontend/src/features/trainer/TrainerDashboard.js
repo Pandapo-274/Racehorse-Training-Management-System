@@ -12,6 +12,7 @@ import {
   toChartData,
   toInitials,
 } from "./dashboardApi";
+import { getUser, logout, handleAuthError } from "../auth/authService";
 
 // UC6 - View Master Fitness & Training Dashboard
 //
@@ -249,7 +250,7 @@ export default function TrainerDashboard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = getUser();
 
   const load = useCallback((w, signal) => {
     setLoading(true);
@@ -257,10 +258,12 @@ export default function TrainerDashboard() {
     fetchDashboard(w, signal)
       .then(setData)
       .catch((err) => {
-        if (err.name !== "AbortError") setError(err.message);
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return; // 401 -> /login, 403 -> /access-denied
+        setError(err.message);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -269,7 +272,7 @@ export default function TrainerDashboard() {
   }, [weeks, load]);
 
   const handleSignOut = () => {
-    localStorage.removeItem("user");
+    logout();
     navigate("/login", { replace: true });
   };
 

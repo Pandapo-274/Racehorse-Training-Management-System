@@ -7,6 +7,7 @@ import VetDashboard from "./features/vet/VetDashboard";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import LandingPage from "./features/landingpage/LandingPage";
+import RegisterPage from "./features/auth/RegisterPage";
 const Placeholder = ({ text }) => <h1 style={{ padding: 24 }}>{text}</h1>;
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         {/* Authentication */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route path="/access-denied" element={<AccessDeniedPage />} />
         {/* Club Manager */}
         <Route path="/manager" element={<ManagerDashboard/>} />

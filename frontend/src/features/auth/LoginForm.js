@@ -27,9 +27,8 @@ export default function LoginForm() {
     setLoading(true);
     setSubmitError("");
     try {
-      const user = await login(username, password);
-      localStorage.setItem("user", JSON.stringify(user)); // tạm thời
-      navigate(HOME_BY_ROLE[user.role], { replace: true });
+      const user = await login(username, password); // login() đã lưu token + user
+      navigate(HOME_BY_ROLE[user.role] || "/access-denied", { replace: true });
     } catch (err) {
       setSubmitError(err.message);
     } finally {

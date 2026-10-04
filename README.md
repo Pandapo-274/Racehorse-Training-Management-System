@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 4, 2026` at `12:52` by `tqt195`
+Last Commited: `Oct 4, 2026` at `18:16` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 4, 2026`
+- `[18:16]` `ArichiAya` - Initiated Setting Up For `UC1` For Frontend (Testing Needed Soon)
 - `[16:28]` `tusandthatsall` - Add UC6
 - `[15:57]` `tusandthatsall` - Update V1_initial_schema.sql and Add V2_demo_data.sql
 - `[15:04]` `DevilJack422` - Add UC2 Add Login with JWT and RBAC

@@ -9,15 +9,16 @@
 // Toàn bộ phép quy đổi giữa hai từ vựng nằm ở đây, không rải trong JSX - đổi
 // cách hiển thị thì sửa một chỗ, và component chỉ việc render.
 
+import { authFetch } from "../auth/authService";
+
 const API = "/api/trainer/dashboard";
 
-/** Gọi API. weeks = số tuần hiển thị trên biểu đồ. */
-export async function fetchDashboard(weeks = 8, signal) {
-  const res = await fetch(`${API}?weeks=${weeks}`, { signal });
-  if (!res.ok) {
-    throw new Error(`Could not load dashboard data (HTTP ${res.status})`);
-  }
-  return res.json();
+/**
+ * Gọi API (có gắn Bearer token). weeks = số tuần hiển thị trên biểu đồ.
+ * Lỗi HTTP -> ApiError (có .status); màn hình xử lý 401/403 bằng handleAuthError.
+ */
+export function fetchDashboard(weeks = 8, signal) {
+  return authFetch(`${API}?weeks=${weeks}`, { signal });
 }
 
 /* ------------------------------------------------------------------ *
