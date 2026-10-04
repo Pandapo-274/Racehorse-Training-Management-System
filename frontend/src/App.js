@@ -6,12 +6,15 @@ import TrainerDashboard from "./features/trainer/TrainerDashboard"
 import VetDashboard from "./features/vet/VetDashboard";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
+import LandingPage from "./features/landingpage/LandingPage";
 const Placeholder = ({ text }) => <h1 style={{ padding: 24 }}>{text}</h1>;
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Landing Page */}
+        <Route path="/" element={<LandingPage />} />
         {/* Authentication */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/access-denied" element={<AccessDeniedPage />} />

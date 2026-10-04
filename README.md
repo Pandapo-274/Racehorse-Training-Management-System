@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 4, 2026` at `10:58` by `tqt195`
+Last Commited: `Oct 4, 2026` at `11:38` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 4, 2026`
+- `[11:38]` `tqt195` - Landing Page added
 - `[10:58]` `tqt195` - 5 Role Dashboard
 - `[8:57]` `tqt195` - Access denied page
 > #### `Oct 2, 2026`
