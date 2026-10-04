@@ -37,6 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 4, 2026`
+- `[14:24]` `DevilJack422` - Add UC1 Register Account API (`POST /api/auth/register`)
 - `[12:52]` `tqt195` - Update Horse Owner Dashboard
 - `[11:38]` `tqt195` - Landing Page added
 - `[10:58]` `tqt195` - 5 Role Dashboard
