@@ -1,0 +1,845 @@
+.vet-page {
+  min-height: 100vh;
+
+  display: flex;
+
+  background: #fdf0f6;
+
+  color: #18213e;
+
+  font-family: var(--font-body);
+}
+
+
+/* ========================================
+   SIDEBAR
+======================================== */
+
+.vet-sidebar {
+  width: 207px;
+
+  min-height: 100vh;
+
+  flex-shrink: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 0 10px 14px;
+
+  background:
+    repeating-linear-gradient(
+      108deg,
+      rgba(245, 95, 169, 0.08) 0 4px,
+      transparent 4px 42px
+    ),
+    linear-gradient(
+      180deg,
+      #0b1229 0%,
+      #111a38 100%
+    );
+
+  color: white;
+}
+
+
+.vet-brand {
+  height: 78px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  padding: 8px 12px;
+}
+
+
+.vet-brand img {
+  width: 48px;
+  height: 48px;
+
+  object-fit: contain;
+}
+
+
+.vet-brand strong {
+  display: block;
+
+  font-size: 14px;
+}
+
+
+.vet-brand span {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #9da5c4;
+
+  font-size: 8px;
+}
+
+
+.vet-menu-title {
+  width: 96px;
+
+  margin: 14px 12px;
+
+  padding: 5px 10px;
+
+  background: #e43e8c;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  transform: skew(-12deg);
+}
+
+
+.vet-navigation {
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+
+.vet-nav-item {
+  height: 40px;
+
+  border: none;
+
+  background: transparent;
+
+  color: #9ba5c6;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 0 15px;
+
+  font-family: inherit;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+
+.vet-nav-item span {
+  color: #8f98bb;
+}
+
+
+.vet-nav-item.active {
+  background: linear-gradient(
+    90deg,
+    #e33b89,
+    #d93682
+  );
+
+  color: white;
+
+  font-weight: 900;
+}
+
+
+.vet-nav-item.active span {
+  color: white;
+}
+
+
+.vet-sidebar-bottom {
+  margin-top: auto;
+}
+
+
+.vet-signout {
+  width: 100%;
+
+  height: 38px;
+
+  margin-bottom: 9px;
+
+  border: none;
+
+  border-radius: 7px;
+
+  background: #101936;
+
+  color: #9ca5c2;
+
+  text-align: left;
+
+  padding-left: 14px;
+
+  font-size: 10px;
+}
+
+
+.vet-user {
+  min-height: 55px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  padding: 8px;
+
+  border-radius: 10px;
+
+  background: #182449;
+}
+
+
+.vet-avatar {
+  width: 29px;
+  height: 29px;
+
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #ff5f6d;
+
+  color: white;
+
+  font-size: 9px;
+
+  font-weight: 900;
+}
+
+
+.vet-user strong {
+  display: block;
+
+  color: white;
+
+  font-size: 9px;
+}
+
+
+.vet-user span {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #8e97bd;
+
+  font-size: 8px;
+}
+
+
+/* ========================================
+   MAIN
+======================================== */
+
+.vet-main {
+  flex: 1;
+
+  min-width: 0;
+}
+
+
+.vet-header {
+  height: 69px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 34px 0 27px;
+
+  background: rgba(255, 255, 255, 0.96);
+
+  border-bottom: 2px solid #f55fa9;
+}
+
+
+.vet-page-title {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+}
+
+
+.vet-page-title span {
+  color: #ffc53d;
+
+  font-size: 10px;
+}
+
+
+.vet-page-title h1 {
+  margin: 0;
+
+  font-family: var(--font-heading);
+
+  font-size: 20px;
+
+  font-weight: 900;
+}
+
+
+.vet-header > div:first-child > p {
+  margin: 5px 0 0 17px;
+
+  color: #939bb9;
+
+  font-size: 9px;
+}
+
+
+.vet-header-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+
+.vet-search {
+  width: 192px;
+
+  height: 31px;
+
+  padding: 0 15px;
+
+  border: 1px solid #f1d8e6;
+
+  border-radius: 18px;
+
+  background: #fff4f9;
+
+  outline: none;
+
+  font-family: inherit;
+
+  font-size: 9px;
+}
+
+
+.vet-notification {
+  width: 31px;
+  height: 31px;
+
+  border: 1px solid #f1d8e6;
+
+  border-radius: 50%;
+
+  background: #fff4f9;
+
+  color: #ff5f6d;
+}
+
+
+.vet-profile {
+  width: 31px;
+  height: 31px;
+
+  border-radius: 50%;
+
+  background: #f55fa9;
+}
+
+
+/* ========================================
+   CONTENT
+======================================== */
+
+.vet-content {
+  padding: 20px 24px 45px;
+
+  max-width: 1200px;
+
+  margin: auto;
+}
+
+
+/* ========================================
+   ALERT
+======================================== */
+
+.vet-alert {
+  min-height: 41px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 18px;
+
+  margin-bottom: 16px;
+
+  border-radius: 12px;
+
+  border-left: 4px solid #ff596c;
+
+  background: #ffe1e5;
+
+  color: #df354d;
+
+  font-size: 10px;
+}
+
+
+.vet-alert strong {
+  margin-right: 4px;
+}
+
+
+/* ========================================
+   DASHBOARD GRID
+======================================== */
+
+.vet-dashboard-grid {
+  display: grid;
+
+  grid-template-columns: minmax(0, 2.15fr) minmax(250px, 0.95fr);
+
+  gap: 17px;
+}
+
+
+/* ========================================
+   CARD
+======================================== */
+
+.vet-card {
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 8px 22px rgba(22, 32, 63, 0.07);
+
+  overflow: hidden;
+}
+
+
+.vet-card-title {
+  display: flex;
+
+  gap: 8px;
+
+  align-items: flex-start;
+}
+
+
+.vet-card-title > span {
+  margin-top: 4px;
+
+  color: #ffc53d;
+
+  font-size: 7px;
+}
+
+
+.vet-card-title h2 {
+  margin: 0;
+
+  font-family: var(--font-heading);
+
+  font-size: 12px;
+
+  font-weight: 900;
+}
+
+
+.vet-card-title p {
+  margin: 3px 0 0;
+
+  color: #9ba2bd;
+
+  font-size: 8px;
+}
+
+
+/* ========================================
+   STABLE MAP
+======================================== */
+
+.stable-card {
+  min-height: 424px;
+
+  padding: 15px 18px;
+
+  border-top: 4px solid #f55fa9;
+}
+
+
+.stable-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+
+  gap: 12px 10px;
+
+  margin-top: 17px;
+}
+
+
+.stable-box {
+  height: 70px;
+
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+
+  padding: 10px;
+
+  border-radius: 10px;
+
+  background: #fff7fa;
+
+  border: 1px solid #efdbe6;
+
+  overflow: hidden;
+}
+
+
+.stable-box::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: 0;
+  right: 0;
+
+  height: 4px;
+}
+
+
+.stable-box.fit::before {
+  background: #82c638;
+}
+
+
+.stable-box.monitor::before {
+  background: #ffc13b;
+}
+
+
+.stable-box.injured::before {
+  background: #ff596c;
+}
+
+
+.stable-box.quarantine::before {
+  background: #ed4fa2;
+}
+
+
+.stall-number {
+  color: #969eb9;
+
+  font-size: 7px;
+
+  margin-bottom: 5px;
+}
+
+
+.stable-box strong {
+  font-size: 9px;
+
+  font-weight: 900;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+
+/* ========================================
+   RIGHT COLUMN
+======================================== */
+
+.vet-right-column {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 17px;
+}
+
+
+/* ========================================
+   LEGEND
+======================================== */
+
+.legend-card {
+  min-height: 175px;
+
+  padding: 15px 18px;
+
+  border-top: 4px solid #ffc13b;
+}
+
+
+.legend-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 13px;
+
+  margin-top: 17px;
+}
+
+
+.legend-list > div {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  font-size: 9px;
+}
+
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+
+  border-radius: 3px;
+}
+
+
+.legend-color.fit {
+  background: #82c638;
+}
+
+
+.legend-color.monitor {
+  background: #ffc13b;
+}
+
+
+.legend-color.injured {
+  background: #ff596c;
+}
+
+
+.legend-color.quarantine {
+  background: #ed4fa2;
+}
+
+
+/* ========================================
+   WAITING
+======================================== */
+
+.waiting-card {
+  min-height: 220px;
+
+  padding: 15px 18px;
+
+  border-top: 4px solid #e63148;
+}
+
+
+.waiting-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 9px;
+
+  margin-top: 17px;
+}
+
+
+.waiting-item {
+  min-height: 53px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  padding: 8px 12px;
+
+  border-radius: 11px;
+
+  border: 1px solid #efdbe6;
+
+  background: #fff8fb;
+}
+
+
+.waiting-item strong {
+  font-size: 9px;
+}
+
+
+.waiting-item span {
+  margin-top: 4px;
+
+  color: #69728f;
+
+  font-size: 8px;
+}
+
+
+.waiting-item.urgent {
+  border: 2px solid #ff596c;
+
+  background: #fff4f5;
+}
+
+
+.waiting-item.urgent strong {
+  color: #e7354c;
+}
+
+
+/* ========================================
+   ACTION
+======================================== */
+
+.vet-action {
+  display: flex;
+
+  justify-content: flex-end;
+
+  margin-top: 23px;
+}
+
+
+.examine-button {
+  width: 255px;
+
+  height: 43px;
+
+  border: 2px solid #b71f3a;
+
+  border-radius: 23px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ff6978,
+      #dd2747
+    );
+
+  color: white;
+
+  font-family: var(--font-heading);
+
+  font-size: 11px;
+
+  font-weight: 900;
+
+  box-shadow:
+    0 4px 0 #b41e38;
+
+  cursor: pointer;
+}
+
+
+.examine-button:hover {
+  transform: translateY(-1px);
+}
+
+
+.examine-button:active {
+  transform: translateY(2px);
+
+  box-shadow:
+    0 2px 0 #b41e38;
+}
+
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+@media (max-width: 1000px) {
+
+  .vet-sidebar {
+    width: 175px;
+  }
+
+  .vet-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vet-right-column {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+  }
+
+}
+
+
+@media (max-width: 700px) {
+
+  .vet-sidebar {
+    width: 65px;
+  }
+
+  .vet-brand div,
+  .vet-menu-title {
+    display: none;
+  }
+
+  .vet-nav-item {
+    justify-content: center;
+
+    padding: 0;
+
+    font-size: 0;
+  }
+
+  .vet-nav-item span {
+    font-size: 12px;
+  }
+
+  .vet-user div:last-child,
+  .vet-signout {
+    display: none;
+  }
+
+  .vet-user {
+    justify-content: center;
+  }
+
+  .vet-header {
+    padding: 12px 15px;
+  }
+
+  .vet-search {
+    width: 130px;
+  }
+
+  .stable-grid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .vet-right-column {
+    grid-template-columns: 1fr;
+  }
+
+}

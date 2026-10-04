@@ -1,13 +1,44 @@
 // src/features/auth/authService.js
 // Dữ liệu cứng để dựng giao diện. Khi có backend sẽ thay bằng fetch("/api/auth/login").
 export const DEMO_USERS = [
-  { username: "hoa.tm",   password: "123456", fullName: "Trần Minh Hòa",    role: "CLUB_MANAGER" },
-  { username: "thang.nd", password: "123456", fullName: "Nguyễn Đức Thắng", role: "HEAD_TRAINER" },
+  {
+    username: "manager",
+    password: "123456",
+    fullName: "Club Manager",
+    role: "CLUB_MANAGER"
+  },
+  {
+    username: "trainer",
+    password: "123456",
+    fullName: "Head Trainer",
+    role: "HEAD_TRAINER"
+  },
+  {
+    username: "vet",
+    password: "123456",
+    fullName: "Veterinarian",
+    role: "VETERINARIAN"
+  },
+  {
+    username: "groom",
+    password: "123456",
+    fullName: "GROOM",
+    role: "GROOM"
+  },
+  {
+    username: "owner",
+    password: "123456",
+    fullName: "Horse Owner",
+    role: "HORSE_OWNER"
+  }
 ];
 
 export const HOME_BY_ROLE = {
-  CLUB_MANAGER: "/manager/horses",
-  HEAD_TRAINER: "/trainer/progress",
+  CLUB_MANAGER: "/manager",
+  HEAD_TRAINER: "/trainer",
+  VETERINARIAN: "/veterinarian",
+  GROOM: "/groom",
+  HORSE_OWNER: "/horse-owner",
 };
 
 export function login(username, password) {
