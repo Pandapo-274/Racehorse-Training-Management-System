@@ -1,0 +1,67 @@
+/* src/features/trainer/trainer-data.css
+   Trạng thái tải và lỗi cho màn Head Trainer.
+
+   File riêng, không nhét vào trainer.css: file đó dài 660 dòng và do người
+   khác trong nhóm giữ, sửa vào đó là dễ đụng merge. Ở đây chỉ có đúng những
+   lớp mà phần nối dữ liệu cần thêm. */
+
+.trainer-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 28px 24px;
+  border-radius: 14px;
+  background: #fff;
+  color: #18213e;
+  font-family: var(--font-body);
+}
+
+.trainer-state--error {
+  background: #ffe1e5;
+  color: #a02234;
+}
+
+.trainer-state strong { font-size: 15px; }
+.trainer-state p { margin: 0; font-size: 13px; opacity: .85; }
+
+.trainer-retry {
+  align-self: flex-start;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 18px;
+  background: #18213e;
+  color: #fff;
+  font: 600 13px var(--font-body);
+  cursor: pointer;
+}
+
+/* Nút chọn khoảng thời gian cho biểu đồ. */
+.fitness-range {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 16px;
+  background: #f4eef3;
+}
+.fitness-range button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 13px;
+  font: 600 11px var(--font-body);
+  color: #6b6480;
+}
+.fitness-range button[aria-pressed="true"] {
+  background: #f55fa9;
+  color: #fff;
+}
+
+/* Ô trống khi chưa có dữ liệu để vẽ. */
+.fitness-empty,
+.alerts-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #9a93ab;
+}

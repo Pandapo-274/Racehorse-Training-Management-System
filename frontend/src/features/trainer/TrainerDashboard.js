@@ -1,85 +1,30 @@
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./trainer.css";
+import "./trainer-data.css";
+import {
+  fetchDashboard,
+  toFormBadge,
+  toStatusChip,
+  toAlertMessage,
+  toSeverity,
+  toDistance,
+  toChartData,
+  toInitials,
+} from "./dashboardApi";
 
-const fitnessData = [
-  { date: "6 Sep", value: 68 },
-  { date: "7 Sep", value: 72 },
-  { date: "8 Sep", value: 70 },
-  { date: "9 Sep", value: 77 },
-  { date: "10 Sep", value: 81 },
-  { date: "11 Sep", value: 75 },
-  { date: "12 Sep", value: 86 },
-];
+// UC6 - View Master Fitness & Training Dashboard
+//
+// Bố cục, lớp CSS và cấu trúc thẻ giữ nguyên như bản dựng theo Figma. Thay đổi
+// duy nhất: ba mảng dữ liệu cứng (fitnessData, alerts, horses) được thay bằng
+// một lần gọi GET /api/trainer/dashboard. Mọi phép quy đổi từ từ vựng cơ sở dữ
+// liệu sang từ vựng hiển thị nằm trong dashboardApi.js, không nằm trong JSX.
 
-const alerts = [
-  {
-    horse: "Air Groove",
-    message: "Slow heart-rate recovery",
-    level: "High",
-  },
-  {
-    horse: "Gold Ship",
-    message: "Workload up 28% this week",
-    level: "Medium",
-  },
-  {
-    horse: "TM Opera O",
-    message: "Missed one session",
-    level: "Low",
-  },
-];
+const RANGE_OPTIONS = [4, 8, 12];
 
-const horses = [
-  {
-    name: "Symboli Rudolf",
-    phase: "No plan yet",
-    distance: "—",
-    fitness: 83,
-    form: "S",
-    status: "Ready to plan",
-  },
-  {
-    name: "Gold Ship",
-    phase: "Phase 2 · Build",
-    distance: "42 km",
-    fitness: 76,
-    form: "A",
-    status: "Active",
-  },
-  {
-    name: "Kitasan Black",
-    phase: "Phase 1 · Base",
-    distance: "28 km",
-    fitness: 81,
-    form: "B",
-    status: "Active",
-  },
-  {
-    name: "Deep Impact",
-    phase: "Phase 3 · Peak",
-    distance: "51 km",
-    fitness: 88,
-    form: "S",
-    status: "Active",
-  },
-  {
-    name: "Air Groove",
-    phase: "Paused",
-    distance: "—",
-    fitness: 61,
-    form: "C",
-    status: "Locked",
-  },
-  {
-    name: "TM Opera O",
-    phase: "Phase 2 · Build",
-    distance: "35 km",
-    fitness: 70,
-    form: "B",
-    status: "Monitor",
-  },
-];
+function TrainerSidebar({ user, onSignOut }) {
+  const fullName = user?.fullName || "Head Trainer";
 
-function TrainerSidebar() {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
@@ -121,15 +66,15 @@ function TrainerSidebar() {
       </nav>
 
       <div className="trainer-sidebar-bottom">
-        <button className="trainer-signout">
+        <button className="trainer-signout" onClick={onSignOut}>
           Sign out
         </button>
 
         <div className="trainer-user">
-          <div className="trainer-avatar">KM</div>
+          <div className="trainer-avatar">{toInitials(fullName)}</div>
 
           <div>
-            <strong>Kenta Morishita</strong>
+            <strong>{fullName}</strong>
             <span>Head Trainer</span>
           </div>
         </div>
@@ -138,10 +83,9 @@ function TrainerSidebar() {
   );
 }
 
-function FitnessChart() {
-  const max = Math.max(
-    ...fitnessData.map((item) => item.value)
-  );
+function FitnessChart({ data, weeks, onWeeksChange }) {
+  // Chia cho max chứ không cho 100: giữ nguyên cách vẽ của bản thiết kế.
+  const max = data.length ? Math.max(...data.map((item) => item.value)) : 1;
 
   return (
     <div className="trainer-card fitness-card">
@@ -150,39 +94,53 @@ function FitnessChart() {
 
         <div>
           <h2>Average fitness index</h2>
-          <p>Last seven sessions</p>
+          <p>Derived from 2-minute recovery heart rate</p>
+        </div>
+
+        <div className="fitness-range" role="group" aria-label="Chart range">
+          {RANGE_OPTIONS.map((w) => (
+            <button
+              key={w}
+              type="button"
+              aria-pressed={w === weeks}
+              onClick={() => onWeeksChange(w)}
+            >
+              {w}w
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="fitness-chart">
-        {fitnessData.map((item, index) => {
-          const height = (item.value / max) * 100;
+      {data.length === 0 ? (
+        <p className="fitness-empty">No completed sessions in this range.</p>
+      ) : (
+        <div className="fitness-chart">
+          {data.map((item, index) => {
+            const height = (item.value / max) * 100;
 
-          return (
-            <div className="fitness-column" key={item.date}>
-              <div className="fitness-bar-wrapper">
-                <div
-                  className={`fitness-bar ${
-                    index === fitnessData.length - 1
-                      ? "highlight"
-                      : ""
-                  }`}
-                  style={{
-                    height: `${height}%`,
-                  }}
-                />
+            return (
+              <div className="fitness-column" key={item.date}>
+                <div className="fitness-bar-wrapper">
+                  <div
+                    className={`fitness-bar ${
+                      index === data.length - 1 ? "highlight" : ""
+                    }`}
+                    style={{ height: `${height}%` }}
+                    title={`${item.value} points · ${item.sessions} sessions`}
+                  />
+                </div>
+
+                <span>{item.date}</span>
               </div>
-
-              <span>{item.date}</span>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function AlertsCard() {
+function AlertsCard({ alerts }) {
   return (
     <div className="trainer-card alerts-card">
       <div className="trainer-card-title">
@@ -193,26 +151,31 @@ function AlertsCard() {
         </div>
       </div>
 
-      <div className="alerts-list">
-        {alerts.map((alert) => (
-          <div
-            className={`trainer-alert ${alert.level.toLowerCase()}`}
-            key={alert.horse}
-          >
-            <div>
-              <strong>{alert.horse}</strong>
-              <p>{alert.message}</p>
-            </div>
+      {alerts.length === 0 ? (
+        <p className="alerts-empty">No open alerts.</p>
+      ) : (
+        <div className="alerts-list">
+          {alerts.map((alert) => {
+            const level = toSeverity(alert.severity);
 
-            <span>{alert.level}</span>
-          </div>
-        ))}
-      </div>
+            return (
+              <div className={`trainer-alert ${level.cls}`} key={alert.alertId}>
+                <div>
+                  <strong>{alert.horseName}</strong>
+                  <p>{toAlertMessage(alert)}</p>
+                </div>
+
+                <span>{level.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function HorsesTable() {
+function HorsesTable({ horses }) {
   return (
     <div className="trainer-card horses-card">
       <div className="trainer-card-title">
@@ -238,41 +201,40 @@ function HorsesTable() {
           </thead>
 
           <tbody>
-            {horses.map((horse) => (
-              <tr key={horse.name}>
-                <td className="horse-name">
-                  {horse.name}
-                </td>
+            {horses.map((horse) => {
+              const form = toFormBadge(horse.lastEvaluation);
+              const status = toStatusChip(horse);
 
-                <td>{horse.phase}</td>
+              return (
+                <tr key={horse.horseId}>
+                  <td className="horse-name">{horse.horseName}</td>
 
-                <td>{horse.distance}</td>
+                  <td>{horse.currentPhase || "No plan yet"}</td>
 
-                <td className="fitness-value">
-                  {horse.fitness}
-                </td>
+                  <td>{toDistance(horse.weeklyDistanceKm)}</td>
 
-                <td>
-                  <span
-                    className={`form-badge form-${horse.form.toLowerCase()}`}
-                  >
-                    {horse.form}
-                  </span>
-                </td>
+                  <td className="fitness-value">
+                    {horse.fitnessIndex ?? "—"}
+                  </td>
 
-                <td>
-                  <span
-                    className={`horse-status ${
-                      horse.status
-                        .toLowerCase()
-                        .replaceAll(" ", "-")
-                    }`}
-                  >
-                    {horse.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  <td>
+                    {form ? (
+                      <span className={`form-badge form-${form.toLowerCase()}`}>
+                        {form}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+
+                  <td>
+                    <span className={`horse-status ${status.cls}`}>
+                      {status.label}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -281,9 +243,45 @@ function HorsesTable() {
 }
 
 export default function TrainerDashboard() {
+  const navigate = useNavigate();
+  const [weeks, setWeeks] = useState(8);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+
+  const load = useCallback((w, signal) => {
+    setLoading(true);
+    setError("");
+    fetchDashboard(w, signal)
+      .then(setData)
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(weeks, ctrl.signal);
+    return () => ctrl.abort();
+  }, [weeks, load]);
+
+  const handleSignOut = () => {
+    localStorage.removeItem("user");
+    navigate("/login", { replace: true });
+  };
+
+  const today = new Date().toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
   return (
     <div className="trainer-page">
-      <TrainerSidebar />
+      <TrainerSidebar user={user} onSignOut={handleSignOut} />
 
       <main className="trainer-main">
         <header className="trainer-header">
@@ -293,7 +291,7 @@ export default function TrainerDashboard() {
               <h1>Herd progress and fitness</h1>
             </div>
 
-            <p>Live · 13 Sep 2026</p>
+            <p>Live · {today}</p>
           </div>
 
           <div className="trainer-header-actions">
@@ -303,21 +301,50 @@ export default function TrainerDashboard() {
               placeholder="Search horses, records..."
             />
 
-            <button className="trainer-notification">
-              ●
-            </button>
+            <button className="trainer-notification">●</button>
 
             <div className="trainer-profile" />
           </div>
         </header>
 
         <section className="trainer-content">
-          <div className="trainer-top">
-            <FitnessChart />
-            <AlertsCard />
-          </div>
+          {error && (
+            <div className="trainer-state trainer-state--error" role="alert">
+              <strong>{error}</strong>
+              <p>
+                Check that the backend is running on port 8080 and that the
+                database has been seeded.
+              </p>
+              <button
+                type="button"
+                className="trainer-retry"
+                onClick={() => load(weeks)}
+              >
+                Try again
+              </button>
+            </div>
+          )}
 
-          <HorsesTable />
+          {loading && !data && (
+            <div className="trainer-state">
+              <strong>Loading dashboard…</strong>
+            </div>
+          )}
+
+          {data && (
+            <>
+              <div className="trainer-top">
+                <FitnessChart
+                  data={toChartData(data.fitnessTrend)}
+                  weeks={weeks}
+                  onWeeksChange={setWeeks}
+                />
+                <AlertsCard alerts={data.openAlerts || []} />
+              </div>
+
+              <HorsesTable horses={data.horses || []} />
+            </>
+          )}
         </section>
       </main>
     </div>
