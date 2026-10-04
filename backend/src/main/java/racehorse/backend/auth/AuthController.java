@@ -4,7 +4,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,5 +26,16 @@ public class AuthController {
                                                      HttpServletRequest http) {
         RegisterResponse body = authService.register(request, http.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        return authService.login(request, http.getRemoteAddr());
+    }
+
+    /** Cần token. Interceptor đã giải mã sẵn và nhét user vào request. */
+    @GetMapping("/me")
+    public UserInfo me(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return authService.me(user.userId());
     }
 }
