@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 2, 2026` at `11:30` by `Pandapo274`
+Last Commited: `Oct 4, 2026` at `8:57` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -36,7 +36,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
-
+> #### `Oct 4, 2026`
+- `[8:57]` `tqt195` - Access denied page
 > #### `Oct 2, 2026`
 - `[11:30]` `Pandapo274` - Update `application.properties`
 - `[11:23]` `tqt195` - Login page updated
