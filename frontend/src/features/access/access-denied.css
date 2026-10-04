@@ -1,0 +1,196 @@
+* {
+  box-sizing: border-box;
+}
+
+.access-denied-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #fdf0f6;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  position: relative;
+  overflow: hidden;
+
+  font-family: Arial, sans-serif;
+}
+
+/* Background shape */
+
+.access-bg-shape {
+  position: absolute;
+
+  width: 650px;
+  height: 430px;
+
+  right: -80px;
+  top: -80px;
+
+  background: #fae2ee;
+
+  transform: rotate(-18deg);
+
+  opacity: 0.9;
+}
+
+
+/* Main card */
+
+.access-denied-card {
+  width: 458px;
+  min-height: 320px;
+
+  background: #ffffff;
+
+  border-radius: 15px;
+
+  position: relative;
+  z-index: 2;
+
+  padding: 42px 40px 28px;
+
+  text-align: center;
+
+  box-shadow:
+    0 10px 30px rgba(22, 32, 63, 0.08);
+}
+
+
+/* Top line */
+
+.access-denied-top-line {
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 5px;
+
+  border-radius: 15px 15px 0 0;
+
+  background: linear-gradient(
+    90deg,
+    #f55fa9,
+    #d93b87
+  );
+}
+
+
+/* Error icon */
+
+.access-denied-icon {
+  width: 62px;
+  height: 62px;
+
+  margin: 0 auto 22px;
+
+  border-radius: 50%;
+
+  background: #ffe4e6;
+
+  color: #c81e3a;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 31px;
+  font-weight: 800;
+}
+
+
+/* Title */
+
+.access-denied-card h1 {
+  margin: 0 auto;
+
+  max-width: 380px;
+
+  color: #16203f;
+
+  font-size: 20px;
+  line-height: 1.3;
+
+  font-weight: 800;
+}
+
+
+/* Description */
+
+.access-denied-description {
+  margin: 20px auto 0;
+
+  max-width: 390px;
+
+  color: #5c6480;
+
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+
+/* Log text */
+
+.access-denied-log {
+  margin: 28px auto 14px;
+
+  color: #a0a6bc;
+
+  font-size: 9px;
+}
+
+
+/* Button */
+
+.access-denied-button {
+  width: 183px;
+  height: 42px;
+
+  border: none;
+  border-radius: 22px;
+
+  background: linear-gradient(
+    90deg,
+    #16203f,
+    #0b1229
+  );
+
+  color: white;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.access-denied-button:hover {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 5px 12px rgba(11, 18, 41, 0.25);
+}
+
+
+/* Responsive */
+
+@media (max-width: 600px) {
+  .access-denied-card {
+    width: calc(100% - 32px);
+
+    padding-left: 25px;
+    padding-right: 25px;
+  }
+
+  .access-denied-card h1 {
+    font-size: 18px;
+  }
+
+  .access-denied-description {
+    font-size: 11px;
+  }
+}

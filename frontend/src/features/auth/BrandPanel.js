@@ -1,15 +1,15 @@
 // src/features/auth/BrandPanel.js
 
-
 const STATS = [
-  { value: 48, label: "Horses",           color: "var(--pink-500)" },
-  { value: 12, label: "Active plans",     color: "var(--gold-500)" },
-  { value: 7,  label: "G1 races in 2026", color: "var(--rose-500)" },
+  { value: 48, label: "Horses", color: "var(--pink-500)" },
+  { value: 12, label: "Active plans", color: "var(--gold-500)" },
+  { value: 7, label: "G1 races in 2026", color: "var(--rose-500)" },
 ];
 
 export default function BrandPanel() {
   return (
     <aside className="brand">
+      <img src="/logo.svg" alt="Tenma Academy" className="brand__logo" />
       <h1 className="brand__title">TENMA ACADEMY</h1>
       <div className="brand__rule" />
       <p className="brand__sub">Racehorse training management system</p>

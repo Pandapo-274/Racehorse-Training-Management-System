@@ -16,7 +16,7 @@ export function login(username, password) {
       const found = DEMO_USERS.find(
         (u) => u.username === username && u.password === password
       );
-      if (!found) return reject(new Error("Sai tên đăng nhập hoặc mật khẩu"));
+      if (!found) return reject(new Error("Incorrect username or password"));
       const { password: _pw, ...user } = found; // không lưu mật khẩu
       resolve(user);
     }, 400);

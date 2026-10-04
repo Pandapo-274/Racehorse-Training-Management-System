@@ -62,11 +62,11 @@ export default function LoginForm() {
         <div className="demo-row">
           <Button type="button" variant="secondary" disabled={loading}
             onClick={() => navigate("/access-denied")}>
-            Demo: sai quyền
+            Demo: no access
           </Button>
           <Button type="button" variant="secondary" disabled={loading}
             onClick={() => signInAs("thang.nd", "123456")}>
-            Vào vai HLV
+            Sign in as Trainer
           </Button>
         </div>
       )}
