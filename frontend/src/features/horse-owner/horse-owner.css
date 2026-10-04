@@ -1,9 +1,46 @@
+/* =====================================================
+   HORSE OWNER DASHBOARD
+   TENMA Racing Academy
+===================================================== */
+
+:root {
+  --owner-navy: #111a36;
+  --owner-navy-light: #182447;
+  --owner-text: #17203f;
+  --owner-muted: #9ba2b8;
+  --owner-pink: #e74291;
+  --owner-pink-dark: #d93284;
+  --owner-pink-soft: #fff0f6;
+  --owner-pink-bg: #fff4f8;
+  --owner-yellow: #ffc53d;
+  --owner-green: #7abf35;
+  --owner-border: #efdce6;
+}
+
+/* =====================================================
+   PAGE
+===================================================== */
+
 .owner-page {
   min-height: 100vh;
+  width: 100%;
   display: flex;
-  background: #fff4f8;
-  color: #17203f;
-  font-family: "Trebuchet MS", Arial, sans-serif;
+  background: var(--owner-pink-bg);
+  color: var(--owner-text);
+  font-family: var(
+    --font-body,
+    "Be Vietnam Pro",
+    "Trebuchet MS",
+    Arial,
+    sans-serif
+  );
+  box-sizing: border-box;
+}
+
+.owner-page *,
+.owner-page *::before,
+.owner-page *::after {
+  box-sizing: border-box;
 }
 
 /* =====================================================
@@ -11,33 +48,42 @@
 ===================================================== */
 
 .owner-sidebar {
-  width: 264px;
+  width: 270px;
   min-height: 100vh;
   flex-shrink: 0;
-  box-sizing: border-box;
-  background: #111a36;
-  color: #ffffff;
   padding: 10px 10px 12px;
+  background: var(--owner-navy);
+  color: #ffffff;
+
   display: flex;
   flex-direction: column;
+
+  position: relative;
+  z-index: 10;
 }
+
+/* ---------- Brand ---------- */
 
 .owner-brand {
   height: 85px;
-  box-sizing: border-box;
   padding: 12px 14px;
+
   display: flex;
   align-items: center;
   gap: 12px;
+
   position: relative;
   overflow: hidden;
+
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .owner-brand::before {
   content: "";
+
   position: absolute;
   inset: 0;
+
   background:
     repeating-linear-gradient(
       108deg,
@@ -46,20 +92,32 @@
       rgba(255, 255, 255, 0.045) 25px,
       rgba(255, 255, 255, 0.045) 31px
     );
+
+  pointer-events: none;
 }
 
 .owner-brand-mark {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+
   position: relative;
   z-index: 1;
-  width: 43px;
-  height: 43px;
-  border: 2px solid #ef5ba1;
+
+  border: 2px solid var(--owner-pink);
   border-radius: 50%;
+
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ef5ba1;
-  font-size: 25px;
+
+  overflow: hidden;
+}
+
+.owner-brand-mark img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .owner-brand-text {
@@ -69,31 +127,56 @@
 
 .owner-brand-text strong {
   display: block;
+
   font-size: 16px;
+  line-height: 1;
   letter-spacing: 1px;
+  font-weight: 900;
 }
 
 .owner-brand-text span {
   display: block;
-  margin-top: 3px;
+  margin-top: 5px;
+
   color: #aab2ce;
+
   font-size: 8px;
+  line-height: 1;
 }
+
+/* ---------- Menu ribbon ---------- */
 
 .owner-menu-ribbon {
   width: 123px;
   height: 29px;
+
   margin: 14px 0 17px 7px;
   padding-left: 10px;
-  box-sizing: border-box;
-  background: #e63e91;
-  clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%);
+
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+
+  background: var(--owner-pink);
+
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    92% 100%,
+    0 100%
+  );
+
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
+  letter-spacing: 0.3px;
 }
+
+.menu-ribbon-icon {
+  color: var(--owner-yellow);
+  font-size: 7px;
+}
+
+/* ---------- Navigation ---------- */
 
 .owner-navigation {
   display: flex;
@@ -102,30 +185,58 @@
 }
 
 .owner-nav-item {
-  height: 38px;
+  height: 39px;
+
   padding: 0 16px;
-  box-sizing: border-box;
+
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
+
   color: #8f98b9;
+
   text-decoration: none;
+
   font-size: 10px;
-  font-weight: 600;
-  position: relative;
+  font-weight: 700;
+
+  border-radius: 4px;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.owner-nav-item:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .owner-nav-item.active {
-  background: #df3989;
-  color: white;
-  clip-path: polygon(0 0, 100% 0, 94% 100%, 0 100%);
+  color: #ffffff;
+  background: var(--owner-pink);
+
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    94% 100%,
+    0 100%
+  );
 }
 
 .owner-nav-icon {
-  width: 16px;
-  font-size: 10px;
-  text-align: center;
+  width: 17px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: currentColor;
+
+  font-size: 11px;
 }
+
+/* ---------- Sidebar bottom ---------- */
 
 .owner-sidebar-bottom {
   margin-top: auto;
@@ -134,44 +245,85 @@
 .owner-signout {
   width: 100%;
   height: 36px;
+  padding: 0 15px;
   border: 0;
   border-radius: 7px;
-  background: #101a37;
+  background: transparent;
   color: #8992b1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   text-align: left;
-  padding-left: 15px;
+  font-family: inherit;
   font-size: 9px;
   cursor: pointer;
 }
 
+.owner-signout:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
 .owner-account {
   height: 57px;
+
   margin-top: 9px;
   padding: 0 12px;
+
   border-radius: 9px;
-  background: #182447;
+
+  background: var(--owner-navy-light);
+
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .owner-account-avatar {
-  width: 29px;
-  height: 29px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+
   border-radius: 50%;
-  background: #ff5c75;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ff7d91,
+      #ef4c94
+    );
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.owner-account-info {
+  min-width: 0;
 }
 
 .owner-account strong {
   display: block;
+
+  color: #ffffff;
+
   font-size: 10px;
+  line-height: 1;
 }
 
 .owner-account span {
   display: block;
-  margin-top: 3px;
+  margin-top: 5px;
+
   color: #8d96b5;
+
   font-size: 8px;
+  line-height: 1;
 }
 
 /* =====================================================
@@ -181,96 +333,181 @@
 .owner-main {
   flex: 1;
   min-width: 0;
-  background: #fff4f8;
+
+  background: var(--owner-pink-bg);
 }
 
+/* =====================================================
+   HEADER
+===================================================== */
+
 .owner-header {
+  width: 100%;
   height: 85px;
-  box-sizing: border-box;
-  padding: 0 31px;
+
+  padding: 0 32px;
+
   background: #ffffff;
-  border-top: 7px solid #ededed;
-  border-bottom: 2px solid #ed4a91;
+
+  border-bottom: 2px solid var(--owner-pink);
+
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+.owner-header-title {
+  min-width: 0;
+}
+
 .owner-header-title h1 {
   margin: 0;
-  font-size: 18px;
+
+  color: var(--owner-text);
+
+  font-family: var(
+    --font-heading,
+    "Baloo 2",
+    "Trebuchet MS",
+    sans-serif
+  );
+
+  font-size: 19px;
   line-height: 1;
   font-weight: 900;
 }
 
 .yellow-diamond {
-  color: #ffc53d;
   margin-right: 10px;
-  font-size: 9px;
+
+  color: var(--owner-yellow);
+
+  font-size: 8px;
 }
 
 .owner-header-title p {
   margin: 8px 0 0 18px;
+
   color: #9da5bd;
+
   font-size: 9px;
+  line-height: 1;
 }
 
 .owner-header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 15px;
 }
 
+/* ---------- Search ---------- */
+
 .owner-search {
-  width: 192px;
-  height: 32px;
-  box-sizing: border-box;
+  width: 205px;
+  height: 34px;
+
+  padding: 0 13px;
+
   border: 1px solid #f2d3e1;
-  background: #fff0f6;
   border-radius: 18px;
-  padding: 0 14px;
+
+  background: var(--owner-pink-soft);
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.search-icon {
+  color: #a4a9ba;
+
+  font-size: 15px;
+  line-height: 1;
 }
 
 .owner-search input {
   width: 100%;
   height: 100%;
+
+  padding: 0;
+
   border: 0;
-  outline: none;
+  outline: 0;
+
   background: transparent;
-  font-size: 9px;
+
   color: #596078;
+
+  font-family: inherit;
+
+  font-size: 9px;
 }
 
 .owner-search input::placeholder {
   color: #a1a6b8;
 }
 
+/* ---------- Notification ---------- */
+
 .owner-notification {
-  width: 31px;
-  height: 31px;
+  width: 32px;
+  height: 32px;
+
   padding: 0;
-  border: 1px solid #f3d4e2;
-  background: #fff2f7;
-  border-radius: 50%;
+
   position: relative;
+
+  border: 1px solid #f3d4e2;
+  border-radius: 50%;
+
+  background: #fff2f7;
+
   cursor: pointer;
 }
 
-.owner-notification span {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff5678;
-  top: 10px;
-  left: 10px;
+.notification-icon {
+  color: #6d748a;
+
+  font-size: 8px;
 }
 
-.owner-header-avatar {
-  width: 31px;
-  height: 31px;
+.notification-dot {
+  width: 6px;
+  height: 6px;
+
+  position: absolute;
+  top: 6px;
+  right: 6px;
+
+  border: 1px solid #ffffff;
   border-radius: 50%;
-  background: #ef5aa0;
+
+  background: #ff5678;
+}
+
+/* ---------- Avatar ---------- */
+
+.owner-header-avatar {
+  width: 33px;
+  height: 33px;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ff7b90,
+      #e74291
+    );
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+
+  font-size: 8px;
+  font-weight: 900;
 }
 
 /* =====================================================
@@ -278,11 +515,12 @@
 ===================================================== */
 
 .owner-content {
-  width: 1112px;
+  width: 1136px;
   max-width: calc(100% - 64px);
+
   margin: 0 auto;
-  padding: 23px 0 40px;
-  box-sizing: border-box;
+
+  padding: 25px 0 40px;
 }
 
 /* =====================================================
@@ -291,51 +529,68 @@
 
 .horse-overview {
   width: 100%;
-  height: 250px;
-  box-sizing: border-box;
+  height: 256px;
+
   position: relative;
   overflow: hidden;
+
   border-radius: 20px;
+
   background: #ffffff;
-  box-shadow: 0 10px 28px rgba(49, 31, 62, 0.1);
+
+  box-shadow:
+    0 10px 28px rgba(49, 31, 62, 0.10);
 }
 
+/* ---------- Top gradient ---------- */
+
 .horse-gradient {
-  position: absolute;
-  left: 0;
-  top: 0;
   width: 100%;
-  height: 96px;
-  background: linear-gradient(
-    105deg,
-    #17203f 0%,
-    #3c234b 32%,
-    #8f2e69 65%,
-    #d83b88 100%
-  );
+  height: 98px;
+
+  position: absolute;
+  top: 0;
+  left: 0;
+
+  background:
+    linear-gradient(
+      105deg,
+      #17203f 0%,
+      #3c234b 32%,
+      #8f2e69 65%,
+      #d83b88 100%
+    );
 }
 
 .horse-gradient::after {
   content: "";
+
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    120deg,
-    transparent 0%,
-    transparent 43%,
-    rgba(255, 255, 255, 0.06) 43%,
-    rgba(255, 255, 255, 0.06) 55%,
-    transparent 55%
-  );
+
+  background:
+    linear-gradient(
+      120deg,
+      transparent 0%,
+      transparent 43%,
+      rgba(255, 255, 255, 0.06) 43%,
+      rgba(255, 255, 255, 0.06) 55%,
+      transparent 55%
+    );
 }
 
+/* ---------- Decorative speed lines ---------- */
+
 .horse-speed-lines {
-  position: absolute;
-  right: 40px;
-  top: -40px;
   width: 470px;
   height: 210px;
+
+  position: absolute;
+  right: 35px;
+  top: -40px;
+
   transform: rotate(17deg);
+
   background:
     repeating-linear-gradient(
       105deg,
@@ -344,116 +599,188 @@
       rgba(255, 255, 255, 0.22) 30px,
       rgba(255, 255, 255, 0.22) 35px
     );
+
   opacity: 0.75;
+
+  pointer-events: none;
 }
 
 .horse-speed-lines::after {
   content: "";
+
+  width: 370px;
+  height: 180px;
+
   position: absolute;
   right: -80px;
   top: 90px;
-  width: 370px;
-  height: 180px;
+
   background: #f3bddb;
+
   opacity: 0.45;
+
   transform: rotate(-24deg);
 }
 
-/* photo */
+/* =====================================================
+   HORSE PHOTO
+===================================================== */
 
 .horse-photo {
+  width: 154px;
+  height: 190px;
+
   position: absolute;
-  left: 28px;
-  top: 32px;
-  width: 150px;
-  height: 186px;
-  box-sizing: border-box;
-  border-radius: 16px;
+  left: 29px;
+  top: 33px;
+
   padding: 5px;
-  background: linear-gradient(
-    180deg,
-    #ffc53d,
-    #ff5ba6
-  );
+
   z-index: 5;
+
+  overflow: hidden;
+
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffc53d,
+      #ff5ba6
+    );
+
+  box-shadow:
+    0 7px 18px rgba(22, 25, 50, 0.16);
 }
 
-.horse-photo::before {
-  content: "";
+.horse-photo img {
+  width: 100%;
+  height: 100%;
+
+  position: relative;
+  z-index: 1;
+
+  display: block;
+
+  object-fit: cover;
+
+  border-radius: 12px;
+}
+
+.photo-overlay {
   position: absolute;
   inset: 5px;
+
+  z-index: 2;
+
   border-radius: 12px;
-  background: #fdf1f7;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(23, 32, 63, 0.02),
+      rgba(23, 32, 63, 0.15)
+    );
+
+  pointer-events: none;
 }
 
+/* ---------- Photo corners ---------- */
+
 .photo-corner {
-  position: absolute;
-  z-index: 2;
   width: 22px;
   height: 22px;
+
+  position: absolute;
+
+  z-index: 3;
 }
 
 .photo-corner.top-left {
   top: 12px;
   left: 12px;
-  border-top: 2px solid #ffc53d;
-  border-left: 2px solid #ffc53d;
+
+  border-top: 2px solid var(--owner-yellow);
+  border-left: 2px solid var(--owner-yellow);
 }
 
 .photo-corner.top-right {
   top: 12px;
   right: 12px;
-  border-top: 2px solid #ffc53d;
-  border-right: 2px solid #ffc53d;
+
+  border-top: 2px solid var(--owner-yellow);
+  border-right: 2px solid var(--owner-yellow);
 }
 
 .photo-corner.bottom-left {
   bottom: 12px;
   left: 12px;
-  border-bottom: 2px solid #ffc53d;
-  border-left: 2px solid #ffc53d;
+
+  border-bottom: 2px solid var(--owner-yellow);
+  border-left: 2px solid var(--owner-yellow);
 }
 
 .photo-corner.bottom-right {
   bottom: 12px;
   right: 12px;
-  border-bottom: 2px solid #ffc53d;
-  border-right: 2px solid #ffc53d;
+
+  border-bottom: 2px solid var(--owner-yellow);
+  border-right: 2px solid var(--owner-yellow);
 }
 
-/* horse title */
+/* =====================================================
+   HORSE TITLE
+===================================================== */
 
 .horse-title-area {
   position: absolute;
   z-index: 5;
-  left: 200px;
-  top: 21px;
+
+  left: 202px;
+  top: 22px;
 }
 
 .horse-title-area h2 {
   margin: 0;
-  color: white;
+
+  color: #ffffff;
+
+  font-family: var(
+    --font-heading,
+    "Baloo 2",
+    "Trebuchet MS",
+    sans-serif
+  );
+
   font-size: 29px;
   line-height: 1;
   font-weight: 900;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
 }
 
 .horse-title-line {
   width: 200px;
   height: 2px;
+
   margin-top: 8px;
-  background: #ffc53d;
+
+  background: var(--owner-yellow);
 }
 
 .horse-title-area p {
   margin: 7px 0 0;
+
   color: #d7d9e7;
-  font-size: 11px;
+
+  font-size: 10px;
+  line-height: 1;
 }
 
+/* ---------- Rating ---------- */
+
 .horse-rating {
-  margin-top: 35px;
+  margin-top: 33px;
+
   display: flex;
   align-items: center;
   gap: 12px;
@@ -461,65 +788,98 @@
 
 .horse-stars {
   color: #ffb52b;
+
   font-size: 18px;
+  line-height: 1;
   letter-spacing: 2px;
 }
 
 .cleared-chip {
-  padding: 5px 9px;
+  padding: 5px 10px;
+
   border-radius: 12px;
+
   background: #e0f4cd;
   color: #5b952c;
+
   font-size: 8px;
-  font-weight: 800;
+  font-weight: 900;
+  line-height: 1;
 }
 
-/* metrics */
+/* =====================================================
+   HORSE METRICS
+===================================================== */
 
 .horse-metrics {
+  width: 280px;
+
   position: absolute;
-  left: 480px;
-  top: 113px;
-  width: 270px;
+  left: 495px;
+  top: 116px;
+
   display: grid;
   grid-template-columns: 1fr 1fr;
+
+  column-gap: 28px;
   row-gap: 17px;
 }
 
 .metric span {
   display: block;
+
   color: #9ba2b6;
+
   font-size: 9px;
+  line-height: 1;
 }
 
 .metric strong {
   display: block;
-  margin-top: 4px;
-  color: #17203f;
+
+  margin-top: 5px;
+
+  color: var(--owner-text);
+
+  font-family: var(
+    --font-heading,
+    "Baloo 2",
+    "Trebuchet MS",
+    sans-serif
+  );
+
   font-size: 20px;
   line-height: 1;
   font-weight: 900;
 }
 
-/* training */
+/* =====================================================
+   TRAINING STATS
+===================================================== */
 
 .training-stats {
+  width: 300px;
+
   position: absolute;
   z-index: 5;
-  left: 792px;
-  top: 110px;
-  width: 290px;
+
+  left: 815px;
+  top: 111px;
 }
 
 .training-stats h3 {
-  margin: 0 0 7px;
+  margin: 0 0 8px;
+
   color: #9ba2b6;
-  font-size: 11px;
-  font-weight: 700;
+
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
 }
 
 .training-row {
-  height: 24px;
+  min-height: 24px;
+
   display: flex;
   align-items: center;
   gap: 7px;
@@ -528,12 +888,17 @@
 .training-icon {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+
   border-radius: 5px;
-  color: white;
+
+  color: #ffffff;
+
   display: flex;
-  justify-content: center;
   align-items: center;
-  font-size: 9px;
+  justify-content: center;
+
+  font-size: 8px;
   font-weight: 900;
 }
 
@@ -558,27 +923,49 @@
 }
 
 .training-name {
-  width: 67px;
+  width: 60px;
+  flex-shrink: 0;
+
   color: #5f667e;
-  font-size: 10px;
+
+  font-size: 9px;
+  line-height: 1;
 }
 
 .training-meter {
-  width: 186px;
+  width: 150px;
   height: 8px;
-  border-radius: 8px;
-  background: #f0d5e4;
+  flex-shrink: 0;
+
   overflow: hidden;
+
+  border-radius: 8px;
+
+  background: #f0d5e4;
 }
 
 .training-meter-fill {
   height: 100%;
+
   border-radius: 8px;
-  background: linear-gradient(
-    90deg,
-    #ed4c98,
-    #d93284
-  );
+
+  background:
+    linear-gradient(
+      90deg,
+      #ed4c98,
+      #d93284
+    );
+}
+
+.training-value {
+  width: 24px;
+
+  color: #7d8498;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  text-align: right;
 }
 
 /* =====================================================
@@ -586,74 +973,149 @@
 ===================================================== */
 
 .owner-middle {
-  margin-top: 20px;
+  margin-top: 22px;
+
   display: grid;
-  grid-template-columns: 690px 402px;
+  grid-template-columns:
+    minmax(0, 1.72fr)
+    minmax(330px, 1fr);
+
   gap: 20px;
 }
 
 .owner-card {
-  box-sizing: border-box;
-  background: #ffffff;
-  border-radius: 15px;
-  box-shadow: 0 8px 24px rgba(49, 31, 62, 0.07);
+  position: relative;
+
   overflow: hidden;
+
+  background: #ffffff;
+
+  border-radius: 15px;
+
+  box-shadow:
+    0 8px 24px rgba(49, 31, 62, 0.07);
 }
 
-.fitness-card {
-  height: 300px;
-  border-top: 4px solid #e74291;
-}
-
-.remarks-card {
-  height: 300px;
-  border-top: 4px solid #f0b62f;
-}
+/* =====================================================
+   CARD HEADING
+===================================================== */
 
 .card-heading {
   padding: 15px 22px 0;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .card-heading h3 {
   margin: 0;
+
+  color: var(--owner-text);
+
+  font-family: var(
+    --font-heading,
+    "Baloo 2",
+    "Trebuchet MS",
+    sans-serif
+  );
+
   font-size: 12px;
+  line-height: 1;
   font-weight: 900;
 }
 
-.card-heading h3 span {
-  color: #ffc53d;
-  font-size: 7px;
+.heading-diamond {
   margin-right: 7px;
+
+  color: var(--owner-yellow);
+
+  font-size: 7px;
 }
 
 .card-heading p {
   margin: 6px 0 0;
+
   color: #9ca4bb;
+
   font-size: 9px;
+  line-height: 1;
 }
 
 /* =====================================================
-   FITNESS CHART
+   FITNESS CARD
 ===================================================== */
+
+.fitness-card {
+  height: 300px;
+
+  border-top: 4px solid var(--owner-pink);
+}
+
+.fitness-current {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.fitness-current strong {
+  color: var(--owner-pink);
+
+  font-family: var(
+    --font-heading,
+    "Baloo 2",
+    "Trebuchet MS",
+    sans-serif
+  );
+
+  font-size: 18px;
+  line-height: 1;
+}
+
+.fitness-current span {
+  color: #a1a8ba;
+
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+/* ---------- Chart ---------- */
 
 .fitness-chart {
   height: 205px;
-  margin: 13px 22px 0;
+
+  margin: 12px 22px 0;
+
   display: flex;
   align-items: flex-end;
+
   gap: 10px;
 }
 
 .fitness-column {
-  flex: 1;
   height: 100%;
+  flex: 1;
+
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  align-items: stretch;
+}
+
+.fitness-value {
+  height: 17px;
+
+  color: #8f96aa;
+
+  font-size: 7px;
+  font-weight: 700;
+
+  text-align: center;
 }
 
 .fitness-bar-area {
   height: 165px;
+
   display: flex;
   align-items: flex-end;
 }
@@ -661,100 +1123,179 @@
 .fitness-bar {
   width: 100%;
   min-height: 30px;
+
   border-radius: 7px 7px 5px 5px;
+
   background: #83c536;
 }
 
 .fitness-bar.current {
-  background: linear-gradient(
-    180deg,
-    #ef4d9a,
-    #d93c88
-  );
+  background:
+    linear-gradient(
+      180deg,
+      #ef4d9a,
+      #d93c88
+    );
 }
 
 .fitness-column > span {
-  text-align: center;
   margin-top: 8px;
+
   color: #9da4ba;
+
   font-size: 8px;
+  line-height: 1;
   font-weight: 700;
+
+  text-align: center;
 }
 
 /* =====================================================
-   REMARKS
+   TRAINER REMARKS
 ===================================================== */
 
+.remarks-card {
+  height: 300px;
+
+  border-top: 4px solid #f0b62f;
+}
+
 .remark-date {
-  margin: 18px 22px 0;
-  color: #e64290;
+  margin: 19px 22px 0;
+
+  color: var(--owner-pink);
+
   font-size: 9px;
+  line-height: 1;
   font-weight: 900;
 }
 
 .remark-text {
-  margin: 9px 22px 0;
+  margin: 10px 22px 0;
+
   color: #60677d;
+
   font-size: 9px;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .trial-box {
+  height: 54px;
+
   position: absolute;
-}
-
-.remarks-card {
-  position: relative;
-}
-
-.trial-box {
   left: 22px;
   right: 22px;
   bottom: 18px;
-  height: 54px;
+
+  padding: 0 14px;
+
   border-radius: 12px;
+
   background: #fbebf4;
+
   display: flex;
   align-items: center;
-  justify-content: center;
+
   color: #62697d;
+
   font-size: 9px;
   font-weight: 700;
 }
 
-.trial-box span {
-  margin-right: 5px;
+.trial-icon {
+  margin-right: 7px;
+
+  color: var(--owner-pink);
+
+  font-size: 8px;
+}
+
+.trial-arrow {
+  margin-left: auto;
+
+  color: var(--owner-pink);
+
+  font-size: 12px;
 }
 
 /* =====================================================
-   COSTS
+   COSTS CARD
 ===================================================== */
 
 .costs-card {
   height: 254px;
+
   margin-top: 20px;
+
   border-top: 4px solid #e53b82;
 }
 
+.costs-heading {
+  align-items: center;
+}
+
+.cost-period {
+  height: 27px;
+
+  padding: 0 10px;
+
+  border: 1px solid #efd9e5;
+  border-radius: 7px;
+
+  background: #ffffff;
+
+  color: #777e91;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  font-family: inherit;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.cost-period:hover {
+  background: var(--owner-pink-soft);
+}
+
+.cost-period span {
+  color: #b2b7c5;
+  font-size: 10px;
+}
+
+/* ---------- Table ---------- */
+
 .cost-table-wrapper {
   margin: 16px 22px 0;
+
   overflow-x: auto;
 }
 
 .cost-table {
   width: 100%;
+
   border-collapse: collapse;
+
   table-layout: fixed;
 }
 
 .cost-table th {
-  height: 26px;
+  height: 31px;
+
   padding: 0;
-  border-bottom: 1px solid #efdce6;
-  text-align: left;
+
+  border-bottom: 1px solid var(--owner-border);
+
   color: #9ba2b8;
+
   font-size: 8px;
   font-weight: 700;
+
+  text-align: left;
 }
 
 .cost-table th:nth-child(1) {
@@ -772,14 +1313,28 @@
 }
 
 .cost-table td {
-  height: 32px;
+  height: 34px;
+
   padding: 0;
-  color: #17203f;
+
+  color: var(--owner-text);
+
   font-size: 9px;
   font-weight: 600;
+
+  border-bottom: 1px solid #f6e9ef;
+}
+
+.cost-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .cost-table td.line-item {
+  font-weight: 900;
+}
+
+.cost-table tbody tr:last-child td:not(.line-item) {
+  color: var(--owner-pink);
   font-weight: 900;
 }
 
@@ -789,33 +1344,66 @@
 
 @media (max-width: 1250px) {
   .owner-sidebar {
-    width: 220px;
+    width: 235px;
   }
 
   .owner-content {
-    max-width: calc(100% - 40px);
+    max-width: calc(100% - 48px);
   }
 
   .owner-middle {
-    grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+    grid-template-columns:
+      minmax(0, 1.65fr)
+      minmax(310px, 1fr);
   }
 
-  .horse-overview {
-    transform-origin: top left;
+  .horse-metrics {
+    left: 440px;
+  }
+
+  .training-stats {
+    left: 730px;
+    width: 270px;
+  }
+
+  .training-meter {
+    width: 125px;
   }
 }
 
-@media (max-width: 950px) {
+@media (max-width: 1050px) {
   .owner-sidebar {
-    width: 190px;
+    width: 210px;
   }
 
   .owner-header {
-    padding: 0 18px;
+    padding: 0 20px;
   }
 
   .owner-content {
-    max-width: calc(100% - 30px);
+    max-width: calc(100% - 36px);
+  }
+
+  .horse-title-area {
+    left: 190px;
+  }
+
+  .horse-metrics {
+    left: 405px;
+  }
+
+  .training-stats {
+    left: 650px;
+  }
+
+  .owner-search {
+    width: 175px;
+  }
+}
+
+@media (max-width: 900px) {
+  .owner-sidebar {
+    width: 190px;
   }
 
   .owner-middle {
@@ -827,66 +1415,128 @@
     width: 100%;
   }
 
-  .horse-metrics {
-    left: 420px;
+  .horse-overview {
+    min-height: 430px;
+    height: auto;
+    padding-bottom: 20px;
   }
 
   .training-stats {
-    left: 700px;
+    position: relative;
+    left: auto;
+    top: auto;
+
+    width: calc(100% - 40px);
+
+    margin: 170px 20px 0;
+  }
+
+  .training-meter {
+    flex: 1;
+    width: auto;
   }
 }
 
 @media (max-width: 700px) {
+  .owner-page {
+    display: block;
+  }
+
   .owner-sidebar {
     display: none;
+  }
+
+  .owner-header {
+    height: 70px;
+    padding: 0 15px;
+  }
+
+  .owner-header-title h1 {
+    font-size: 16px;
+  }
+
+  .owner-header-title p {
+    margin-left: 15px;
+    font-size: 8px;
+  }
+
+  .owner-search {
+    width: 140px;
+    height: 31px;
+  }
+
+  .owner-notification,
+  .owner-header-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .owner-header-actions {
+    gap: 7px;
   }
 
   .owner-content {
     width: auto;
     max-width: none;
+
     margin: 0 15px;
-  }
 
-  .owner-header {
-    height: 70px;
-  }
-
-  .owner-search {
-    width: 145px;
+    padding: 18px 0 30px;
   }
 
   .horse-overview {
-    height: auto;
-    min-height: 560px;
+    min-height: 610px;
+
+    padding-bottom: 25px;
+
+    border-radius: 16px;
   }
 
   .horse-gradient {
-    height: 180px;
+    height: 190px;
+  }
+
+  .horse-speed-lines {
+    display: none;
   }
 
   .horse-photo {
     left: 20px;
     top: 25px;
+
+    width: 140px;
+    height: 175px;
   }
 
   .horse-title-area {
-    left: 190px;
-    top: 30px;
+    left: 180px;
+    top: 32px;
+
+    right: 15px;
+  }
+
+  .horse-title-area h2 {
+    font-size: 23px;
+  }
+
+  .horse-rating {
+    margin-top: 27px;
+
+    flex-wrap: wrap;
   }
 
   .horse-metrics {
-    left: 190px;
-    top: 210px;
+    position: relative;
+    left: auto;
+    top: auto;
+
+    width: calc(100% - 40px);
+
+    margin: 220px 20px 0;
   }
 
   .training-stats {
-    left: 20px;
-    top: 330px;
-    width: calc(100% - 40px);
-  }
-
-  .training-meter {
-    flex: 1;
+    margin: 28px 20px 0;
   }
 
   .owner-middle {
@@ -904,7 +1554,75 @@
     padding-bottom: 20px;
   }
 
+  .cost-table-wrapper {
+    overflow-x: auto;
+  }
+
   .cost-table {
     min-width: 650px;
+  }
+}
+
+@media (max-width: 480px) {
+  .owner-header-title p {
+    display: none;
+  }
+
+  .owner-search {
+    width: 120px;
+  }
+
+  .owner-search input {
+    font-size: 8px;
+  }
+
+  .horse-title-area {
+    left: 170px;
+  }
+
+  .horse-title-area h2 {
+    font-size: 20px;
+  }
+
+  .horse-title-line {
+    width: 145px;
+  }
+
+  .horse-stars {
+    font-size: 14px;
+  }
+
+  .cleared-chip {
+    font-size: 7px;
+  }
+
+  .horse-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric strong {
+    font-size: 18px;
+  }
+
+  .card-heading {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .fitness-chart {
+    margin-left: 18px;
+    margin-right: 18px;
+    gap: 6px;
+  }
+
+  .remark-date,
+  .remark-text {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .trial-box {
+    left: 18px;
+    right: 18px;
   }
 }

@@ -132,15 +132,18 @@
 
 .manager-signout {
   width: 100%;
-  height: 38px;
-  margin-bottom: 9px;
-  border: none;
+  height: 36px;
+  padding: 0 15px;
+  border: 0;
   border-radius: 7px;
-  background: #101936;
-  color: #9ca5c2;
+  background: transparent;
+  color: #8992b1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   text-align: left;
-  padding-left: 14px;
-  font-size: 10px;
+  font-family: inherit;
+  font-size: 9px;
   cursor: pointer;
 }
 

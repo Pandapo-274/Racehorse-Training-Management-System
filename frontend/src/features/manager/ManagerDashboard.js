@@ -99,8 +99,7 @@ function ManagerSidebar() {
       </nav>
 
       <div className="manager-sidebar-bottom">
-        <button className="manager-signout">Sign out</button>
-
+      <button type="button" className="manager-signout">Sign out</button>
         <div className="manager-user">
           <div className="manager-avatar">AT</div>
 

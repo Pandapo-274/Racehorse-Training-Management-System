@@ -28,21 +28,13 @@ const flows = [
     route: "/veterinarian",
   },
 ];
-
 function Crest() {
   return (
-    <div className="landing-crest">
-      <div className="crest-ring">
-        <div className="crest-star">★</div>
-        <div className="crest-shield">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div className="crest-wings left"></div>
-        <div className="crest-wings right"></div>
-      </div>
-    </div>
+    <img
+      className="landing-logo"
+      src="/logo.svg"
+      alt="Tenma Racing Academy"
+    />
   );
 }
 

@@ -51,12 +51,16 @@ const costRows = [
   ],
 ];
 
+/* =====================================================
+   SIDEBAR
+===================================================== */
+
 function Sidebar() {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
         <div className="owner-brand-mark">
-          ♘
+          <img src="/logo.svg" alt="TENMA Racing Academy" />
         </div>
 
         <div className="owner-brand-text">
@@ -66,36 +70,38 @@ function Sidebar() {
       </div>
 
       <div className="owner-menu-ribbon">
-        <span>◉</span>
-        MENU
+        <span className="menu-ribbon-icon">◆</span>
+        <span>MENU</span>
       </div>
 
       <nav className="owner-navigation">
-        <a href="#" className="owner-nav-item active">
-          <span className="owner-nav-icon">◉</span>
+        <a href="#my-horses" className="owner-nav-item active">
+          <span className="owner-nav-icon">♞</span>
           <span>My horses</span>
         </a>
 
-        <a href="#" className="owner-nav-item">
-          <span className="owner-nav-icon">◉</span>
+        <a href="#results-races" className="owner-nav-item">
+          <span className="owner-nav-icon">◆</span>
           <span>Results &amp; races</span>
         </a>
 
-        <a href="#" className="owner-nav-item">
-          <span className="owner-nav-icon">◉</span>
+        <a href="#costs-prizes" className="owner-nav-item">
+          <span className="owner-nav-icon">◆</span>
           <span>Costs &amp; prizes</span>
         </a>
       </nav>
 
       <div className="owner-sidebar-bottom">
-        <button className="owner-signout">
+        <button type="button" className="owner-signout">
           Sign out
         </button>
 
         <div className="owner-account">
-          <div className="owner-account-avatar"></div>
+          <div className="owner-account-avatar">
+            KA
+          </div>
 
-          <div>
+          <div className="owner-account-info">
             <strong>Kenji Arai</strong>
             <span>Horse Owner</span>
           </div>
@@ -104,6 +110,10 @@ function Sidebar() {
     </aside>
   );
 }
+
+/* =====================================================
+   HEADER
+===================================================== */
 
 function Header() {
   return (
@@ -118,31 +128,51 @@ function Header() {
       </div>
 
       <div className="owner-header-actions">
-        <div className="owner-search">
+        <label className="owner-search">
+          <span className="search-icon">⌕</span>
+
           <input
             type="text"
             placeholder="Search horses, records..."
+            aria-label="Search horses and records"
           />
-        </div>
+        </label>
 
-        <button className="owner-notification">
-          <span></span>
+        <button
+          type="button"
+          className="owner-notification"
+          aria-label="Notifications"
+        >
+          <span className="notification-icon">●</span>
+          <span className="notification-dot"></span>
         </button>
 
-        <div className="owner-header-avatar"></div>
+        <div className="owner-header-avatar">
+          KA
+        </div>
       </div>
     </header>
   );
 }
 
+/* =====================================================
+   HORSE OVERVIEW
+===================================================== */
+
 function HorseOverview() {
   return (
-    <section className="horse-overview">
+    <section className="horse-overview" id="my-horses">
       <div className="horse-gradient"></div>
-
       <div className="horse-speed-lines"></div>
 
       <div className="horse-photo">
+        <img
+          src="/symbolirudoff.jpg"
+          alt="Symboli Rudolf"
+        />
+
+        <div className="photo-overlay"></div>
+
         <div className="photo-corner top-left"></div>
         <div className="photo-corner top-right"></div>
         <div className="photo-corner bottom-left"></div>
@@ -157,7 +187,9 @@ function HorseOverview() {
         <p>Thoroughbred · 4 yrs · TM-0481</p>
 
         <div className="horse-rating">
-          <span className="horse-stars">★★★★★</span>
+          <span className="horse-stars" aria-label="5 stars">
+            ★★★★★
+          </span>
 
           <span className="cleared-chip">
             Cleared to race
@@ -202,10 +234,14 @@ function HorseOverview() {
 
             <div className="training-meter">
               <div
-                className="training-meter-fill"
+                className={`training-meter-fill ${stat.type}`}
                 style={{ width: `${stat.value}%` }}
               ></div>
             </div>
+
+            <span className="training-value">
+              {stat.value}
+            </span>
           </div>
         ))}
       </div>
@@ -213,23 +249,39 @@ function HorseOverview() {
   );
 }
 
+/* =====================================================
+   FITNESS TREND
+===================================================== */
+
 function FitnessTrend() {
   return (
     <section className="owner-card fitness-card">
       <div className="card-heading">
         <div>
           <h3>
-            <span>◆</span>
+            <span className="heading-diamond">◆</span>
             Fitness trend
           </h3>
 
           <p>Last eight weeks</p>
         </div>
+
+        <div className="fitness-current">
+          <strong>83</strong>
+          <span>current</span>
+        </div>
       </div>
 
       <div className="fitness-chart">
         {fitnessData.map((item, index) => (
-          <div className="fitness-column" key={item.week}>
+          <div
+            className="fitness-column"
+            key={item.week}
+          >
+            <div className="fitness-value">
+              {item.value}
+            </div>
+
             <div className="fitness-bar-area">
               <div
                 className={`fitness-bar ${
@@ -251,12 +303,16 @@ function FitnessTrend() {
   );
 }
 
+/* =====================================================
+   TRAINER REMARKS
+===================================================== */
+
 function TrainerRemarks() {
   return (
     <section className="owner-card remarks-card">
       <div className="card-heading">
         <h3>
-          <span>◆</span>
+          <span className="heading-diamond">◆</span>
           Trainer's remarks
         </h3>
       </div>
@@ -266,31 +322,47 @@ function TrainerRemarks() {
       </div>
 
       <p className="remark-text">
-        Held rhythm through laps 1–3, lost breathing cadence
-        when the pace lifted. Session stopped early on a system
-        alert. Load cut 15% next week.
+        Held rhythm through laps 1–3, lost breathing
+        cadence when the pace lifted. Session stopped
+        early on a system alert. Load cut 15% next week.
       </p>
 
       <div className="trial-box">
-        <span>▶</span>
-        1,600 m trial · 12 Sep
+        <span className="trial-icon">▶</span>
+        <span>1,600 m trial · 12 Sep</span>
+        <span className="trial-arrow">→</span>
       </div>
     </section>
   );
 }
 
+/* =====================================================
+   COSTS & PRIZE MONEY
+===================================================== */
+
 function CostsAndPrizeMoney() {
   return (
-    <section className="owner-card costs-card">
-      <div className="card-heading">
+    <section
+      className="owner-card costs-card"
+      id="costs-prizes"
+    >
+      <div className="card-heading costs-heading">
         <div>
           <h3>
-            <span>◆</span>
+            <span className="heading-diamond">◆</span>
             Costs and prize money
           </h3>
 
           <p>Q3 2026</p>
         </div>
+
+        <button
+          type="button"
+          className="cost-period"
+        >
+          Q3 2026
+          <span>⌄</span>
+        </button>
       </div>
 
       <div className="cost-table-wrapper">
@@ -310,7 +382,7 @@ function CostsAndPrizeMoney() {
               <tr key={row[0]}>
                 {row.map((cell, index) => (
                   <td
-                    key={index}
+                    key={`${row[0]}-${index}`}
                     className={index === 0 ? "line-item" : ""}
                   >
                     {cell}
@@ -324,6 +396,10 @@ function CostsAndPrizeMoney() {
     </section>
   );
 }
+
+/* =====================================================
+   MAIN DASHBOARD
+===================================================== */
 
 function HorseOwnerDashboard() {
   return (
