@@ -20,8 +20,13 @@
      Bên JPA map bằng @Enumerated(EnumType.STRING).
    ============================================================================= */
 
-USE rtms;
-GO
+/* KHONG dat "USE <ten_db>" trong file migration cua Flyway.
+   Flyway da ket noi dung database qua spring.datasource.url (databaseName=...).
+   Mot cau USE o day se day phien lam viec sang database khac voi noi Flyway ghi
+   bang lich su, nen Flyway tuong schema con trong va chay lai V1 trong khi bang
+   da ton tai - dung loi "There is already an object named 'ROLE'".
+   No cung pha vo bien DB_NAME: doi ten database trong .env se khong con tac dung.
+   ============================================================================= */
 
 /* =============================================================================
    1. LÕI - ROLE, USER, HORSE
