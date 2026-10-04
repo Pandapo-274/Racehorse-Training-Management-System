@@ -37,6 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 4, 2026`
+- `[15:57]` `tusandthatsall` - Update V1_initial_schema.sql and Add V2_demo_data.sql
 - `[15:04]` `DevilJack422` - Add UC2 Add Login with JWT and RBAC
 - `[14:24]` `DevilJack422` - Add UC1 Register Account API (`POST /api/auth/register`)
 - `[12:52]` `tqt195` - Update Horse Owner Dashboard
