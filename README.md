@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 4, 2026` at `18:16` by `ArichiAya`
+Last Commited: `Oct 8, 2026` at `21:05` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -36,6 +36,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
+> #### `Oct 8, 2026`
+- `[21:05]` `Pandapo274` - Add UC7 UC8 Horse Management and Vitals (Merge from feature/uc7-uc8-horse-backend)
 > #### `Oct 4, 2026`
 - `[18:16]` `ArichiAya` - Initiated Setting Up For `UC1` For Frontend (Testing Needed Soon)
 - `[16:28]` `tusandthatsall` - Add UC6
