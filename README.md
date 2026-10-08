@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 8, 2026` at `00:09` by `DevilJack422`
+### Last Commited: `Oct 8, 2026` at `00:10` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
