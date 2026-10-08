@@ -36,6 +36,9 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
+> #### `Oct 9, 2026`
+- `[00:08]` `DevilJack` - Add `UC4` Backend Profile
+
 > #### `Oct 8, 2026`
 - `[23:51]` `DevilJack` - Add `UC3` Backend Logout
 - `[23:21]` `ArichiAya` - Setting Up `UC7` and `UC8` Frontend Pages (Testing And Verifying Needed)
