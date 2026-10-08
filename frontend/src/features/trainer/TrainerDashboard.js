@@ -24,6 +24,7 @@ import { getUser, logout, handleAuthError } from "../auth/authService";
 const RANGE_OPTIONS = [4, 8, 12];
 
 function TrainerSidebar({ user, onSignOut }) {
+  const navigate = useNavigate();
   const fullName = user?.fullName || "Head Trainer";
 
   return (
@@ -43,6 +44,11 @@ function TrainerSidebar({ user, onSignOut }) {
         <button className="trainer-nav-item active">
           <span>◉</span>
           Herd progress
+        </button>
+
+        <button type="button" className="trainer-nav-item" onClick={() => navigate("/trainer/horses")}>
+          <span>◉</span>
+          Horses
         </button>
 
         <button className="trainer-nav-item">

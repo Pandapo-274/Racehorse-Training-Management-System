@@ -95,7 +95,7 @@ function GroomSidebar() {
           Today
         </button>
 
-        <button className="groom-nav-item">
+        <button type="button" className="groom-nav-item" onClick={() => navigate("/groom/horses")}>
           <span>◉</span>
           Stable map
         </button>
