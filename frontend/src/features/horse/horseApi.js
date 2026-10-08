@@ -53,6 +53,8 @@ export function canEditHorses(user) {
   return !!user && CAN_EDIT.has(user.role);
 }
 
+<<<<<<< HEAD
+=======
 export function getHorseBasePath(user) {
   const paths = {
     CLUB_MANAGER: "/manager/horses",
@@ -64,6 +66,7 @@ export function getHorseBasePath(user) {
   return paths[user?.role] || "/login";
 }
 
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 /* ------------------------------------------------------------------ *
  * Từ vựng hiển thị
  * ------------------------------------------------------------------ */

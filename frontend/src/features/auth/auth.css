@@ -204,9 +204,42 @@
 }
 
 .portal-btn {
-  width: 200px;
+  width: 210px;
+  height: 46px;
+  border-radius: 23px;
+
+  color: #16203f;
+  background: rgba(255, 255, 255, 0.9);
+
+  border: 2px solid var(--gold-500);
+
+  font: 800 14px var(--font-heading);
+
+  cursor: pointer;
+
+  box-shadow: 0 6px 18px rgba(22, 32, 63, 0.12);
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
+.portal-btn:hover {
+  color: #fff;
+  background: var(--navy-950);
+  border-color: var(--navy-950);
+
+  transform: translateY(-2px);
+
+  box-shadow: 0 8px 20px rgba(22, 32, 63, 0.2);
+}
+
+.portal-btn:active {
+  transform: translateY(0);
+}
 @media (max-width: 1000px) {
   .auth {
     grid-template-columns: 1fr;

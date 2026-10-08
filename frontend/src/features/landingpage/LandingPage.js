@@ -87,20 +87,15 @@ function LandingPage() {
               className="landing-btn landing-btn-primary"
               onClick={() => navigate("/login")}
             >
-              Enter the system
+              Login 
             </button>
 
             <button
               className="landing-btn landing-btn-secondary"
-              onClick={() => {
-                document
-                  .getElementById("operational-flows")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  });
-              }}
+              onClick={() => navigate("/register")}
             >
-              See the three flows
+            
+              No Account? Register Here
             </button>
 
           </div>
@@ -147,12 +142,10 @@ function LandingPage() {
       >
 
         <div className="section-title-ribbon">
-          Three operational flows
+          Three main features
         </div>
 
-        <p className="section-description">
-          Each flow maps to a set of roles and a closed business sequence.
-        </p>
+        
 
         <div className="flow-grid">
 
@@ -172,12 +165,7 @@ function LandingPage() {
 
               <p>{flow.description}</p>
 
-              <button
-                className="flow-button"
-                onClick={() => navigate(flow.route)}
-              >
-                Open flow
-              </button>
+              
 
             </article>
           ))}

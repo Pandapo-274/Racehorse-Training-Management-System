@@ -10,7 +10,11 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
+<<<<<<< HEAD
+  listHorses, canEditHorses, toStatus, toGender,
+=======
   listHorses, canEditHorses, getHorseBasePath, toStatus, toGender,
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
   toAge, formatWeight, STATUS_OPTIONS,
 } from "./horseApi";
 
@@ -18,7 +22,10 @@ export default function HorseListPage() {
   const navigate = useNavigate();
   const user = getUser();
   const mayEdit = canEditHorses(user);
+<<<<<<< HEAD
+=======
   const horseBase = getHorseBasePath(user);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   const [horses, setHorses] = useState(null);
   const [error, setError] = useState("");
@@ -74,7 +81,11 @@ export default function HorseListPage() {
   }, [horses]);
 
   const actions = mayEdit ? (
+<<<<<<< HEAD
+    <button type="button" className="hz-btn" onClick={() => navigate("/horses/new")}>
+=======
     <button type="button" className="hz-btn" onClick={() => navigate(`${horseBase}/new`)}>
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
       Add a horse
     </button>
   ) : null;
@@ -177,11 +188,19 @@ export default function HorseListPage() {
                         className="hz-row"
                         tabIndex={0}
                         role="link"
+<<<<<<< HEAD
+                        onClick={() => navigate(`/horses/${h.horseId}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/horses/${h.horseId}`);
+=======
                         onClick={() => navigate(`${horseBase}/${h.horseId}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             navigate(`${horseBase}/${h.horseId}`);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
                           }
                         }}
                       >
@@ -202,7 +221,11 @@ export default function HorseListPage() {
                               className="hz-btn hz-btn--ghost"
                               onClick={(e) => {
                                 e.stopPropagation(); // nếu không, dòng cũng bắt được cú bấm
+<<<<<<< HEAD
+                                navigate(`/horses/${h.horseId}/edit`);
+=======
                                 navigate(`${horseBase}/${h.horseId}/edit`);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
                               }}
                             >
                               Edit
