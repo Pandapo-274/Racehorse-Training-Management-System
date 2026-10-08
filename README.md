@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 8, 2026` at `00:09` by `DevilJack422`
+### Last Commited: `Oct 9, 2026` at `00:17` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 9, 2026`
+- `[00:17]` `tqt195` - Update Landing Page
 - `[00:08]` `DevilJack422` - Add `UC4` Backend Profile
 
 > #### `Oct 8, 2026`
