@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 8, 2026` at `23:21` by `ArichiAya`
+### Last Commited: `Oct 8, 2026` at `00:09` by `DevilJack422`
 
 ## Information
 > ### Version: `-`
@@ -37,10 +37,10 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 9, 2026`
-- `[00:08]` `DevilJack` - Add `UC4` Backend Profile
+- `[00:08]` `DevilJack422` - Add `UC4` Backend Profile
 
 > #### `Oct 8, 2026`
-- `[23:51]` `DevilJack` - Add `UC3` Backend Logout
+- `[23:51]` `DevilJack422` - Add `UC3` Backend Logout
 - `[23:21]` `ArichiAya` - Setting Up `UC7` and `UC8` Frontend Pages (Testing And Verifying Needed)
 - `[21:05]` `Pandapo274` - Add `UC7` `UC8` Horse Management and Vitals (Merge from feature/uc7-uc8-horse-backend)
 
