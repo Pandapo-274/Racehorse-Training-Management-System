@@ -82,7 +82,7 @@ function ManagerSidebar() {
           Overview
         </button>
 
-        <button className="manager-nav-item">
+        <button type="button" className="manager-nav-item" onClick={() => navigate("/manager/horses")}>
           <span>◉</span>
           Horses
         </button>

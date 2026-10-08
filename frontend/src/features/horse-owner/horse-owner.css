@@ -187,6 +187,11 @@
 .owner-nav-item {
   height: 39px;
 
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+
   padding: 0 16px;
 
   display: flex;

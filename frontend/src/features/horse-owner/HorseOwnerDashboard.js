@@ -86,10 +86,10 @@ function Sidebar() {
       </div>
 
       <nav className="owner-navigation">
-        <a href="#my-horses" className="owner-nav-item active">
+        <button type="button" className="owner-nav-item active" onClick={() => navigate("/horse-owner/horses")}>
           <span className="owner-nav-icon">♞</span>
           <span>My horses</span>
-        </a>
+        </button>
 
         <a href="#results-races" className="owner-nav-item">
           <span className="owner-nav-icon">◆</span>
