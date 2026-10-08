@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-Last Commited: `Oct 4, 2026` at `18:16` by `ArichiAya`
+### Last Commited: `Oct 8, 2026` at `00:09` by `DevilJack422`
 
 ## Information
 > ### Version: `-`
@@ -36,16 +36,25 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - Add your `Changelog` in the `Changelogs` tab below
 
 ## Changelogs
+> #### `Oct 9, 2026`
+- `[00:08]` `DevilJack422` - Add `UC4` Backend Profile
+
+> #### `Oct 8, 2026`
+- `[23:51]` `DevilJack422` - Add `UC3` Backend Logout
+- `[23:21]` `ArichiAya` - Setting Up `UC7` and `UC8` Frontend Pages (Testing And Verifying Needed)
+- `[21:05]` `Pandapo274` - Add `UC7` `UC8` Horse Management and Vitals (Merge from feature/uc7-uc8-horse-backend)
+
 > #### `Oct 4, 2026`
 - `[18:16]` `ArichiAya` - Initiated Setting Up For `UC1` For Frontend (Testing Needed Soon)
-- `[16:28]` `tusandthatsall` - Add UC6
-- `[15:57]` `tusandthatsall` - Update V1_initial_schema.sql and Add V2_demo_data.sql
-- `[15:04]` `DevilJack422` - Add UC2 Add Login with JWT and RBAC
-- `[14:24]` `DevilJack422` - Add UC1 Register Account API (`POST /api/auth/register`)
+- `[16:28]` `tusandthatsall` - Add `UC6`
+- `[15:57]` `tusandthatsall` - Update `V1_initial_schema.sql` and `Add V2_demo_data.sql`
+- `[15:04]` `DevilJack422` - Add `UC2` Add Login with JWT and RBAC
+- `[14:24]` `DevilJack422` - Add `UC1` Register Account API (`POST /api/auth/register`)
 - `[12:52]` `tqt195` - Update Horse Owner Dashboard
 - `[11:38]` `tqt195` - Landing Page added
 - `[10:58]` `tqt195` - 5 Role Dashboard
 - `[8:57]` `tqt195` - Access denied page
+
 > #### `Oct 2, 2026`
 - `[11:30]` `Pandapo274` - Update `application.properties`
 - `[11:23]` `tqt195` - Login page updated

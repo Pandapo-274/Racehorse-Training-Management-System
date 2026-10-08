@@ -12,7 +12,11 @@ import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import PedigreeTree from "./PedigreeTree";
 import VitalsPanel from "./VitalsPanel";
 import {
+<<<<<<< HEAD
   getHorse, getPedigree, getVitals, canEditHorses,
+=======
+  getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
 
@@ -38,8 +42,16 @@ export default function HorseDetailPage() {
   const navigate = useNavigate();
   const user = getUser();
   const mayEdit = canEditHorses(user);
+<<<<<<< HEAD
 
   const [tab, setTab] = useState("overview");
+=======
+  const horseBase = getHorseBasePath(user);
+  const canViewPedigree = user?.role === "CLUB_MANAGER" || user?.role === "HEAD_TRAINER";
+  const canViewVitals = ["HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"].includes(user?.role);
+
+  const [tab, setTab] = useState(canViewPedigree ? "overview" : "vitals");
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
   const [horse, setHorse] = useState(null);
   const [error, setError] = useState("");
 
@@ -87,7 +99,11 @@ export default function HorseDetailPage() {
     return (
       <HorseShell title="Horse">
         <StateBlock kind="error" title={error}>
+<<<<<<< HEAD
           Go back to <Link to="/horses">the registry</Link>.
+=======
+          Go back to <Link to={horseBase}>the registry</Link>.
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
         </StateBlock>
       </HorseShell>
     );
@@ -116,14 +132,22 @@ export default function HorseDetailPage() {
           {mayEdit && (
             <button
               type="button" className="hz-btn"
+<<<<<<< HEAD
               onClick={() => navigate(`/horses/${id}/edit`)}
+=======
+              onClick={() => navigate(`${horseBase}/${id}/edit`)}
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
             >
               Edit
             </button>
           )}
           <button
             type="button" className="hz-btn hz-btn--ghost"
+<<<<<<< HEAD
             onClick={() => navigate("/horses")}
+=======
+            onClick={() => navigate(horseBase)}
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           >
             Back
           </button>
@@ -131,7 +155,14 @@ export default function HorseDetailPage() {
       }
     >
       <div className="hz-tabs" role="tablist">
+<<<<<<< HEAD
         {TABS.map((t) => (
+=======
+        {TABS.filter((t) =>
+          (t.id !== "pedigree" || canViewPedigree) &&
+          (t.id !== "vitals" || canViewVitals)
+        ).map((t) => (
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           <button
             key={t.id} type="button" role="tab"
             aria-selected={tab === t.id}

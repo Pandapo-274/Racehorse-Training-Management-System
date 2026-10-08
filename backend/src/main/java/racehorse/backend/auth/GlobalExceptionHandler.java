@@ -18,13 +18,13 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new LinkedHashMap<>();
         ex.getBindingResult().getFieldErrors()
                 .forEach(fe -> errors.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
-        return ResponseEntity.badRequest().body(ApiError.of(400, "Dữ liệu không hợp lệ", errors));
+        return ResponseEntity.badRequest().body(ApiError.of(400, "Validation failed", errors));
     }
 
     /** JSON gửi lên bị hỏng / thiếu body. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException ex) {
-        return ResponseEntity.badRequest().body(ApiError.of(400, "Body JSON không hợp lệ", Map.of()));
+        return ResponseEntity.badRequest().body(ApiError.of(400, "Malformed JSON request body", Map.of()));
     }
 
     @ExceptionHandler(ApiException.class)

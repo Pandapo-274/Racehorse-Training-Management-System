@@ -7,7 +7,11 @@
 // nên làm theo cách đó - lớp ở đây đều mang tiền tố .hz-.
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUser, logout } from "../auth/authService";
+<<<<<<< HEAD
 import { toInitials } from "./horseApi";
+=======
+import { getHorseBasePath, toInitials } from "./horseApi";
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -34,13 +38,21 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   const fullName = user?.fullName || "Signed out";
   const role = ROLE_LABEL[user?.role] || "—";
   const home = HOME_BY_ROLE[user?.role] || "/login";
+<<<<<<< HEAD
+=======
+  const horseBase = getHorseBasePath(user);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
   };
 
+<<<<<<< HEAD
   const onHorses = location.pathname.startsWith("/horses");
+=======
+  const onHorses = location.pathname.startsWith(horseBase);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   return (
     <div className="hz-page">
@@ -64,7 +76,11 @@ export default function HorseShell({ title, subtitle, actions, children }) {
           <button
             className={`hz-nav-item${onHorses ? " active" : ""}`}
             aria-current={onHorses ? "page" : undefined}
+<<<<<<< HEAD
             onClick={() => navigate("/horses")}
+=======
+            onClick={() => navigate(horseBase)}
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           >
             <span aria-hidden="true">◉</span>
             Horses

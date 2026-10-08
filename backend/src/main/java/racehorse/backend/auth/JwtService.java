@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,18 +25,19 @@ public class JwtService {
                       @Value("${app.jwt.expiration-minutes:480}") long expirationMinutes) {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
-            throw new IllegalStateException("JWT_SECRET trong .env phải dài ít nhất 32 ký tự");
+            throw new IllegalStateException("JWT_SECRET in .env must be at least 32 characters long");
         }
         this.key = Keys.hmacShaKeyFor(bytes);
         this.expirationMinutes = expirationMinutes;
     }
 
-    public String generate(AuthenticatedUser user) {
+    public String generate(int userId, String username, String role) {
         Instant now = Instant.now();
         return Jwts.builder()
-                .subject(String.valueOf(user.userId()))
-                .claim("username", user.username())
-                .claim("role", user.role())
+                .id(UUID.randomUUID().toString()) // jti: "số seri" của vé, để logout thu hồi đúng vé này
+                .subject(String.valueOf(userId))
+                .claim("username", username)
+                .claim("role", role)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
                 .signWith(key, Jwts.SIG.HS256)
@@ -50,7 +52,9 @@ public class JwtService {
             return Optional.of(new AuthenticatedUser(
                     Integer.parseInt(c.getSubject()),
                     c.get("username", String.class),
-                    c.get("role", String.class)));
+                    c.get("role", String.class),
+                    c.getId(),
+                    c.getExpiration().toInstant()));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }

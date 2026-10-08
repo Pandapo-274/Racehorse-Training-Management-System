@@ -12,7 +12,11 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "./HorseShell";
 import {
   listHorses, getHorse, createHorse, updateHorse, canEditHorses,
+<<<<<<< HEAD
   ownersFromHorses, GENDER_OPTIONS, toGender, SIRE_GENDERS, DAM_GENDERS,
+=======
+  ownersFromHorses, getHorseBasePath, GENDER_OPTIONS, toGender, SIRE_GENDERS, DAM_GENDERS,
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 } from "./horseApi";
 
 const EMPTY = {
@@ -111,6 +115,10 @@ export default function HorseFormPage() {
   const { id } = useParams();
   const editing = Boolean(id);
   const user = getUser();
+<<<<<<< HEAD
+=======
+  const horseBase = getHorseBasePath(user);
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
@@ -201,7 +209,11 @@ export default function HorseFormPage() {
     try {
       const payload = toPayload(form);
       const saved = editing ? await updateHorse(id, payload) : await createHorse(payload);
+<<<<<<< HEAD
       navigate(`/horses/${saved.horseId}`, { replace: true });
+=======
+      navigate(`${horseBase}/${saved.horseId}`, { replace: true });
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
 
@@ -223,7 +235,11 @@ export default function HorseFormPage() {
       <HorseShell title={editing ? "Edit horse" : "Add a horse"}>
         <StateBlock kind="error" title="You cannot edit horse records">
           Only a head trainer or the club manager may register or change a horse. Ask one of
+<<<<<<< HEAD
           them, or go back to <Link to="/horses">the registry</Link>.
+=======
+          them, or go back to <Link to={horseBase}>the registry</Link>.
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
         </StateBlock>
       </HorseShell>
     );
@@ -238,7 +254,11 @@ export default function HorseFormPage() {
           : "Register a horse into the academy"
       }
       actions={
+<<<<<<< HEAD
         <button type="button" className="hz-btn hz-btn--ghost" onClick={() => navigate("/horses")}>
+=======
+        <button type="button" className="hz-btn hz-btn--ghost" onClick={() => navigate(horseBase)}>
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           Cancel
         </button>
       }
@@ -401,7 +421,11 @@ export default function HorseFormPage() {
 
             <button
               type="button" className="hz-btn hz-btn--ghost" disabled={saving}
+<<<<<<< HEAD
               onClick={() => navigate(editing ? `/horses/${id}` : "/horses")}
+=======
+              onClick={() => navigate(editing ? `${horseBase}/${id}` : horseBase)}
+>>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
             >
               Cancel
             </button>

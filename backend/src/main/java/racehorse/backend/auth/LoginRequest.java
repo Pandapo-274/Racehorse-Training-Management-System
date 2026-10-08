@@ -5,11 +5,11 @@ import jakarta.validation.constraints.Size;
 
 /** "username" nhận cả username lẫn email (tài liệu UC2 ghi đăng nhập bằng Email). */
 public record LoginRequest(
-        @NotBlank(message = "Vui lòng nhập tên đăng nhập hoặc email")
-        @Size(max = 100, message = "Tối đa 100 ký tự")
+        @NotBlank(message = "Username or email is required")
+        @Size(max = 100, message = "Must be at most 100 characters")
         String username,
 
-        @NotBlank(message = "Vui lòng nhập mật khẩu")
-        @Size(max = 72, message = "Tối đa 72 ký tự")
+        @NotBlank(message = "Password is required")
+        @Size(max = 72, message = "Must be at most 72 characters")
         String password
 ) {}

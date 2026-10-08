@@ -73,7 +73,7 @@ function VetSidebar() {
 
       <nav className="vet-navigation">
 
-        <button className="vet-nav-item active">
+        <button type="button" className="vet-nav-item active" onClick={() => navigate("/veterinarian/horses")}>
           <span>◉</span>
           Herd health
         </button>
