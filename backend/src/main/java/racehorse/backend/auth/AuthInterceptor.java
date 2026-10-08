@@ -19,10 +19,12 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtService jwt;
     private final UserRepository users;
+    private final TokenBlacklist blacklist;
 
-    public AuthInterceptor(JwtService jwt, UserRepository users) {
+    public AuthInterceptor(JwtService jwt, UserRepository users, TokenBlacklist blacklist) {
         this.jwt = jwt;
         this.users = users;
+        this.blacklist = blacklist;
     }
 
     @Override
@@ -31,11 +33,14 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         String header = req.getHeader("Authorization");
         if (header == null || !header.startsWith("Bearer ")) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Bạn chưa đăng nhập");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Authentication required");
         }
         AuthenticatedUser user = jwt.parse(header.substring(7).trim())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED,
-                        "Phiên đăng nhập không hợp lệ hoặc đã hết hạn"));
+                        "Invalid or expired token"));
+        if (blacklist.isRevoked(user.tokenId())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Token has been revoked, please log in again");
+        }
         req.setAttribute(USER_ATTR, user);
 
         if (handler instanceof HandlerMethod hm) {
@@ -45,7 +50,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 String action = ("ACCESS " + req.getMethod() + " " + req.getRequestURI());
                 if (action.length() > 100) action = action.substring(0, 100);
                 users.writeAudit(user.userId(), action, null, null, "DENIED", req.getRemoteAddr());
-                throw new ApiException(HttpStatus.FORBIDDEN, "Bạn không có quyền truy cập chức năng này");
+                throw new ApiException(HttpStatus.FORBIDDEN, "You do not have permission to access this resource");
             }
         }
         return true;

@@ -2,6 +2,7 @@ package racehorse.backend.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +32,14 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
         return authService.login(request, http.getRemoteAddr());
+    }
+
+    /** Cần token. Sau lệnh này token hiện tại không dùng được nữa. */
+    @PostMapping("/logout")
+    public Map<String, String> logout(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                      HttpServletRequest http) {
+        authService.logout(user, http.getRemoteAddr());
+        return Map.of("message", "Logged out successfully");
     }
 
     /** Cần token. Interceptor đã giải mã sẵn và nhét user vào request. */

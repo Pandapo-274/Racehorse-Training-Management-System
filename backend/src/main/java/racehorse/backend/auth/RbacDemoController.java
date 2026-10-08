@@ -14,6 +14,6 @@ public class RbacDemoController {
     @GetMapping("/manager-only")
     @RequireRole({"CLUB_MANAGER"})
     public Map<String, Object> managerOnly(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me) {
-        return Map.of("message", "Chào sếp " + me.username(), "role", me.role());
+        return Map.of("message", "Welcome, manager " + me.username(), "role", me.role());
     }
 }
