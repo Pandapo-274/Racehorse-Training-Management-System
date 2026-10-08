@@ -54,7 +54,8 @@ public class JwtService {
                     c.get("username", String.class),
                     c.get("role", String.class),
                     c.getId(),
-                    c.getExpiration().toInstant()));
+                    c.getExpiration().toInstant(),
+                    c.getIssuedAt().toInstant()));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
