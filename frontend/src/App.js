@@ -8,6 +8,9 @@ import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import LandingPage from "./features/landingpage/LandingPage";
 import RegisterPage from "./features/auth/RegisterPage";
+import HorseListPage from "./features/horse/HorseListPage";
+import HorseFormPage from "./features/horse/HorseFormPage";
+import HorseDetailPage from "./features/horse/HorseDetailPage";
 const Placeholder = ({ text }) => <h1 style={{ padding: 24 }}>{text}</h1>;
 
 export default function App() {
@@ -30,6 +33,13 @@ export default function App() {
         <Route path="/groom" element={<GroomDashboard/>} />
         {/* Horse Owner */}
         <Route path="/horse-owner" element={<HorseOwnerDashboard/>} />
+        {/* UC7 Horse Management + UC8 Horse Vitals.
+            /horses/new đặt trước /horses/:id cho rõ ý - react-router vốn đã ưu
+            tiên đoạn tĩnh hơn đoạn động, nhưng đọc từ trên xuống thì dễ hiểu hơn. */}
+        <Route path="/horses" element={<HorseListPage />} />
+        <Route path="/horses/new" element={<HorseFormPage />} />
+        <Route path="/horses/:id" element={<HorseDetailPage />} />
+        <Route path="/horses/:id/edit" element={<HorseFormPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

@@ -56,19 +56,7 @@ export default function LoginForm() {
         {loading ? "Signing in..." : "Enter academy"}
       </Button>
 
-      {/* Hai nút demo trong Figma: chỉ hiện khi chạy npm start */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="demo-row">
-          <Button type="button" variant="secondary" disabled={loading}
-            onClick={() => navigate("/access-denied")}>
-            Demo: no access
-          </Button>
-          <Button type="button" variant="secondary" disabled={loading}
-            onClick={() => signInAs("thang.nd", "123456")}>
-            Sign in as Trainer
-          </Button>
-        </div>
-      )}
+      
     </form>
   );
 }
