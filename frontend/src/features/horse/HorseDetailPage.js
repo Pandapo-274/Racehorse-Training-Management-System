@@ -18,6 +18,7 @@ import VitalsPanel from "./VitalsPanel";
 
 import {
   getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
+  canViewPedigree, canViewVitals,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
 
@@ -45,9 +46,11 @@ export default function HorseDetailPage() {
   const user = getUser();
 
   const mayEdit = canEditHorses(user);
+  const mayViewPedigree = canViewPedigree(user);
+  const mayViewVitals = canViewVitals(user);
   const horseBase = getHorseBasePath(user);
 
-  const [tab, setTab] = useState(canViewPedigree ? "overview" : "vitals");
+  const [tab, setTab] = useState("overview");
   const [horse, setHorse] = useState(null);
   const [error, setError] = useState("");
 
@@ -172,8 +175,8 @@ export default function HorseDetailPage() {
       {/* Tabs */}
       <div className="hz-tabs" role="tablist">
         {TABS.filter((t) =>
-          (t.id !== "pedigree" || canViewPedigree) &&
-          (t.id !== "vitals" || canViewVitals)
+          (t.id !== "pedigree" || mayViewPedigree) &&
+          (t.id !== "vitals" || mayViewVitals)
         ).map((t) => (
           <button
             key={t.id}

@@ -53,6 +53,19 @@ export function canEditHorses(user) {
   return !!user && CAN_EDIT.has(user.role);
 }
 
+/**
+ * Xem phả hệ (UC7) và chỉ số sinh tồn (UC8): backend không giới hạn theo role
+ * ở hai endpoint này (chỉ kiểm tra quyền xem từng con ngựa), nên mọi role đã
+ * đăng nhập đều thấy. Nếu sau này cần siết quyền, sửa tại đây.
+ */
+export function canViewPedigree(user) {
+  return !!user;
+}
+
+export function canViewVitals(user) {
+  return !!user;
+}
+
 export function getHorseBasePath(user) {
   const paths = {
     CLUB_MANAGER: "/manager/horses",

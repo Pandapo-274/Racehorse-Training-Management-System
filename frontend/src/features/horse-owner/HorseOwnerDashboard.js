@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import "./horse-owner.css";
 import { useNavigate } from "react-router-dom";
-import { logout } from "../auth/authService";
+import { getUser, logout } from "../auth/authService";
 
 // TODO(fetch): trainingStats -> API chỉ số huấn luyện của ngựa (HorseOverview)
 const trainingStats = [
@@ -56,12 +56,45 @@ const costRows = [
   ],
 ];
 
+// TODO(fetch): ownerSummary -> API tổng quan ngựa của chủ ngựa (StatStrip)
+const ownerSummary = [
+  { value: "3", label: "Horses stabled", type: "pink" },
+  { value: "83", label: "Current fitness", type: "green" },
+  { value: "36 km", label: "Weekly distance", type: "gold" },
+  { value: "22 Nov", label: "Next race", type: "red" },
+];
+
+function HorseshoeIcon() {
+  return (
+    <svg className="owner-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function toInitials(name) {
+  if (!name) return "??";
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
+function scrollToId(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 /* =====================================================
    SIDEBAR
 ===================================================== */
 
-function Sidebar() {
+function Sidebar({ user }) {
   const navigate = useNavigate();
+  const fullName = user?.fullName || "Horse Owner";
+
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
@@ -70,36 +103,37 @@ function Sidebar() {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
-        <div className="owner-brand-mark">
-          <img src="/logo.svg" alt="TENMA Racing Academy" />
-        </div>
-
-        <div className="owner-brand-text">
+        <img src="/logo.svg" alt="Tenma logo" />
+        <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>
         </div>
       </div>
 
-      <div className="owner-menu-ribbon">
-        <span className="menu-ribbon-icon">◆</span>
-        <span>MENU</span>
+      <div className="owner-menu-title">
+        <HorseshoeIcon /> MENU
       </div>
 
       <nav className="owner-navigation">
-        <button type="button" className="owner-nav-item active" onClick={() => navigate("/horse-owner/horses")}>
-          <span className="owner-nav-icon">♞</span>
-          <span>My horses</span>
+        <button type="button" className="owner-nav-item active">
+          <HorseshoeIcon />
+          Overview
         </button>
 
-        <a href="#results-races" className="owner-nav-item">
-          <span className="owner-nav-icon">◆</span>
-          <span>Results &amp; races</span>
-        </a>
+        <button type="button" className="owner-nav-item" onClick={() => navigate("/horse-owner/horses")}>
+          <HorseshoeIcon />
+          My horses
+        </button>
 
-        <a href="#costs-prizes" className="owner-nav-item">
-          <span className="owner-nav-icon">◆</span>
-          <span>Costs &amp; prizes</span>
-        </a>
+        <button type="button" className="owner-nav-item" onClick={() => scrollToId("results-races")}>
+          <HorseshoeIcon />
+          Results &amp; races
+        </button>
+
+        <button type="button" className="owner-nav-item" onClick={() => scrollToId("costs-prizes")}>
+          <HorseshoeIcon />
+          Costs &amp; prizes
+        </button>
       </nav>
 
       <div className="owner-sidebar-bottom">
@@ -108,12 +142,9 @@ function Sidebar() {
         </button>
 
         <div className="owner-account">
-          <div className="owner-account-avatar">
-            KA
-          </div>
-
-          <div className="owner-account-info">
-            <strong>Kenji Arai</strong>
+          <div className="owner-account-avatar">{toInitials(fullName)}</div>
+          <div>
+            <strong>{fullName}</strong>
             <span>Horse Owner</span>
           </div>
         </div>
@@ -126,43 +157,76 @@ function Sidebar() {
    HEADER
 ===================================================== */
 
-function Header() {
+function Header({ user }) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const fullName = user?.fullName || "Horse Owner";
+
+  // Giống màn /horse-owner/horses: tìm kiếm ngựa nằm ở danh sách, nên Enter chuyển sang đó.
+  const handleSearch = (event) => {
+    if (event.key === "Enter") navigate("/horse-owner/horses");
+  };
+
   return (
     <header className="owner-header">
       <div className="owner-header-title">
-        <h1>
-          <span className="yellow-diamond">◆</span>
-          My horses
-        </h1>
+        <div className="owner-page-title">
+          <span className="owner-diamond" aria-hidden="true" />
+          <h1>My horses</h1>
+        </div>
 
         <p>3 horses stabled at Tenma Academy</p>
       </div>
 
       <div className="owner-header-actions">
-        <label className="owner-search">
-          <span className="search-icon">⌕</span>
-
-          <input
-            type="text"
-            placeholder="Search horses, records..."
-            aria-label="Search horses and records"
-          />
-        </label>
+        <input
+          className="owner-search"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={handleSearch}
+          placeholder="Search horses, records..."
+          aria-label="Search horses and records"
+        />
 
         <button
           type="button"
           className="owner-notification"
-          aria-label="Notifications"
+          onClick={() => scrollToId("trainer-remarks")}
+          title="Jump to trainer's remarks"
+          aria-label="Jump to trainer's remarks"
         >
-          <span className="notification-icon">●</span>
-          <span className="notification-dot"></span>
+          <span className="owner-notification-dot" />
         </button>
 
-        <div className="owner-header-avatar">
-          KA
-        </div>
+        <button
+          type="button"
+          className="owner-header-avatar"
+          onClick={() => navigate("/horse-owner/horses")}
+          title="Open my horses"
+          aria-label="Open my horses"
+        >
+          {toInitials(fullName)}
+        </button>
       </div>
     </header>
+  );
+}
+
+/* =====================================================
+   STAT STRIP
+===================================================== */
+
+function StatStrip() {
+  return (
+    <div className="owner-stats">
+      {ownerSummary.map((item) => (
+        <div className={`owner-stat-card ${item.type}`} key={item.label}>
+          <span className="owner-stat-value">{item.value}</span>
+          <span className="owner-stat-label">{item.label}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -172,7 +236,7 @@ function Header() {
 
 function HorseOverview() {
   return (
-    <section className="horse-overview" id="my-horses">
+    <section className="horse-overview" id="results-races">
       <div className="horse-gradient"></div>
       <div className="horse-speed-lines"></div>
 
@@ -320,7 +384,7 @@ function FitnessTrend() {
 
 function TrainerRemarks() {
   return (
-    <section className="owner-card remarks-card">
+    <section className="owner-card remarks-card" id="trainer-remarks">
       <div className="card-heading">
         <h3>
           <span className="heading-diamond">◆</span>
@@ -413,14 +477,18 @@ function CostsAndPrizeMoney() {
 ===================================================== */
 
 function HorseOwnerDashboard() {
+  const user = getUser();
+
   return (
     <div className="owner-page">
-      <Sidebar />
+      <Sidebar user={user} />
 
       <main className="owner-main">
-        <Header />
+        <Header user={user} />
 
         <div className="owner-content">
+          <StatStrip />
+
           <HorseOverview />
 
           <div className="owner-middle">
