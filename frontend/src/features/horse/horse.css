@@ -369,3 +369,36 @@
   .hz-content { padding: 20px 18px 26px; }
   .hz-detail-row { grid-template-columns: 1fr; gap: 3px; }
 }
+/* Nút hành động bên trong một khối trạng thái. StateBlock xếp con theo cột
+   nên nút tự nằm dưới dòng chữ; span này chỉ thêm khoảng thở. */
+.hz-state-action { display: block; margin-top: 12px; }
+
+.hz-textarea {
+  width: 100%;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--text-900);
+  font: 400 12.5px/1.5 var(--font-body);
+  resize: vertical;
+}
+.hz-textarea:focus { outline: 2px solid var(--pink-300); outline-offset: 1px; }
+
+/* Khối "điều gì sẽ xảy ra tiếp theo". Thanh vàng bên trái để nó đọc ra là lời
+   giải thích, không phải một ô nhập nữa. */
+.hz-note-box {
+  margin: 16px 0 0;
+  padding: 12px 15px;
+  border-radius: 10px;
+  border-left: 3px solid var(--gold-500);
+  background: var(--field-bg);
+}
+.hz-note-box strong { display: block; font: 700 12px var(--font-body); color: var(--text-900); }
+.hz-note-box p { margin: 4px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--text-600); }
+
+/* Lý do học viện từ chối. Màu khác hẳn phần mô tả để không bị đọc lướt qua. */
+.hz-reject-note {
+  margin: 5px 0 0 !important;
+  color: var(--danger) !important;
+}

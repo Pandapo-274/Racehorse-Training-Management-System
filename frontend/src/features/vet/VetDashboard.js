@@ -1,6 +1,7 @@
 import "./vet.css";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // TODO(fetch): horses -> API sơ đồ chuồng + trạng thái từng ngựa (StableMap)
 const horses = [
@@ -101,18 +102,9 @@ function VetSidebar() {
           Sign out
         </button>
 
-        <div className="vet-user">
-
-          <div className="vet-avatar">
-            YN
-          </div>
-
-          <div>
-            <strong>Dr. Yuki Nakajima</strong>
-            <span>Veterinarian</span>
-          </div>
-
-        </div>
+        {/* Trước đây ghi cứng "Dr. Yuki Nakajima" nên ai đăng nhập cũng thấy
+            tên đó. Giờ lấy theo người đang đăng nhập, và bấm vào mở hồ sơ. */}
+        <ProfileCard className="vet-user" avatarClassName="vet-avatar" />
 
       </div>
 
@@ -291,7 +283,7 @@ export default function VetDashboard() {
               ●
             </button>
 
-            <div className="vet-profile" />
+            <ProfileCircle className="vet-profile" />
 
           </div>
 

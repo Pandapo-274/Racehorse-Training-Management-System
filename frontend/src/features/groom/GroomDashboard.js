@@ -1,6 +1,7 @@
 import "./groom.css";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // TODO(fetch): tasks -> API công việc trong ngày của groom (TasksCard)
 const tasks = [
@@ -123,18 +124,9 @@ function GroomSidebar() {
           Sign out
         </button>
 
-        <div className="groom-user">
-
-          <div className="groom-avatar">
-            RS
-          </div>
-
-          <div>
-            <strong>Riku Sasaki</strong>
-            <span>Groom</span>
-          </div>
-
-        </div>
+        {/* Trước đây ghi cứng "Riku Sasaki" nên ai đăng nhập cũng thấy tên
+            đó. Giờ lấy theo người đang đăng nhập, và bấm vào mở hồ sơ. */}
+        <ProfileCard className="groom-user" avatarClassName="groom-avatar" />
 
       </div>
 
@@ -297,7 +289,7 @@ export default function GroomDashboard() {
               ●
             </button>
 
-            <div className="groom-profile" />
+            <ProfileCircle className="groom-profile" />
 
           </div>
 

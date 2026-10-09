@@ -123,3 +123,16 @@
   .pf-grid { grid-template-columns: 1fr; }
   .pf-form-grid { grid-template-columns: 1fr; }
 }
+
+/* Xác nhận sau khi tải ảnh lên. Cần thiết vì ảnh mới hiện ra ngay, trông y
+   như một bản xem thử, trong khi nút "Save changes" bên dưới vẫn mờ - ba ô
+   chữ có đổi gì đâu. Hai dấu hiệu đó cộng lại khiến người dùng tưởng ảnh chưa
+   được lưu, và đi tìm một nút lưu không tồn tại. */
+.pf-photo__saved {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  color: var(--text-600);
+}

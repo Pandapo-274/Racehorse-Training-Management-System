@@ -10,9 +10,9 @@ import {
   toSeverity,
   toDistance,
   toChartData,
-  toInitials,
 } from "./dashboardApi";
 import { getUser, logout, handleAuthError } from "../auth/authService";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // UC6 - View Master Fitness & Training Dashboard
 //
@@ -52,7 +52,6 @@ function HorseshoeIcon() {
 
 function TrainerSidebar({ user, onSignOut }) {
   const navigate = useNavigate();
-  const fullName = user?.fullName || "Head Trainer";
 
   return (
     <aside className="trainer-sidebar">
@@ -109,13 +108,8 @@ function TrainerSidebar({ user, onSignOut }) {
           Sign out
         </button>
 
-        <div className="trainer-user">
-          <div className="trainer-avatar">{toInitials(fullName)}</div>
-          <div>
-            <strong>{fullName}</strong>
-            <span>Head Trainer</span>
-          </div>
-        </div>
+        <ProfileCard className="trainer-user" avatarClassName="trainer-avatar"
+                     role="Head Trainer" />
       </div>
     </aside>
   );
@@ -444,13 +438,7 @@ export default function TrainerDashboard() {
               <span className="trainer-notification-dot" />
             </button>
 
-            <button
-              type="button"
-              className="trainer-profile trainer-profile-button"
-              onClick={() => navigate("/trainer/horses")}
-              title="Open horses"
-              aria-label="Open horses"
-            />
+            <ProfileCircle className="trainer-profile" />
           </div>
         </header>
 

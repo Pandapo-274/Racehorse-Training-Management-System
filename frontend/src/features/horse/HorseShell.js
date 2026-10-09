@@ -7,7 +7,8 @@
 // nên làm theo cách đó - lớp ở đây đều mang tiền tố .hz-.
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUser, logout } from "../auth/authService";
-import { getHorseBasePath, toInitials } from "./horseApi";
+import { ProfileCard } from "../profile/ProfileLink";
+import { getHorseBasePath } from "./horseApi";
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -46,7 +47,6 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   const location = useLocation();
   const user = getUser();
 
-  const fullName = user?.fullName || "Signed out";
   const role = ROLE_LABEL[user?.role] || "—";
   const home = HOME_BY_ROLE[user?.role] || "/login";
   const horseBase = getHorseBasePath(user);
@@ -94,13 +94,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
             Sign out
           </button>
 
-          <div className="hz-user">
-            <div className="hz-avatar">{toInitials(fullName)}</div>
-            <div>
-              <strong>{fullName}</strong>
-              <span>{role}</span>
-            </div>
-          </div>
+          <ProfileCard className="hz-user" avatarClassName="hz-avatar" role={role} />
         </div>
       </aside>
 

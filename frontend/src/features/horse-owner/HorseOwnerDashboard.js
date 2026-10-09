@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./horse-owner.css";
 import { useNavigate } from "react-router-dom";
-import { getUser, logout } from "../auth/authService";
+import { getUser, logout, handleAuthError } from "../auth/authService";
+import { listHorses } from "../horse/horseApi";
+import { listRequests, pendingOnly } from "../horse/horseRequestApi";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // TODO(fetch): trainingStats -> API chỉ số huấn luyện của ngựa (HorseOverview)
 const trainingStats = [
@@ -78,11 +81,6 @@ function HorseshoeIcon() {
   );
 }
 
-function toInitials(name) {
-  if (!name) return "??";
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
 function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -93,7 +91,6 @@ function scrollToId(id) {
 
 function Sidebar({ user }) {
   const navigate = useNavigate();
-  const fullName = user?.fullName || "Horse Owner";
 
   const handleSignOut = () => {
     logout();
@@ -141,13 +138,8 @@ function Sidebar({ user }) {
           Sign out
         </button>
 
-        <div className="owner-account">
-          <div className="owner-account-avatar">{toInitials(fullName)}</div>
-          <div>
-            <strong>{fullName}</strong>
-            <span>Horse Owner</span>
-          </div>
-        </div>
+        <ProfileCard className="owner-account" avatarClassName="owner-account-avatar"
+                     role="Horse Owner" />
       </div>
     </aside>
   );
@@ -160,7 +152,6 @@ function Sidebar({ user }) {
 function Header({ user }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const fullName = user?.fullName || "Horse Owner";
 
   // Giống màn /horse-owner/horses: tìm kiếm ngựa nằm ở danh sách, nên Enter chuyển sang đó.
   const handleSearch = (event) => {
@@ -199,15 +190,7 @@ function Header({ user }) {
           <span className="owner-notification-dot" />
         </button>
 
-        <button
-          type="button"
-          className="owner-header-avatar"
-          onClick={() => navigate("/horse-owner/horses")}
-          title="Open my horses"
-          aria-label="Open my horses"
-        >
-          {toInitials(fullName)}
-        </button>
+        <ProfileCircle className="owner-header-avatar" />
       </div>
     </header>
   );
@@ -476,8 +459,79 @@ function CostsAndPrizeMoney() {
    MAIN DASHBOARD
 ===================================================== */
 
+/**
+ * Màn hình khi chủ ngựa chưa có con nào.
+ *
+ * Trước đây trang này luôn hiện dữ liệu mẫu - "3 Horses stabled", Symboli
+ * Rudolf, biểu đồ thể lực - kể cả với tài khoản không sở hữu con ngựa nào.
+ * Người dùng bấm sang "My horses" thì thấy "0 horses", và hai màn hình nói
+ * ngược nhau.
+ *
+ * Chủ ngựa không tự tạo hồ sơ ngựa được: POST /api/horses chỉ nhận
+ * HEAD_TRAINER và CLUB_MANAGER. Nên nút ở đây không gọi thẳng vào đó mà dẫn
+ * sang biểu mẫu gửi yêu cầu - đường duy nhất thật sự đi được.
+ */
+function NoHorsesYet({ pendingCount }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="owner-empty">
+      <div className="owner-empty__mark" aria-hidden="true">◆</div>
+
+      <h2>No horses in your name yet</h2>
+
+      <p>
+        Horses are entered into the register by the academy. Send a request and they
+        will add yours, assign a registration code and a stall.
+      </p>
+
+      {pendingCount > 0 && (
+        <p className="owner-empty__pending">
+          {pendingCount === 1
+            ? "You have one request waiting for the academy."
+            : `You have ${pendingCount} requests waiting for the academy.`}
+        </p>
+      )}
+
+      <button type="button" className="owner-empty__btn"
+              onClick={() => navigate("/horse-owner/request")}>
+        {pendingCount > 0 ? "Request another horse" : "Request a horse registration"}
+      </button>
+    </div>
+  );
+}
+
 function HorseOwnerDashboard() {
   const user = getUser();
+  const navigate = useNavigate();
+
+  // null = chưa biết. Chỉ phân nhánh sau khi máy chủ đã trả lời, nếu không
+  // trang sẽ nháy qua màn trống một cái rồi mới hiện nội dung.
+  const [horses, setHorses] = useState(null);
+  const [pending, setPending] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+
+    listHorses(ctrl.signal)
+      .then((rows) => setHorses(rows || []))
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return;
+        // Gọi hỏng thì giữ nguyên trang như cũ thay vì khẳng định "không có
+        // con nào" - nói sai còn tệ hơn không nói.
+        setFailed(true);
+      });
+
+    listRequests(ctrl.signal)
+      .then((rows) => setPending(pendingOnly(rows).length))
+      .catch(() => {}); // chỉ là con số phụ, hỏng thì bỏ qua
+
+    return () => ctrl.abort();
+  }, [navigate]);
+
+  const empty = !failed && horses !== null && horses.length === 0;
 
   return (
     <div className="owner-page">
@@ -487,16 +541,25 @@ function HorseOwnerDashboard() {
         <Header user={user} />
 
         <div className="owner-content">
-          <StatStrip />
+          {empty ? (
+            <NoHorsesYet pendingCount={pending} />
+          ) : (
+            <>
+              {/* TODO(fetch): bốn khối dưới vẫn là dữ liệu mẫu. Chúng chỉ còn
+                  hiện khi tài khoản thật sự có ngựa, nên không còn mâu thuẫn
+                  với màn "My horses" nữa, nhưng số liệu thì vẫn chưa thật. */}
+              <StatStrip />
 
-          <HorseOverview />
+              <HorseOverview />
 
-          <div className="owner-middle">
-            <FitnessTrend />
-            <TrainerRemarks />
-          </div>
+              <div className="owner-middle">
+                <FitnessTrend />
+                <TrainerRemarks />
+              </div>
 
-          <CostsAndPrizeMoney />
+              <CostsAndPrizeMoney />
+            </>
+          )}
         </div>
       </main>
     </div>

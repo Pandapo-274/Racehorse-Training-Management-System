@@ -1545,3 +1545,43 @@ button.owner-stat-card {
     grid-template-columns: 1fr;
   }
 }
+/* Màn hình khi chủ ngựa chưa có con nào. Chiếm trọn vùng nội dung thay vì nằm
+   trong một thẻ nhỏ: lúc này không có gì khác trên trang, nên một hộp con lọt
+   thỏm giữa khoảng trắng trông như trang bị tải hỏng. */
+.owner-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 72px 28px;
+  border-radius: 18px;
+  background: #fff;
+  text-align: center;
+}
+.owner-empty__mark { font-size: 26px; color: var(--gold-500); line-height: 1; }
+.owner-empty h2 { margin: 4px 0 0; font: 800 21px var(--font-heading); color: var(--text-900); }
+.owner-empty p {
+  margin: 0;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-600);
+}
+.owner-empty__pending {
+  padding: 8px 15px;
+  border-radius: 14px;
+  border-left: 3px solid var(--gold-500);
+  background: var(--field-bg);
+  font-size: 12px !important;
+}
+.owner-empty__btn {
+  margin-top: 10px;
+  padding: 11px 26px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--pink-500);
+  color: #fff;
+  font: 700 13px var(--font-body);
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 var(--pink-rim);
+}
+.owner-empty__btn:hover { background: var(--pink-700); }

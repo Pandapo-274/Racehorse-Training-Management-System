@@ -1,0 +1,60 @@
+/* src/features/profile/profile-link.css
+   Hai lối vào màn hồ sơ. Chỉ làm đúng một việc: biến thẻ button về lại hình
+   dáng mà lớp CSS của từng dashboard đã định sẵn.
+
+   Trước đây hai chỗ này là thẻ div, giờ thành button để bàn phím và trình đọc
+   màn hình dùng được. Nhưng button mặc định mang theo viền, nền xám, đệm và
+   canh chữ giữa của trình duyệt, đè lên kiểu dáng cũ. Những dòng dưới đây gỡ
+   đúng những thứ đó ra, không thêm kiểu dáng mới nào - mọi kích thước, màu
+   nền, bo góc vẫn do lớp riêng của mỗi dashboard quyết định. */
+
+.profile-link {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Vùng bấm phải ôm sát vòng tròn, nếu không nó loang ra chiếm chỗ bên cạnh. */
+.profile-link--circle {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.profile-link--circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* Khối tên: giữ nguyên cách sắp hàng ngang của div cũ. */
+.profile-link--card {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  width: 100%;
+}
+.profile-link--card img {
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.profile-link__who strong { display: block; }
+.profile-link__who span { display: block; }
+
+/* Dấu hiệu bấm được. Rất nhẹ, vì hai thứ này nằm trong thanh bên tối màu và
+   thanh tiêu đề - làm đậm sẽ kéo mắt khỏi nội dung chính. */
+.profile-link:hover { filter: brightness(1.12); }
+
+/* Viền focus phải hiện rõ: đây là lối đi duy nhất tới hồ sơ bằng bàn phím. */
+.profile-link:focus-visible {
+  outline: 2px solid var(--pink-300);
+  outline-offset: 2px;
+}

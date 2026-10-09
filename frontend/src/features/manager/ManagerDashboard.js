@@ -1,6 +1,7 @@
 import "./manager.css";
 import { useNavigate } from "react-router-dom";
-import { getUser, logout } from "../auth/authService";
+import { logout } from "../auth/authService";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // TODO(fetch): workloadData -> API tải trọng đàn theo tuần (WorkloadChart)
 const workloadData = [
@@ -71,15 +72,9 @@ function HorseshoeIcon() {
   );
 }
 
-function toInitials(name) {
-  if (!name) return "??";
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
 function ManagerSidebar() {
   const navigate = useNavigate();
-  const user = getUser();
-  const fullName = user?.fullName || "Academy Manager";
+  /* Không còn gọi getUser ở đây nữa: ProfileCard tự đọc người đang đăng nhập. */
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
@@ -135,14 +130,8 @@ function ManagerSidebar() {
         <button type="button" className="manager-signout" onClick={handleSignOut}>
           Sign out
         </button>
-        <div className="manager-user">
-          <div className="manager-avatar">{toInitials(fullName)}</div>
-
-          <div>
-            <strong>{fullName}</strong>
-            <span>Academy Manager</span>
-          </div>
-        </div>
+        <ProfileCard className="manager-user" avatarClassName="manager-avatar"
+                     role="Academy Manager" />
       </div>
     </aside>
   );
@@ -319,7 +308,7 @@ export default function ManagerDashboard() {
               <span className="manager-notification-dot" />
             </button>
 
-            <div className="manager-profile" />
+            <ProfileCircle className="manager-profile" />
           </div>
         </header>
 

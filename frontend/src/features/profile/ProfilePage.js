@@ -84,6 +84,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [photoSaved, setPhotoSaved] = useState(false);
 
   // Nhận hồ sơ từ máy chủ và đổ vào biểu mẫu. Gọi cả lúc mở trang lẫn sau mỗi
   // lần lưu, vì máy chủ có chuẩn hoá dữ liệu (email bị hạ về chữ thường), nên
@@ -164,6 +165,7 @@ export default function ProfilePage() {
     if (!file) return;
 
     setAvatarError("");
+    setPhotoSaved(false);
 
     const problem = await checkAvatar(file);
     if (problem) {
@@ -172,10 +174,17 @@ export default function ProfilePage() {
     }
 
     setUploading(true);
+    setPhotoSaved(false);
     try {
       const updated = await uploadAvatar(file);
       adopt(updated);
       updateStoredUser({ avatarUrl: updated.avatarUrl });
+
+      // Ảnh đã nằm trên máy chủ từ lúc POST trả về, nhưng không nói ra thì
+      // người dùng không biết: ảnh đổi ngay trước mắt y như một bản xem thử,
+      // mà nút "Save changes" bên dưới vẫn mờ vì ba ô chữ không đổi gì. Hai
+      // dấu hiệu đó cộng lại đọc thành "đã đổi nhưng chưa lưu".
+      setPhotoSaved(true);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setAvatarError(err.fieldErrors?.file || err.message);
@@ -254,6 +263,13 @@ export default function ProfilePage() {
 
           {avatarError && (
             <p className="pf-error" role="alert">{avatarError}</p>
+          )}
+
+          {photoSaved && !avatarError && (
+            <p className="pf-photo__saved" role="status">
+              <StatusChip tone="good" label="Photo saved" />
+              <span>Your new photo is stored on the server.</span>
+            </p>
           )}
         </Card>
 

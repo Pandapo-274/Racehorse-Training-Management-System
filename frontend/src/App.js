@@ -12,6 +12,7 @@ import { getUser } from "./features/auth/authService";
 import HorseListPage from "./features/horse/HorseListPage";
 import HorseDetailPage from "./features/horse/HorseDetailPage";
 import HorseFormPage from "./features/horse/HorseFormPage";
+import HorseRequestPage from "./features/horse/HorseRequestPage";
 import ProfilePage from "./features/profile/ProfilePage";
 import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
@@ -38,6 +39,21 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/access-denied" element={<AccessDeniedPage />} />
+
+        {/* UC5 - công khai: người đang quên mật khẩu thì chưa đăng nhập được,
+            bọc RoleRoute vào là đá họ về đúng trang họ không vào nổi.
+            Tên /reset-password do backend quyết định, nó sinh liên kết
+            {app.frontend-base-url}/reset-password?token=... */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* UC4 và UC5 - cần đăng nhập, mọi vai trò đều có hồ sơ của mình.
+            Bốn dòng này từng bị mất trong một lần gộp nhánh: phần import vẫn
+            còn nên không ai thấy lỗi, nhưng /profile rơi vào catch-all ở cuối
+            và bị đá về /login. */}
+        <Route path="/profile" element={<RoleRoute roles={EVERY_ROLE}><ProfilePage /></RoleRoute>} />
+        <Route path="/change-password" element={<RoleRoute roles={EVERY_ROLE}><ChangePasswordPage /></RoleRoute>} />
+
         {/* Club Manager */}
         <Route path="/manager" element={<ManagerDashboard/>} />
         {/* Head Trainer */}
@@ -67,6 +83,9 @@ export default function App() {
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />
 
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
+        {/* Chủ ngựa xin học viện đăng ký ngựa. Không phải /horse-owner/horses/new:
+            đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}
+        <Route path="/horse-owner/request" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseRequestPage /></RoleRoute>} />
         <Route path="/horse-owner/horses/:id" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseDetailPage /></RoleRoute>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />

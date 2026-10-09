@@ -18,6 +18,7 @@ export default function HorseListPage() {
   const navigate = useNavigate();
   const user = getUser();
   const mayEdit = canEditHorses(user);
+  const isOwner = user?.role === "HORSE_OWNER";
   const horseBase = getHorseBasePath(user);
 
   const [horses, setHorses] = useState(null);
@@ -140,11 +141,28 @@ export default function HorseListPage() {
           }
         >
           {horses.length === 0 ? (
-            <StateBlock title="No horses yet">
-              {mayEdit
-                ? "Use “Add a horse” to register the first one."
-                : "Nothing has been registered in your name yet."}
-            </StateBlock>
+            isOwner ? (
+              /* Chủ ngựa không tự tạo được hồ sơ ngựa - POST /api/horses chỉ
+                 nhận HEAD_TRAINER và CLUB_MANAGER. Nên màn trống ở đây không
+                 mời họ bấm một nút sẽ trả 403, mà chỉ ra đường thật: gửi yêu
+                 cầu để học viện đăng ký hộ. */
+              <StateBlock title="No horses in your name yet">
+                Horses are entered into the register by the academy. Send a request and
+                they will add yours, assign a registration code and a stall.
+                <span className="hz-state-action">
+                  <button type="button" className="hz-btn"
+                          onClick={() => navigate("/horse-owner/request")}>
+                    Request a horse registration
+                  </button>
+                </span>
+              </StateBlock>
+            ) : (
+              <StateBlock title="No horses yet">
+                {mayEdit
+                  ? "Use “Add a horse” to register the first one."
+                  : "Nothing has been registered here yet."}
+              </StateBlock>
+            )
           ) : visible.length === 0 ? (
             <StateBlock title="Nothing matches those filters">
               Clear the search box or pick a different status.
