@@ -1,23 +1,33 @@
 // src/features/horse/HorseDetailPage.js
+
 // Hồ sơ một con ngựa, ba thẻ: Overview và Pedigree thuộc UC7, Vitals thuộc UC8.
 //
 // Ba endpoint được gọi riêng theo từng thẻ chứ không gọi hết một lượt khi mở
 // trang: phả hệ và chỉ số sinh tồn mỗi cái là một chuỗi truy vấn nặng ở
 // backend (đệ quy nhiều đời, ghép năm bảng), mà phần lớn người mở hồ sơ chỉ
 // xem thẻ đầu. Đã tải rồi thì giữ lại, chuyển qua chuyển lại không gọi thêm.
+
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+
 import { getUser, handleAuthError } from "../auth/authService";
+
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import PedigreeTree from "./PedigreeTree";
 import VitalsPanel from "./VitalsPanel";
+
 import {
-<<<<<<< HEAD
-  getHorse, getPedigree, getVitals, canEditHorses,
-=======
-  getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
-  toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
+  getHorse,
+  getPedigree,
+  getVitals,
+  canEditHorses,
+  getHorseBasePath,
+  toStatus,
+  toGender,
+  toAge,
+  formatDate,
+  formatDateTime,
+  formatWeight,
 } from "./horseApi";
 
 const TABS = [
@@ -40,18 +50,27 @@ function Row({ label, children }) {
 export default function HorseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const user = getUser();
+
   const mayEdit = canEditHorses(user);
-<<<<<<< HEAD
-
-  const [tab, setTab] = useState("overview");
-=======
   const horseBase = getHorseBasePath(user);
-  const canViewPedigree = user?.role === "CLUB_MANAGER" || user?.role === "HEAD_TRAINER";
-  const canViewVitals = ["HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"].includes(user?.role);
 
-  const [tab, setTab] = useState(canViewPedigree ? "overview" : "vitals");
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
+  const canViewPedigree =
+    user?.role === "CLUB_MANAGER" ||
+    user?.role === "HEAD_TRAINER";
+
+  const canViewVitals = [
+    "HEAD_TRAINER",
+    "VETERINARIAN",
+    "GROOM",
+    "HORSE_OWNER",
+  ].includes(user?.role);
+
+  const [tab, setTab] = useState(
+    canViewPedigree ? "overview" : "vitals"
+  );
+
   const [horse, setHorse] = useState(null);
   const [error, setError] = useState("");
 
@@ -65,50 +84,71 @@ export default function HorseDetailPage() {
   const fail = useCallback(
     (set) => (err) => {
       if (err.name === "AbortError") return;
+
       if (handleAuthError(err, navigate)) return;
+
       set(err.message);
     },
     [navigate]
   );
 
+  // Load horse
   useEffect(() => {
     const ctrl = new AbortController();
+
     setError("");
-    getHorse(id, ctrl.signal).then(setHorse).catch(fail(setError));
+
+    getHorse(id, ctrl.signal)
+      .then(setHorse)
+      .catch(fail(setError));
+
     return () => ctrl.abort();
   }, [id, fail]);
 
-  // Phả hệ: tải lại khi đổi số đời, vì đó là tham số của chính truy vấn.
+  // Load pedigree only when the Pedigree tab is opened.
+  // Reload when generations changes.
   useEffect(() => {
     if (tab !== "pedigree") return undefined;
+
     const ctrl = new AbortController();
+
     setPedigreeError("");
-    getPedigree(id, generations, ctrl.signal).then(setPedigree).catch(fail(setPedigreeError));
+
+    getPedigree(id, generations, ctrl.signal)
+      .then(setPedigree)
+      .catch(fail(setPedigreeError));
+
     return () => ctrl.abort();
   }, [tab, id, generations, fail]);
 
+  // Load vitals only when the Vitals tab is opened.
+  // Keep the loaded result when switching tabs.
   useEffect(() => {
     if (tab !== "vitals" || vitals) return undefined;
+
     const ctrl = new AbortController();
+
     setVitalsError("");
-    getVitals(id, ctrl.signal).then(setVitals).catch(fail(setVitalsError));
+
+    getVitals(id, ctrl.signal)
+      .then(setVitals)
+      .catch(fail(setVitalsError));
+
     return () => ctrl.abort();
   }, [tab, id, vitals, fail]);
 
+  // Error state
   if (error) {
     return (
       <HorseShell title="Horse">
         <StateBlock kind="error" title={error}>
-<<<<<<< HEAD
-          Go back to <Link to="/horses">the registry</Link>.
-=======
           Go back to <Link to={horseBase}>the registry</Link>.
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
         </StateBlock>
       </HorseShell>
     );
   }
 
+  // Loading state
   if (!horse) {
     return (
       <HorseShell title="Horse">
@@ -123,48 +163,50 @@ export default function HorseDetailPage() {
   return (
     <HorseShell
       title={horse.horseName}
-      subtitle={`${horse.registrationCode} · ${toGender(horse.horseGender)}${
-        age == null ? "" : ` · ${age} years old`
-      }`}
+      subtitle={`${horse.registrationCode} · ${toGender(
+        horse.horseGender
+      )}${age == null ? "" : ` · ${age} years old`}`}
       actions={
         <>
-          <StatusChip tone={st.tone} label={st.label} title={st.hint} />
+          <StatusChip
+            tone={st.tone}
+            label={st.label}
+            title={st.hint}
+          />
+
           {mayEdit && (
             <button
-              type="button" className="hz-btn"
-<<<<<<< HEAD
-              onClick={() => navigate(`/horses/${id}/edit`)}
-=======
-              onClick={() => navigate(`${horseBase}/${id}/edit`)}
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
+              type="button"
+              className="hz-btn"
+              onClick={() =>
+                navigate(`${horseBase}/${id}/edit`)
+              }
             >
               Edit
             </button>
           )}
+
           <button
-            type="button" className="hz-btn hz-btn--ghost"
-<<<<<<< HEAD
-            onClick={() => navigate("/horses")}
-=======
+            type="button"
+            className="hz-btn hz-btn--ghost"
             onClick={() => navigate(horseBase)}
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           >
             Back
           </button>
         </>
       }
     >
+      {/* Tabs */}
       <div className="hz-tabs" role="tablist">
-<<<<<<< HEAD
-        {TABS.map((t) => (
-=======
-        {TABS.filter((t) =>
-          (t.id !== "pedigree" || canViewPedigree) &&
-          (t.id !== "vitals" || canViewVitals)
+        {TABS.filter(
+          (t) =>
+            (t.id !== "pedigree" || canViewPedigree) &&
+            (t.id !== "vitals" || canViewVitals)
         ).map((t) => (
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           <button
-            key={t.id} type="button" role="tab"
+            key={t.id}
+            type="button"
+            role="tab"
             aria-selected={tab === t.id}
             className={tab === t.id ? "active" : ""}
             onClick={() => setTab(t.id)}
@@ -174,49 +216,101 @@ export default function HorseDetailPage() {
         ))}
       </div>
 
+      {/* =========================
+          OVERVIEW
+          ========================= */}
       {tab === "overview" && (
         <div className="hz-detail-grid">
           <Card title="Identity">
-            <Row label="Name">{horse.horseName}</Row>
-            <Row label="Registration code">
-              <span className="hz-mono">{horse.registrationCode}</span>
+            <Row label="Name">
+              {horse.horseName}
             </Row>
-            <Row label="Sex">{toGender(horse.horseGender)}</Row>
+
+            <Row label="Registration code">
+              <span className="hz-mono">
+                {horse.registrationCode}
+              </span>
+            </Row>
+
+            <Row label="Sex">
+              {toGender(horse.horseGender)}
+            </Row>
+
             <Row label="Date of birth">
               {formatDate(horse.dateOfBirth)}
-              {age != null && <span className="hz-muted"> · {age} years</span>}
+
+              {age != null && (
+                <span className="hz-muted">
+                  {" "}
+                  · {age} years
+                </span>
+              )}
             </Row>
-            <Row label="Breed">{horse.breed || "—"}</Row>
-            <Row label="Colour">{horse.color || "—"}</Row>
+
+            <Row label="Breed">
+              {horse.breed || "—"}
+            </Row>
+
+            <Row label="Colour">
+              {horse.color || "—"}
+            </Row>
           </Card>
 
           <Card title="Stable">
-            <Row label="Weight">{formatWeight(horse.weight)}</Row>
+            <Row label="Weight">
+              {formatWeight(horse.weight)}
+            </Row>
+
             <Row label="Stall">
-              <span className="hz-mono">{horse.stallNo || "—"}</span>
+              <span className="hz-mono">
+                {horse.stallNo || "—"}
+              </span>
             </Row>
-            <Row label="Owner">{horse.ownerName || `User #${horse.ownerId}`}</Row>
+
+            <Row label="Owner">
+              {horse.ownerName || `User #${horse.ownerId}`}
+            </Row>
+
             <Row label="Health status">
-              <StatusChip tone={st.tone} label={st.label} title={st.hint} />
-              {/* Nói rõ vì sao không sửa được ở đây, nếu không người dùng sẽ
-                  đi tìm nút sửa trạng thái trong biểu mẫu và không thấy. */}
-              <p className="hz-muted hz-note">Set by the veterinarian, not in this form.</p>
+              <StatusChip
+                tone={st.tone}
+                label={st.label}
+                title={st.hint}
+              />
+
+              <p className="hz-muted hz-note">
+                Set by the veterinarian, not in this form.
+              </p>
             </Row>
-            <Row label="Registered">{formatDateTime(horse.createdAt)}</Row>
-            <Row label="Last updated">{formatDateTime(horse.updatedAt)}</Row>
+
+            <Row label="Registered">
+              {formatDateTime(horse.createdAt)}
+            </Row>
+
+            <Row label="Last updated">
+              {formatDateTime(horse.updatedAt)}
+            </Row>
           </Card>
         </div>
       )}
 
+      {/* =========================
+          PEDIGREE
+          ========================= */}
       {tab === "pedigree" && (
         <Card
           title="Pedigree"
           hint="Sire line runs along the top of each pair, dam line along the bottom"
           actions={
-            <div className="hz-segment" role="group" aria-label="Generations to show">
+            <div
+              className="hz-segment"
+              role="group"
+              aria-label="Generations to show"
+            >
               {GENERATION_OPTIONS.map((g) => (
                 <button
-                  key={g} type="button"
+                  key={g}
+                  type="button"
                   aria-pressed={g === generations}
                   onClick={() => setGenerations(g)}
                 >
@@ -227,7 +321,10 @@ export default function HorseDetailPage() {
           }
         >
           {pedigreeError ? (
-            <StateBlock kind="error" title={pedigreeError} />
+            <StateBlock
+              kind="error"
+              title={pedigreeError}
+            />
           ) : !pedigree ? (
             <StateBlock title="Loading pedigree…" />
           ) : !pedigree.sire && !pedigree.dam ? (
@@ -242,9 +339,15 @@ export default function HorseDetailPage() {
         </Card>
       )}
 
+      {/* =========================
+          VITALS
+          ========================= */}
       {tab === "vitals" &&
         (vitalsError ? (
-          <StateBlock kind="error" title={vitalsError} />
+          <StateBlock
+            kind="error"
+            title={vitalsError}
+          />
         ) : !vitals ? (
           <StateBlock title="Loading vitals…" />
         ) : (

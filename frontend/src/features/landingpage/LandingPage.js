@@ -30,11 +30,7 @@ const flows = [
 ];
 function Crest() {
   return (
-    <img
-      className="landing-logo"
-      src="/logo.svg"
-      alt="Tenma Racing Academy"
-    />
+    <img className="landing-logo" src="/logo.svg" alt="Tenma Racing Academy" />
   );
 }
 
@@ -47,12 +43,10 @@ function LandingPage() {
 
   return (
     <div className="landing-page">
-
       {/* =====================================================
           HERO
       ===================================================== */}
       <section className="landing-hero">
-
         <SpeedLines />
 
         <div className="hero-glow"></div>
@@ -60,146 +54,99 @@ function LandingPage() {
         <div className="hero-band"></div>
 
         <div className="hero-content">
-
           <Crest />
 
-          <div className="hero-kicker">
-            RACING ACADEMY · ESTABLISHED 1998
-          </div>
+          <div className="hero-kicker">RACING ACADEMY · ESTABLISHED 1998</div>
 
           <h1>TENMA</h1>
 
-          <div className="hero-tagline">
-            Every stride, on the record
-          </div>
+          <div className="hero-tagline">Every stride, on the record</div>
 
           <div className="gold-rule"></div>
 
           <p className="hero-description">
-            Pedigree records, phased training plans, live heart-rate
-            telemetry, medical files and training locks — the full
-            training lifecycle of a racehorse in one system.
+            Pedigree records, phased training plans, live heart-rate telemetry,
+            medical files and training locks — the full training lifecycle of a
+            racehorse in one system.
           </p>
 
           <div className="hero-buttons">
-
             <button
               className="landing-btn landing-btn-primary"
               onClick={() => navigate("/login")}
             >
-              Login 
+              Login
             </button>
 
             <button
               className="landing-btn landing-btn-secondary"
               onClick={() => navigate("/register")}
             >
-            
               No Account? Register Here
             </button>
-
           </div>
-
         </div>
 
         {/* Feature horse card */}
         <div className="hero-feature">
-
           <div className="feature-frame">
-
             <div className="feature-photo">
-              <img src="/symbolirudoff.jpg"alt="Symboli Rudolf"/>
+              <img src="/symbolirudoff.jpg" alt="Symboli Rudolf" />
             </div>
 
             <div className="feature-bottom">
-
               <div>
                 <h2>SYMBOLI RUDOLF</h2>
 
-                <div className="feature-stars">
-                  ★★★★★
-                </div>
+                <div className="feature-stars">★★★★★</div>
               </div>
 
-              <div className="g1-badge">
-                G1
-              </div>
-
+              <div className="g1-badge">G1</div>
             </div>
-
           </div>
-
         </div>
-
       </section>
 
       {/* =====================================================
           FLOWS
       ===================================================== */}
-      <section
-        className="landing-flows"
-        id="operational-flows"
-      >
-
-        <div className="section-title-ribbon">
-          Three main features
-        </div>
-
-        
+      <section className="landing-flows" id="operational-flows">
+        <div className="section-title-ribbon">Three main features</div>
 
         <div className="flow-grid">
-
           {flows.map((flow) => (
             <article
               className={`flow-card flow-${flow.color}`}
               key={flow.number}
             >
-
-              <div className="flow-number">
-                {flow.number}
-              </div>
+              <div className="flow-number">{flow.number}</div>
 
               <h2>{flow.title}</h2>
 
               <div className="flow-gold-line"></div>
 
               <p>{flow.description}</p>
-
-              
-
             </article>
           ))}
-
         </div>
-
       </section>
 
       {/* =====================================================
           STATISTICS
       ===================================================== */}
       <section className="landing-statistics">
-
         <SpeedLines />
 
         <div className="statistics-grid">
-
           <div className="stat-item">
             <strong>48</strong>
             <span>Horses in training</span>
           </div>
 
           <div className="stat-divider"></div>
-
-          <div className="stat-item">
-            <strong>22</strong>
-            <span>Screens built</span>
-          </div>
-
-          <div className="stat-divider"></div>
-
-          <div className="stat-item">
-            <strong>5</strong>
-            <span>Roles in RBAC</span>
+         <div className="stat-item">
+            <strong>12</strong>
+            <span>Active plans</span>
           </div>
 
           <div className="stat-divider"></div>
@@ -208,29 +155,20 @@ function LandingPage() {
             <strong>7</strong>
             <span>G1 races this season</span>
           </div>
-
         </div>
 
         <div className="landing-footer-line"></div>
 
         <div className="landing-footer">
-
           <div className="footer-brand">
             <Crest />
 
-            <span>
-              Tenma Academy · Racehorse training management system
-            </span>
+            <span>Tenma Academy · Racehorse training management system</span>
           </div>
 
-          <span className="footer-project">
-            Coursework project · 2026
-          </span>
-
+          <span className="footer-project">Coursework project · 2026</span>
         </div>
-
       </section>
-
     </div>
   );
 }

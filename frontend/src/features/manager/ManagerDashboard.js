@@ -1,6 +1,6 @@
 import "./manager.css";
 import { useNavigate } from "react-router-dom";
-import { logout } from "../auth/authService";
+import { getUser, logout } from "../auth/authService";
 
 // TODO(fetch): workloadData -> API tải trọng đàn theo tuần (WorkloadChart)
 const workloadData = [
@@ -57,8 +57,29 @@ const openItems = [
   },
 ];
 
+function HorseshoeIcon() {
+  return (
+    <svg className="manager-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function toInitials(name) {
+  if (!name) return "??";
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
 function ManagerSidebar() {
   const navigate = useNavigate();
+  const user = getUser();
+  const fullName = user?.fullName || "Academy Manager";
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
@@ -74,47 +95,51 @@ function ManagerSidebar() {
         </div>
       </div>
 
-      <div className="manager-menu-title">◉ MENU</div>
+      <div className="manager-menu-title">
+        <HorseshoeIcon /> MENU
+      </div>
 
       <nav className="manager-nav">
-        <button className="manager-nav-item active">
-          <span>◉</span>
+        <button type="button" className="manager-nav-item active">
+          <HorseshoeIcon />
           Overview
         </button>
 
         <button type="button" className="manager-nav-item" onClick={() => navigate("/manager/horses")}>
-          <span>◉</span>
+          <HorseshoeIcon />
           Horses
         </button>
 
         <button className="manager-nav-item">
-          <span>◉</span>
+          <HorseshoeIcon />
           Staff
         </button>
 
         <button className="manager-nav-item">
-          <span>◉</span>
+          <HorseshoeIcon />
           Supplies &amp; feed
         </button>
 
         <button className="manager-nav-item">
-          <span>◉</span>
+          <HorseshoeIcon />
           Permissions
         </button>
 
         <button className="manager-nav-item">
-          <span>◉</span>
+          <HorseshoeIcon />
           Audit log
         </button>
       </nav>
 
       <div className="manager-sidebar-bottom">
-      <button type="button" className="manager-signout" onClick={handleSignOut}>Sign out</button>
+        <button type="button" className="manager-signout" onClick={handleSignOut}>
+          Sign out
+        </button>
         <div className="manager-user">
-          <div className="manager-avatar">AT</div>
+          <div className="manager-avatar">{toInitials(fullName)}</div>
 
           <div>
-            <strong>Aoi Tachibana</strong>
+            <strong>{fullName}</strong>
             <span>Academy Manager</span>
           </div>
         </div>
@@ -138,7 +163,7 @@ function WorkloadChart() {
   return (
     <div className="manager-card workload-card">
       <div className="manager-card-title">
-        <span className="diamond">◆</span>
+        <span className="manager-diamond" aria-hidden="true" />
         <div>
           <h2>Herd workload</h2>
           <p>Total distance (km) per week</p>
@@ -174,7 +199,7 @@ function HealthCard() {
   return (
     <div className="manager-card health-card">
       <div className="manager-card-title">
-        <span className="diamond">◆</span>
+        <span className="manager-diamond" aria-hidden="true" />
         <div>
           <h2>Herd health status</h2>
         </div>
@@ -223,7 +248,7 @@ function OpenItems() {
     <div className="manager-card open-items-card">
       <div className="open-items-header">
         <div className="manager-card-title">
-          <span className="diamond">◆</span>
+          <span className="manager-diamond" aria-hidden="true" />
           <div>
             <h2>Open items</h2>
           </div>
@@ -254,9 +279,7 @@ function OpenItems() {
                 <td>{item.horse}</td>
                 <td>{item.when}</td>
                 <td>
-                  <span
-                    className={`item-status ${item.statusType}`}
-                  >
+                  <span className={`item-status ${item.statusType}`}>
                     {item.status}
                   </span>
                 </td>
@@ -278,7 +301,7 @@ export default function ManagerDashboard() {
         <header className="manager-header">
           <div>
             <div className="manager-page-title">
-              <span>◆</span>
+              <span className="manager-diamond" aria-hidden="true" />
               <h1>Academy overview</h1>
             </div>
 
@@ -292,37 +315,20 @@ export default function ManagerDashboard() {
               className="manager-search"
             />
 
-            <button className="notification-btn">●</button>
+            <button type="button" className="manager-notification" aria-label="Notifications">
+              <span className="manager-notification-dot" />
+            </button>
 
-            <div className="header-profile" />
+            <div className="manager-profile" />
           </div>
         </header>
 
         <section className="manager-content">
           <div className="manager-stats">
-            <StatCard
-              value="48"
-              label="Horses"
-              type="pink"
-            />
-
-            <StatCard
-              value="12"
-              label="Active plans"
-              type="gold"
-            />
-
-            <StatCard
-              value="4"
-              label="Under training lock"
-              type="red"
-            />
-
-            <StatCard
-              value="¥184M"
-              label="Quarterly operating cost"
-              type="green"
-            />
+            <StatCard value="48" label="Horses" type="pink" />
+            <StatCard value="12" label="Active plans" type="gold" />
+            <StatCard value="4" label="Under training lock" type="red" />
+            <StatCard value="¥184M" label="Quarterly operating cost" type="green" />
           </div>
 
           <div className="manager-middle">

@@ -42,6 +42,25 @@ export function logout() {
   localStorage.removeItem(USER_KEY);
 }
 
+/**
+ * Cập nhật vài trường của user đang lưu, giữ nguyên token. Dùng sau khi UC4
+ * sửa hồ sơ thành công.
+ *
+ * Thêm vào đây chứ không để màn hình tự ghi localStorage: tên hai khoá
+ * TOKEN_KEY và USER_KEY là chuyện nội bộ của file này. Nếu nơi khác cũng ghi
+ * thẳng "user", thì ngày nào đó đổi tên khoá ở đây sẽ làm chỗ kia hỏng âm thầm
+ * - không lỗi, chỉ là sidebar hiện mãi tên cũ và không ai hiểu vì sao.
+ *
+ * Trả về user sau khi gộp, hoặc null nếu chưa đăng nhập.
+ */
+export function updateStoredUser(partial) {
+  const current = getUser();
+  if (!current) return null;
+  const merged = { ...current, ...partial };
+  localStorage.setItem(USER_KEY, JSON.stringify(merged));
+  return merged;
+}
+
 /* ------------------------------------------------------------------ *
  * Gọi API
  * ------------------------------------------------------------------ */

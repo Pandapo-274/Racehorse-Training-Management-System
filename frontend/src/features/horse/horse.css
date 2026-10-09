@@ -14,70 +14,95 @@
 }
 
 .hz-sidebar {
-  width: 207px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  width: 265px;
+  height: 100vh;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 10px 14px;
+  padding: 0 12px 16px;
+  overflow: hidden;
   color: #fff;
   background:
-    repeating-linear-gradient(108deg, rgba(245, 95, 169, .08) 0 4px, transparent 4px 42px),
-    linear-gradient(180deg, var(--navy-950), #111a38);
+    repeating-linear-gradient(108deg, rgba(245, 95, 169, .12) 0 6px, transparent 6px 60px) top / 100% 140px no-repeat,
+    linear-gradient(180deg, #0b1229 0%, #131c3b 100%);
 }
 
-.hz-brand { height: 78px; display: flex; align-items: center; gap: 9px; padding: 8px 12px; }
-.hz-brand img { width: 48px; height: 48px; object-fit: contain; }
-.hz-brand strong { display: block; font-size: 14px; }
-.hz-brand span { display: block; margin-top: 2px; font-size: 8px; color: #9da5c4; }
+.hz-brand {
+  height: 92px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, #d9a21c, rgba(217, 162, 28, .15)) 1;
+}
+.hz-brand img { width: 50px; height: 50px; object-fit: contain; }
+.hz-brand strong {
+  display: block; font-family: var(--font-heading); font-size: 18px;
+  font-weight: 800; letter-spacing: .08em; line-height: 1.1;
+}
+.hz-brand span { display: block; margin-top: 2px; font-size: 12px; color: #a4abc8; }
 
 .hz-menu-title {
-  margin: 14px 12px; width: 96px; padding: 5px 10px;
-  background: #e43e8c; font-size: 10px; font-weight: 900;
-  transform: skew(-12deg);
+  display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+  margin: 22px 0 14px 12px; padding: 0 28px 0 14px; height: 32px;
+  background: linear-gradient(90deg, #f55fa9, #e43e8c);
+  box-shadow: 0 0 0 1px #c9317a;
+  font-family: var(--font-heading); font-size: 13px; font-weight: 800;
+  letter-spacing: .06em; transform: skewX(-14deg);
 }
+.hz-menu-title .hz-nav-icon { width: 14px; height: 14px; }
 
-.hz-nav { display: flex; flex-direction: column; gap: 4px; }
+.hz-nav { display: flex; flex-direction: column; gap: 5px; }
 .hz-nav-item {
-  height: 40px; border: 0; background: transparent; color: #9ba5c6;
-  display: flex; align-items: center; gap: 10px; padding: 0 15px;
-  font: 700 11px var(--font-body); text-align: left; cursor: pointer;
+  position: relative; height: 46px; border: 0; background: transparent; color: #a2abca;
+  display: flex; align-items: center; gap: 14px; padding: 0 0 0 24px;
+  font: 600 15px var(--font-body); text-align: left; cursor: pointer;
+  transition: color .15s ease;
 }
-.hz-nav-item.active {
-  background: linear-gradient(90deg, #e33b89, #d93682);
-  color: #fff; font-weight: 900;
+.hz-nav-item .hz-nav-icon { flex-shrink: 0; width: 22px; height: 22px; color: #c3cae3; }
+.hz-nav-item:hover { color: #fff; }
+.hz-nav-item.active { color: #fff; font-weight: 800; z-index: 0; }
+.hz-nav-item.active::before {
+  content: ""; position: absolute; inset: 0 -2px; z-index: -1;
+  background: linear-gradient(90deg, #e8408f, #d3347c);
+  transform: skewX(-14deg);
 }
+.hz-nav-item.active .hz-nav-icon { color: #fff; }
 
 .hz-sidebar-bottom { margin-top: auto; }
 .hz-signout {
-  width: 100%; height: 34px; margin-bottom: 14px;
-  border: 1px solid rgba(255, 255, 255, .25); border-radius: 17px;
-  background: transparent; color: #fff;
-  font: 700 11px var(--font-body); cursor: pointer;
+  width: 100%; height: 44px; margin-bottom: 12px; padding-left: 18px;
+  border: 0; border-radius: 10px; background: #16203f; color: #a2abca;
+  font: 500 14px var(--font-body); text-align: left; cursor: pointer;
 }
-.hz-signout:hover { background: rgba(255, 255, 255, .08); }
+.hz-signout:hover { color: #fff; background: #1c2850; }
 
-.hz-user { display: flex; align-items: center; gap: 9px; padding: 0 6px; }
-.hz-avatar {
-  width: 32px; height: 32px; flex-shrink: 0;
-  display: grid; place-items: center; border-radius: 50%;
-  background: var(--pink-500); font: 800 11px var(--font-heading);
+.hz-user {
+  display: flex; align-items: center; gap: 12px; min-height: 66px;
+  padding: 0 14px; border-radius: 12px; background: #16203f;
 }
-.hz-user strong { display: block; font-size: 11px; }
-.hz-user span { display: block; margin-top: 1px; font-size: 9px; color: #9da5c4; }
+.hz-avatar {
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: grid; place-items: center; border-radius: 50%;
+  background: #ff5f6d; font: 800 13px var(--font-body);
+}
+.hz-user strong { display: block; font-size: 14px; font-weight: 700; }
+.hz-user span { display: block; margin-top: 2px; font-size: 12px; color: #8e97bd; }
 
 .hz-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .hz-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 20px; padding: 26px 30px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; min-height: 84px; padding: 12px 32px 12px 36px;
+  background: #fff; border-bottom: 3px solid var(--pink-500);
 }
-.hz-page-title { display: flex; align-items: center; gap: 9px; }
+.hz-page-title { display: flex; align-items: center; gap: 10px; }
 .hz-page-title span { color: var(--gold-500); font-size: 13px; }
-.hz-page-title h1 { margin: 0; font: 800 25px/1.2 var(--font-heading); }
-.hz-header p { margin: 5px 0 0 22px; font-size: 12px; color: var(--text-600); }
+.hz-page-title h1 { margin: 0; font: 800 26px/1.15 var(--font-heading); }
+.hz-header p { margin: 2px 0 0 25px; font-size: 12.5px; color: #9aa1bc; }
 .hz-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
-.hz-content { padding: 0 30px 34px; display: grid; gap: 16px; }
+.hz-content { padding: 32px 32px 34px; display: grid; gap: 16px; }
 
 /* ---------- nút ---------- */
 
@@ -340,7 +365,7 @@
 
 @media (max-width: 860px) {
   .hz-sidebar { display: none; }
-  .hz-header { flex-direction: column; padding: 20px 18px 12px; }
-  .hz-content { padding: 0 18px 26px; }
+  .hz-header { flex-direction: column; align-items: flex-start; padding: 20px 18px 14px; }
+  .hz-content { padding: 20px 18px 26px; }
   .hz-detail-row { grid-template-columns: 1fr; gap: 3px; }
 }

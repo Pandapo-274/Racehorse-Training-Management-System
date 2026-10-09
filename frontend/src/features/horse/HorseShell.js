@@ -7,11 +7,7 @@
 // nên làm theo cách đó - lớp ở đây đều mang tiền tố .hz-.
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUser, logout } from "../auth/authService";
-<<<<<<< HEAD
-import { toInitials } from "./horseApi";
-=======
 import { getHorseBasePath, toInitials } from "./horseApi";
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -30,6 +26,21 @@ const HOME_BY_ROLE = {
   HORSE_OWNER: "/horse-owner",
 };
 
+/* Biểu tượng móng ngựa - cùng kiểu với sidebar màn Herd progress */
+function HorseshoeIcon() {
+  return (
+    <svg className="hz-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function HorseShell({ title, subtitle, actions, children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,21 +49,14 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   const fullName = user?.fullName || "Signed out";
   const role = ROLE_LABEL[user?.role] || "—";
   const home = HOME_BY_ROLE[user?.role] || "/login";
-<<<<<<< HEAD
-=======
   const horseBase = getHorseBasePath(user);
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
   };
 
-<<<<<<< HEAD
-  const onHorses = location.pathname.startsWith("/horses");
-=======
   const onHorses = location.pathname.startsWith(horseBase);
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
   return (
     <div className="hz-page">
@@ -65,24 +69,22 @@ export default function HorseShell({ title, subtitle, actions, children }) {
           </div>
         </div>
 
-        <div className="hz-menu-title">◉ MENU</div>
+        <div className="hz-menu-title">
+          <HorseshoeIcon /> MENU
+        </div>
 
         <nav className="hz-nav">
           <button className="hz-nav-item" onClick={() => navigate(home)}>
-            <span aria-hidden="true">◉</span>
+            <HorseshoeIcon />
             Dashboard
           </button>
 
           <button
             className={`hz-nav-item${onHorses ? " active" : ""}`}
             aria-current={onHorses ? "page" : undefined}
-<<<<<<< HEAD
-            onClick={() => navigate("/horses")}
-=======
             onClick={() => navigate(horseBase)}
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
           >
-            <span aria-hidden="true">◉</span>
+            <HorseshoeIcon />
             Horses
           </button>
         </nav>

@@ -30,8 +30,9 @@ export default function LoginPage() {
 
           <LoginForm />
 
+          {/* UC5 đã có luồng tự đặt lại mật khẩu, không phải đi nhờ quản lý nữa. */}
           <small className="login-card__foot">
-            Forgot your password? Contact the academy manager
+            <Link to="/forgot-password">Forgot your password?</Link>
           </small>
 
           <small className="login-card__foot">

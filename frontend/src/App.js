@@ -8,23 +8,25 @@ import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import LandingPage from "./features/landingpage/LandingPage";
 import RegisterPage from "./features/auth/RegisterPage";
-<<<<<<< HEAD
-import HorseListPage from "./features/horse/HorseListPage";
-import HorseFormPage from "./features/horse/HorseFormPage";
-import HorseDetailPage from "./features/horse/HorseDetailPage";
-const Placeholder = ({ text }) => <h1 style={{ padding: 24 }}>{text}</h1>;
-=======
 import { getUser } from "./features/auth/authService";
 import HorseListPage from "./features/horse/HorseListPage";
 import HorseDetailPage from "./features/horse/HorseDetailPage";
 import HorseFormPage from "./features/horse/HorseFormPage";
+import ProfilePage from "./features/profile/ProfilePage";
+import ChangePasswordPage from "./features/password/ChangePasswordPage";
+import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
+import ResetPasswordPage from "./features/password/ResetPasswordPage";
+
+/* UC4 - mọi vai trò đều có hồ sơ của mình, nên liệt kê cả năm thay vì thêm một
+   loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
+   một người chỉ đọc và sửa được hồ sơ của chính họ. */
+const EVERY_ROLE = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"];
 function RoleRoute({ roles, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
   if (!roles.includes(user.role)) return <Navigate to="/access-denied" replace />;
   return children;
 }
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
 
 export default function App() {
   return (
@@ -46,15 +48,21 @@ export default function App() {
         <Route path="/groom" element={<GroomDashboard/>} />
         {/* Horse Owner */}
         <Route path="/horse-owner" element={<HorseOwnerDashboard/>} />
-<<<<<<< HEAD
-        {/* UC7 Horse Management + UC8 Horse Vitals.
-            /horses/new đặt trước /horses/:id cho rõ ý - react-router vốn đã ưu
-            tiên đoạn tĩnh hơn đoạn động, nhưng đọc từ trên xuống thì dễ hiểu hơn. */}
-        <Route path="/horses" element={<HorseListPage />} />
-        <Route path="/horses/new" element={<HorseFormPage />} />
-        <Route path="/horses/:id" element={<HorseDetailPage />} />
-        <Route path="/horses/:id/edit" element={<HorseFormPage />} />
-=======
+
+        {/* UC4 - Profile */}
+        <Route path="/profile" element={<RoleRoute roles={EVERY_ROLE}><ProfilePage /></RoleRoute>} />
+
+        {/* UC5 - Password. /forgot-password và /reset-password cố ý KHÔNG bọc
+            RoleRoute: người quên mật khẩu thì chưa đăng nhập được, bọc guard
+            vào là đá họ về /login - đúng cái trang họ không vào nổi.
+            Tên /reset-password do backend quyết định, nó sinh liên kết
+            {app.frontend-base-url}/reset-password?token=... nên không đổi được. */}
+        <Route
+          path="/change-password"
+          element={<RoleRoute roles={EVERY_ROLE}><ChangePasswordPage /></RoleRoute>}
+        />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
@@ -76,7 +84,6 @@ export default function App() {
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
         <Route path="/horse-owner/horses/:id" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseDetailPage /></RoleRoute>} />
 
->>>>>>> 916da958dc05d2885df8052c0aed68e2296d7f72
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
