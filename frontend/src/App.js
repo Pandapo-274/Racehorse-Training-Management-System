@@ -49,21 +49,6 @@ export default function App() {
         {/* Horse Owner */}
         <Route path="/horse-owner" element={<HorseOwnerDashboard/>} />
 
-        {/* UC4 - Profile */}
-        <Route path="/profile" element={<RoleRoute roles={EVERY_ROLE}><ProfilePage /></RoleRoute>} />
-
-        {/* UC5 - Password. /forgot-password và /reset-password cố ý KHÔNG bọc
-            RoleRoute: người quên mật khẩu thì chưa đăng nhập được, bọc guard
-            vào là đá họ về /login - đúng cái trang họ không vào nổi.
-            Tên /reset-password do backend quyết định, nó sinh liên kết
-            {app.frontend-base-url}/reset-password?token=... nên không đổi được. */}
-        <Route
-          path="/change-password"
-          element={<RoleRoute roles={EVERY_ROLE}><ChangePasswordPage /></RoleRoute>}
-        />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
         <Route path="/manager/horses/new" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseFormPage /></RoleRoute>} />

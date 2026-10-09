@@ -17,17 +17,8 @@ import PedigreeTree from "./PedigreeTree";
 import VitalsPanel from "./VitalsPanel";
 
 import {
-  getHorse,
-  getPedigree,
-  getVitals,
-  canEditHorses,
-  getHorseBasePath,
-  toStatus,
-  toGender,
-  toAge,
-  formatDate,
-  formatDateTime,
-  formatWeight,
+  getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
+  toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
 
 const TABS = [
@@ -56,21 +47,7 @@ export default function HorseDetailPage() {
   const mayEdit = canEditHorses(user);
   const horseBase = getHorseBasePath(user);
 
-  const canViewPedigree =
-    user?.role === "CLUB_MANAGER" ||
-    user?.role === "HEAD_TRAINER";
-
-  const canViewVitals = [
-    "HEAD_TRAINER",
-    "VETERINARIAN",
-    "GROOM",
-    "HORSE_OWNER",
-  ].includes(user?.role);
-
-  const [tab, setTab] = useState(
-    canViewPedigree ? "overview" : "vitals"
-  );
-
+  const [tab, setTab] = useState(canViewPedigree ? "overview" : "vitals");
   const [horse, setHorse] = useState(null);
   const [error, setError] = useState("");
 
@@ -176,19 +153,15 @@ export default function HorseDetailPage() {
 
           {mayEdit && (
             <button
-              type="button"
-              className="hz-btn"
-              onClick={() =>
-                navigate(`${horseBase}/${id}/edit`)
-              }
+              type="button" className="hz-btn"
+              onClick={() => navigate(`${horseBase}/${id}/edit`)}
             >
               Edit
             </button>
           )}
 
           <button
-            type="button"
-            className="hz-btn hz-btn--ghost"
+            type="button" className="hz-btn hz-btn--ghost"
             onClick={() => navigate(horseBase)}
           >
             Back
@@ -198,10 +171,9 @@ export default function HorseDetailPage() {
     >
       {/* Tabs */}
       <div className="hz-tabs" role="tablist">
-        {TABS.filter(
-          (t) =>
-            (t.id !== "pedigree" || canViewPedigree) &&
-            (t.id !== "vitals" || canViewVitals)
+        {TABS.filter((t) =>
+          (t.id !== "pedigree" || canViewPedigree) &&
+          (t.id !== "vitals" || canViewVitals)
         ).map((t) => (
           <button
             key={t.id}

@@ -38,7 +38,8 @@ public class AuthInterceptor implements HandlerInterceptor {
         AuthenticatedUser user = jwt.parse(header.substring(7).trim())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED,
                         "Invalid or expired token"));
-        if (blacklist.isRevoked(user.tokenId())) {
+        if (blacklist.isRevoked(user.tokenId())
+                || blacklist.isIssuedBeforeCutoff(user.userId(), user.issuedAt())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Token has been revoked, please log in again");
         }
         req.setAttribute(USER_ATTR, user);

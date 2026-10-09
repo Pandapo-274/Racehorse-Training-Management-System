@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 8, 2026` at `00:22` by `ArichiAya`
+### Last Commited: `Oct 8, 2026` at `00:25` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -37,7 +37,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 9, 2026`
-- `[00:22]` `ArichiAya` - Check Conflict And Merge
+- `[00:52]` `DevilJack422` - Add `UC5` Backend Password
+- `[00:25]` `ArichiAya` - Checking Conflict And Fixing Conflict, Needing Re-Testing
 - `[00:17]` `tqt195` - Update Landing Page
 - `[00:08]` `DevilJack422` - Add `UC4` Backend Profile
 
