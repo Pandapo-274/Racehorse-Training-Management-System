@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 9, 2026` at `19:27` by `ArichiAya`
+### Last Commited: `Oct 10, 2026` at `08:51` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -35,7 +35,10 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - Update the `Last Commited` line as the format shown above
 - Add your `Changelog` in the `Changelogs` tab below
 
+
 ## Changelogs
+> #### 'Oct 10, 2026'
+- `[08:51]` `tusandthatsall` - Fix Profile Picture Bug
 > #### `Oct 9, 2026`
 - `[19:27]` `ArichiAya` - Revamping `UC4` and `UC5` For Frontend, But Needed Fixing For Avatar Bug (feat. `tusandthatsall`) 
 - `[11:04]` `tusandthatsall` - Add `V4__profile_avatar_and_reset_token.sql`
