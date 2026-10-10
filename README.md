@@ -37,7 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 
 ## Changelogs
-> #### 'Oct 10, 2026'
+> #### `Oct 10, 2026`
 - `[08:51]` `tusandthatsall` - Fix Profile Picture Bug
 > #### `Oct 9, 2026`
 - `[19:27]` `ArichiAya` - Revamping `UC4` and `UC5` For Frontend, But Needed Fixing For Avatar Bug (feat. `tusandthatsall`) 
