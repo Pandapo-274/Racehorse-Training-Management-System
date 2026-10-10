@@ -118,7 +118,8 @@ public class AuthService {
     }
 
     private UserInfo toInfo(UserRecord u) {
-        return new UserInfo(u.userId(), u.username(), u.fullName(), u.email(), u.role());
+        return new UserInfo(u.userId(), u.username(), u.fullName(), u.email(), u.role(),
+                u.avatarUrl());
     }
 
     private ApiException conflict(Map<String, String> errors) {

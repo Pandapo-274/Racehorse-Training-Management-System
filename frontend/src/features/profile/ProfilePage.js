@@ -92,6 +92,13 @@ export default function ProfilePage() {
   const adopt = useCallback((p) => {
     setProfile(p);
     setForm({ fullName: p.fullName || "", email: p.email || "", phone: p.phone || "" });
+
+    // Đồng bộ luôn vào localStorage, không chỉ sau khi lưu. Thanh bên đọc
+    // avatarUrl từ đó chứ không gọi API, nên hai trường hợp này cần nó:
+    // phiên đăng nhập có từ trước bản sửa (localStorage chưa từng có
+    // avatarUrl), và ảnh được đổi ở một máy khác. Chỉ cần mở màn hồ sơ một
+    // lần là khớp lại, không phải đăng xuất rồi đăng nhập.
+    updateStoredUser({ fullName: p.fullName, email: p.email, avatarUrl: p.avatarUrl });
   }, []);
 
   const load = useCallback(

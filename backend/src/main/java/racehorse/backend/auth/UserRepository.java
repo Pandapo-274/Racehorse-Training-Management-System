@@ -15,14 +15,16 @@ public class UserRepository {
     }
 
     private static final String SELECT_USER = """
-            SELECT u.user_id, u.username, u.password_hash, u.full_name, u.email, u.status, r.role_name
+            SELECT u.user_id, u.username, u.password_hash, u.full_name, u.email, u.status,
+                   u.avatar_url, r.role_name
             FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
             """;
 
     private static UserRecord mapUser(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
         return new UserRecord(rs.getInt("user_id"), rs.getString("username"),
                 rs.getString("password_hash"), rs.getString("full_name"),
-                rs.getString("email"), rs.getString("status"), rs.getString("role_name"));
+                rs.getString("email"), rs.getString("status"), rs.getString("role_name"),
+                rs.getString("avatar_url"));
     }
 
     /** Đăng nhập bằng username HOẶC email. Username cấm ký tự @ nên hai loại không bao giờ đụng nhau. */
