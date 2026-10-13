@@ -38,8 +38,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > #### `Oct 13, 2026`
-- `[10:41]` `tusandthatsall` - Add UC18 and Adjust UC14
-- `[10:37]` `tusandthatsall` - Add UC14
+- `[10:41]` `tusandthatsall` - Add `UC18` and Adjust `UC14`
+- `[10:37]` `tusandthatsall` - Add `UC14`
 > #### `Oct 10, 2026`
 - `[08:51]` `tusandthatsall` - Fix Profile Picture Bug
 > #### `Oct 9, 2026`
