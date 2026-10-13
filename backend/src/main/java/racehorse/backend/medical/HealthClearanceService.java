@@ -36,15 +36,21 @@ public class HealthClearanceService {
 
     private final MedicalRecordRepository records;
     private final HealthClearanceRepository clearance;
+    private final InjuryRepository injuries;
+    private final TrainingLockRepository locks;
     private final HorseRepository horses;
     private final UserRepository users;
 
     public HealthClearanceService(MedicalRecordRepository records,
                                   HealthClearanceRepository clearance,
+                                  InjuryRepository injuries,
+                                  TrainingLockRepository locks,
                                   HorseRepository horses,
                                   UserRepository users) {
         this.records = records;
         this.clearance = clearance;
+        this.injuries = injuries;
+        this.locks = locks;
         this.horses = horses;
         this.users = users;
     }
@@ -79,7 +85,7 @@ public class HealthClearanceService {
            khép trước - không phải lỗi, nên không đếm vào injuriesClosed. */
         List<Integer> closed = new ArrayList<>();
         for (Integer injuryId : asked) {
-            if (clearance.markInjuryRecovered(injuryId) == 1) {
+            if (injuries.markRecovered(injuryId) == 1) {
                 closed.add(injuryId);
             }
         }
@@ -88,8 +94,8 @@ public class HealthClearanceService {
            thương nào chưa RECOVERED thì con ngựa chưa hồi phục, dù bác sĩ có
            khai bao nhiêu id đi nữa. Chạy trước khi khép thì luôn luôn thấy
            "còn chấn thương" và không bao giờ clear được. */
-        List<HealthClearanceRepository.OpenInjury> stillOpen =
-                clearance.findOpenInjuries(horse.horseId());
+        List<InjuryRepository.OpenInjury> stillOpen =
+                injuries.findOpenInjuries(horse.horseId());
         if (!stillOpen.isEmpty()) {
             String list = stillOpen.stream()
                     .map(i -> "#" + i.injuryId() + " " + i.bodyLocation()
@@ -99,8 +105,8 @@ public class HealthClearanceService {
                     "This horse still has unrecovered injuries: " + list);
         }
 
-        List<Integer> lockIds = clearance.findActiveLockIds(horse.horseId());
-        clearance.releaseActiveLocks(horse.horseId(), vet.userId());
+        List<Integer> lockIds = locks.findActiveLockIds(horse.horseId());
+        locks.releaseActiveLocks(horse.horseId(), vet.userId());
 
         int recordId = records.insertClearance(raw, vet.userId());
 
@@ -125,7 +131,7 @@ public class HealthClearanceService {
      * Những gì bác sĩ còn phải xử lý trước khi clear được, để màn hình hiện
      * sẵn thay vì để người dùng bấm rồi mới nhận lỗi.
      */
-    public List<HealthClearanceRepository.OpenInjury> openInjuries(int horseId,
+    public List<InjuryRepository.OpenInjury> openInjuries(int horseId,
                                                                    AuthenticatedUser user) {
         HorseResponse horse = horses.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
@@ -133,7 +139,7 @@ public class HealthClearanceService {
         if ("HORSE_OWNER".equals(user.role()) && horse.ownerId() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You may not view this horse's records");
         }
-        return clearance.findOpenInjuries(horseId);
+        return injuries.findOpenInjuries(horseId);
     }
 
     /* ------------------------------------------------------------------ */
@@ -152,7 +158,7 @@ public class HealthClearanceService {
                 errors.put("recoveredInjuryIds", "Injury id must not be null");
                 continue;
             }
-            clearance.findHorseOfInjury(id).ifPresentOrElse(owner -> {
+            injuries.findHorseOfInjury(id).ifPresentOrElse(owner -> {
                 if (owner != horseId) {
                     errors.put("recoveredInjuryIds",
                             "Injury #" + id + " belongs to a different horse");

@@ -48,7 +48,7 @@ public class HealthClearanceController {
      * để hiện sẵn danh sách cần tích thay vì để bác sĩ bấm rồi nhận lỗi 400.
      */
     @GetMapping("/blockers")
-    public List<HealthClearanceRepository.OpenInjury> blockers(
+    public List<InjuryRepository.OpenInjury> blockers(
             @RequestParam int horseId,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.openInjuries(horseId, user);
