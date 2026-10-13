@@ -90,6 +90,38 @@ public class MedicalRecordRepository {
     }
 
     /**
+     * UC18 - bản ghi khám khép hồ sơ, health_status = 'ELIGIBLE'.
+     *
+     * Có một phương thức riêng chứ không dùng lại insert() ở trên là có chủ
+     * đích. MedicalExamRequest cố tình KHÔNG diễn đạt được ELIGIBLE (@Pattern
+     * chỉ nhận MONITOR|INJURED|QUARANTINE), nên nếu UC18 dùng lại insert() thì
+     * phải tự dựng một MedicalExamRequest vi phạm chính ràng buộc nó khai -
+     * tức là đi vòng qua hàng rào bằng cách trèo qua nó. Một đường ghi riêng
+     * giữ cho lời khai kia đúng: ELIGIBLE chỉ vào được database qua đây.
+     *
+     * injury_confirmed để 0 và report_id để NULL: đây không phải một lần khám
+     * phát hiện chấn thương, mà là lần khám kết luận chấn thương đã hết.
+     */
+    public int insertClearance(RecoveryConfirmationRequest r, int vetId) {
+        return jdbc.sql("""
+                INSERT INTO MEDICAL_RECORD
+                    (horse_id, vet_id, record_type, exam_date, diagnosis,
+                     health_status, injury_confirmed, notes)
+                OUTPUT INSERTED.record_id
+                VALUES
+                    (:horseId, :vetId, 'EXAM', :examDate, :diagnosis,
+                     'ELIGIBLE', 0, :notes)
+                """)
+                .param("horseId", r.horseId())
+                .param("vetId", vetId)
+                .param("examDate", r.examDate())
+                .param("diagnosis", blankToNull(r.diagnosis()))
+                .param("notes", blankToNull(r.notes()))
+                .query(Integer.class)
+                .single();
+    }
+
+    /**
      * Đổi tình trạng sức khoẻ của con ngựa.
      *
      * updated_at được chạm cùng lúc, nếu không thì màn hồ sơ ngựa vẫn hiện
