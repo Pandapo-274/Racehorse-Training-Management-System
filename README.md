@@ -37,6 +37,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 
 ## Changelogs
+> ### `Oct 15, 2026`
+- `[09:50]` `DevilJack422` - Add `UC11`, `UC12` and `UC13`
 > #### `Oct 13, 2026`
 - `[11:10]` `tusandthatsall` - Add `UC15` and Add `UC16`
 - `[10:41]` `tusandthatsall` - Add `UC18` and Adjust `UC14`
