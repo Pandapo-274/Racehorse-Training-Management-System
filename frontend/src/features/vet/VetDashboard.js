@@ -1,347 +1,351 @@
-import "./vet.css";
-import { useNavigate } from "react-router-dom";
-import { logout } from "../auth/authService";
-import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { handleAuthError } from "../auth/authService";
+import VetShell, { VetState } from "./VetShell";
+import { listHorses, toBoardStatus } from "./vetApi";
 
-// TODO(fetch): horses -> API sơ đồ chuồng + trạng thái từng ngựa (StableMap)
-const horses = [
-  { stall: "01", name: "Symboli Rudolf", status: "fit" },
-  { stall: "02", name: "Gold Ship", status: "fit" },
-  { stall: "03", name: "TM Opera O", status: "monitor" },
-  { stall: "04", name: "Kitasan Black", status: "fit" },
-  { stall: "05", name: "Deep Impact", status: "fit" },
-
-  { stall: "06", name: "Daiwa Scarlet", status: "fit" },
-  { stall: "07", name: "Air Groove", status: "injured" },
-  { stall: "08", name: "Almond Eye", status: "fit" },
-  { stall: "09", name: "Orfevre", status: "fit" },
-  { stall: "10", name: "Narita Brian", status: "monitor" },
-
-  { stall: "11", name: "Oguri Cap", status: "fit" },
-  { stall: "12", name: "Tokai Teio", status: "fit" },
-  { stall: "13", name: "Special Week", status: "fit" },
-  { stall: "14", name: "Vodka", status: "quarantine" },
-  { stall: "15", name: "Mejiro Ryan", status: "fit" },
-
-  { stall: "16", name: "Grass Wonder", status: "fit" },
-  { stall: "17", name: "El Condor Pasa", status: "fit" },
-  { stall: "18", name: "Biwa Hayahide", status: "monitor" },
-  { stall: "19", name: "Hishi Amazon", status: "fit" },
-  { stall: "20", name: "Maruzensky", status: "fit" },
-];
+// Màn 16 - Herd health board. Cùng khung với Trainer và Manager (xem VetShell).
+//
+// Sơ đồ chuồng và các thẻ đếm lấy từ GET /api/horses (status + stallNo).
+// Danh sách chờ khám và báo cáo sự cố vẫn là dữ liệu mẫu: backend chưa có
+// endpoint liệt kê INCIDENT_REPORT.
 
 // TODO(fetch): waitingHorses -> API ngựa đang chờ khám (WaitingList)
 const waitingHorses = [
-  {
-    name: "Air Groove",
-    description: "Lame, left hind",
-    status: "urgent",
-  },
-  {
-    name: "TM Opera O",
-    description: "Follow-up after treatment",
-    status: "normal",
-  },
-  {
-    name: "Gold Ship",
-    description: "Routine hoof check",
-    status: "normal",
-  },
+  { name: "Air Groove", description: "Lame, left hind", priority: "urgent" },
+  { name: "TM Opera O", description: "Follow-up after treatment", priority: "normal" },
+  { name: "Gold Ship", description: "Routine hoof check", priority: "normal" },
 ];
 
-function VetSidebar() {
-  const navigate = useNavigate();
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+// TODO(fetch): incident -> API báo cáo sự cố mới nhất
+const incident = {
+  message: "Air Groove is lame with swelling in the left hind hock.",
+};
 
+const STATUS_META = {
+  fit: { label: "Race-fit" },
+  monitor: { label: "Monitor" },
+  injured: { label: "Injured" },
+  quarantine: { label: "Quarantine" },
+};
+
+const STATUS_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "fit", label: "Race-fit" },
+  { value: "monitor", label: "Monitor" },
+  { value: "injured", label: "Injured" },
+  { value: "quarantine", label: "Quarantine" },
+];
+
+function StatCard({ value, label, type, active, onClick }) {
   return (
-    <aside className="vet-sidebar">
-
-      <div className="vet-brand">
-        <img src="/logo.svg" alt="Tenma Racing Academy" />
-
-        <div>
-          <strong>TENMA</strong>
-          <span>Racing Academy</span>
-        </div>
-      </div>
-
-      <div className="vet-menu-title">
-        ◉ MENU
-      </div>
-
-      <nav className="vet-navigation">
-
-        <button type="button" className="vet-nav-item active" onClick={() => navigate("/veterinarian/horses")}>
-          <span>◉</span>
-          Herd health
-        </button>
-
-        <button className="vet-nav-item">
-          <span>◉</span>
-          Examination
-        </button>
-
-        <button className="vet-nav-item">
-          <span>◉</span>
-          Recovery
-        </button>
-
-        <button className="vet-nav-item">
-          <span>◉</span>
-          Preventive care
-        </button>
-
-      </nav>
-
-      <div className="vet-sidebar-bottom">
-
-        <button className="vet-signout" onClick={handleSignOut}>
-          Sign out
-        </button>
-
-        {/* Trước đây ghi cứng "Dr. Yuki Nakajima" nên ai đăng nhập cũng thấy
-            tên đó. Giờ lấy theo người đang đăng nhập, và bấm vào mở hồ sơ. */}
-        <ProfileCard className="vet-user" avatarClassName="vet-avatar" />
-
-      </div>
-
-    </aside>
+    <button
+      type="button"
+      className={`vet-stat-card ${type}${active ? " selected" : ""}`}
+      onClick={onClick}
+      aria-pressed={active}
+    >
+      <span className="vet-stat-value">{value}</span>
+      <span className="vet-stat-label">{label}</span>
+    </button>
   );
 }
 
-
-function StableMap() {
+function StableMap({ horses, counts, statusFilter, onStatusChange, matches, onOpen }) {
   return (
     <div className="vet-card stable-card">
-
       <div className="vet-card-title">
-
-        <span>◆</span>
-
+        <span className="vet-diamond" aria-hidden="true" />
         <div>
           <h2>Stable map</h2>
-          <p>Stall colour shows health status</p>
+          <p>Stall colour shows health status · click a stall to examine</p>
         </div>
 
+        <div className="vet-status-segment" role="group" aria-label="Filter stalls by health status">
+          {STATUS_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              aria-pressed={statusFilter === filter.value}
+              onClick={() => onStatusChange(filter.value)}
+            >
+              {filter.label} <b>{counts[filter.value]}</b>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="stable-grid">
-
         {horses.map((horse) => (
-          <div
-            key={horse.stall}
-            className={`stable-box ${horse.status}`}
+          <button
+            type="button"
+            key={horse.id}
+            className={`stable-box ${horse.status}${matches(horse) ? "" : " dimmed"}`}
+            title={`Stall ${horse.stall} · ${horse.name} · ${STATUS_META[horse.status].label}`}
+            onClick={() => onOpen(horse)}
           >
-
-            <span className="stall-number">
-              Stall {horse.stall}
-            </span>
-
-            <strong>
-              {horse.name}
-            </strong>
-
-          </div>
+            <span className="stall-number">Stall {horse.stall}</span>
+            <strong>{horse.name}</strong>
+          </button>
         ))}
-
       </div>
-
     </div>
   );
 }
 
+function HealthCard({ counts, total }) {
+  const fitPct = total ? Math.round((counts.fit / total) * 100) : 0;
 
-function Legend() {
+  const donut = useMemo(() => {
+    if (!total) return "#f4e1eb";
+    const parts = [
+      ["#8cc63f", counts.fit],
+      ["#ffc53d", counts.monitor],
+      ["#ff5f6d", counts.injured],
+      ["#f55fa9", counts.quarantine],
+    ];
+    let start = 0;
+    const stops = parts
+      .filter(([, n]) => n > 0)
+      .map(([color, n]) => {
+        const end = start + (n / total) * 360;
+        const stop = `${color} ${start}deg ${end}deg`;
+        start = end;
+        return stop;
+      });
+    return `conic-gradient(${stops.join(", ")})`;
+  }, [counts, total]);
+
   return (
-    <div className="vet-card legend-card">
-
+    <div className="vet-card health-card">
       <div className="vet-card-title">
-
-        <span>◆</span>
-
+        <span className="vet-diamond" aria-hidden="true" />
         <div>
-          <h2>Legend</h2>
+          <h2>Herd health status</h2>
+          <p>{total} horses</p>
         </div>
-
       </div>
 
-      <div className="legend-list">
-
-        <div>
-          <span className="legend-color fit" />
-          <strong>Race-fit</strong>
+      <div className="health-content">
+        <div className="health-donut" style={{ background: donut }}>
+          <div className="health-donut-inner">
+            <strong>{fitPct}%</strong>
+            <span>race-fit</span>
+          </div>
         </div>
 
-        <div>
-          <span className="legend-color monitor" />
-          <strong>Monitor</strong>
+        <div className="health-legend">
+          {["fit", "monitor", "injured", "quarantine"].map((key) => (
+            <div key={key}>
+              <span className={`legend-dot ${key}`} />
+              <strong>{STATUS_META[key].label}</strong>
+              <b>{counts[key]}</b>
+            </div>
+          ))}
         </div>
-
-        <div>
-          <span className="legend-color injured" />
-          <strong>Injured</strong>
-        </div>
-
-        <div>
-          <span className="legend-color quarantine" />
-          <strong>Quarantine</strong>
-        </div>
-
       </div>
-
     </div>
   );
 }
 
+function WaitingList({ items, onExamine }) {
+  const urgent = items.find((item) => item.priority === "urgent");
 
-function WaitingList() {
   return (
     <div className="vet-card waiting-card">
-
-      <div className="vet-card-title">
-
-        <span>◆</span>
-
-        <div>
-          <h2>Waiting to be seen</h2>
+      <div className="waiting-header">
+        <div className="vet-card-title">
+          <span className="vet-diamond" aria-hidden="true" />
+          <div>
+            <h2>Waiting to be seen</h2>
+            <p>
+              {items.length} horse{items.length === 1 ? "" : "s"} in the queue
+            </p>
+          </div>
         </div>
 
+        {urgent && (
+          <button type="button" className="examine-button" onClick={() => onExamine(urgent)}>
+            Examine {urgent.name} now
+          </button>
+        )}
       </div>
 
-      <div className="waiting-list">
+      {items.length === 0 ? (
+        <div className="vet-inline-state">No horses are waiting for an examination.</div>
+      ) : (
+        <div className="waiting-table-wrapper">
+          <table className="waiting-table">
+            <thead>
+              <tr>
+                <th>Horses</th>
+                <th>Reason</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
 
-        {waitingHorses.map((horse) => (
-
-          <div
-            key={horse.name}
-            className={`waiting-item ${horse.status}`}
-          >
-
-            <strong>
-              {horse.name}
-            </strong>
-
-            <span>
-              {horse.description}
-            </span>
-
-          </div>
-
-        ))}
-
-      </div>
-
+            <tbody>
+              {items.map((horse) => (
+                <tr key={horse.name}>
+                  <td className="horse-name">{horse.name}</td>
+                  <td>{horse.description}</td>
+                  <td>
+                    <span className={`waiting-status ${horse.priority}`}>
+                      {horse.priority === "urgent" ? "Urgent" : "Routine"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-
 export default function VetDashboard() {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const alertRef = useRef(null);
+
+  const [apiHorses, setApiHorses] = useState(null);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setError("");
+    listHorses(ctrl.signal)
+      .then(setApiHorses)
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return;
+        setError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [navigate, reload]);
+
+  const horses = useMemo(
+    () =>
+      (apiHorses || [])
+        .map((h) => ({
+          id: h.horseId,
+          stall: h.stallNo || "—",
+          name: h.horseName,
+          status: toBoardStatus(h.status),
+        }))
+        .sort((a, b) => a.stall.localeCompare(b.stall, undefined, { numeric: true })),
+    [apiHorses]
+  );
+
+  const counts = useMemo(() => {
+    const result = { all: horses.length, fit: 0, monitor: 0, injured: 0, quarantine: 0 };
+    horses.forEach((horse) => {
+      result[horse.status] += 1;
+    });
+    return result;
+  }, [horses]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matches = (horse) =>
+    (statusFilter === "all" || horse.status === statusFilter) &&
+    (!normalizedQuery ||
+      horse.name.toLowerCase().includes(normalizedQuery) ||
+      horse.stall.toLowerCase().includes(normalizedQuery));
+
+  const visibleWaiting = waitingHorses.filter(
+    (horse) =>
+      !normalizedQuery ||
+      horse.name.toLowerCase().includes(normalizedQuery) ||
+      horse.description.toLowerCase().includes(normalizedQuery)
+  );
+
+  const openExamination = (horse) => navigate(`/veterinarian/examination/${horse.id}`);
+
+  // Danh sách chờ là dữ liệu mẫu nên chỉ có tên: tìm con ngựa thật cùng tên.
+  const examineWaiting = (item) => {
+    const match = horses.find((h) => h.name.toLowerCase() === item.name.toLowerCase());
+    navigate(match ? `/veterinarian/examination/${match.id}` : "/veterinarian/examination");
+  };
+
+  const scrollToAlert = () =>
+    alertRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  const today = new Date().toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const statCards = [
+    { key: "fit", label: "Race-fit", type: "green" },
+    { key: "monitor", label: "Under monitoring", type: "gold" },
+    { key: "injured", label: "Injured", type: "red" },
+    { key: "quarantine", label: "Quarantine", type: "pink" },
+  ];
 
   return (
-    <div className="vet-page">
+    <VetShell
+      active="health"
+      title="Herd health board"
+      subtitle={`Live · ${today}`}
+      query={query}
+      onQueryChange={setQuery}
+      onBellClick={scrollToAlert}
+    >
+      {state?.notice && (
+        <div className="vx-banner vx-banner--ok" role="status">
+          <strong>{state.notice}</strong>
+        </div>
+      )}
 
-      <VetSidebar />
+      {error && (
+        <VetState kind="error" title={error} onRetry={() => setReload((n) => n + 1)}>
+          Check that the backend is running on port 8080 and that you are still signed in.
+        </VetState>
+      )}
 
-      <main className="vet-main">
+      {!error && !apiHorses && <VetState title="Loading herd…" />}
 
-        {/* HEADER */}
-
-        <header className="vet-header">
-
-          <div>
-
-            <div className="vet-page-title">
-
-              <span>◆</span>
-
-              <h1>
-                Herd health board
-              </h1>
-
-            </div>
-
-            <p>
-              Stable map · Barns A – C
-            </p>
-
+      {apiHorses && (
+        <>
+          <div className="vet-stats">
+            {statCards.map((card) => (
+              <StatCard
+                key={card.key}
+                value={counts[card.key]}
+                label={card.label}
+                type={card.type}
+                active={statusFilter === card.key}
+                onClick={() => setStatusFilter(statusFilter === card.key ? "all" : card.key)}
+              />
+            ))}
           </div>
 
+          <div ref={alertRef} className="vet-alert" role="alert">
+            <strong>New incident report:</strong>
+            <span>{incident.message}</span>
+          </div>
 
-          <div className="vet-header-actions">
-
-            <input
-              type="text"
-              className="vet-search"
-              placeholder="Search horses, records..."
+          <div className="vet-middle">
+            <StableMap
+              horses={horses}
+              counts={counts}
+              statusFilter={statusFilter}
+              onStatusChange={setStatusFilter}
+              matches={matches}
+              onOpen={openExamination}
             />
-
-            <button className="vet-notification">
-              ●
-            </button>
-
-            <ProfileCircle className="vet-profile" />
-
+            <HealthCard counts={counts} total={horses.length} />
           </div>
 
-        </header>
-
-
-        <section className="vet-content">
-
-          {/* ALERT */}
-
-          <div className="vet-alert">
-
-            <strong>
-              New incident report:
-            </strong>
-
-            <span>
-              Air Groove is lame with swelling in the left hind hock.
-            </span>
-
-          </div>
-
-
-          {/* MAIN AREA */}
-
-          <div className="vet-dashboard-grid">
-
-            <StableMap />
-
-            <div className="vet-right-column">
-
-              <Legend />
-
-              <WaitingList />
-
-            </div>
-
-          </div>
-
-
-          {/* ACTION */}
-
-          <div className="vet-action">
-
-            <button className="examine-button">
-
-              <span>
-                Examine Air Groove now
-              </span>
-
-            </button>
-
-          </div>
-
-        </section>
-
-      </main>
-
-    </div>
+          <WaitingList items={visibleWaiting} onExamine={examineWaiting} />
+        </>
+      )}
+    </VetShell>
   );
 }

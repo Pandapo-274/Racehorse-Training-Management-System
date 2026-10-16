@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 16, 2026` at `11:27` by `tusandthatsall`
+### Last Commited: `Oct 16, 2026` at `6:41` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -38,6 +38,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > ### `Oct 16, 2026`
+- `[6:41]` `tqt195` - Vet Examination + Vet Recovery
 - `[11:23]` `DevilJack422` - Modified `UC1` to send email to reset new pass word
 - `[11:17]` `tusandthatsall` - Add `UC17`
 - `[11:16]` `Pandapo274` - Add `UC9`, `UC10`

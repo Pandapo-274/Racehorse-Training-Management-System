@@ -18,6 +18,7 @@ export default function HorseListPage() {
   const navigate = useNavigate();
   const user = getUser();
   const mayEdit = canEditHorses(user);
+  const isVet = user?.role === "VETERINARIAN";
   const isOwner = user?.role === "HORSE_OWNER";
   const horseBase = getHorseBasePath(user);
 
@@ -225,6 +226,34 @@ export default function HorseListPage() {
                             >
                               Edit
                             </button>
+                          )}
+
+                          {isVet && (
+                            <>
+                              {h.status !== "ELIGIBLE" && (
+                                <button
+                                  type="button"
+                                  className="hz-btn hz-btn--ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/veterinarian/recovery/${h.horseId}`);
+                                  }}
+                                >
+                                  Recovery
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="hz-btn hz-btn--ghost"
+                                style={{ marginLeft: 8 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/veterinarian/examination/${h.horseId}`);
+                                }}
+                              >
+                                Update status
+                              </button>
+                            </>
                           )}
                         </td>
                       </tr>
