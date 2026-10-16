@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 13, 2026` at `11:10` by `tusandthatsall`
+### Last Commited: `Oct 16, 2026` at `11:16` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 
 ## Changelogs
+> ### `Oct 16, 2026`
+- `[11:16]` `Pandapo274` - Add `UC9`, `UC10`
 > ### `Oct 15, 2026`
 - `[09:50]` `DevilJack422` - Add `UC11`, `UC12` and `UC13`
 > #### `Oct 13, 2026`
