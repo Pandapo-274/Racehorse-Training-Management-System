@@ -38,6 +38,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 ## Changelogs
 > ### `Oct 16, 2026`
+- `[11:23]` `DevilJack422` - Modified `UC1` to send email to reset new pass word
 - `[11:17]` `tusandthatsall` - Add `UC17`
 - `[11:16]` `Pandapo274` - Add `UC9`, `UC10`
 > ### `Oct 15, 2026`
