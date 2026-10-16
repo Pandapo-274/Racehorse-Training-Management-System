@@ -39,27 +39,27 @@ public class TrainingSessionService {
     public TrainingSessionResponse create(TrainingSessionRequest r, AuthenticatedUser user, String ip) {
         TrainingSessionRepository.PhaseContext ctx = repository.findPhaseContext(r.phaseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
-                        "Không tìm thấy giai đoạn #" + r.phaseId()));
+                        "Phase #" + r.phaseId() + " not found"));
 
         if (!"ACTIVE".equals(ctx.planStatus())) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Giáo án chưa được kích hoạt (đang ở trạng thái " + ctx.planStatus() + ")");
+                    "Training plan is not active (current status: " + ctx.planStatus() + ")");
         }
         checkHorseCanTrain(ctx.horseId());
 
         Map<String, String> errors = new LinkedHashMap<>();
         if (!repository.isActiveGroom(r.assignedTo())) {
-            errors.put("assignedTo", "Người phụ trách phải là Groom đang hoạt động");
+            errors.put("assignedTo", "Assignee must be an active Groom");
         }
         LocalDate day = r.sessionDate().toLocalDate();
         if (day.isBefore(LocalDate.now())) {
-            errors.put("sessionDate", "Không thể xếp buổi tập vào ngày đã qua");
+            errors.put("sessionDate", "Cannot schedule a session in the past");
         } else if ((ctx.startDate() != null && day.isBefore(ctx.startDate()))
                 || (ctx.endDate() != null && day.isAfter(ctx.endDate()))) {
-            errors.put("sessionDate", "Buổi tập phải nằm trong thời gian của giai đoạn");
+            errors.put("sessionDate", "Session must fall within the phase period");
         }
         if (!errors.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
 
         // Không nhập cự ly dự kiến thì lấy theo giai đoạn.
@@ -79,7 +79,7 @@ public class TrainingSessionService {
         checkCanAct(s, user);
         if (!"SCHEDULED".equals(s.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Chỉ bắt đầu được buổi tập đang SCHEDULED (hiện là " + s.status() + ")");
+                    "Only a SCHEDULED session can be started (currently " + s.status() + ")");
         }
         checkHorseCanTrain(s.horseId());
         repository.markRunning(sessionId);
@@ -103,25 +103,25 @@ public class TrainingSessionService {
 
     private TrainingSessionResponse getOrThrow(int sessionId) {
         return repository.findById(sessionId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy buổi tập #" + sessionId));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Session #" + sessionId + " not found"));
     }
 
     /** Groom chỉ thao tác trên buổi tập của chính mình. */
     private void checkCanAct(TrainingSessionResponse s, AuthenticatedUser user) {
         if ("GROOM".equals(user.role()) && s.assignedTo() != user.userId()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Buổi tập này không được giao cho bạn");
+            throw new ApiException(HttpStatus.FORBIDDEN, "This session is not assigned to you");
         }
     }
 
     private void checkHorseCanTrain(int horseId) {
         HorseResponse horse = horseRepository.findById(horseId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy ngựa của giai đoạn"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this phase not found"));
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Ngựa đang ở trạng thái " + horse.status() + ", không thể tập");
+                    "Horse status is " + horse.status() + ", cannot train");
         }
         if (vitalsRepository.findActiveLock(horseId).isPresent()) {
-            throw new ApiException(HttpStatus.CONFLICT, "Ngựa đang bị khóa huấn luyện");
+            throw new ApiException(HttpStatus.CONFLICT, "Horse is under an active training lock");
         }
     }
 }

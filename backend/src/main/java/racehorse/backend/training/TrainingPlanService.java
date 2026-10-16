@@ -62,7 +62,7 @@ public class TrainingPlanService {
         TrainingPlanResponse plan = getOrThrow(planId);
         if (!TRANSITIONS.getOrDefault(plan.status(), Set.of()).contains(newStatus)) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Không thể chuyển giáo án từ " + plan.status() + " sang " + newStatus);
+                    "Cannot change plan status from " + plan.status() + " to " + newStatus);
         }
         if ("ACTIVE".equals(newStatus)) {
             checkCanActivate(plan);
@@ -84,21 +84,21 @@ public class TrainingPlanService {
 
     private TrainingPlanResponse getOrThrow(int planId) {
         return planRepository.findById(planId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy giáo án #" + planId));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Training plan #" + planId + " not found"));
     }
 
     private void checkCanActivate(TrainingPlanResponse plan) {
         HorseResponse horse = horseRepository.findById(plan.horseId())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy ngựa của giáo án"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Ngựa đang ở trạng thái " + horse.status() + ", chưa thể bắt đầu tập");
+                    "Horse status is " + horse.status() + ", cannot start training yet");
         }
         if (vitalsRepository.findActiveLock(plan.horseId()).isPresent()) {
-            throw new ApiException(HttpStatus.CONFLICT, "Ngựa đang bị khóa huấn luyện");
+            throw new ApiException(HttpStatus.CONFLICT, "Horse is under an active training lock");
         }
         if (planRepository.existsActivePlan(plan.horseId(), plan.planId())) {
-            throw new ApiException(HttpStatus.CONFLICT, "Ngựa này đã có một giáo án đang chạy");
+            throw new ApiException(HttpStatus.CONFLICT, "This horse already has an active training plan");
         }
     }
 
@@ -107,10 +107,10 @@ public class TrainingPlanService {
         Map<String, String> errors = new LinkedHashMap<>();
 
         if (!horseRepository.existsById(r.horseId())) {
-            errors.put("horseId", "Ngựa không tồn tại");
+            errors.put("horseId", "Horse does not exist");
         }
         if (r.endDate().isBefore(r.startDate())) {
-            errors.put("endDate", "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu");
+            errors.put("endDate", "End date must be on or after start date");
         }
 
         LocalDate prevEnd = null;
@@ -118,20 +118,20 @@ public class TrainingPlanService {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
             if (p.endDate().isBefore(p.startDate())) {
-                errors.putIfAbsent(key + ".endDate", "Ngày kết thúc giai đoạn phải sau hoặc bằng ngày bắt đầu");
+                errors.putIfAbsent(key + ".endDate", "Phase end date must be on or after phase start date");
             }
             if (p.startDate().isBefore(r.startDate()) || p.endDate().isAfter(r.endDate())) {
-                errors.putIfAbsent(key + ".startDate", "Giai đoạn phải nằm trong thời gian của giáo án");
+                errors.putIfAbsent(key + ".startDate", "Phase must fall within the plan period");
             }
             // Cho phép chung đúng một ngày biên (cuối giai đoạn trước = đầu giai đoạn sau), giống dữ liệu V2.
             if (prevEnd != null && p.startDate().isBefore(prevEnd)) {
-                errors.putIfAbsent(key + ".startDate", "Giai đoạn bắt đầu trước khi giai đoạn trước kết thúc");
+                errors.putIfAbsent(key + ".startDate", "Phase starts before the previous phase ends");
             }
             prevEnd = p.endDate();
         }
 
         if (!errors.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
     }
 }

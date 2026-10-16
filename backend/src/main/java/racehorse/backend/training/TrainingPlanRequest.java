@@ -14,35 +14,35 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record TrainingPlanRequest(
-        @NotNull(message = "Vui lòng chọn ngựa") Integer horseId,
-        @NotBlank(message = "Tên giáo án là bắt buộc")
-        @Size(max = 150, message = "Tên giáo án tối đa 150 ký tự") String planName,
-        @NotNull(message = "Ngày bắt đầu là bắt buộc") LocalDate startDate,
-        @NotNull(message = "Ngày kết thúc là bắt buộc") LocalDate endDate,
-        @NotEmpty(message = "Giáo án cần ít nhất một giai đoạn")
-        @Size(max = 12, message = "Tối đa 12 giai đoạn")
-        @Valid List<@NotNull(message = "Giai đoạn không được rỗng") PhaseRequest> phases
+        @NotNull(message = "Horse is required") Integer horseId,
+        @NotBlank(message = "Plan name is required")
+        @Size(max = 150, message = "Plan name must be at most 150 characters") String planName,
+        @NotNull(message = "Start date is required") LocalDate startDate,
+        @NotNull(message = "End date is required") LocalDate endDate,
+        @NotEmpty(message = "A plan needs at least one phase")
+        @Size(max = 12, message = "At most 12 phases")
+        @Valid List<@NotNull(message = "Phase must not be null") PhaseRequest> phases
 ) {
 
     /** phase_no không nằm ở đây: service tự đánh số 1, 2, 3 theo thứ tự trong danh sách. */
     public record PhaseRequest(
-            @NotBlank(message = "Tên giai đoạn là bắt buộc")
-            @Size(max = 100, message = "Tên giai đoạn tối đa 100 ký tự") String phaseName,
-            @Positive(message = "Cự ly phải lớn hơn 0 (mét)") Integer distance,
-            @Size(max = 50, message = "Cường độ tối đa 50 ký tự") String workload,
+            @NotBlank(message = "Phase name is required")
+            @Size(max = 100, message = "Phase name must be at most 100 characters") String phaseName,
+            @Positive(message = "Distance must be greater than 0 (meters)") Integer distance,
+            @Size(max = 50, message = "Workload must be at most 50 characters") String workload,
             @Pattern(regexp = "TURF|DIRT|SYNTHETIC",
-                     message = "Mặt đường phải là TURF, DIRT hoặc SYNTHETIC") String surface,
-            @Min(value = 1, message = "Tối thiểu 1 buổi mỗi tuần")
-            @Max(value = 14, message = "Tối đa 14 buổi mỗi tuần") Integer sessionsPerWeek,
-            @Min(value = 100, message = "Ngưỡng nhịp tim từ 100 đến 260")
-            @Max(value = 260, message = "Ngưỡng nhịp tim từ 100 đến 260") Integer heartRateCeiling,
-            @NotNull(message = "Ngày bắt đầu giai đoạn là bắt buộc") LocalDate startDate,
-            @NotNull(message = "Ngày kết thúc giai đoạn là bắt buộc") LocalDate endDate
+                     message = "Surface must be TURF, DIRT or SYNTHETIC") String surface,
+            @Min(value = 1, message = "At least 1 session per week")
+            @Max(value = 14, message = "At most 14 sessions per week") Integer sessionsPerWeek,
+            @Min(value = 100, message = "Heart rate ceiling must be between 100 and 260")
+            @Max(value = 260, message = "Heart rate ceiling must be between 100 and 260") Integer heartRateCeiling,
+            @NotNull(message = "Phase start date is required") LocalDate startDate,
+            @NotNull(message = "Phase end date is required") LocalDate endDate
     ) {}
 
     public record StatusChange(
-            @NotBlank(message = "Trạng thái là bắt buộc")
+            @NotBlank(message = "Status is required")
             @Pattern(regexp = "DRAFT|ACTIVE|PAUSED|COMPLETED",
-                     message = "Trạng thái phải là DRAFT, ACTIVE, PAUSED hoặc COMPLETED") String status
+                     message = "Status must be DRAFT, ACTIVE, PAUSED or COMPLETED") String status
     ) {}
 }
