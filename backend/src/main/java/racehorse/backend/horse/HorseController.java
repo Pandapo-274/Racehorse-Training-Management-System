@@ -31,7 +31,7 @@ public class HorseController {
     }
 
     @PostMapping
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER"})
     public ResponseEntity<HorseResponse> create(
             @Valid @RequestBody HorseRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
@@ -41,7 +41,7 @@ public class HorseController {
     }
 
     @PutMapping("/{id}")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER"})
     public HorseResponse update(
             @PathVariable int id,
             @Valid @RequestBody HorseRequest request,

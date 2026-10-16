@@ -27,11 +27,15 @@ public class TrainingSessionService {
     private final UserRepository userRepository;
 
     public TrainingSessionService(TrainingSessionRepository repository, HorseRepository horseRepository,
-                                  HorseVitalsRepository vitalsRepository, UserRepository userRepository) {
+            HorseVitalsRepository vitalsRepository, UserRepository userRepository) {
         this.repository = repository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
+    }
+    /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
+    public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
+        return repository.findActiveGrooms();
     }
 
     /** Giao buổi tập: horse_id lấy từ phase, không nhận từ client. */
@@ -70,7 +74,8 @@ public class TrainingSessionService {
     }
 
     /**
-     * SCHEDULED -> RUNNING. Kiểm tra lại ngựa vì tình trạng có thể đổi sau khi xếp lịch
+     * SCHEDULED -> RUNNING. Kiểm tra lại ngựa vì tình trạng có thể đổi sau khi xếp
+     * lịch
      * (bị khóa, bị thương). Sau bước này UC11 mới nhận được số đo của buổi tập.
      */
     @Transactional
@@ -83,10 +88,11 @@ public class TrainingSessionService {
         }
         checkHorseCanTrain(s.horseId());
         repository.markRunning(sessionId);
-        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS",
+                ip);
         return getOrThrow(sessionId);
     }
-
+    
     public TrainingSessionResponse get(int sessionId, AuthenticatedUser user) {
         TrainingSessionResponse s = getOrThrow(sessionId);
         checkCanAct(s, user);
@@ -98,6 +104,108 @@ public class TrainingSessionService {
         Integer assignedTo = "GROOM".equals(user.role()) ? user.userId() : null;
         return repository.findAll(horseId, status, assignedTo);
     }
+    
+/**
+ * Đổi ngày/giờ hoặc Groom phụ trách của một buổi tập.
+ * Chỉ Head Trainer được gọi thông qua Controller.
+ */
+@Transactional
+public TrainingSessionResponse reschedule(
+        int sessionId,
+        TrainingSessionScheduleRequest request,
+        AuthenticatedUser user,
+        String ip) {
+
+    // 1. Buổi tập phải tồn tại.
+    TrainingSessionResponse current = getOrThrow(sessionId);
+
+    // 2. Chỉ đổi được lịch khi chưa bắt đầu.
+    if (!"SCHEDULED".equals(current.status())) {
+        throw new ApiException(
+                HttpStatus.CONFLICT,
+                "Only a SCHEDULED session can be rescheduled");
+    }
+
+    // 3. Tìm phase và giáo án chứa buổi tập.
+    TrainingSessionRepository.PhaseContext ctx =
+            repository.findPhaseContext(current.phaseId())
+                    .orElseThrow(() -> new ApiException(
+                            HttpStatus.NOT_FOUND,
+                            "Training phase not found"));
+
+    // 4. Giáo án phải còn ACTIVE.
+    if (!"ACTIVE".equals(ctx.planStatus())) {
+        throw new ApiException(
+                HttpStatus.CONFLICT,
+                "Training plan is not active");
+    }
+
+    // 5. Kiểm tra lại tình trạng ngựa và training lock.
+    checkHorseCanTrain(current.horseId());
+
+    Map<String, String> errors = new LinkedHashMap<>();
+
+    // 6. Groom mới phải là tài khoản đang hoạt động.
+    if (!repository.isActiveGroom(request.assignedTo())) {
+        errors.put(
+                "assignedTo",
+                "Assignee must be an active Groom");
+    }
+
+    // 7. Ngày mới không được ở trong quá khứ.
+    LocalDate day = request.sessionDate().toLocalDate();
+
+    if (day.isBefore(LocalDate.now())) {
+        errors.put(
+                "sessionDate",
+                "Cannot schedule a session in the past");
+    }
+
+    // 8. Ngày mới phải nằm trong thời gian của phase.
+    if (ctx.startDate() != null && day.isBefore(ctx.startDate())) {
+        errors.put(
+                "sessionDate",
+                "Session cannot be before the phase start date");
+    }
+
+    if (ctx.endDate() != null && day.isAfter(ctx.endDate())) {
+        errors.put(
+                "sessionDate",
+                "Session cannot be after the phase end date");
+    }
+
+    if (!errors.isEmpty()) {
+        throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "Invalid schedule data",
+                errors);
+    }
+
+    // 9. Cập nhật có điều kiện để tránh đổi lịch khi buổi tập
+    // đã chuyển khỏi trạng thái SCHEDULED.
+    int updated = repository.updateSchedule(
+            sessionId,
+            request.assignedTo(),
+            request.sessionDate());
+
+    if (updated == 0) {
+        throw new ApiException(
+                HttpStatus.CONFLICT,
+                "Session is no longer available for rescheduling");
+    }
+
+    // 10. Ghi lịch sử thao tác.
+    userRepository.writeAudit(
+            user.userId(),
+            "TRAINING_SESSION_RESCHEDULE",
+            "TRAINING_SESSION",
+            sessionId,
+            "SUCCESS",
+            ip);
+
+    // 11. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
+    return getOrThrow(sessionId);
+}
 
     // ---------- helper ----------
 

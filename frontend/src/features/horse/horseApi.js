@@ -46,8 +46,12 @@ export function updateHorse(id, body) {
  * Quyền
  * ------------------------------------------------------------------ */
 
-/** Chỉ hai role này được tạo và sửa - khớp @RequireRole trên HorseController. */
-const CAN_EDIT = new Set(["HEAD_TRAINER", "CLUB_MANAGER"]);
+/**
+ * Chỉ Club Manager được tạo và sửa hồ sơ hành chính của ngựa - khớp
+ * @RequireRole trên HorseController. Head Trainer chỉ xem (và báo cho bác sĩ
+ * khi ngựa có vấn đề); khám và đổi trạng thái là việc của bác sĩ thú y.
+ */
+const CAN_EDIT = new Set(["CLUB_MANAGER"]);
 
 export function canEditHorses(user) {
   return !!user && CAN_EDIT.has(user.role);

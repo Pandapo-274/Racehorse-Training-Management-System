@@ -144,7 +144,7 @@ export default function HorseListPage() {
           {horses.length === 0 ? (
             isOwner ? (
               /* Chủ ngựa không tự tạo được hồ sơ ngựa - POST /api/horses chỉ
-                 nhận HEAD_TRAINER và CLUB_MANAGER. Nên màn trống ở đây không
+                 nhận CLUB_MANAGER. Nên màn trống ở đây không
                  mời họ bấm một nút sẽ trả 403, mà chỉ ra đường thật: gửi yêu
                  cầu để học viện đăng ký hộ. */
               <StateBlock title="No horses in your name yet">

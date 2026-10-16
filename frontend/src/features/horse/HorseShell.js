@@ -27,10 +27,68 @@ const HOME_BY_ROLE = {
   HORSE_OWNER: "/horse-owner",
 };
 
+/* Menu từng role. Chép từ thanh bên của dashboard tương ứng. */
+const NAV_BY_ROLE = {
+  CLUB_MANAGER: [
+    { key: "home", label: "Overview" },
+    { key: "horses", label: "Horses" },
+    { key: "staff", label: "Staff", to: null },
+    { key: "supplies", label: "Supplies & feed", to: null },
+    { key: "permissions", label: "Permissions", to: null },
+    { key: "audit", label: "Audit log", to: null },
+  ],
+  HEAD_TRAINER: [
+    { key: "home", label: "Herd progress" },
+    { key: "horses", label: "Horses" },
+    {
+      key: "plans",
+      label: "Training plans",
+      to: "/trainer/training-plans",
+    },
+    { key: "schedule", label: "Schedule", to: null },
+    { key: "live", label: "Live session", to: null },
+    { key: "races", label: "Races", to: null },
+  ],
+  VETERINARIAN: [
+    { key: "home", label: "Herd health" },
+    { key: "horses", label: "Horses" },
+    {
+      key: "examination",
+      label: "Examination",
+      to: "/veterinarian/examination",
+    },
+    { key: "recovery", label: "Recovery", to: "/veterinarian/recovery" },
+    { key: "preventive", label: "Preventive care", to: null },
+  ],
+  GROOM: [
+    { key: "home", label: "Today" },
+    { key: "horses", label: "Stable map" },
+    { key: "feeding", label: "Feeding", to: null },
+    { key: "incidents", label: "Incident reports", to: null },
+    { key: "supplies", label: "Supplies", to: null },
+  ],
+  HORSE_OWNER: [
+    { key: "home", label: "Overview" },
+    { key: "horses", label: "My horses" },
+    { key: "results", label: "Results & races", to: null },
+    { key: "costs", label: "Costs & prizes", to: null },
+  ],
+  DEFAULT: [
+    { key: "home", label: "Dashboard" },
+    { key: "horses", label: "Horses" },
+  ],
+};
+
 /* Biểu tượng móng ngựa - cùng kiểu với sidebar màn Herd progress */
 function HorseshoeIcon() {
   return (
-    <svg className="hz-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <svg
+      className="hz-nav-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+    >
       <path
         d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
         fill="none"
@@ -58,6 +116,21 @@ export default function HorseShell({ title, subtitle, actions, children }) {
 
   const onHorses = location.pathname.startsWith(horseBase);
 
+  // Mỗi role giữ nguyên menu của dashboard mình, để sang trang Horses không
+  // bị mất lối đi. `key: "horses"` là mục sáng lên khi đang ở trang ngựa;
+  // `to: null` là mục chưa có trang (giống nút tương ứng trên dashboard).
+  const navItems = (NAV_BY_ROLE[user?.role] || NAV_BY_ROLE.DEFAULT).map(
+    (item) => ({
+      ...item,
+      to:
+        item.key === "home"
+          ? home
+          : item.key === "horses"
+            ? horseBase
+            : item.to,
+    }),
+  );
+
   return (
     <div className="hz-page">
       <aside className="hz-sidebar">
@@ -74,19 +147,25 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         </div>
 
         <nav className="hz-nav">
-          <button className="hz-nav-item" onClick={() => navigate(home)}>
-            <HorseshoeIcon />
-            Dashboard
-          </button>
-
-          <button
-            className={`hz-nav-item${onHorses ? " active" : ""}`}
-            aria-current={onHorses ? "page" : undefined}
-            onClick={() => navigate(horseBase)}
-          >
-            <HorseshoeIcon />
-            Horses
-          </button>
+          {navItems.map((item) => {
+            const active =
+              (item.key === "horses" && onHorses) ||
+              (item.key === "home" && location.pathname === home) ||
+              (item.key === "plans" &&
+                location.pathname.startsWith("/trainer/training-plans"));
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className={`hz-nav-item${active ? " active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => item.to && navigate(item.to)}
+              >
+                <HorseshoeIcon />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="hz-sidebar-bottom">
@@ -94,7 +173,11 @@ export default function HorseShell({ title, subtitle, actions, children }) {
             Sign out
           </button>
 
-          <ProfileCard className="hz-user" avatarClassName="hz-avatar" role={role} />
+          <ProfileCard
+            className="hz-user"
+            avatarClassName="hz-avatar"
+            role={role}
+          />
         </div>
       </aside>
 
@@ -155,7 +238,10 @@ export function Card({ title, hint, actions, children, className = "" }) {
 /** Trạng thái đang tải / lỗi / rỗng - ba màn dùng chung một hình dạng. */
 export function StateBlock({ kind = "info", title, children, onRetry }) {
   return (
-    <div className={`hz-state hz-state--${kind}`} role={kind === "error" ? "alert" : undefined}>
+    <div
+      className={`hz-state hz-state--${kind}`}
+      role={kind === "error" ? "alert" : undefined}
+    >
       <strong>{title}</strong>
       {children && <p>{children}</p>}
       {onRetry && (
