@@ -18,7 +18,7 @@ const workloadData = [
 const openItems = [
   {
     item: "New record awaiting owner assignment",
-    role: "Academy Manager",
+    role: "Club Manager",
     horse: "Symboli Rudolf",
     when: "09:12 today",
     status: "Pending",
@@ -50,7 +50,7 @@ const openItems = [
   },
   {
     item: "View access granted to new owner",
-    role: "Academy Manager",
+    role: "Club Manager",
     horse: "Kitasan Black",
     when: "11 Sep 2026",
     status: "Done",
@@ -86,7 +86,7 @@ function ManagerSidebar() {
         <img src="/logo.svg" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ function ManagerSidebar() {
           Sign out
         </button>
         <ProfileCard className="manager-user" avatarClassName="manager-avatar"
-                     role="Academy Manager" />
+                     role="Club Manager" />
       </div>
     </aside>
   );
@@ -242,10 +242,6 @@ function OpenItems() {
             <h2>Open items</h2>
           </div>
         </div>
-
-        <button className="register-horse-btn">
-          Register horse
-        </button>
       </div>
 
       <div className="items-table-wrapper">
@@ -291,7 +287,7 @@ export default function ManagerDashboard() {
           <div>
             <div className="manager-page-title">
               <span className="manager-diamond" aria-hidden="true" />
-              <h1>Academy overview</h1>
+              <h1>Club overview</h1>
             </div>
 
             <p>2026 season · Week 38</p>

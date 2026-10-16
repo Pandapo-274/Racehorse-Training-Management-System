@@ -7,7 +7,7 @@ const flows = [
     number: "01",
     title: "Records & pedigree",
     description:
-      "The academy manager creates horse records, enters pedigree and assigns owners. Every action passes a permission check and lands in the audit log.",
+      "The club manager creates horse records, enters pedigree and assigns owners. Every action passes a permission check and lands in the audit log.",
     color: "pink",
     route: "/manager/horses",
   },
@@ -30,7 +30,7 @@ const flows = [
 ];
 function Crest() {
   return (
-    <img className="landing-logo" src="/logo.svg" alt="Tenma Racing Academy" />
+    <img className="landing-logo" src="/logo.svg" alt="Tenma Racing Club" />
   );
 }
 
@@ -56,7 +56,7 @@ function LandingPage() {
         <div className="hero-content">
           <Crest />
 
-          <div className="hero-kicker">RACING ACADEMY · ESTABLISHED 1998</div>
+          <div className="hero-kicker">RACING CLUB · ESTABLISHED 1998</div>
 
           <h1>TENMA</h1>
 
@@ -163,10 +163,10 @@ function LandingPage() {
           <div className="footer-brand">
             <Crest />
 
-            <span>Tenma Academy · Racehorse training management system</span>
+            <span>Tenma Club · Racehorse Training & Management System </span>
           </div>
 
-          <span className="footer-project">Coursework project · 2026</span>
+          
         </div>
       </section>
     </div>

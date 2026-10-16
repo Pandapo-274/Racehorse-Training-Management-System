@@ -15,6 +15,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import PedigreeTree from "./PedigreeTree";
 import VitalsPanel from "./VitalsPanel";
+import HorseHealthPanel from "./HorseHealthPanel";
 
 import {
   getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
@@ -46,6 +47,7 @@ export default function HorseDetailPage() {
   const user = getUser();
 
   const mayEdit = canEditHorses(user);
+  const isVet = user?.role === "VETERINARIAN";
   const mayViewPedigree = canViewPedigree(user);
   const mayViewVitals = canViewVitals(user);
   const horseBase = getHorseBasePath(user);
@@ -163,6 +165,24 @@ export default function HorseDetailPage() {
             </button>
           )}
 
+          {isVet && (
+            <button
+              type="button" className="hz-btn"
+              onClick={() => navigate(`/veterinarian/examination/${id}`)}
+            >
+              Update health status
+            </button>
+          )}
+
+          {isVet && horse.status !== "ELIGIBLE" && (
+            <button
+              type="button" className="hz-btn hz-btn--ghost"
+              onClick={() => navigate(`/veterinarian/recovery/${id}`)}
+            >
+              Recovery
+            </button>
+          )}
+
           <button
             type="button" className="hz-btn hz-btn--ghost"
             onClick={() => navigate(horseBase)}
@@ -254,7 +274,9 @@ export default function HorseDetailPage() {
               />
 
               <p className="hz-muted hz-note">
-                Set by the veterinarian, not in this form.
+                {isVet
+                  ? "Record an examination to change it, or confirm recovery to clear it."
+                  : "Set by the veterinarian, not in this form."}
               </p>
             </Row>
 
@@ -266,6 +288,8 @@ export default function HorseDetailPage() {
               {formatDateTime(horse.updatedAt)}
             </Row>
           </Card>
+
+          <HorseHealthPanel horse={horse} user={user} />
         </div>
       )}
 

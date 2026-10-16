@@ -4,6 +4,9 @@ import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard"
 import TrainerDashboard from "./features/trainer/TrainerDashboard"
 import VetDashboard from "./features/vet/VetDashboard";
+import VetExaminationPage from "./features/vet/VetExaminationPage";
+import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
+import VetRecoveryPage from "./features/vet/VetRecoveryPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import LandingPage from "./features/landingpage/LandingPage";
@@ -78,6 +81,14 @@ export default function App() {
 
         <Route path="/veterinarian/horses" element={<RoleRoute roles={["VETERINARIAN"]}><HorseListPage /></RoleRoute>} />
         <Route path="/veterinarian/horses/:id" element={<RoleRoute roles={["VETERINARIAN"]}><HorseDetailPage /></RoleRoute>} />
+
+        {/* Flow 3 - bác sĩ thú y: khám (UC14/15/16), kết quả khoá tập, hồi phục (UC18).
+            Không có :horseId thì hiện trang chọn ngựa. */}
+        <Route path="/veterinarian/examination" element={<RoleRoute roles={["VETERINARIAN"]}><VetExaminationPage /></RoleRoute>} />
+        <Route path="/veterinarian/examination/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetExaminationPage /></RoleRoute>} />
+        <Route path="/veterinarian/examination/:horseId/lock-issued" element={<RoleRoute roles={["VETERINARIAN"]}><VetLockIssuedPage /></RoleRoute>} />
+        <Route path="/veterinarian/recovery" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
+        <Route path="/veterinarian/recovery/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
 
         <Route path="/groom/horses" element={<RoleRoute roles={["GROOM"]}><HorseListPage /></RoleRoute>} />
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />

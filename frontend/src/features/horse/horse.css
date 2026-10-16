@@ -116,7 +116,7 @@
 .hz-btn:disabled { opacity: .55; cursor: default; }
 
 .hz-btn--ghost {
-  background: #fff; color: var(--text-900);
+  background: #ed74b7; color: var(--text-900);
   border: 1px solid var(--line); box-shadow: none;
 }
 .hz-btn--ghost:hover { background: var(--field-bg); }
