@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.TokenBlacklist;
@@ -69,7 +71,9 @@ public class PasswordService {
 
     /**
      * Luôn trả cùng một kết quả dù email có tồn tại hay không, để kẻ xấu không dò được
-     * "email này có tài khoản không". @Transactional: lỡ gửi mail lỗi thì token cũng rollback.
+     * "email này có tài khoản không".
+     * Mail chỉ được gửi SAU KHI transaction commit xong (token đã nằm chắc trong DB) và chạy nền, nên
+     * gửi mail lỗi không làm hỏng request, cũng không để lại mail chứa link chết do rollback.
      */
     @Transactional
     public void forgotPassword(ForgotPasswordRequest req, String ip) {
@@ -89,7 +93,20 @@ public class PasswordService {
         passwords.insertToken(u.userId(), sha256Hex(token), RESET_TOKEN_MINUTES);
         users.writeAudit(u.userId(), "FORGOT_PASSWORD", "APP_USER", u.userId(), "SUCCESS", ip);
 
-        mailSender.sendResetLink(u.email(), u.fullName(), frontendBaseUrl + "/reset-password?token=" + token);
+        String link = frontendBaseUrl + "/reset-password?token=" + token;
+        String to = u.email();
+        String name = u.fullName();
+        Runnable send = () -> mailSender.sendResetLink(to, name, link, RESET_TOKEN_MINUTES);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
     }
 
     @Transactional
