@@ -10,7 +10,9 @@ import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** status KHÔNG nằm ở đây: trạng thái do bác sĩ thú y quyết định (UC14, UC18). */
+/** Chỉ còn dùng nội bộ: HorseRequestService.approve tạo ngựa qua HorseService.create.
+ *  Không còn endpoint POST /api/horses.
+ *  status KHÔNG nằm ở đây: trạng thái do bác sĩ thú y quyết định (UC14, UC18). */
 public record HorseRequest(
         @NotNull(message = "Chủ ngựa là bắt buộc") Integer ownerId,
         Integer sireId,
@@ -23,5 +25,6 @@ public record HorseRequest(
         @PastOrPresent(message = "Ngày sinh không được ở tương lai") LocalDate dateOfBirth,
         @Size(max = 50) String color,
         @DecimalMin(value = "0.0", inclusive = false, message = "Cân nặng phải lớn hơn 0") BigDecimal weight,
-        @Size(max = 20) String stallNo
+        @Size(max = 20) String stallNo,
+        @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE") String recordType
 ) {}

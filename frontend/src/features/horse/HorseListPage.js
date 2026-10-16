@@ -10,14 +10,13 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
-  listHorses, canEditHorses, getHorseBasePath, toStatus, toGender,
-  toAge, formatWeight, STATUS_OPTIONS,
+  listHorses, canEditHorse, getHorseBasePath, toStatus, toGender,
+  toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly,
 } from "./horseApi";
 
 export default function HorseListPage() {
   const navigate = useNavigate();
   const user = getUser();
-  const mayEdit = canEditHorses(user);
   const isVet = user?.role === "VETERINARIAN";
   const isOwner = user?.role === "HORSE_OWNER";
   const horseBase = getHorseBasePath(user);
@@ -26,6 +25,7 @@ export default function HorseListPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("ALL");
   const [status, setStatus] = useState("ALL");
 
   const load = useCallback(
@@ -53,7 +53,8 @@ export default function HorseListPage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (horses || []).filter((h) => {
-      if (status !== "ALL" && h.status !== status) return false;
+      if (stage !== "ALL" && toStage(h).key !== stage) return false;
+      if (status !== "ALL" && (isPedigreeOnly(h) || h.status !== status)) return false;
       if (!q) return true;
       return (
         (h.horseName || "").toLowerCase().includes(q) ||
@@ -62,22 +63,24 @@ export default function HorseListPage() {
         (h.stallNo || "").toLowerCase().includes(q)
       );
     });
-  }, [horses, query, status]);
+  }, [horses, query, stage, status]);
 
-  // Đếm theo trạng thái để dán số lên từng nút lọc. Đếm trên toàn đàn, không
+  // Đếm theo phân loại để dán số lên từng nút lọc. Đếm trên toàn đàn, không
   // phải trên kết quả đang hiển thị - nếu không, bấm sang bộ lọc khác sẽ thấy
   // số nhảy lung tung.
   const counts = useMemo(() => {
     const c = { ALL: (horses || []).length };
-    STATUS_OPTIONS.forEach((s) => {
-      c[s] = (horses || []).filter((h) => h.status === s).length;
+    STAGE_FILTERS.forEach(({ key }) => {
+      c[key] = (horses || []).filter((h) => toStage(h).key === key).length;
     });
     return c;
   }, [horses]);
 
-  const actions = mayEdit ? (
-    <button type="button" className="hz-btn" onClick={() => navigate(`${horseBase}/new`)}>
-      Add a horse
+  // Không còn nút "Add a horse": ngựa vào hệ thống qua yêu cầu đăng ký của chủ ngựa
+  // và Club Manager duyệt. Manager/Trainer chỉ xem; trang duyệt nằm ở menu bên trái.
+  const actions = isOwner ? (
+    <button type="button" className="hz-btn" onClick={() => navigate("/horse-owner/request")}>
+      Request a horse registration
     </button>
   ) : null;
 
@@ -118,38 +121,37 @@ export default function HorseListPage() {
                 aria-label="Search horses"
               />
 
-              <div className="hz-segment" role="group" aria-label="Filter by status">
-                <button
-                  type="button"
-                  aria-pressed={status === "ALL"}
-                  onClick={() => setStatus("ALL")}
-                >
+              <div className="hz-segment" role="group" aria-label="Filter by type">
+                <button type="button" aria-pressed={stage === "ALL"} onClick={() => setStage("ALL")}>
                   All <b>{counts.ALL}</b>
                 </button>
-
-                {STATUS_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    aria-pressed={status === s}
-                    onClick={() => setStatus(s)}
-                  >
-                    {toStatus(s).label} <b>{counts[s]}</b>
+                {STAGE_FILTERS.map(({ key, label }) => (
+                  <button key={key} type="button" aria-pressed={stage === key}
+                          onClick={() => setStage(key)}>
+                    {label} <b>{counts[key]}</b>
                   </button>
                 ))}
               </div>
+
+              <select className="hz-search" value={status} aria-label="Filter by health status"
+                      onChange={(e) => setStatus(e.target.value)}>
+                <option value="ALL">Any health status</option>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{toStatus(s).label}</option>
+                ))}
+              </select>
             </div>
           }
         >
           {horses.length === 0 ? (
             isOwner ? (
               /* Chủ ngựa không tự tạo được hồ sơ ngựa - POST /api/horses chỉ
-                 nhận CLUB_MANAGER. Nên màn trống ở đây không
+                 nhận HEAD_TRAINER và CLUB_MANAGER. Nên màn trống ở đây không
                  mời họ bấm một nút sẽ trả 403, mà chỉ ra đường thật: gửi yêu
                  cầu để học viện đăng ký hộ. */
               <StateBlock title="No horses in your name yet">
                 Horses are entered into the register by the academy. Send a request and
-                they will add yours, assign a registration code and a stall.
+                the club manager will review it, then assign a registration code and a stall.
                 <span className="hz-state-action">
                   <button type="button" className="hz-btn"
                           onClick={() => navigate("/horse-owner/request")}>
@@ -159,9 +161,8 @@ export default function HorseListPage() {
               </StateBlock>
             ) : (
               <StateBlock title="No horses yet">
-                {mayEdit
-                  ? "Use “Add a horse” to register the first one."
-                  : "Nothing has been registered here yet."}
+                Nothing has been registered here yet. Horses appear once an owner sends a
+                request and the club approves it.
               </StateBlock>
             )
           ) : visible.length === 0 ? (
@@ -180,7 +181,8 @@ export default function HorseListPage() {
                     <th>Weight</th>
                     <th>Stall</th>
                     <th>Owner</th>
-                    <th>Status</th>
+                    <th>Type</th>
+                    <th>Health</th>
                     <th aria-label="Actions" />
                   </tr>
                 </thead>
@@ -188,6 +190,8 @@ export default function HorseListPage() {
                 <tbody>
                   {visible.map((h) => {
                     const st = toStatus(h.status);
+                    const stg = toStage(h);
+                    const pedigree = isPedigreeOnly(h);
                     const age = toAge(h.dateOfBirth);
 
                     return (
@@ -208,14 +212,21 @@ export default function HorseListPage() {
                         <td className="hz-mono">{h.registrationCode}</td>
                         <td>{toGender(h.horseGender)}</td>
                         <td>{age == null ? "—" : `${age}y`}</td>
-                        <td>{formatWeight(h.weight)}</td>
-                        <td className="hz-mono">{h.stallNo || "—"}</td>
+                        <td>{pedigree ? "—" : formatWeight(h.weight)}</td>
+                        <td className="hz-mono">{pedigree ? "—" : h.stallNo || "—"}</td>
                         <td>{h.ownerName || `#${h.ownerId}`}</td>
                         <td>
-                          <StatusChip tone={st.tone} label={st.label} title={st.hint} />
+                          <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
+                        </td>
+                        <td>
+                          {pedigree ? (
+                            <span className="hz-muted">—</span>
+                          ) : (
+                            <StatusChip tone={st.tone} label={st.label} title={st.hint} />
+                          )}
                         </td>
                         <td className="hz-row-action">
-                          {mayEdit && (
+                          {canEditHorse(user, h) && (
                             <button
                               type="button"
                               className="hz-btn hz-btn--ghost"
@@ -228,7 +239,7 @@ export default function HorseListPage() {
                             </button>
                           )}
 
-                          {isVet && (
+                          {isVet && !pedigree && (
                             <>
                               {h.status !== "ELIGIBLE" && (
                                 <button

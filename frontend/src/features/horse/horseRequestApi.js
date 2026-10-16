@@ -27,6 +27,7 @@ export function submitRequest(form) {
       dateOfBirth: form.dateOfBirth || null,
       color: form.color.trim() || null,
       note: form.note.trim() || null,
+      recordType: form.recordType || "ACADEMY",
     }),
   });
 }

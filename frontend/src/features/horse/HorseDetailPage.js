@@ -18,7 +18,7 @@ import VitalsPanel from "./VitalsPanel";
 import HorseHealthPanel from "./HorseHealthPanel";
 
 import {
-  getHorse, getPedigree, getVitals, canEditHorses, getHorseBasePath,
+  getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly,
   canViewPedigree, canViewVitals,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
@@ -46,7 +46,6 @@ export default function HorseDetailPage() {
 
   const user = getUser();
 
-  const mayEdit = canEditHorses(user);
   const isVet = user?.role === "VETERINARIAN";
   const mayViewPedigree = canViewPedigree(user);
   const mayViewVitals = canViewVitals(user);
@@ -140,6 +139,9 @@ export default function HorseDetailPage() {
   }
 
   const st = toStatus(horse.status);
+  const stg = toStage(horse);
+  const pedigreeOnly = isPedigreeOnly(horse);
+  const mayEdit = canEditHorse(user, horse);
   const age = toAge(horse.dateOfBirth);
 
   return (
@@ -150,11 +152,11 @@ export default function HorseDetailPage() {
       )}${age == null ? "" : ` · ${age} years old`}`}
       actions={
         <>
-          <StatusChip
-            tone={st.tone}
-            label={st.label}
-            title={st.hint}
-          />
+          <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
+
+          {!pedigreeOnly && (
+            <StatusChip tone={st.tone} label={st.label} title={st.hint} />
+          )}
 
           {mayEdit && (
             <button
@@ -165,7 +167,7 @@ export default function HorseDetailPage() {
             </button>
           )}
 
-          {isVet && (
+          {isVet && !pedigreeOnly && (
             <button
               type="button" className="hz-btn"
               onClick={() => navigate(`/veterinarian/examination/${id}`)}
@@ -174,7 +176,7 @@ export default function HorseDetailPage() {
             </button>
           )}
 
-          {isVet && horse.status !== "ELIGIBLE" && (
+          {isVet && !pedigreeOnly && horse.status !== "ELIGIBLE" && (
             <button
               type="button" className="hz-btn hz-btn--ghost"
               onClick={() => navigate(`/veterinarian/recovery/${id}`)}
@@ -196,7 +198,7 @@ export default function HorseDetailPage() {
       <div className="hz-tabs" role="tablist">
         {TABS.filter((t) =>
           (t.id !== "pedigree" || mayViewPedigree) &&
-          (t.id !== "vitals" || mayViewVitals)
+          (t.id !== "vitals" || (mayViewVitals && !pedigreeOnly))
         ).map((t) => (
           <button
             key={t.id}
@@ -251,34 +253,37 @@ export default function HorseDetailPage() {
             </Row>
           </Card>
 
-          <Card title="Stable">
-            <Row label="Weight">
-              {formatWeight(horse.weight)}
-            </Row>
+          <Card title={pedigreeOnly ? "Record" : "Stable"}>
+            {pedigreeOnly ? (
+              <p className="hz-muted hz-note">
+                Pedigree record only. This horse is kept as a parent or ancestor, so it has no
+                stall, weight, health status or training plan.
+              </p>
+            ) : (
+              <>
+                <Row label="Weight">{formatWeight(horse.weight)}</Row>
 
-            <Row label="Stall">
-              <span className="hz-mono">
-                {horse.stallNo || "—"}
-              </span>
-            </Row>
+                <Row label="Stall">
+                  <span className="hz-mono">{horse.stallNo || "—"}</span>
+                </Row>
+              </>
+            )}
 
             <Row label="Owner">
               {horse.ownerName || `User #${horse.ownerId}`}
             </Row>
 
-            <Row label="Health status">
-              <StatusChip
-                tone={st.tone}
-                label={st.label}
-                title={st.hint}
-              />
+            {!pedigreeOnly && (
+              <Row label="Health status">
+                <StatusChip tone={st.tone} label={st.label} title={st.hint} />
 
-              <p className="hz-muted hz-note">
-                {isVet
-                  ? "Record an examination to change it, or confirm recovery to clear it."
-                  : "Set by the veterinarian, not in this form."}
-              </p>
-            </Row>
+                <p className="hz-muted hz-note">
+                  {isVet
+                    ? "Record an examination to change it, or confirm recovery to clear it."
+                    : "Set by the veterinarian, not in this form."}
+                </p>
+              </Row>
+            )}
 
             <Row label="Registered">
               {formatDateTime(horse.createdAt)}
@@ -289,7 +294,7 @@ export default function HorseDetailPage() {
             </Row>
           </Card>
 
-          <HorseHealthPanel horse={horse} user={user} />
+          {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
         </div>
       )}
 

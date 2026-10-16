@@ -3,7 +3,6 @@ import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard"
 import TrainerDashboard from "./features/trainer/TrainerDashboard"
-import TrainingPlanPage from "./features/trainer/TrainingPlanPage"
 import VetDashboard from "./features/vet/VetDashboard";
 import VetExaminationPage from "./features/vet/VetExaminationPage";
 import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
@@ -17,11 +16,11 @@ import HorseListPage from "./features/horse/HorseListPage";
 import HorseDetailPage from "./features/horse/HorseDetailPage";
 import HorseFormPage from "./features/horse/HorseFormPage";
 import HorseRequestPage from "./features/horse/HorseRequestPage";
+import HorseReviewPage from "./features/horse/HorseReviewPage";
 import ProfilePage from "./features/profile/ProfilePage";
 import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
 import ResetPasswordPage from "./features/password/ResetPasswordPage";
-import SchedulePage from "./features/trainer/SchedulePage";
 
 /* UC4 - mọi vai trò đều có hồ sơ của mình, nên liệt kê cả năm thay vì thêm một
    loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
@@ -63,8 +62,6 @@ export default function App() {
         <Route path="/manager" element={<ManagerDashboard/>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
-        <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
-        <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
         {/* Veterinarian */}
         <Route path="/veterinarian" element={<VetDashboard />} />
         {/* Groom */}
@@ -74,14 +71,13 @@ export default function App() {
 
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
-        <Route path="/manager/horses/new" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseFormPage /></RoleRoute>} />
+        {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
+        <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
-        <Route path="/manager/horses/:id/edit" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseFormPage /></RoleRoute>} />
 
         <Route path="/trainer/horses" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseListPage /></RoleRoute>} />
-        <Route path="/trainer/horses/new" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseFormPage /></RoleRoute>} />
+        <Route path="/trainer/horse-requests" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseReviewPage /></RoleRoute>} />
         <Route path="/trainer/horses/:id" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseDetailPage /></RoleRoute>} />
-        <Route path="/trainer/horses/:id/edit" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseFormPage /></RoleRoute>} />
 
         <Route path="/veterinarian/horses" element={<RoleRoute roles={["VETERINARIAN"]}><HorseListPage /></RoleRoute>} />
         <Route path="/veterinarian/horses/:id" element={<RoleRoute roles={["VETERINARIAN"]}><HorseDetailPage /></RoleRoute>} />
@@ -102,6 +98,8 @@ export default function App() {
             đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}
         <Route path="/horse-owner/request" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseRequestPage /></RoleRoute>} />
         <Route path="/horse-owner/horses/:id" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseDetailPage /></RoleRoute>} />
+        {/* Chủ ngựa sửa thông tin cơ bản của ngựa mình (mã đăng ký và chuồng bị khoá). */}
+        <Route path="/horse-owner/horses/:id/edit" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseFormPage /></RoleRoute>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

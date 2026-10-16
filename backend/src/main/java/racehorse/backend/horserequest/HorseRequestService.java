@@ -22,15 +22,17 @@ public class HorseRequestService {
     private final UserRepository users;
 
     public HorseRequestService(HorseRequestRepository requests, HorseService horseService,
-                               UserRepository users) {
+            UserRepository users) {
         this.requests = requests;
         this.horseService = horseService;
         this.users = users;
     }
 
-    /* ------------------------------------------------------------------ *
+    /*
+     * ------------------------------------------------------------------ *
      * Chủ ngựa gửi yêu cầu
-     * ------------------------------------------------------------------ */
+     * ------------------------------------------------------------------
+     */
 
     public HorseRequestRow submit(SubmitRequest raw, AuthenticatedUser me, String ip) {
         String name = raw.horseName().trim();
@@ -53,9 +55,11 @@ public class HorseRequestService {
         return getOrThrow(id);
     }
 
-    /* ------------------------------------------------------------------ *
+    /*
+     * ------------------------------------------------------------------ *
      * Xem
-     * ------------------------------------------------------------------ */
+     * ------------------------------------------------------------------
+     */
 
     /** Chủ ngựa chỉ thấy yêu cầu của mình; học viện thấy cả hàng chờ. */
     public List<HorseRequestRow> list(AuthenticatedUser me) {
@@ -65,9 +69,11 @@ public class HorseRequestService {
         return requests.findAll();
     }
 
-    /* ------------------------------------------------------------------ *
+    /*
+     * ------------------------------------------------------------------ *
      * Học viện xử lý
-     * ------------------------------------------------------------------ */
+     * ------------------------------------------------------------------
+     */
 
     /**
      * Duyệt: tạo con ngựa thật rồi gắn nó vào yêu cầu.
@@ -80,7 +86,7 @@ public class HorseRequestService {
      */
     @Transactional
     public HorseRequestRow approve(int requestId, ReviewRequest review,
-                                   AuthenticatedUser me, String ip) {
+            AuthenticatedUser me, String ip) {
         HorseRequestRow req = getOrThrow(requestId);
         requirePending(req);
 
@@ -93,14 +99,14 @@ public class HorseRequestService {
 
         racehorse.backend.horse.HorseRequest newHorse = new racehorse.backend.horse.HorseRequest(
                 req.ownerId(),
-                null, null,                       // phả hệ điền sau, lúc duyệt chưa biết
+                null, null, // phả hệ điền sau, lúc duyệt chưa biết
                 req.horseName(),
                 code.toUpperCase(Locale.ROOT),
                 req.breed(),
                 req.horseGender(),
                 req.dateOfBirth(),
                 req.color(),
-                null,                             // cân nặng do học viện cân, không lấy lời khai
+                null, // cân nặng do học viện cân, không lấy lời khai
                 blankToNull(review.stallNo()));
 
         HorseResponse created = horseService.create(newHorse, me, ip);
@@ -120,7 +126,7 @@ public class HorseRequestService {
 
     @Transactional
     public HorseRequestRow reject(int requestId, ReviewRequest review,
-                                  AuthenticatedUser me, String ip) {
+            AuthenticatedUser me, String ip) {
         requirePending(getOrThrow(requestId));
 
         String note = review == null ? null : blankToNull(review.note());
@@ -142,9 +148,11 @@ public class HorseRequestService {
         return getOrThrow(requestId);
     }
 
-    /* ------------------------------------------------------------------ *
+    /*
+     * ------------------------------------------------------------------ *
      * helper
-     * ------------------------------------------------------------------ */
+     * ------------------------------------------------------------------
+     */
 
     private HorseRequestRow getOrThrow(int requestId) {
         return requests.findById(requestId)

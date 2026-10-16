@@ -34,9 +34,8 @@ export function getVitals(id, signal) {
   return authFetch(`${API}/${id}/vitals`, { signal });
 }
 
-export function createHorse(body) {
-  return authFetch(API, { method: "POST", body: JSON.stringify(body) });
-}
+/* Không còn createHorse: ngựa chỉ vào hệ thống qua yêu cầu đăng ký (horseRequestApi),
+   Club Manager duyệt rồi backend mới tạo hồ sơ. */
 
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -47,14 +46,21 @@ export function updateHorse(id, body) {
  * ------------------------------------------------------------------ */
 
 /**
- * Chỉ Club Manager được tạo và sửa hồ sơ hành chính của ngựa - khớp
- * @RequireRole trên HorseController. Head Trainer chỉ xem (và báo cho bác sĩ
- * khi ngựa có vấn đề); khám và đổi trạng thái là việc của bác sĩ thú y.
+ * Chỉ CHỦ NGỰA được sửa, và chỉ ngựa của mình. Club Manager và Head Trainer
+ * chỉ xem. Khớp @RequireRole trên HorseController.update và kiểm quyền sở hữu
+ * trong HorseService.updateByOwner (backend mới là nơi quyết định thật).
  */
-const CAN_EDIT = new Set(["CLUB_MANAGER"]);
+export function canEditHorse(user, horse) {
+  return !!user && !!horse && user.role === "HORSE_OWNER" && horse.ownerId === user.userId;
+}
 
-export function canEditHorses(user) {
-  return !!user && CAN_EDIT.has(user.role);
+/** Hai role duyệt yêu cầu đăng ký ngựa. */
+export function canReviewRequests(user) {
+  return !!user && (user.role === "CLUB_MANAGER" || user.role === "HEAD_TRAINER");
+}
+
+export function getRequestsPath(user) {
+  return user?.role === "HEAD_TRAINER" ? "/trainer/horse-requests" : "/manager/horse-requests";
 }
 
 /**
@@ -92,7 +98,8 @@ export function getHorseBasePath(user) {
  * gần như trùng nhau. Ai chỉ nhìn màu sẽ đọc sai.
  */
 const STATUS_TEXT = {
-  ELIGIBLE:   { label: "Eligible",   tone: "good",     hint: "Cleared to train" },
+  // Nhãn cũ "Eligible" dễ bị đọc là "đủ điều kiện đua". Thực ra nó chỉ là sức khoẻ.
+  ELIGIBLE:   { label: "Fit to train", tone: "good",   hint: "Cleared to train by the vet" },
   MONITOR:    { label: "Monitor",    tone: "warning",  hint: "Needs watching" },
   INJURED:    { label: "Injured",    tone: "critical", hint: "Not fit to train" },
   QUARANTINE: { label: "Quarantine", tone: "serious",  hint: "Isolated" },
@@ -103,6 +110,61 @@ export function toStatus(status) {
 }
 
 export const STATUS_OPTIONS = Object.keys(STATUS_TEXT);
+
+/* ------------------------------------------------------------------ *
+ * Loại hồ sơ và phân loại theo tuổi
+ * ------------------------------------------------------------------ */
+
+/** PHẢI khớp HorsePolicy.java ở backend. Đổi mốc thì đổi cả hai nơi. */
+export const AGE_RULES = { foalBelow: 2, racingMax: 10, academyMax: 25 };
+
+export const RECORD_TYPES = {
+  ACADEMY:  "Academy horse",
+  PEDIGREE: "Pedigree record only",
+};
+
+/** Ngựa chỉ là hồ sơ tham chiếu (cha mẹ, tổ tiên): không chuồng, không tập, không khám. */
+export function isPedigreeOnly(horse) {
+  return horse?.recordType === "PEDIGREE";
+}
+
+/**
+ * Phân loại hiển thị, suy từ loại hồ sơ + tuổi (không lưu DB nên không bao giờ lỗi thời).
+ * Trả về { key, label, tone, hint }.
+ */
+export function toStage(horse) {
+  if (isPedigreeOnly(horse)) {
+    return { key: "PEDIGREE", label: "Pedigree only", tone: "neutral",
+             hint: "Reference record for parents and ancestors. Not a training horse." };
+  }
+  const age = toAge(horse?.dateOfBirth);
+  if (age == null) return { key: "UNKNOWN", label: "Age unknown", tone: "neutral", hint: "" };
+  if (age < AGE_RULES.foalBelow) {
+    return { key: "FOAL", label: "Foal", tone: "neutral", hint: "Too young to race" };
+  }
+  if (age <= AGE_RULES.racingMax) {
+    return { key: "RACING", label: "Racing age", tone: "neutral", hint: "In the racing age range" };
+  }
+  return { key: "RETIRED", label: "Retired age", tone: "neutral", hint: "Past racing age" };
+}
+
+export const STAGE_FILTERS = [
+  { key: "RACING", label: "Racing" },
+  { key: "FOAL", label: "Foal" },
+  { key: "RETIRED", label: "Retired" },
+  { key: "PEDIGREE", label: "Pedigree" },
+];
+
+/** Cùng luật với HorsePolicy.ageProblem: trả thông báo lỗi hoặc null. */
+export function ageProblem(recordType, dateOfBirth) {
+  if (recordType === "PEDIGREE") return null;
+  if (!dateOfBirth) return "Date of birth is required for an academy horse";
+  const age = toAge(dateOfBirth);
+  if (age != null && age > AGE_RULES.academyMax) {
+    return `This horse is ${age} years old, above the academy limit of ${AGE_RULES.academyMax}. Register it as a pedigree record instead.`;
+  }
+  return null;
+}
 
 /** Giới tính. Backend chỉ nhận đúng năm giá trị này (@Pattern trên HorseRequest). */
 const GENDER_TEXT = {
@@ -214,30 +276,4 @@ export function formatWeight(w) {
 export function toInitials(name) {
   if (!name) return "??";
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
-/* ------------------------------------------------------------------ *
- * Danh sách chủ ngựa
- * ------------------------------------------------------------------ */
-
-/**
- * Backend chưa có endpoint liệt kê tài khoản, nhưng biểu mẫu cần chọn ownerId,
- * và HorseService từ chối mọi ownerId không phải role HORSE_OWNER.
- *
- * Cách lấp: GET /api/horses đã trả kèm ownerId và ownerName của từng con, nên
- * suy ngược ra được danh sách chủ ngựa *đang có ít nhất một con*. Đủ cho việc
- * thường gặp là gán con mới cho một chủ đã có. Chủ chưa có con nào thì không
- * suy ra được - biểu mẫu vì vậy vẫn cho gõ thẳng số ID.
- *
- * Khi nào backend có GET /api/users?role=HORSE_OWNER thì thay hàm này, phần
- * còn lại của biểu mẫu không phải sửa.
- */
-export function ownersFromHorses(horses) {
-  const byId = new Map();
-  (horses || []).forEach((h) => {
-    if (h.ownerId != null && !byId.has(h.ownerId)) {
-      byId.set(h.ownerId, { ownerId: h.ownerId, ownerName: h.ownerName || `User #${h.ownerId}` });
-    }
-  });
-  return [...byId.values()].sort((a, b) => a.ownerName.localeCompare(b.ownerName));
 }
