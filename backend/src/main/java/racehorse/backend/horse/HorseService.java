@@ -39,7 +39,7 @@ public class HorseService {
             id = horseRepository.insert(request);
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Dữ liệu vi phạm ràng buộc (mã đăng ký hoặc chuồng đã tồn tại)");
+                    "Data violates a constraint (registration code or stall already exists)");
         }
         userRepository.writeAudit(user.userId(), "HORSE_CREATE", "HORSE", id, "SUCCESS", ip);
         return getOrThrow(id);
@@ -54,7 +54,7 @@ public class HorseService {
             horseRepository.update(horseId, request);
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "Dữ liệu vi phạm ràng buộc (mã đăng ký hoặc chuồng đã tồn tại)");
+                    "Data violates a constraint (registration code or stall already exists)");
         }
         userRepository.writeAudit(user.userId(), "HORSE_UPDATE", "HORSE", horseId, "SUCCESS", ip);
         return getOrThrow(horseId);
@@ -73,7 +73,8 @@ public class HorseService {
         }
         return horseRepository.findAll();
     }
-        /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
+
+    /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
     public PedigreeNode getPedigree(int horseId, int generations, AuthenticatedUser user) {
         checkCanView(getOrThrow(horseId), user);
         int depth = Math.max(1, Math.min(generations, 5));
@@ -106,12 +107,12 @@ public class HorseService {
 
     HorseResponse getOrThrow(int horseId) {
         return horseRepository.findById(horseId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy ngựa #" + horseId));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + horseId + " not found"));
     }
 
     void checkCanView(HorseResponse horse, AuthenticatedUser user) {
         if ("HORSE_OWNER".equals(user.role()) && horse.ownerId() != user.userId()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Bạn không có quyền xem ngựa này");
+            throw new ApiException(HttpStatus.FORBIDDEN, "You do not have permission to view this horse");
         }
     }
 
@@ -132,22 +133,22 @@ public class HorseService {
         Map<String, String> errors = new HashMap<>();
 
         if (horseRepository.existsByRegistrationCode(r.registrationCode(), excludeId)) {
-            errors.put("registrationCode", "Mã đăng ký đã tồn tại");
+            errors.put("registrationCode", "Registration code already exists");
         }
         if (r.stallNo() != null && horseRepository.existsByStallNo(r.stallNo(), excludeId)) {
-            errors.put("stallNo", "Chuồng này đã có ngựa khác");
+            errors.put("stallNo", "This stall is already occupied by another horse");
         }
         if (!horseRepository.isHorseOwner(r.ownerId())) {
-            errors.put("ownerId", "Chủ ngựa phải là tài khoản có role HORSE_OWNER");
+            errors.put("ownerId", "Owner must be an account with role HORSE_OWNER");
         }
-        checkParent(r.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, excludeId, errors);
-        checkParent(r.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, excludeId, errors);
+        checkParent(r.sireId(), "sireId", "Sire", SIRE_GENDERS, excludeId, errors);
+        checkParent(r.damId(), "damId", "Dam", DAM_GENDERS, excludeId, errors);
         if (r.sireId() != null && r.sireId().equals(r.damId())) {
-            errors.put("damId", "Cha và mẹ không được là cùng một con");
+            errors.put("damId", "Sire and dam must not be the same horse");
         }
 
         if (!errors.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
     }
 
@@ -155,13 +156,13 @@ public class HorseService {
                              Set<String> allowedGenders, int selfId, Map<String, String> errors) {
         if (parentId == null) return;
         if (parentId == selfId) {
-            errors.put(field, label + " không được là chính con ngựa này");
+            errors.put(field, label + " must not be this horse itself");
             return;
         }
         horseRepository.findById(parentId).ifPresentOrElse(parent -> {
             if (parent.horseGender() != null && !allowedGenders.contains(parent.horseGender())) {
-                errors.put(field, label + " có giới tính không phù hợp");
+                errors.put(field, label + " has an incompatible gender");
             }
-        }, () -> errors.put(field, label + " không tồn tại"));
+        }, () -> errors.put(field, label + " does not exist"));
     }
 }
