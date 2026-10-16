@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 10, 2026` at `08:51` by `tusandthatsall`
+### Last Commited: `Oct 13, 2026` at `11:10` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,12 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 
 ## Changelogs
+> ### `Oct 15, 2026`
+- `[09:50]` `DevilJack422` - Add `UC11`, `UC12` and `UC13`
+> #### `Oct 13, 2026`
+- `[11:10]` `tusandthatsall` - Add `UC15` and Add `UC16`
+- `[10:41]` `tusandthatsall` - Add `UC18` and Adjust `UC14`
+- `[10:37]` `tusandthatsall` - Add `UC14`
 > #### `Oct 10, 2026`
 - `[08:51]` `tusandthatsall` - Fix Profile Picture Bug
 > #### `Oct 9, 2026`
