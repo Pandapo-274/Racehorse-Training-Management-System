@@ -18,7 +18,7 @@ import VitalsPanel from "./VitalsPanel";
 import HorseHealthPanel from "./HorseHealthPanel";
 
 import {
-  getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly,
+  getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
   canViewPedigree, canViewVitals,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
@@ -154,7 +154,7 @@ export default function HorseDetailPage() {
         <>
           <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
 
-          {!pedigreeOnly && (
+          {healthApplies(horse) && (
             <StatusChip tone={st.tone} label={st.label} title={st.hint} />
           )}
 
@@ -273,7 +273,7 @@ export default function HorseDetailPage() {
               {horse.ownerName || `User #${horse.ownerId}`}
             </Row>
 
-            {!pedigreeOnly && (
+            {healthApplies(horse) && (
               <Row label="Health status">
                 <StatusChip tone={st.tone} label={st.label} title={st.hint} />
 

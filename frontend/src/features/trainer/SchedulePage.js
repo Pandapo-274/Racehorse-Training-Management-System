@@ -598,8 +598,9 @@ export default function SchedulePage() {
     <div className="trainer-page">
       <ScheduleSidebar
         onSignOut={() => {
-          // Dùng cùng luồng đăng xuất của trang Trainer Dashboard.
-          navigate("/login");
+          // Cùng luồng đăng xuất với Trainer Dashboard: xoá token rồi mới chuyển trang.
+          logout();
+          navigate("/login", { replace: true });
         }}
       />
 

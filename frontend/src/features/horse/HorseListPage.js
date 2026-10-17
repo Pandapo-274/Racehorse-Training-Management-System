@@ -11,7 +11,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   listHorses, canEditHorse, getHorseBasePath, toStatus, toGender,
-  toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly,
+  toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly, healthApplies,
 } from "./horseApi";
 
 export default function HorseListPage() {
@@ -54,7 +54,7 @@ export default function HorseListPage() {
     const q = query.trim().toLowerCase();
     return (horses || []).filter((h) => {
       if (stage !== "ALL" && toStage(h).key !== stage) return false;
-      if (status !== "ALL" && (isPedigreeOnly(h) || h.status !== status)) return false;
+      if (status !== "ALL" && (!healthApplies(h) || h.status !== status)) return false;
       if (!q) return true;
       return (
         (h.horseName || "").toLowerCase().includes(q) ||
@@ -219,8 +219,13 @@ export default function HorseListPage() {
                           <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
                         </td>
                         <td>
-                          {pedigree ? (
-                            <span className="hz-muted">—</span>
+                          {!healthApplies(h) ? (
+                            <span
+                              className="hz-muted"
+                              title={pedigree ? "Reference record, not tracked" : "Retired, not on the training programme"}
+                            >
+                              —
+                            </span>
                           ) : (
                             <StatusChip tone={st.tone} label={st.label} title={st.hint} />
                           )}

@@ -155,6 +155,24 @@ export const STAGE_FILTERS = [
   { key: "PEDIGREE", label: "Pedigree" },
 ];
 
+/**
+ * Cột/chip Health có nghĩa với con ngựa này không?
+ *
+ * Health (HORSE.status) chỉ mô tả sức khoẻ để TẬP. Hai trường hợp nó vô nghĩa:
+ *  - Hồ sơ PEDIGREE: không tập, không khám.
+ *  - Ngựa nghỉ hưu (quá tuổi đua) mà status vẫn là mặc định ELIGIBLE: "Fit to train"
+ *    cho con ngựa 24 tuổi là sai sự thật. Cột status không có giá trị "đã nghỉ"
+ *    nên nó chỉ đang mang giá trị mặc định.
+ *
+ * Ngựa nghỉ hưu mà status là MONITOR / INJURED / QUARANTINE thì VẪN hiện: đó là
+ * cảnh báo thật, giấu đi là nguy hiểm.
+ */
+export function healthApplies(horse) {
+  if (isPedigreeOnly(horse)) return false;
+  if (toStage(horse).key === "RETIRED" && horse?.status === "ELIGIBLE") return false;
+  return true;
+}
+
 /** Cùng luật với HorsePolicy.ageProblem: trả thông báo lỗi hoặc null. */
 export function ageProblem(recordType, dateOfBirth) {
   if (recordType === "PEDIGREE") return null;

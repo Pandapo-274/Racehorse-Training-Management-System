@@ -3,6 +3,8 @@ import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard"
 import TrainerDashboard from "./features/trainer/TrainerDashboard"
+import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
+import SchedulePage from "./features/trainer/SchedulePage";
 import VetDashboard from "./features/vet/VetDashboard";
 import VetExaminationPage from "./features/vet/VetExaminationPage";
 import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
@@ -78,6 +80,11 @@ export default function App() {
         <Route path="/trainer/horses" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseListPage /></RoleRoute>} />
         <Route path="/trainer/horse-requests" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseReviewPage /></RoleRoute>} />
         <Route path="/trainer/horses/:id" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseDetailPage /></RoleRoute>} />
+
+        {/* Hai mục trên sidebar của Head Trainer. Thiếu hai route này thì navigate()
+            rơi vào path="*" ở cuối và bị đá về /login. */}
+        <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
+        <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
 
         <Route path="/veterinarian/horses" element={<RoleRoute roles={["VETERINARIAN"]}><HorseListPage /></RoleRoute>} />
         <Route path="/veterinarian/horses/:id" element={<RoleRoute roles={["VETERINARIAN"]}><HorseDetailPage /></RoleRoute>} />

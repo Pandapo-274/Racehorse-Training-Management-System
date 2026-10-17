@@ -58,7 +58,7 @@ public class HorseRequestController {
     }
 
     @PutMapping("/{id}/approve")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER"})
     public HorseRequestRow approve(
             @PathVariable int id,
             @Valid @RequestBody ReviewRequest review,
@@ -68,7 +68,7 @@ public class HorseRequestController {
     }
 
     @PutMapping("/{id}/reject")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER"})
     public HorseRequestRow reject(
             @PathVariable int id,
             @Valid @RequestBody ReviewRequest review,
