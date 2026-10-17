@@ -402,3 +402,9 @@
   margin: 5px 0 0 !important;
   color: var(--danger) !important;
 }
+/* Trang duyệt yêu cầu đăng ký ngựa */
+.hz-list li.hz-review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 20px; align-items: start; }
+.hz-review__note { font-style: italic; }
+.hz-review__form .hz-field { margin-bottom: 8px; }
+@media (max-width: 900px) { .hz-list li.hz-review { grid-template-columns: 1fr; } }
+

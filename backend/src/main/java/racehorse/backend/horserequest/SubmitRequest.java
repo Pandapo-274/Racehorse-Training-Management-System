@@ -37,5 +37,9 @@ public record SubmitRequest(
         String color,
 
         @Size(max = 500, message = "Note must be at most 500 characters")
-        String note
+        String note,
+
+        /** ACADEMY (mặc định) hoặc PEDIGREE: chỉ làm hồ sơ cha mẹ / tổ tiên. */
+        @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE")
+        String recordType
 ) {}

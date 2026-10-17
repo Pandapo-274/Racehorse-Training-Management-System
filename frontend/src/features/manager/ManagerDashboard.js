@@ -60,7 +60,13 @@ const openItems = [
 
 function HorseshoeIcon() {
   return (
-    <svg className="manager-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <svg
+      className="manager-nav-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+    >
       <path
         d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
         fill="none"
@@ -100,9 +106,21 @@ function ManagerSidebar() {
           Overview
         </button>
 
-        <button type="button" className="manager-nav-item" onClick={() => navigate("/manager/horses")}>
+        <button
+          type="button"
+          className="manager-nav-item"
+          onClick={() => navigate("/manager/horses")}
+        >
           <HorseshoeIcon />
           Horses
+        </button>
+        <button
+          type="button"
+          className="manager-nav-item"
+          onClick={() => navigate("/manager/horse-requests")}
+        >
+          <HorseshoeIcon />
+          Registrations
         </button>
 
         <button className="manager-nav-item">
@@ -127,11 +145,18 @@ function ManagerSidebar() {
       </nav>
 
       <div className="manager-sidebar-bottom">
-        <button type="button" className="manager-signout" onClick={handleSignOut}>
+        <button
+          type="button"
+          className="manager-signout"
+          onClick={handleSignOut}
+        >
           Sign out
         </button>
-        <ProfileCard className="manager-user" avatarClassName="manager-avatar"
-                     role="Club Manager" />
+        <ProfileCard
+          className="manager-user"
+          avatarClassName="manager-avatar"
+          role="Club Manager"
+        />
       </div>
     </aside>
   );
@@ -300,7 +325,11 @@ export default function ManagerDashboard() {
               className="manager-search"
             />
 
-            <button type="button" className="manager-notification" aria-label="Notifications">
+            <button
+              type="button"
+              className="manager-notification"
+              aria-label="Notifications"
+            >
               <span className="manager-notification-dot" />
             </button>
 
@@ -313,7 +342,11 @@ export default function ManagerDashboard() {
             <StatCard value="48" label="Horses" type="pink" />
             <StatCard value="12" label="Active plans" type="gold" />
             <StatCard value="4" label="Under training lock" type="red" />
-            <StatCard value="¥184M" label="Quarterly operating cost" type="green" />
+            <StatCard
+              value="¥184M"
+              label="Quarterly operating cost"
+              type="green"
+            />
           </div>
 
           <div className="manager-middle">

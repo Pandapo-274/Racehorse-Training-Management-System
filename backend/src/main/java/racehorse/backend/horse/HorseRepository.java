@@ -23,7 +23,8 @@ public class HorseRepository {
     private static final String SELECT_HORSE = """
             SELECT h.horse_id, h.owner_id, u.full_name AS owner_name, h.sire_id, h.dam_id,
                    h.horse_name, h.registration_code, h.breed, h.horse_gender, h.date_of_birth,
-                   h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at
+                   h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at,
+                   h.record_type
             FROM HORSE h JOIN APP_USER u ON u.user_id = h.owner_id
             """;
 
@@ -37,7 +38,8 @@ public class HorseRepository {
                 rs.getString("color"), rs.getObject("weight", BigDecimal.class),
                 rs.getString("stall_no"), rs.getString("status"),
                 rs.getObject("created_at", LocalDateTime.class),
-                rs.getObject("updated_at", LocalDateTime.class));
+                rs.getObject("updated_at", LocalDateTime.class),
+                rs.getString("record_type"));
     }
 
     public Optional<HorseResponse> findById(int horseId) {
@@ -81,10 +83,12 @@ public class HorseRepository {
     public int insert(HorseRequest r) {
         return jdbc.sql("""
                 INSERT INTO HORSE (owner_id, sire_id, dam_id, horse_name, registration_code,
-                                   breed, horse_gender, date_of_birth, color, weight, stall_no)
+                                   breed, horse_gender, date_of_birth, color, weight, stall_no,
+                                   record_type)
                 OUTPUT INSERTED.horse_id
                 VALUES (:ownerId, :sireId, :damId, :name, :code,
-                        :breed, :gender, :dob, :color, :weight, :stallNo)
+                        :breed, :gender, :dob, :color, :weight, :stallNo,
+                        :recordType)
                 """)
                 .param("ownerId", r.ownerId())
                 .param("sireId", r.sireId())
@@ -97,32 +101,35 @@ public class HorseRepository {
                 .param("color", r.color())
                 .param("weight", r.weight())
                 .param("stallNo", r.stallNo())
+                .param("recordType", r.recordType())
                 .query(Integer.class)
                 .single();
     }
 
-    /** Trả số dòng được cập nhật (0 = không có ngựa này). */
-    public int update(int horseId, HorseRequest r) {
+    /**
+     * Chủ ngựa sửa phần "lặt vặt". UPDATE này KHÔNG chạm vào owner_id,
+     * registration_code, stall_no, weight, record_type, status: dù service có
+     * sai thì tầng SQL cũng không thể ghi đè những cột định danh đó.
+     *
+     * @return số dòng được cập nhật (0 = không có ngựa này).
+     */
+    public int updateBasics(int horseId, HorseUpdateRequest r) {
         return jdbc.sql("""
                 UPDATE HORSE
-                SET owner_id = :ownerId, sire_id = :sireId, dam_id = :damId,
-                    horse_name = :name, registration_code = :code, breed = :breed,
+                SET sire_id = :sireId, dam_id = :damId,
+                    horse_name = :name, breed = :breed,
                     horse_gender = :gender, date_of_birth = :dob, color = :color,
-                    weight = :weight, stall_no = :stallNo, updated_at = SYSUTCDATETIME()
+                    updated_at = SYSUTCDATETIME()
                 WHERE horse_id = :id
                 """)
                 .param("id", horseId)
-                .param("ownerId", r.ownerId())
                 .param("sireId", r.sireId())
                 .param("damId", r.damId())
                 .param("name", r.horseName())
-                .param("code", r.registrationCode())
                 .param("breed", r.breed())
                 .param("gender", r.horseGender())
                 .param("dob", r.dateOfBirth())
                 .param("color", r.color())
-                .param("weight", r.weight())
-                .param("stallNo", r.stallNo())
                 .update();
     }
         public boolean isHorseOwner(int userId) {

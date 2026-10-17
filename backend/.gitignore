@@ -32,5 +32,5 @@ build/
 ### VS Code ###
 .vscode/
 ### Avatar ###
-backend/uploads/
+uploads/
 .env

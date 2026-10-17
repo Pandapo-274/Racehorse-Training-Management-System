@@ -2,11 +2,8 @@ package racehorse.backend.horse;
 
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,24 +27,22 @@ public class HorseController {
         this.horseService = horseService;
     }
 
-    @PostMapping
-    @RequireRole({"CLUB_MANAGER"})
-    public ResponseEntity<HorseResponse> create(
-            @Valid @RequestBody HorseRequest request,
-            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
-            HttpServletRequest http) {
-        HorseResponse body = horseService.create(request, user, http.getRemoteAddr());
-        return ResponseEntity.status(HttpStatus.CREATED).body(body);
-    }
+    /*
+     * KHÔNG còn POST /api/horses.
+     * Ngựa chỉ vào hệ thống qua đường duyệt: chủ ngựa gửi yêu cầu
+     * (POST /api/horse-requests), Club Manager duyệt và cấp mã đăng ký + chuồng.
+     * Manager và Head Trainer chỉ XEM danh sách ngựa, không sửa hồ sơ ngựa.
+     */
 
+    /** Chỉ chủ ngựa, và chỉ ngựa của chính mình (service kiểm quyền sở hữu). */
     @PutMapping("/{id}")
-    @RequireRole({"CLUB_MANAGER"})
+    @RequireRole({"HORSE_OWNER"})
     public HorseResponse update(
             @PathVariable int id,
-            @Valid @RequestBody HorseRequest request,
+            @Valid @RequestBody HorseUpdateRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return horseService.update(id, request, user, http.getRemoteAddr());
+        return horseService.updateByOwner(id, request, user, http.getRemoteAddr());
     }
 
     @GetMapping
