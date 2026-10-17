@@ -37,7 +37,7 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
 Backend: 
 cd backend
-.\mvnw springboot:run
+.\mvnw spring-boot:run
 
 Frontend:
 cd frontend
