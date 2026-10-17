@@ -3,6 +3,10 @@ import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard"
 import TrainerDashboard from "./features/trainer/TrainerDashboard"
+import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
+import SchedulePage from "./features/trainer/SchedulePage";
+import LiveSessionMonitorPage from "./features/trainer/LiveSessionMonitorPage";
+import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage";
 import VetDashboard from "./features/vet/VetDashboard";
 import VetExaminationPage from "./features/vet/VetExaminationPage";
 import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
@@ -62,6 +66,10 @@ export default function App() {
         <Route path="/manager" element={<ManagerDashboard/>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
+        <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
+        <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
+        <Route path="/trainer/live-session" element={<RoleRoute roles={["HEAD_TRAINER"]}><LiveSessionMonitorPage /></RoleRoute>} />
+        <Route path="/trainer/session-review" element={<RoleRoute roles={["HEAD_TRAINER"]}><SessionEvaluationPage /></RoleRoute>} />
         {/* Veterinarian */}
         <Route path="/veterinarian" element={<VetDashboard />} />
         {/* Groom */}

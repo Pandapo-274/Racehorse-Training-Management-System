@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 16, 2026` at `11:16` by `Pandapo274`
+### Last Commited: `Oct 17, 2026` at `23:22` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -37,6 +37,8 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 
 
 ## Changelogs
+> ### `Oct 17, 2026`
+- `[23:22]` `ArichiAya` - Implement and refine the workflows for `UC9` (Training Plan Builder), `UC10` (Schedule Assignment), `UC11` (Live Session Monitor), `UC12` (Session Evaluation), `UC13` (Health Status Board), and `UC15` (2D Injury Marker).
 > ### `Oct 16, 2026`
 - `[11:16]` `Pandapo274` - Add `UC9`, `UC10`
 > ### `Oct 15, 2026`

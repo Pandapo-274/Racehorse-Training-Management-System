@@ -1,14 +1,3 @@
-// src/features/vet/VetExaminationPage.js
-// Màn 17 - Examination (UC14 + UC15 + UC16).
-//
-// Một lần bấm nút chạy tối đa ba lời gọi nối tiếp, mỗi lời gọi cần id của lời
-// gọi trước:
-//   1. POST /api/medical-records  -> recordId
-//   2. POST /api/injuries         -> injuryId   (chỉ khi xác nhận có chấn thương)
-//   3. POST /api/training-locks                 (chỉ khi bấm "Issue emergency lock")
-// Ba lệnh này KHÔNG nằm trong một giao dịch ở backend. Nên kết quả của bước đã
-// xong được giữ trong `saved`, và bấm lại sau lỗi chỉ lặp phần còn thiếu - nếu
-// không, thử lại sẽ ghi trùng hồ sơ khám.
 
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -19,6 +8,7 @@ import VetHorsePicker from "./VetHorsePicker";
 import {
   getHorse,
   listLocksForHorse,
+  listInjuries,
   createMedicalRecord,
   createInjury,
   issueLock,
@@ -44,31 +34,50 @@ const SHAPES = {
   ],
 };
 
-/** Vùng cơ thể gần đúng từ vị trí chạm. Bên trái/phải bác sĩ tự chọn vì hình nhìn ngang. */
+/** Vùng cơ thể gần đúng từ vị trí chạm. */
 function guessBodyPart(x, y) {
   if (x >= 58 && y < 30) return "Head";
+
   if (y >= 50) {
     const level = y < 62 ? "upper" : y < 76 ? "middle" : "lower";
+
     if (x < 40) return `Hind limb, ${level}`;
     if (x >= 46) return `Forelimb, ${level}`;
   }
+
   return "Trunk";
 }
 
 function composeLocation(part, side) {
-  return /^(Head|Trunk)/.test(part) ? part : `${side} ${part[0].toLowerCase()}${part.slice(1)}`;
+  return /^(Head|Trunk)/.test(part)
+    ? part
+    : `${side} ${part[0].toLowerCase()}${part.slice(1)}`;
 }
 
 function swapSide(text, side) {
-  return /^(left|right)\b/i.test(text) ? text.replace(/^(left|right)/i, side) : text;
+  return /^(left|right)\b/i.test(text)
+    ? text.replace(/^(left|right)/i, side)
+    : text;
 }
 
 const clamp = (n) => Math.min(100, Math.max(0, n));
 const round2 = (n) => Math.round(n * 100) / 100;
 
-function HorseModel({ marker, onMark }) {
+function rect({ x, y, w, h, r }) {
+  return {
+    x,
+    y,
+    width: w,
+    height: h,
+    rx: r,
+    className: "vx-model-shape",
+  };
+}
+
+function HorseModel({ marker, existingMarkers = [], onMark }) {
   const handleClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
+
     onMark(
       round2(clamp(((e.clientX - rect.left) / rect.width) * 100)),
       round2(clamp(((e.clientY - rect.top) / rect.height) * 100))
@@ -77,20 +86,25 @@ function HorseModel({ marker, onMark }) {
 
   const handleKey = (e) => {
     const step = 2;
+
     if ((e.key === "Enter" || e.key === " ") && !marker) {
       e.preventDefault();
       onMark(38, 40);
       return;
     }
+
     if (!marker) return;
+
     const moves = {
       ArrowLeft: [-step, 0],
       ArrowRight: [step, 0],
       ArrowUp: [0, -step],
       ArrowDown: [0, step],
     };
+
     if (moves[e.key]) {
       e.preventDefault();
+
       onMark(
         round2(clamp(marker.x + moves[e.key][0])),
         round2(clamp(marker.y + moves[e.key][1])),
@@ -111,13 +125,34 @@ function HorseModel({ marker, onMark }) {
       <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
         <rect {...rect(SHAPES.body)} />
         <rect {...rect(SHAPES.head)} />
+
         {SHAPES.legs.map((leg) => (
           <rect key={leg.x} {...rect({ ...leg, r: 3 })} />
         ))}
       </svg>
 
+      {existingMarkers.map((item) => (
+        <span
+          key={item.injuryId}
+          className="vx-marker"
+          title={`${item.bodyLocation || "Injury"} · ${item.severity || ""}`}
+          style={{
+            left: `${Number(item.coordinateX)}%`,
+            top: `${Number(item.coordinateY)}%`,
+          }}
+        >
+          <i />
+        </span>
+      ))}
+
       {marker && (
-        <span className="vx-marker" style={{ left: `${marker.x}%`, top: `${marker.y}%` }}>
+        <span
+          className="vx-marker"
+          style={{
+            left: `${marker.x}%`,
+            top: `${marker.y}%`,
+          }}
+        >
           <i />
         </span>
       )}
@@ -125,16 +160,21 @@ function HorseModel({ marker, onMark }) {
   );
 }
 
-function rect({ x, y, w, h, r }) {
-  return { x, y, width: w, height: h, rx: r, className: "vx-model-shape" };
-}
-
 /* ---------- trang ---------- */
 
 export default function VetExaminationPage() {
   const { horseId } = useParams();
-  if (!horseId) return <VetHorsePicker mode="examination" />;
-  return <ExaminationForm key={horseId} horseId={Number(horseId)} />;
+
+  if (!horseId) {
+    return <VetHorsePicker mode="examination" />;
+  }
+
+  return (
+    <ExaminationForm
+      key={horseId}
+      horseId={Number(horseId)}
+    />
+  );
 }
 
 function Field({ label, full, children }) {
@@ -152,6 +192,7 @@ function ExaminationForm({ horseId }) {
 
   const [horse, setHorse] = useState(null);
   const [locks, setLocks] = useState([]);
+  const [existingMarkers, setExistingMarkers] = useState([]);
   const [loadError, setLoadError] = useState("");
   const [reload, setReload] = useState(0);
 
@@ -170,9 +211,10 @@ function ExaminationForm({ horseId }) {
   const [lockLevel, setLockLevel] = useState("FULL");
   const [reason, setReason] = useState("");
 
-  const [submitting, setSubmitting] = useState(null); // "lock" | "save" | null
+  const [submitting, setSubmitting] = useState(null);
   const [error, setError] = useState(null);
   const [releasing, setReleasing] = useState(false);
+
   const saved = useRef({ record: null, injury: null });
 
   const injuryConfirmed = confirmed === "yes";
@@ -180,24 +222,50 @@ function ExaminationForm({ horseId }) {
 
   useEffect(() => {
     const ctrl = new AbortController();
+
     setLoadError("");
-    Promise.all([getHorse(horseId, ctrl.signal), listLocksForHorse(horseId, ctrl.signal)])
-      .then(([h, l]) => {
+
+    Promise.all([
+      getHorse(horseId, ctrl.signal),
+      listLocksForHorse(horseId, ctrl.signal),
+      listInjuries(horseId, ctrl.signal),
+    ])
+      .then(([h, l, injuries]) => {
         setHorse(h);
         setLocks(l);
+
+        setExistingMarkers(
+          (Array.isArray(injuries)
+            ? injuries
+            : injuries?.content || []
+          ).filter(
+            (item) =>
+              item.recoveredAt == null &&
+              item.status !== "RECOVERED" &&
+              Number.isFinite(Number(item.coordinateX)) &&
+              Number.isFinite(Number(item.coordinateY))
+          )
+        );
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
+
         setLoadError(err.message);
       });
+
     return () => ctrl.abort();
   }, [horseId, navigate, reload]);
 
-  // `moveOnly`: phím mũi tên chỉ dịch chấm, không ghi đè tên vùng bác sĩ đã sửa.
+  // Di chuyển marker không ghi đè tên vùng đã được bác sĩ chỉnh sửa.
   const handleTap = (x, y, moveOnly = false) => {
     setMarker({ x, y });
-    if (!moveOnly) setBodyLocation(composeLocation(guessBodyPart(x, y), side));
+
+    if (!moveOnly) {
+      setBodyLocation(
+        composeLocation(guessBodyPart(x, y), side)
+      );
+    }
   };
 
   const handleSide = (next) => {
@@ -207,34 +275,63 @@ function ExaminationForm({ horseId }) {
 
   const validate = (withLock) => {
     const problems = [];
-    if (!examDate) problems.push("Choose the exam date.");
-    else if (examDate > todayInputValue()) problems.push("The exam date cannot be in the future.");
-    if (!diagnosis.trim()) problems.push("Enter a diagnosis.");
-    if (diagnosis.trim().length > 255) problems.push("The diagnosis must be at most 255 characters.");
+
+    if (!examDate) {
+      problems.push("Choose the exam date.");
+    } else if (examDate > todayInputValue()) {
+      problems.push("The exam date cannot be in the future.");
+    }
+
+    if (!diagnosis.trim()) {
+      problems.push("Enter a diagnosis.");
+    }
+
+    if (diagnosis.trim().length > 255) {
+      problems.push("The diagnosis must be at most 255 characters.");
+    }
+
     if (injuryConfirmed) {
-      if (!marker) problems.push("Tap the model to mark the injury site.");
-      else if (!bodyLocation.trim()) problems.push("Describe the marked location.");
+      if (!marker) {
+        problems.push("Tap the model to mark the injury site.");
+      } else if (!bodyLocation.trim()) {
+        problems.push("Describe the marked location.");
+      }
+
       if (restDays !== "" && !/^\d+$/.test(restDays)) {
         problems.push("Expected rest must be a whole number of days.");
       }
     }
+
     if (withLock) {
       const why = reason.trim() || diagnosis.trim();
-      if (!why) problems.push("A reason is required for the lock.");
-      if (why.length > 255) problems.push("The lock reason must be at most 255 characters.");
+
+      if (!why) {
+        problems.push("A reason is required for the lock.");
+      }
+
+      if (why.length > 255) {
+        problems.push("The lock reason must be at most 255 characters.");
+      }
     }
+
     return problems;
   };
 
   const submit = async (withLock) => {
     setError(null);
+
     const problems = validate(withLock);
+
     if (problems.length) {
-      setError({ message: problems[0], details: problems.slice(1) });
+      setError({
+        message: problems[0],
+        details: problems.slice(1),
+      });
       return;
     }
 
     setSubmitting(withLock ? "lock" : "save");
+
     const done = saved.current;
     const statusBefore = horse.status;
 
@@ -245,9 +342,14 @@ function ExaminationForm({ horseId }) {
           recordType: "EXAM",
           examDate: examTimestamp(examDate),
           diagnosis: diagnosis.trim(),
-          healthStatus: injuryConfirmed ? "INJURED" : otherStatus || null,
+          healthStatus: injuryConfirmed
+            ? "INJURED"
+            : otherStatus || null,
           injuryConfirmed,
-          expectedRestDays: injuryConfirmed && restDays !== "" ? Number(restDays) : null,
+          expectedRestDays:
+            injuryConfirmed && restDays !== ""
+              ? Number(restDays)
+              : null,
           notes: notes.trim() || null,
         });
       }
@@ -264,7 +366,9 @@ function ExaminationForm({ horseId }) {
 
       if (!withLock) {
         navigate("/veterinarian", {
-          state: { notice: `Examination saved for ${horse.horseName}.` },
+          state: {
+            notice: `Examination saved for ${horse.horseName}.`,
+          },
         });
         return;
       }
@@ -276,18 +380,31 @@ function ExaminationForm({ horseId }) {
         lockLevel,
       });
 
-      navigate(`/veterinarian/examination/${horseId}/lock-issued`, {
-        state: { lock, record: done.record, injury: done.injury, statusBefore },
-      });
+      navigate(
+        `/veterinarian/examination/${horseId}/lock-issued`,
+        {
+          state: {
+            lock,
+            record: done.record,
+            injury: done.injury,
+            statusBefore,
+          },
+        }
+      );
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
+
       const info = describeError(err);
+
       if (done.record) {
         info.note =
           `The examination record (#${done.record.recordId}) is already saved` +
-          (done.injury ? ` with its injury marker (#${done.injury.injuryId})` : "") +
+          (done.injury
+            ? ` with its injury marker (#${done.injury.injuryId})`
+            : "") +
           ". Trying again only repeats the step that failed.";
       }
+
       setError(info);
     } finally {
       setSubmitting(null);
@@ -296,9 +413,18 @@ function ExaminationForm({ horseId }) {
 
   const handleRelease = async () => {
     if (!activeLock) return;
-    if (!window.confirm(`Release the current lock on ${horse.horseName}?`)) return;
+
+    if (
+      !window.confirm(
+        `Release the current lock on ${horse.horseName}?`
+      )
+    ) {
+      return;
+    }
+
     setReleasing(true);
     setError(null);
+
     try {
       await releaseLock(activeLock.lockId);
       setReload((n) => n + 1);
@@ -314,10 +440,19 @@ function ExaminationForm({ horseId }) {
 
   if (loadError || !horse) {
     return (
-      <VetShell active="examination" title="Examination" subtitle="Loading horse…">
+      <VetShell
+        active="examination"
+        title="Examination"
+        subtitle="Loading horse…"
+      >
         {loadError ? (
-          <VetState kind="error" title={loadError} onRetry={() => setReload((n) => n + 1)}>
-            Check that the backend is running on port 8080 and that you are still signed in.
+          <VetState
+            kind="error"
+            title={loadError}
+            onRetry={() => setReload((n) => n + 1)}
+          >
+            Check that the backend is running on port 8080 and that
+            you are still signed in.
           </VetState>
         ) : (
           <VetState title="Loading horse…" />
@@ -333,7 +468,11 @@ function ExaminationForm({ horseId }) {
     <VetShell
       active="examination"
       title={`Examination · ${horse.horseName}`}
-      subtitle={[horse.registrationCode, horse.breed, age != null ? `${age} yrs` : null]
+      subtitle={[
+        horse.registrationCode,
+        horse.breed,
+        age != null ? `${age} yrs` : null,
+      ]
         .filter(Boolean)
         .join(" · ")}
     >
@@ -342,14 +481,23 @@ function ExaminationForm({ horseId }) {
       <div className="vx-grid vx-grid--exam">
         <VetCard
           title="3D musculoskeletal model"
-          hint={injuryConfirmed ? "Tap to mark the injury site" : "Marking is only needed for a confirmed injury"}
+          hint={
+            injuryConfirmed
+              ? "Tap to mark the injury site"
+              : "Marking is only needed for a confirmed injury"
+          }
           tone="pink"
           className={injuryConfirmed ? "" : "vx-card--muted"}
         >
-          <HorseModel marker={injuryConfirmed ? marker : null} onMark={injuryConfirmed ? handleTap : () => {}} />
+          <HorseModel
+            marker={injuryConfirmed ? marker : null}
+            existingMarkers={existingMarkers}
+            onMark={injuryConfirmed ? handleTap : () => {}}
+          />
 
           <div className="vx-marked">
             <span>Marked location</span>
+
             {injuryConfirmed && marker ? (
               <>
                 <input
@@ -359,14 +507,25 @@ function ExaminationForm({ horseId }) {
                   onChange={(e) => setBodyLocation(e.target.value)}
                   aria-label="Marked location"
                 />
+
                 <div className="vx-marked-row">
-                  <div className="vx-segment" role="group" aria-label="Side of the horse">
+                  <div
+                    className="vx-segment"
+                    role="group"
+                    aria-label="Side of the horse"
+                  >
                     {["Left", "Right"].map((s) => (
-                      <button key={s} type="button" aria-pressed={side === s} onClick={() => handleSide(s)}>
+                      <button
+                        key={s}
+                        type="button"
+                        aria-pressed={side === s}
+                        onClick={() => handleSide(s)}
+                      >
                         {s}
                       </button>
                     ))}
                   </div>
+
                   <select
                     className="vx-input vx-input--compact"
                     value={severity}
@@ -383,10 +542,16 @@ function ExaminationForm({ horseId }) {
               </>
             ) : (
               <strong className="vx-marked-empty">
-                {injuryConfirmed ? "Nothing marked yet" : "No injury to mark"}
+                {injuryConfirmed
+                  ? "Nothing marked yet"
+                  : "No injury to mark"}
               </strong>
             )}
-            <p>The mark is saved with the record so progress can be compared at follow-ups.</p>
+
+            <p>
+              The mark is saved with the record so progress can be
+              compared at follow-ups.
+            </p>
           </div>
         </VetCard>
 
@@ -404,7 +569,11 @@ function ExaminationForm({ horseId }) {
               </Field>
 
               <Field label="Veterinarian">
-                <input className="vx-input" value={user?.fullName || ""} readOnly />
+                <input
+                  className="vx-input"
+                  value={user?.fullName || ""}
+                  readOnly
+                />
               </Field>
 
               <Field label="Diagnosis" full>
@@ -466,17 +635,25 @@ function ExaminationForm({ horseId }) {
 
           <VetCard title="Training lock" tone="red">
             <p className="vx-lead">
-              The lock stops the head trainer from scheduling heavy work for this horse until a
-              veterinarian releases it.
+              The lock stops the head trainer from scheduling heavy work
+              for this horse until a veterinarian releases it.
             </p>
 
             {activeLock ? (
               <div className="vx-banner vx-banner--warn">
                 <strong>
-                  Already locked by {activeLock.issuedByName} ({lockLevelLabel(activeLock.lockLevel)})
+                  Already locked by {activeLock.issuedByName} (
+                  {lockLevelLabel(activeLock.lockLevel)})
                 </strong>
+
                 <p>{activeLock.reason}</p>
-                <button type="button" className="vx-link" disabled={releasing} onClick={handleRelease}>
+
+                <button
+                  type="button"
+                  className="vx-link"
+                  disabled={releasing}
+                  onClick={handleRelease}
+                >
                   {releasing ? "Releasing…" : "Release this lock"}
                 </button>
               </div>
@@ -495,6 +672,7 @@ function ExaminationForm({ horseId }) {
                     ))}
                   </select>
                 </Field>
+
                 <Field label="Reason">
                   <input
                     className="vx-input"
@@ -514,15 +692,20 @@ function ExaminationForm({ horseId }) {
                 disabled={busy || !!activeLock}
                 onClick={() => submit(true)}
               >
-                {submitting === "lock" ? "Saving…" : "Issue emergency lock"}
+                {submitting === "lock"
+                  ? "Saving…"
+                  : "Issue emergency lock"}
               </button>
+
               <button
                 type="button"
                 className="vx-btn vx-btn--ghost"
                 disabled={busy}
                 onClick={() => submit(false)}
               >
-                {submitting === "save" ? "Saving…" : "Save without lock"}
+                {submitting === "save"
+                  ? "Saving…"
+                  : "Save without lock"}
               </button>
             </div>
           </VetCard>

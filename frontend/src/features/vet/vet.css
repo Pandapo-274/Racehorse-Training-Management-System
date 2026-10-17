@@ -1277,3 +1277,125 @@ button.stable-box:focus-visible {
 .vet-page .vx-input--location {
   font-family: var(--font-heading);
 }
+/* ---------- UC15: persisted injury markers and history ---------- */
+.vx-marker--history i {
+  background: #f08a35;
+  box-shadow: 0 0 0 7px rgba(240, 138, 53, 0.2), 0 0 0 1px #fff inset;
+}
+.vx-marker--treating i {
+  background: #ff4d5e;
+  box-shadow: 0 0 0 7px rgba(255, 77, 94, 0.2), 0 0 0 1px #fff inset;
+}
+.vx-marker--partial i {
+  background: #f0b429;
+  box-shadow: 0 0 0 7px rgba(240, 180, 41, 0.2), 0 0 0 1px #fff inset;
+}
+.vx-marker--recovered i {
+  background: #36a879;
+  box-shadow: 0 0 0 7px rgba(54, 168, 121, 0.18), 0 0 0 1px #fff inset;
+}
+.vx-marker--selected i {
+  outline: 3px solid #272435;
+  outline-offset: 3px;
+}
+.vx-marker--draft i {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 8px rgba(139, 92, 246, 0.22), 0 0 0 1px #fff inset;
+}
+
+.vx-injury-history {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1dce7;
+}
+.vx-injury-history__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #272435;
+  font-size: 13px;
+}
+.vx-injury-history__heading > span {
+  color: #69728f;
+  font-size: 12px;
+  font-weight: 600;
+}
+.vx-injury-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vx-injury-history__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f0e1e9;
+  border-radius: 12px;
+  background: #fff;
+}
+.vx-injury-history__item.is-selected {
+  border-color: #f55fa9;
+  background: #fff5fa;
+}
+.vx-injury-history__details {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #272435;
+  text-align: left;
+  cursor: pointer;
+}
+.vx-injury-history__details strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.vx-injury-history__details > span:last-of-type,
+.vx-injury-history__details small {
+  color: #69728f;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.vx-injury-status {
+  display: inline-flex;
+  padding: 3px 7px;
+  border-radius: 20px;
+  background: #f2edf2;
+  color: #5e6682;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.vx-injury-status--treating { background: #ffe7eb; color: #c81e3a; }
+.vx-injury-status--partial { background: #fff3d5; color: #966300; }
+.vx-injury-status--recovered { background: #e2f7ed; color: #16764d; }
+.vx-injury-history__delete {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid #f3c5d4;
+  border-radius: 9px;
+  background: #fff5f8;
+  color: #b42345;
+  font: 700 11px var(--font-body);
+  cursor: pointer;
+}
+.vx-injury-history__delete:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.vx-injury-history__empty,
+.vx-injury-history__note {
+  margin: 9px 0 0;
+  color: #69728f;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.vx-injury-history__note { margin-top: 12px; }
