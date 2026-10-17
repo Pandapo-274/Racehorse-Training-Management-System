@@ -1,12 +1,12 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 16, 2026` at `11:16` by `Pandapo274`
+### Last Commited: `Oct 17, 2026` at `23:22` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
-
 > ### Frontend: `ReactJS`
 > ### Backend: `Java`
 > ### Database: `SQLServer`
+
 ## Contributors
 1. [ArichiAya](https://github.com/NekomataRin) - `React App Frontend`
 2. [tqt195](https://github.com/tqt195) - `React App Frontend`
@@ -19,7 +19,6 @@
 ```
 git clone "https://github.com/Pandapo-274/Racehorse-Training-Management-System.git"
 ```
-
 > #### After your coding session, please use these commands:
 ```
 git pull [use when others pushed the files to the repo]
@@ -30,16 +29,27 @@ Example:
 git add .
 git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
-
 > #### `README.md`
 - Update the `Last Commited` line as the format shown above
 - Add your `Changelog` in the `Changelogs` tab below
 
+## Running Application
+```
+Backend: 
+cd backend
+.\mvnw spring-boot:run
+
+Frontend:
+cd frontend
+npm start
+```
 
 ## Changelogs
-> ### `Oct 16, 2026`
+> #### `Oct 17, 2026`
+- `[23:22]` `ArichiAya` - Implement and refine the workflows for `UC9` (Training Plan Builder), `UC10` (Schedule Assignment), `UC11` (Live Session Monitor), `UC12` (Session Evaluation), `UC13` (Health Status Board), and `UC15` (2D Injury Marker).
+> #### `Oct 16, 2026`
 - `[11:16]` `Pandapo274` - Add `UC9`, `UC10`
-> ### `Oct 15, 2026`
+> #### `Oct 15, 2026`
 - `[09:50]` `DevilJack422` - Add `UC11`, `UC12` and `UC13`
 > #### `Oct 13, 2026`
 - `[11:10]` `tusandthatsall` - Add `UC15` and Add `UC16`
@@ -55,12 +65,10 @@ git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 - `[00:25]` `ArichiAya` - Checking Conflict And Fixing Conflict, Needing Re-Testing
 - `[00:17]` `tqt195` - Update Landing Page
 - `[00:08]` `DevilJack422` - Add `UC4` Backend Profile
-
 > #### `Oct 8, 2026`
 - `[23:51]` `DevilJack422` - Add `UC3` Backend Logout
 - `[23:21]` `ArichiAya` - Setting Up `UC7` and `UC8` Frontend Pages (Testing And Verifying Needed)
 - `[21:05]` `Pandapo274` - Add `UC7` `UC8` Horse Management and Vitals (Merge from feature/uc7-uc8-horse-backend)
-
 > #### `Oct 4, 2026`
 - `[18:16]` `ArichiAya` - Initiated Setting Up For `UC1` For Frontend (Testing Needed Soon)
 - `[16:28]` `tusandthatsall` - Add `UC6`

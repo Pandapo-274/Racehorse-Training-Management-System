@@ -23,6 +23,8 @@ import ProfilePage from "./features/profile/ProfilePage";
 import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
 import ResetPasswordPage from "./features/password/ResetPasswordPage";
+import LiveSessionMonitorPage from "./features/trainer/LiveSessionMonitorPage";
+import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage"
 
 /* UC4 - mọi vai trò đều có hồ sơ của mình, nên liệt kê cả năm thay vì thêm một
    loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
@@ -64,6 +66,10 @@ export default function App() {
         <Route path="/manager" element={<ManagerDashboard/>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
+        <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
+        <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
+        <Route path="/trainer/live-session" element={<RoleRoute roles={["HEAD_TRAINER"]}><LiveSessionMonitorPage /></RoleRoute>} />
+        <Route path="/trainer/session-review" element={<RoleRoute roles={["HEAD_TRAINER"]}><SessionEvaluationPage /></RoleRoute>} />
         {/* Veterinarian */}
         <Route path="/veterinarian" element={<VetDashboard />} />
         {/* Groom */}

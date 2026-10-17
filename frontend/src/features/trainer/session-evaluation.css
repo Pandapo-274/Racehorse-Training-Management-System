@@ -1,0 +1,51 @@
+.session-review-main { min-width: 0; }
+.session-review-main .trainer-header { align-items: center; }
+.session-review-main .trainer-header > div > p { margin: 8px 0 0; color: #858da9; }
+.session-review-refresh { border: 1px solid #d9dced; border-radius: 10px; padding: 10px 16px; background: #fff; color: #202949; font-weight: 700; cursor: pointer; }
+.session-review-refresh:disabled { opacity: .6; cursor: wait; }
+.session-review-message { margin: 0 0 16px; padding: 12px 16px; border-radius: 10px; font-weight: 600; }
+.session-review-message.error { color: #9f2349; background: #ffe5ed; border: 1px solid #f6b6ca; }
+.session-review-message.success { color: #176d4b; background: #e3f8ee; border: 1px solid #a5e3c6; }
+.session-review-layout { display: grid; grid-template-columns: minmax(300px, .82fr) minmax(420px, 1.4fr); gap: 20px; align-items: start; }
+.session-review-panel { min-width: 0; border: 1px solid #f0d8e5; border-radius: 16px; background: #fff; box-shadow: 0 8px 26px rgba(34, 26, 61, .045); overflow: hidden; }
+.session-review-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px; border-bottom: 1px solid #f2e5ec; }
+.session-review-panel-heading h2 { margin: 0; color: #16203f; font-size: 18px; }
+.session-review-panel-heading p { margin: 5px 0 0; color: #9298ae; font-size: 12px; }
+.session-review-panel-heading select { max-width: 150px; border: 1px solid #e2dce8; border-radius: 8px; padding: 8px; background: #fff; color: #343b59; font: inherit; font-size: 12px; }
+.session-review-list { display: grid; gap: 0; }
+.session-review-item { display: flex; flex-direction: column; gap: 7px; width: 100%; padding: 16px 20px; border: 0; border-bottom: 1px solid #f4eaf0; background: #fff; text-align: left; cursor: pointer; color: #222a48; }
+.session-review-item:last-child { border-bottom: 0; }
+.session-review-item:hover { background: #fff7fb; }
+.session-review-item.selected { background: #fff0f7; box-shadow: inset 3px 0 #e8408f; }
+.session-review-item-top, .session-review-item-bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.session-review-item-top strong { font-size: 14px; }
+.session-review-item-meta { color: #9298ae; font-size: 11px; }
+.session-review-item-bottom { color: #6d7593; font-size: 11px; }
+.session-review-status { display: inline-flex; flex-shrink: 0; padding: 5px 8px; border-radius: 20px; background: #f0f1f7; color: #646d8b; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.session-review-status.status-running { background: #fff0d6; color: #94600d; }
+.session-review-status.status-stopped_early { background: #ffe5e9; color: #a72c4d; }
+.session-review-status.status-completed { background: #def7eb; color: #16704c; }
+.session-review-empty { margin: 0; padding: 28px 20px; color: #9298ae; font-size: 13px; line-height: 1.6; }
+.session-review-no-selection { padding: 42px 24px; }
+.session-review-no-selection h2 { margin: 0 0 8px; color: #16203f; }
+.session-review-no-selection p { margin: 0; color: #9298ae; }
+.session-review-detail-heading { align-items: flex-start; }
+.session-review-form { padding: 20px; }
+.session-review-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.session-review-context span { display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 10px; background: #fff5fa; min-width: 0; }
+.session-review-context small { color: #989ab0; font-size: 10px; }
+.session-review-context strong { color: #28304f; font-size: 12px; overflow-wrap: anywhere; }
+.session-review-form h3 { margin: 22px 0 12px; color: #252d4b; font-size: 13px; }
+.session-review-form h3:first-of-type { margin-top: 0; }
+.session-review-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.session-review-fields label, .session-review-remarks { display: flex; flex-direction: column; gap: 7px; color: #6f7794; font-size: 11px; font-weight: 700; }
+.session-review-fields input, .session-review-fields select, .session-review-remarks textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #e5dfe9; border-radius: 8px; padding: 10px 11px; outline: none; background: #fff; color: #222a48; font: inherit; font-size: 13px; }
+.session-review-fields input:focus, .session-review-fields select:focus, .session-review-remarks textarea:focus { border-color: #e8408f; box-shadow: 0 0 0 3px rgba(232, 64, 143, .1); }
+.session-review-remarks { margin-top: 16px; }
+.session-review-remarks textarea { resize: vertical; line-height: 1.5; }
+.session-review-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #f2e5ec; }
+.session-review-form-footer span { color: #9298ae; font-size: 11px; line-height: 1.5; }
+.session-review-form-footer button { flex-shrink: 0; border: 0; border-radius: 9px; padding: 12px 17px; background: linear-gradient(90deg, #e8408f, #d3347c); color: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.session-review-form-footer button:disabled { opacity: .6; cursor: wait; }
+@media (max-width: 1150px) { .session-review-layout { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .session-review-fields, .session-review-context { grid-template-columns: 1fr; } .session-review-form-footer { align-items: stretch; flex-direction: column; } .session-review-form-footer button { width: 100%; } .session-review-panel-heading { align-items: flex-start; flex-direction: column; } }

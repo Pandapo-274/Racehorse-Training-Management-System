@@ -100,9 +100,22 @@ function TrainerSidebar({ user, onSignOut }) {
           Schedule
         </button>
 
-        <button type="button" className="trainer-nav-item">
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/live-session")}
+        >
           <HorseshoeIcon />
           Live session
+        </button>
+
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/session-review")}
+        >
+          <HorseshoeIcon />
+          Session review
         </button>
 
         <button type="button" className="trainer-nav-item">
