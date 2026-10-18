@@ -21,7 +21,7 @@ const COPY = {
   recovery: {
     title: "Recovery",
     subtitle: "Choose a horse to track",
-    card: "Horses that are not race-fit",
+    card: "Horses that are not healthy",
     action: "Track recovery",
     base: "/veterinarian/recovery",
   },
@@ -87,7 +87,7 @@ export default function VetHorsePicker({ mode }) {
           {rows.length === 0 ? (
             <div className="vet-inline-state">
               {mode === "recovery" && !query
-                ? "Every horse is race-fit. Nothing to track right now."
+                ? "Every horse is healthy. Nothing to track right now."
                 : "No horses match your search."}
             </div>
           ) : (

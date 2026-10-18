@@ -99,7 +99,7 @@ export function getHorseBasePath(user) {
  */
 const STATUS_TEXT = {
   // Nhãn cũ "Eligible" dễ bị đọc là "đủ điều kiện đua". Thực ra nó chỉ là sức khoẻ.
-  ELIGIBLE:   { label: "Fit to train", tone: "good",   hint: "Cleared to train by the vet" },
+  ELIGIBLE:   { label: "Healthy", tone: "good",   hint: "Cleared as healthy by the vet" },
   MONITOR:    { label: "Monitor",    tone: "warning",  hint: "Needs watching" },
   INJURED:    { label: "Injured",    tone: "critical", hint: "Not fit to train" },
   QUARANTINE: { label: "Quarantine", tone: "serious",  hint: "Isolated" },
@@ -169,7 +169,8 @@ export const STAGE_FILTERS = [
  */
 export function healthApplies(horse) {
   if (isPedigreeOnly(horse)) return false;
-  if (toStage(horse).key === "RETIRED" && horse?.status === "ELIGIBLE") return false;
+  // Dòng code ở dưới bỏ comment nếu không muốn ngựa nghỉ hưu hiện Health
+  // if (toStage(horse).key === "RETIRED" && horse?.status === "ELIGIBLE") return false;
   return true;
 }
 

@@ -223,14 +223,14 @@ function HealthCard() {
         <div className="health-donut">
           <div className="health-donut-inner">
             <strong>71%</strong>
-            <span>race-fit</span>
+            <span>Healthy</span>
           </div>
         </div>
 
         <div className="health-legend">
           <div>
             <span className="legend-dot race-fit" />
-            <strong>Race-fit</strong>
+            <strong>Healthy</strong>
             <b>34</b>
           </div>
 

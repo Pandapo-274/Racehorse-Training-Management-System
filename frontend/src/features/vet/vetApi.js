@@ -74,7 +74,7 @@ const BOARD_STATUS = {
 };
 
 const BOARD_LABEL = {
-  fit: "Race-fit",
+  fit: "Healthy",
   monitor: "Monitor",
   injured: "Injured",
   quarantine: "Quarantine",

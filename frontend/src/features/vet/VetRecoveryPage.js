@@ -30,7 +30,7 @@ import {
   todayInputValue,
 } from "./vetApi";
 
-const STAGES = ["Injured", "Treatment", "Light work", "Rating", "Race-fit"];
+const STAGES = ["Injured", "Treatment", "Light work", "Rating", "Healthy"];
 
 const REMINDERS = [
   ["VACCINATION", "Vaccination"],
@@ -57,7 +57,7 @@ function stageOf(horse, injuries) {
 function captionOf(stage, open) {
   switch (stage) {
     case 4:
-      return "Cleared. The horse is race-fit and the training lock is released.";
+      return "Cleared. The horse is healthy and the training lock is released.";
     case 3:
       return "All marked injuries are recorded as recovered. Confirm recovery to release the training lock.";
     case 2:
@@ -211,7 +211,7 @@ function RecoveryView({ horseId }) {
         <div className="vx-stack">
           <VetCard title="Release training lock" tone="green">
             <p className="vx-lead">
-              Releasing the lock sets the horse back to Race-fit and lets the head trainer resume
+              Releasing the lock sets the horse back to Healthy and lets the head trainer resume
               the plan.
             </p>
             {activeLock && (
@@ -228,7 +228,7 @@ function RecoveryView({ horseId }) {
                 setDialog(true);
               }}
             >
-              {!canClear ? "Already race-fit" : activeLock ? "Release training lock" : "Confirm recovery"}
+              {!canClear ? "Already healthy" : activeLock ? "Release training lock" : "Confirm recovery"}
             </button>
           </VetCard>
 

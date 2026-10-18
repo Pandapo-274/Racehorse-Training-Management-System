@@ -23,7 +23,7 @@ const incident = {
 };
 
 const STATUS_META = {
-  fit: { label: "Race-fit" },
+  fit: { label: "Healthy" },
   monitor: { label: "Monitor" },
   injured: { label: "Injured" },
   quarantine: { label: "Quarantine" },
@@ -31,7 +31,7 @@ const STATUS_META = {
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
-  { value: "fit", label: "Race-fit" },
+  { value: "fit", label: "Healthy" },
   { value: "monitor", label: "Monitor" },
   { value: "injured", label: "Injured" },
   { value: "quarantine", label: "Quarantine" },
@@ -130,7 +130,7 @@ function HealthCard({ counts, total }) {
         <div className="health-donut" style={{ background: donut }}>
           <div className="health-donut-inner">
             <strong>{fitPct}%</strong>
-            <span>race-fit</span>
+            <span>healthy</span>
           </div>
         </div>
 
