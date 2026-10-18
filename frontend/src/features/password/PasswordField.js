@@ -5,6 +5,7 @@
 // tự - gõ mò trong một chuỗi chấm tròn là nguồn gốc của phần lớn lần "sai mật
 // khẩu" ngay sau khi vừa đổi.
 import { useId, useState } from "react";
+import EyeIcon from "../../components/ui/EyeIcon";
 import { passwordRules } from "./passwordApi";
 
 export default function PasswordField({
@@ -38,8 +39,9 @@ export default function PasswordField({
              người dùng trình đọc màn hình cần biết bấm vào thì được gì. */
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
+          title={visible ? "Hide password" : "Show password"}
         >
-          {visible ? "Hide" : "Show"}
+          <EyeIcon off={visible} />
         </button>
       </div>
 

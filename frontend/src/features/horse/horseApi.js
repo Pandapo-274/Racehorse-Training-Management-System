@@ -152,7 +152,7 @@ export const STAGE_FILTERS = [
   { key: "RACING", label: "Racing" },
   { key: "FOAL", label: "Foal" },
   { key: "RETIRED", label: "Retired" },
-  { key: "PEDIGREE", label: "Pedigree" },
+  { key: "PEDIGREE", label: "Ancestors" },
 ];
 
 /**
