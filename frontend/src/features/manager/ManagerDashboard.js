@@ -1,4 +1,4 @@
-import "./manager.css";
+﻿import "./manager.css";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -89,7 +89,7 @@ function ManagerSidebar() {
   return (
     <aside className="manager-sidebar">
       <div className="manager-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Club</span>

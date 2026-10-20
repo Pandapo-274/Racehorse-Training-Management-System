@@ -1,4 +1,4 @@
-import { authFetch } from "../auth/authService";
+﻿import { authFetch } from "../auth/authService";
 
 const API = "/api/sessions";
 

@@ -1,4 +1,4 @@
-// src/features/horse/VitalsPanel.js
+﻿// src/features/horse/VitalsPanel.js
 // UC8 - ảnh chụp tình trạng hiện tại của một con ngựa.
 //
 // Thứ tự trên màn đúng bằng thứ tự cần biết khi quyết định có cho con ngựa

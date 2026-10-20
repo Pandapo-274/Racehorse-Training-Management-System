@@ -1,4 +1,4 @@
-// src/features/vet/VetShell.js
+﻿// src/features/vet/VetShell.js
 // Khung chung cho mọi màn của bác sĩ thú y: sidebar, header, vùng nội dung.
 // Cùng khung với Trainer và Manager (xem vet.css); các màn chỉ việc truyền
 // `active`, `title`, `subtitle` rồi đặt nội dung vào children.
@@ -41,7 +41,7 @@ function VetSidebar({ active }) {
   return (
     <aside className="vet-sidebar">
       <div className="vet-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>

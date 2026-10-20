@@ -1,4 +1,4 @@
-// src/features/horse/HorseFormPage.js
+﻿// src/features/horse/HorseFormPage.js
 // Chủ ngựa sửa thông tin cơ bản của NGỰA CỦA MÌNH.
 //
 // Màn này không còn tạo ngựa nữa: ngựa mới vào qua yêu cầu đăng ký

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authFetch, handleAuthError, logout } from "../auth/authService";
 import { ProfileCard } from "../profile/ProfileLink";
@@ -92,7 +92,7 @@ function ScheduleSidebar({ onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.svg" alt="TENMA logo" />
+        <img src="/logo.png" alt="TENMA logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>

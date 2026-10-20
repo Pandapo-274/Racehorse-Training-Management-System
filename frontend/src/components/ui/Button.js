@@ -1,4 +1,4 @@
-// src/components/ui/Button.js
+﻿// src/components/ui/Button.js
 export default function Button({ variant = "primary", children, ...props }) {
   return (
     <button className={`btn btn--${variant}`} {...props}>

@@ -1,4 +1,4 @@
-// src/features/horse/HorseListPage.js
+﻿// src/features/horse/HorseListPage.js
 // UC7 - Horse Management, màn danh sách.
 //
 // Lọc và tìm kiếm làm ở trình duyệt, không gọi lại API: GET /api/horses trả về

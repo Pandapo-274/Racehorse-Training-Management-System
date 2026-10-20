@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import "./horse-owner.css";
 import { useNavigate } from "react-router-dom";
 import { getUser, logout, handleAuthError } from "../auth/authService";
@@ -100,7 +100,7 @@ function Sidebar({ user }) {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Club</span>

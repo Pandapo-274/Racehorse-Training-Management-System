@@ -1,4 +1,4 @@
-// src/features/vet/VetHorsePicker.js
+﻿// src/features/vet/VetHorsePicker.js
 // Trang /veterinarian/examination và /veterinarian/recovery khi chưa chọn con
 // ngựa nào (bấm từ sidebar). Danh sách lấy từ GET /api/horses.
 

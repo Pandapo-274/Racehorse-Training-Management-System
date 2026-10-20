@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard } from "../profile/ProfileLink";
 import { handleAuthError, logout } from "../auth/authService";
@@ -23,7 +23,7 @@ function LiveSessionSidebar({ onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.svg" alt="TENMA logo" />
+        <img src="/logo.png" alt="TENMA logo" />
         <div><strong>TENMA</strong><span>Racing Academy</span></div>
       </div>
       <div className="trainer-menu-title"><HorseshoeIcon /> MENU</div>

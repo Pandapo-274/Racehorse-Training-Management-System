@@ -1,4 +1,4 @@
-// src/features/horse/horseRequestApi.js
+﻿// src/features/horse/horseRequestApi.js
 // Yêu cầu đăng ký ngựa - đường để chủ ngựa nói với học viện rằng mình có ngựa
 // muốn gửi.
 //

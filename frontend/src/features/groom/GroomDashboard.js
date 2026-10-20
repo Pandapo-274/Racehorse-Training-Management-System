@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./groom.css";
 import { logout } from "../auth/authService";
@@ -56,7 +56,7 @@ function GroomSidebar() {
   return (
     <aside className="groom-sidebar">
       <div className="groom-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>

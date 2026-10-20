@@ -1,4 +1,4 @@
-// src/features/horse/horseApi.js
+﻿// src/features/horse/horseApi.js
 // UC7 (Horse Management) + UC8 (Horse Vitals).
 //
 // Mọi lời gọi đi qua authFetch của authService nên tự có Bearer token, và lỗi

@@ -1,4 +1,4 @@
-// src/features/trainer/dashboardApi.js
+﻿// src/features/trainer/dashboardApi.js
 // Nối màn Head Trainer (UC6) với backend.
 //
 // Giao diện trong TrainerDashboard.js do nhóm dựng theo Figma và có từ vựng

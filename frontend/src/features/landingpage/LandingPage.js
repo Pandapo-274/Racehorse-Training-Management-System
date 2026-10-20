@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useNavigate } from "react-router-dom";
 import "./landing.css";
 
@@ -30,7 +30,7 @@ const flows = [
 ];
 function Crest() {
   return (
-    <img className="landing-logo" src="/logo.svg" alt="Tenma Racing Club" />
+    <img className="landing-logo" src="/logo.png" alt="Tenma Racing Club" />
   );
 }
 

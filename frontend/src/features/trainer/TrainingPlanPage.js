@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError, logout } from "../auth/authService";
 import { listHorses } from "../horse/horseApi";
@@ -78,7 +78,7 @@ function TrainerSidebar({ active, onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>

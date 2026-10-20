@@ -1,4 +1,4 @@
-// src/features/horse/HorseRequestPage.js
+﻿// src/features/horse/HorseRequestPage.js
 // Chủ ngựa xin học viện đăng ký một con ngựa, và xem lại những yêu cầu đã gửi.
 //
 // Biểu mẫu này cố ý ÍT ô hơn biểu mẫu đăng ký ngựa của học viện. Không có mã
