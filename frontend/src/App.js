@@ -84,7 +84,6 @@ export default function App() {
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
 
         <Route path="/trainer/horses" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseListPage /></RoleRoute>} />
-        <Route path="/trainer/horse-requests" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseReviewPage /></RoleRoute>} />
         <Route path="/trainer/horses/:id" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseDetailPage /></RoleRoute>} />
 
         {/* Hai mục trên sidebar của Head Trainer. Thiếu hai route này thì navigate()

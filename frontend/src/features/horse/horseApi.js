@@ -56,7 +56,7 @@ export function canEditHorse(user, horse) {
 
 /** Hai role duyệt yêu cầu đăng ký ngựa. */
 export function canReviewRequests(user) {
-  return !!user && (user.role === "CLUB_MANAGER" || user.role === "HEAD_TRAINER");
+  return !!user && (user.role === "CLUB_MANAGER");
 }
 
 export function getRequestsPath(user) {
