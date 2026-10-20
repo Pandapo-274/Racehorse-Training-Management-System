@@ -29,7 +29,7 @@ public class TrainingSessionController {
     }
 
     @PostMapping
-    @RequireRole({"HEAD_TRAINER"})
+    @RequireRole({ "HEAD_TRAINER" })
     public ResponseEntity<TrainingSessionResponse> create(
             @Valid @RequestBody TrainingSessionRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
@@ -39,7 +39,7 @@ public class TrainingSessionController {
     }
 
     @GetMapping
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "GROOM"})
+    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM" })
     public List<TrainingSessionResponse> list(
             @RequestParam(required = false) Integer horseId,
             @RequestParam(required = false) String status,
@@ -47,18 +47,48 @@ public class TrainingSessionController {
         return service.list(horseId, status, user);
     }
 
+    /**
+     * GET /api/training-sessions/assignees
+     * Chỉ Head Trainer được xem danh sách Groom để phân công.
+     */
+    @GetMapping("/assignees")
+    @RequireRole({ "HEAD_TRAINER" })
+    public List<TrainingSessionRepository.GroomOption> assignees() {
+        return service.listActiveGrooms();
+    }
+
     @GetMapping("/{id}")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "GROOM"})
+    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM" })
     public TrainingSessionResponse get(@PathVariable int id,
-                                       @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.get(id, user);
     }
 
     @PutMapping("/{id}/start")
-    @RequireRole({"GROOM", "HEAD_TRAINER"})
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
     public TrainingSessionResponse start(@PathVariable int id,
-                                         @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
-                                         HttpServletRequest http) {
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
         return service.start(id, user, http.getRemoteAddr());
     }
+
+    /**
+     * PUT /api/training-sessions/{id}/schedule
+     * Head Trainer cập nhật Groom được phân công và thời gian tập.
+     */
+    @PutMapping("/{id}/schedule")
+    @RequireRole({ "HEAD_TRAINER" })
+    public TrainingSessionResponse reschedule(
+            @PathVariable int id,
+            @Valid @RequestBody TrainingSessionScheduleRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+
+        return service.reschedule(
+                id,
+                request,
+                user,
+                http.getRemoteAddr());
+    }
+
 }

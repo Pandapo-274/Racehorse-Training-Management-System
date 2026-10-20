@@ -1,4 +1,4 @@
-// src/features/auth/LoginPage.js
+﻿// src/features/auth/LoginPage.js
 import { Link, useNavigate } from "react-router-dom";
 import BrandPanel from "./BrandPanel";
 import LoginForm from "./LoginForm";

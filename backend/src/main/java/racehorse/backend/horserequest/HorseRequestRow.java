@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 public record HorseRequestRow(
         int requestId,
         int ownerId, String ownerName,
-        String horseName, String breed, String horseGender,
+        String horseName, String breed, String horseGender, String recordType,
         LocalDate dateOfBirth, String color, String note,
         String status, LocalDateTime createdAt,
         Integer reviewedBy, String reviewerName, LocalDateTime reviewedAt, String reviewNote,

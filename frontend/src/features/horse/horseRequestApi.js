@@ -1,4 +1,4 @@
-// src/features/horse/horseRequestApi.js
+﻿// src/features/horse/horseRequestApi.js
 // Yêu cầu đăng ký ngựa - đường để chủ ngựa nói với học viện rằng mình có ngựa
 // muốn gửi.
 //
@@ -27,6 +27,7 @@ export function submitRequest(form) {
       dateOfBirth: form.dateOfBirth || null,
       color: form.color.trim() || null,
       note: form.note.trim() || null,
+      recordType: form.recordType || "ACADEMY",
     }),
   });
 }

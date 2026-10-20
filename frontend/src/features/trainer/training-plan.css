@@ -1,0 +1,70 @@
+/* Training Plan Builder — shares the same 265px sidebar, 84px header,
+   typography and pink/navy palette as the Head Trainer dashboard. */
+.training-plan-page { --tp-border: #f2dee8; }
+.training-plan-content { padding-top: 26px; }
+.training-plan-target { color: #7c839e; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.training-plan-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .85fr); gap: 20px; align-items: start; }
+.training-plan-left, .training-plan-right { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.plan-builder-card, .training-settings-card, .saved-plans-card { padding: 22px 24px; border-top-width: 5px; }
+.plan-builder-card { border-top-color: var(--t-pink); }
+.training-settings-card { border-top-color: #f5b823; }
+.saved-plans-card { border-top-color: #a7dc63; }
+.training-plan-page .trainer-card-title { align-items: center; margin-bottom: 20px; }
+.training-plan-page .trainer-card-title h2 { margin: 0; font-family: var(--font-heading); font-size: 19px; font-weight: 800; }
+.training-plan-page .trainer-card-title p { margin: 3px 0 0; color: #8e96ad; font-size: 12px; }
+.training-plan-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 18px; }
+.training-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; color: #626a83; font-size: 12px; font-weight: 700; }
+.training-field--wide { grid-column: 1 / -1; }
+.training-field input, .training-field select { width: 100%; min-width: 0; height: 39px; padding: 0 12px; border: 1px solid #f0dce6; border-radius: 10px; outline: none; background: #fdf4f9; color: #202a49; font: 500 12.5px var(--font-body); }
+.training-field input:focus, .training-field select:focus { border-color: var(--t-pink); box-shadow: 0 0 0 3px rgba(245,95,169,.12); }
+.selected-horse-strip { display: flex; align-items: center; gap: 11px; margin-top: 18px; padding: 12px; border: 1px solid #f4dce8; border-radius: 12px; background: #fff8fb; }
+.training-horse-mark { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; background: #ffe2f0; color: #d93b87; font-size: 22px; }
+.selected-horse-strip > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.selected-horse-strip strong { font-size: 13px; }
+.selected-horse-strip > div span { color: #8e96ad; font-size: 11px; }
+.training-status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 5px 9px; border-radius: 12px; background: #edf6e2; color: #568a27; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.training-status-pill.draft { background: #eaf0fb; color: #4b6195; }
+.training-status-pill.active, .training-status-pill.eligible { background: #e7f5d8; color: #4f8f22; }
+.training-status-pill.paused, .training-status-pill.monitor { background: #fff0c9; color: #9c6d00; }
+.training-status-pill.completed { background: #f0e9f7; color: #7c5998; }
+.training-status-pill.injured, .training-status-pill.quarantine { background: #ffe1e5; color: #dc3f52; }
+.phases-card .trainer-card-title { margin-bottom: 16px; }
+.training-add-phase { margin-left: auto; padding: 8px 12px; border: 1px solid #f0cfe0; border-radius: 18px; background: #fff5fa; color: #d93b87; font: 700 11px var(--font-body); cursor: pointer; white-space: nowrap; }
+.training-add-phase:disabled { opacity: .45; cursor: not-allowed; }
+.training-phase-list { display: flex; flex-direction: column; gap: 13px; }
+.training-phase { padding: 15px; border: 1px solid #f1e1e9; border-radius: 13px; background: #fffdfd; }
+.training-phase-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.training-phase-number { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; background: #ffe3f0; color: #d93b87; font: 800 13px var(--font-heading); }
+.training-phase-heading > div { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.training-phase-heading strong { font-size: 13px; }
+.training-phase-heading span { color: #9299ad; font-size: 11px; }
+.training-remove-phase { border: 0; background: transparent; color: #c54a78; font-size: 23px; cursor: pointer; }
+.training-phase-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.training-plan-actions { display: flex; gap: 10px; margin-top: 20px; }
+.training-save-button, .training-back-button { min-width: 110px; height: 40px; padding: 0 20px; border-radius: 22px; font: 800 12px var(--font-body); cursor: pointer; }
+.training-save-button { border: 1px solid #c9317a; background: linear-gradient(90deg, #f55fa9, #e43e8c); color: #fff; box-shadow: 0 3px 8px rgba(217,59,135,.15); }
+.training-save-button:disabled { opacity: .6; cursor: wait; }
+.training-back-button { border: 1px solid #f0cfe0; background: #fff; color: #d93b87; }
+.training-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f4e8ee; font-size: 12px; }
+.training-setting-row span { color: #8c93a9; }
+.training-setting-row strong { max-width: 60%; text-align: right; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.training-medical-note { margin-top: 18px; padding: 14px; border-left: 4px solid #f5b823; border-radius: 9px; background: #fff9e9; }
+.training-medical-note strong { font-size: 12px; }
+.training-medical-note p { margin: 6px 0 0; color: #777b88; font-size: 11px; line-height: 1.65; }
+.training-rule-note { margin-top: 12px; color: #858ca1; font-size: 10.5px; line-height: 1.6; }
+.training-plan-filter { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 0 12px; }
+.training-plan-filter button { padding: 6px 9px; border: 1px solid #f0dce6; border-radius: 15px; background: #fff; color: #8a91a6; font: 700 9px var(--font-body); cursor: pointer; }
+.training-plan-filter button.selected { border-color: #f55fa9; background: #fff0f7; color: #d93b87; }
+.saved-plan-list { display: flex; flex-direction: column; }
+.saved-plan-row { padding: 13px 0; border-bottom: 1px solid #f4e8ee; }
+.saved-plan-row:last-child { border-bottom: 0; }
+.saved-plan-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.saved-plan-top strong { font-size: 12px; line-height: 1.5; }
+.saved-plan-row p { margin: 5px 0; color: #777f97; font-size: 10.5px; line-height: 1.5; }
+.saved-plan-row small { color: #a0a6bc; font-size: 10px; }
+.saved-plan-actions { display: flex; gap: 6px; margin-top: 10px; }
+.saved-plan-actions button { padding: 6px 9px; border: 1px solid #f0cfe0; border-radius: 14px; background: #fff5fa; color: #d93b87; font: 700 10px var(--font-body); cursor: pointer; }
+.training-empty { margin: 0; padding: 12px 0; color: #9399ab; font-size: 12px; }
+.training-plan-notice { margin-bottom: 16px; padding: 12px 15px; border: 1px solid #cfe8bc; border-radius: 10px; background: #f4fbef; color: #477a25; font-size: 12px; }
+@media (max-width: 1180px) { .training-plan-layout { grid-template-columns: minmax(0, 1fr); } .training-plan-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+@media (max-width: 760px) { .training-plan-target { display: none; } .plan-builder-card, .training-settings-card, .saved-plans-card { padding: 17px 15px; } .training-plan-form-grid, .training-phase-fields { grid-template-columns: minmax(0, 1fr); } .training-field--wide { grid-column: auto; } .training-plan-right { display: flex; } .training-phase { padding: 12px; } }

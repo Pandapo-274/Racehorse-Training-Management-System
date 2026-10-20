@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./trainer.css";
 import "./trainer-data.css";
@@ -56,7 +56,7 @@ function TrainerSidebar({ user, onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
           <span>Racing Academy</span>
@@ -82,19 +82,40 @@ function TrainerSidebar({ user, onSignOut }) {
           Horses
         </button>
 
-        <button type="button" className="trainer-nav-item">
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/training-plans")}
+        >
           <HorseshoeIcon />
           Training plans
         </button>
 
-        <button type="button" className="trainer-nav-item">
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/schedule")}
+        >
           <HorseshoeIcon />
           Schedule
         </button>
 
-        <button type="button" className="trainer-nav-item">
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/live-session")}
+        >
           <HorseshoeIcon />
           Live session
+        </button>
+
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/session-review")}
+        >
+          <HorseshoeIcon />
+          Session review
         </button>
 
         <button type="button" className="trainer-nav-item">
@@ -108,8 +129,11 @@ function TrainerSidebar({ user, onSignOut }) {
           Sign out
         </button>
 
-        <ProfileCard className="trainer-user" avatarClassName="trainer-avatar"
-                     role="Head Trainer" />
+        <ProfileCard
+          className="trainer-user"
+          avatarClassName="trainer-avatar"
+          role="Head Trainer"
+        />
       </div>
     </aside>
   );
@@ -127,7 +151,11 @@ function FitnessChart({ data, weeks, onWeeksChange, loading }) {
           <p>Derived from 2-minute recovery heart rate</p>
         </div>
 
-        <div className="trainer-fitness-range" role="group" aria-label="Chart range">
+        <div
+          className="trainer-fitness-range"
+          role="group"
+          aria-label="Chart range"
+        >
           {RANGE_OPTIONS.map((w) => (
             <button
               key={w}
@@ -143,7 +171,9 @@ function FitnessChart({ data, weeks, onWeeksChange, loading }) {
       </div>
 
       {data.length === 0 ? (
-        <p className="trainer-fitness-empty">No completed sessions in this range.</p>
+        <p className="trainer-fitness-empty">
+          No completed sessions in this range.
+        </p>
       ) : (
         <div className="trainer-fitness-chart">
           {data.map((item, index) => {
@@ -182,7 +212,9 @@ function AlertsCard({ alerts, onHorseClick }) {
         <span className="trainer-diamond" aria-hidden="true" />
         <div>
           <h2>Open alerts</h2>
-          <p>{alerts.length} unresolved alert{alerts.length === 1 ? "" : "s"}</p>
+          <p>
+            {alerts.length} unresolved alert{alerts.length === 1 ? "" : "s"}
+          </p>
         </div>
       </div>
 
@@ -200,7 +232,11 @@ function AlertsCard({ alerts, onHorseClick }) {
                 key={alert.alertId}
                 onClick={() => alert.horseId && onHorseClick(alert.horseId)}
                 disabled={!alert.horseId}
-                title={alert.horseId ? "Open horse details" : "Horse details unavailable"}
+                title={
+                  alert.horseId
+                    ? "Open horse details"
+                    : "Horse details unavailable"
+                }
               >
                 <span className="trainer-alert-copy">
                   <strong>{alert.horseName}</strong>
@@ -224,7 +260,13 @@ function getVisibleStatus(horse) {
   return "MONITOR";
 }
 
-function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick }) {
+function HorsesTable({
+  horses,
+  query,
+  statusFilter,
+  onStatusChange,
+  onHorseClick,
+}) {
   const normalizedQuery = query.trim().toLowerCase();
 
   const visible = useMemo(() => {
@@ -240,7 +282,11 @@ function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick
         horse.registrationCode,
         horse.currentPhase,
         horse.status,
-      ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(normalizedQuery),
+      );
     });
   }, [horses, normalizedQuery, statusFilter]);
 
@@ -248,7 +294,7 @@ function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick
     const result = { ALL: horses.length };
     STATUS_FILTERS.slice(1).forEach((filter) => {
       result[filter.value] = horses.filter(
-        (horse) => getVisibleStatus(horse) === filter.value
+        (horse) => getVisibleStatus(horse) === filter.value,
       ).length;
     });
     return result;
@@ -269,7 +315,11 @@ function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick
       </div>
 
       <div className="trainer-filters">
-        <div className="trainer-status-segment" role="group" aria-label="Filter horses by dashboard status">
+        <div
+          className="trainer-status-segment"
+          role="group"
+          aria-label="Filter horses by dashboard status"
+        >
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.value}
@@ -284,10 +334,13 @@ function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick
       </div>
 
       {horses.length === 0 ? (
-        <div className="trainer-inline-state">No horses were returned by the dashboard API.</div>
+        <div className="trainer-inline-state">
+          No horses were returned by the dashboard API.
+        </div>
       ) : visible.length === 0 ? (
         <div className="trainer-inline-state">
-          Nothing matches the current search/filter. Try another horse or clear the filters.
+          Nothing matches the current search/filter. Try another horse or clear
+          the filters.
         </div>
       ) : (
         <div className="trainer-table-wrapper">
@@ -325,10 +378,14 @@ function HorsesTable({ horses, query, statusFilter, onStatusChange, onHorseClick
                     <td className="horse-name">{horse.horseName}</td>
                     <td>{horse.currentPhase || "No plan yet"}</td>
                     <td>{toDistance(horse.weeklyDistanceKm)}</td>
-                    <td className="trainer-fitness-value">{horse.fitnessIndex ?? "—"}</td>
+                    <td className="trainer-fitness-value">
+                      {horse.fitnessIndex ?? "—"}
+                    </td>
                     <td>
                       {form ? (
-                        <span className={`form-badge form-${form.toLowerCase()}`}>
+                        <span
+                          className={`form-badge form-${form.toLowerCase()}`}
+                        >
                           {form}
                         </span>
                       ) : (
@@ -376,7 +433,7 @@ export default function TrainerDashboard() {
         })
         .finally(() => setLoading(false));
     },
-    [navigate]
+    [navigate],
   );
 
   useEffect(() => {
@@ -446,8 +503,15 @@ export default function TrainerDashboard() {
           {error && (
             <div className="trainer-state trainer-state--error" role="alert">
               <strong>{error}</strong>
-              <p>Check that the backend is running on port 8080 and that you are still signed in.</p>
-              <button type="button" className="trainer-retry" onClick={() => load(weeks)}>
+              <p>
+                Check that the backend is running on port 8080 and that you are
+                still signed in.
+              </p>
+              <button
+                type="button"
+                className="trainer-retry"
+                onClick={() => load(weeks)}
+              >
                 Try again
               </button>
             </div>
@@ -465,23 +529,35 @@ export default function TrainerDashboard() {
               <div className="trainer-dashboard-meta">
                 <div className="trainer-summary-strip">
                   <button type="button" onClick={() => setStatusFilter("ALL")}>
-                    <strong>{data.summary?.totalHorses ?? data.horses?.length ?? 0}</strong>
+                    <strong>
+                      {data.summary?.totalHorses ?? data.horses?.length ?? 0}
+                    </strong>
                     <span>Horses</span>
                   </button>
-                  <button type="button" onClick={() => setStatusFilter("ACTIVE")}>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("ACTIVE")}
+                  >
                     <strong>{data.summary?.activePlans ?? 0}</strong>
                     <span>Active plans</span>
                   </button>
-                  <button type="button" onClick={() => setStatusFilter("LOCKED")}>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("LOCKED")}
+                  >
                     <strong>{data.summary?.lockedHorses ?? 0}</strong>
                     <span>Locked</span>
                   </button>
                   <button type="button" onClick={scrollToAlerts}>
-                    <strong>{data.summary?.openAlerts ?? data.openAlerts?.length ?? 0}</strong>
+                    <strong>
+                      {data.summary?.openAlerts ?? data.openAlerts?.length ?? 0}
+                    </strong>
                     <span>Open alerts</span>
                   </button>
                 </div>
-                {loading && <span className="trainer-refreshing">Updating…</span>}
+                {loading && (
+                  <span className="trainer-refreshing">Updating…</span>
+                )}
               </div>
 
               <div className="trainer-top">
@@ -496,7 +572,10 @@ export default function TrainerDashboard() {
                 />
 
                 <div ref={alertsRef}>
-                  <AlertsCard alerts={data.openAlerts || []} onHorseClick={openHorse} />
+                  <AlertsCard
+                    alerts={data.openAlerts || []}
+                    onHorseClick={openHorse}
+                  />
                 </div>
               </div>
 

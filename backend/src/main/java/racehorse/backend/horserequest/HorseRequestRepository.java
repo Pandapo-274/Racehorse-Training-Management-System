@@ -23,7 +23,7 @@ public class HorseRequestRepository {
        JOIN thường sẽ làm biến mất đúng những dòng cần xem nhất. */
     private static final String SELECT_ROW = """
             SELECT q.request_id, q.owner_id, o.full_name AS owner_name,
-                   q.horse_name, q.breed, q.horse_gender, q.date_of_birth, q.color, q.note,
+                   q.horse_name, q.breed, q.horse_gender, q.record_type, q.date_of_birth, q.color, q.note,
                    q.status, q.created_at,
                    q.reviewed_by, r.full_name AS reviewer_name, q.reviewed_at, q.review_note,
                    q.horse_id
@@ -37,6 +37,7 @@ public class HorseRequestRepository {
                 rs.getInt("request_id"),
                 rs.getInt("owner_id"), rs.getString("owner_name"),
                 rs.getString("horse_name"), rs.getString("breed"), rs.getString("horse_gender"),
+                rs.getString("record_type"),
                 rs.getObject("date_of_birth", LocalDate.class),
                 rs.getString("color"), rs.getString("note"),
                 rs.getString("status"),
@@ -86,9 +87,9 @@ public class HorseRequestRepository {
     public int insert(int ownerId, SubmitRequest r) {
         return jdbc.sql("""
                 INSERT INTO HORSE_REQUEST (owner_id, horse_name, breed, horse_gender,
-                                           date_of_birth, color, note)
+                                           date_of_birth, color, note, record_type)
                 OUTPUT INSERTED.request_id
-                VALUES (:owner, :name, :breed, :gender, :dob, :color, :note)
+                VALUES (:owner, :name, :breed, :gender, :dob, :color, :note, :recordType)
                 """)
                 .param("owner", ownerId)
                 .param("name", r.horseName())
@@ -97,6 +98,7 @@ public class HorseRequestRepository {
                 .param("dob", r.dateOfBirth())
                 .param("color", r.color())
                 .param("note", r.note())
+                .param("recordType", r.recordType())
                 .query(Integer.class)
                 .single();
     }

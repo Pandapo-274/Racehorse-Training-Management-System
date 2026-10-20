@@ -1,4 +1,4 @@
-// src/features/auth/registerService.js  (UC1)
+﻿// src/features/auth/registerService.js  (UC1)
 // Gọi POST /api/auth/register. Dùng authFetch/ApiError có sẵn trong authService,
 // không sửa authService. Backend trả lỗi dạng { status, message, errors: {field: msg} }
 // và authService đã gói sẵn errors vào ApiError.fieldErrors.

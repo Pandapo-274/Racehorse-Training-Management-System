@@ -1,4 +1,4 @@
-// src/features/horse/HorseRequestPage.js
+﻿// src/features/horse/HorseRequestPage.js
 // Chủ ngựa xin học viện đăng ký một con ngựa, và xem lại những yêu cầu đã gửi.
 //
 // Biểu mẫu này cố ý ÍT ô hơn biểu mẫu đăng ký ngựa của học viện. Không có mã
@@ -12,11 +12,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
-import { GENDER_OPTIONS, toGender, formatDate, formatDateTime } from "./horseApi";
+import {
+  GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
+} from "./horseApi";
 import { listRequests, submitRequest, toRequestStatus } from "./horseRequestApi";
 
 const EMPTY = {
   horseName: "", breed: "", horseGender: "", dateOfBirth: "", color: "", note: "",
+  recordType: "ACADEMY",
 };
 
 function todayIso() {
@@ -35,6 +38,12 @@ function validate(form) {
   // So sánh theo chuỗi yyyy-mm-dd để khỏi dính múi giờ.
   if (form.dateOfBirth && form.dateOfBirth > todayIso()) {
     e.dateOfBirth = "Date of birth cannot be in the future";
+  }
+  // Ngựa vào học viện cần ngày sinh và không được quá già. Ngựa quá già vẫn gửi
+  // được, nhưng dưới dạng hồ sơ pedigree (chỉ để làm cha mẹ / tổ tiên).
+  if (!e.dateOfBirth) {
+    const problem = ageProblem(form.recordType, form.dateOfBirth);
+    if (problem) e.dateOfBirth = problem;
   }
   return e;
 }
@@ -124,13 +133,29 @@ export default function HorseRequestPage() {
       <form onSubmit={submit} noValidate>
         <Card
           title="About the horse"
-          hint="Only the name is required — the academy will ask for anything else it needs"
+          hint="Name is required, plus date of birth for academy horses"
         >
           <div className="hz-form-grid">
             <Field id="horseName" label="Name" error={errors.horseName}>
               <input id="horseName" name="horseName" value={form.horseName}
                      onChange={change} maxLength={100} autoComplete="off"
                      aria-invalid={!!errors.horseName} />
+            </Field>
+
+            <Field
+              id="recordType"
+              label="What is this record for?"
+              hint={
+                form.recordType === "PEDIGREE"
+                  ? "Kept only as a parent or ancestor. No stall, no training, no health checks."
+                  : "A horse that will live and train at the academy."
+              }
+            >
+              <select id="recordType" name="recordType" value={form.recordType} onChange={change}>
+                {Object.entries(RECORD_TYPES).map(([k, label]) => (
+                  <option key={k} value={k}>{label}</option>
+                ))}
+              </select>
             </Field>
 
             <Field id="horseGender" label="Sex" error={errors.horseGender}>
@@ -143,7 +168,12 @@ export default function HorseRequestPage() {
               </select>
             </Field>
 
-            <Field id="dateOfBirth" label="Date of birth" error={errors.dateOfBirth}>
+            <Field
+              id="dateOfBirth"
+              label={form.recordType === "PEDIGREE" ? "Date of birth" : "Date of birth (required)"}
+              error={errors.dateOfBirth}
+              hint="Academy horses must be 25 or younger. Older horses can be sent as pedigree records."
+            >
               <input id="dateOfBirth" name="dateOfBirth" type="date"
                      value={form.dateOfBirth} onChange={change}
                      aria-invalid={!!errors.dateOfBirth} />
@@ -175,8 +205,9 @@ export default function HorseRequestPage() {
           <div className="hz-note-box">
             <strong>What happens next</strong>
             <p>
-              The academy reviews your request and assigns a registration code and a
-              stall. The horse appears under “My horses” once that is done.
+              The club manager reviews your request and, if approved, assigns the registration
+              code and a stall. Those two cannot be changed afterwards. After approval you can
+              edit the basic details of your own horse (name, sex, colour, pedigree...).
             </p>
           </div>
 
@@ -208,6 +239,7 @@ export default function HorseRequestPage() {
                 <li key={r.requestId}>
                   <div>
                     <strong>{r.horseName}</strong>
+                    <p>{toStage({ recordType: r.recordType, dateOfBirth: r.dateOfBirth }).label}</p>
                     <p>
                       {[toGender(r.horseGender) === "—" ? null : toGender(r.horseGender),
                         r.breed,

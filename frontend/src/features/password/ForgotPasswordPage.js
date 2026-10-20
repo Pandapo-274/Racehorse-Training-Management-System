@@ -1,4 +1,4 @@
-// src/features/password/ForgotPasswordPage.js
+﻿// src/features/password/ForgotPasswordPage.js
 // UC5 - quên mật khẩu. Công khai, không cần đăng nhập.
 //
 // Dùng lại khung của trang đăng nhập (dải màu chéo, BrandPanel, thẻ trắng bốn

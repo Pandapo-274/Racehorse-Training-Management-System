@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseService;
 
@@ -44,9 +45,19 @@ public class HorseRequestService {
                     Map.of("horseName", "A request for this name is already waiting"));
         }
 
+        String type = HorsePolicy.normalizeType(raw.recordType());
+
+        // Chặn ngựa quá già ngay lúc gửi, để chủ ngựa biết sớm và chuyển sang
+        // hồ sơ PEDIGREE thay vì chờ manager từ chối.
+        String ageProblem = HorsePolicy.ageProblem(type, raw.dateOfBirth());
+        if (ageProblem != null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, ageProblem,
+                    Map.of("dateOfBirth", ageProblem));
+        }
+
         SubmitRequest clean = new SubmitRequest(
                 name, blankToNull(raw.breed()), blankToNull(raw.horseGender()),
-                raw.dateOfBirth(), blankToNull(raw.color()), blankToNull(raw.note()));
+                raw.dateOfBirth(), blankToNull(raw.color()), blankToNull(raw.note()), type);
 
         int id = requests.insert(me.userId(), clean);
         users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
@@ -91,6 +102,17 @@ public class HorseRequestService {
                     Map.of("registrationCode", "Enter the code the academy assigns"));
         }
 
+        // Ngựa ACADEMY bắt buộc có chuồng ngay lúc duyệt: mã đăng ký và chuồng
+        // là hai định danh cố định, và chủ ngựa không có quyền sửa chúng sau này,
+        // nên không để thiếu rồi không ai bù được.
+        boolean pedigreeOnly = HorsePolicy.PEDIGREE.equals(req.recordType());
+        String stall = pedigreeOnly ? null : blankToNull(review.stallNo());
+        if (!pedigreeOnly && stall == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "A stall is required to approve an academy horse",
+                    Map.of("stallNo", "Assign a stall"));
+        }
+
         racehorse.backend.horse.HorseRequest newHorse = new racehorse.backend.horse.HorseRequest(
                 req.ownerId(),
                 null, null,                       // phả hệ điền sau, lúc duyệt chưa biết
@@ -101,7 +123,8 @@ public class HorseRequestService {
                 req.dateOfBirth(),
                 req.color(),
                 null,                             // cân nặng do học viện cân, không lấy lời khai
-                blankToNull(review.stallNo()));
+                stall,
+                req.recordType());
 
         HorseResponse created = horseService.create(newHorse, me, ip);
 

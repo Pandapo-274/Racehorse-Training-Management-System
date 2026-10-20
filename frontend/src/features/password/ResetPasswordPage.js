@@ -1,4 +1,4 @@
-// src/features/password/ResetPasswordPage.js
+﻿// src/features/password/ResetPasswordPage.js
 // UC5 - đặt lại mật khẩu từ liên kết trong thư. Công khai.
 //
 // Đường dẫn do backend tự sinh ra, không phải tôi chọn:

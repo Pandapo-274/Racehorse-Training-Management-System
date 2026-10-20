@@ -1,4 +1,4 @@
-// src/features/auth/RegisterPage.js  (UC1) - cùng khung với LoginPage
+﻿// src/features/auth/RegisterPage.js  (UC1) - cùng khung với LoginPage
 import { useNavigate } from "react-router-dom";
 import BrandPanel from "./BrandPanel";
 import RegisterForm from "./RegisterForm";

@@ -1,4 +1,4 @@
-import "./manager.css";
+﻿import "./manager.css";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -18,7 +18,7 @@ const workloadData = [
 const openItems = [
   {
     item: "New record awaiting owner assignment",
-    role: "Academy Manager",
+    role: "Club Manager",
     horse: "Symboli Rudolf",
     when: "09:12 today",
     status: "Pending",
@@ -50,7 +50,7 @@ const openItems = [
   },
   {
     item: "View access granted to new owner",
-    role: "Academy Manager",
+    role: "Club Manager",
     horse: "Kitasan Black",
     when: "11 Sep 2026",
     status: "Done",
@@ -60,7 +60,13 @@ const openItems = [
 
 function HorseshoeIcon() {
   return (
-    <svg className="manager-nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <svg
+      className="manager-nav-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+    >
       <path
         d="M6.2 21V12a5.8 5.8 0 0 1 11.6 0v9"
         fill="none"
@@ -83,10 +89,10 @@ function ManagerSidebar() {
   return (
     <aside className="manager-sidebar">
       <div className="manager-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -100,9 +106,21 @@ function ManagerSidebar() {
           Overview
         </button>
 
-        <button type="button" className="manager-nav-item" onClick={() => navigate("/manager/horses")}>
+        <button
+          type="button"
+          className="manager-nav-item"
+          onClick={() => navigate("/manager/horses")}
+        >
           <HorseshoeIcon />
           Horses
+        </button>
+        <button
+          type="button"
+          className="manager-nav-item"
+          onClick={() => navigate("/manager/horse-requests")}
+        >
+          <HorseshoeIcon />
+          Registrations
         </button>
 
         <button className="manager-nav-item">
@@ -127,11 +145,18 @@ function ManagerSidebar() {
       </nav>
 
       <div className="manager-sidebar-bottom">
-        <button type="button" className="manager-signout" onClick={handleSignOut}>
+        <button
+          type="button"
+          className="manager-signout"
+          onClick={handleSignOut}
+        >
           Sign out
         </button>
-        <ProfileCard className="manager-user" avatarClassName="manager-avatar"
-                     role="Academy Manager" />
+        <ProfileCard
+          className="manager-user"
+          avatarClassName="manager-avatar"
+          role="Club Manager"
+        />
       </div>
     </aside>
   );
@@ -198,14 +223,14 @@ function HealthCard() {
         <div className="health-donut">
           <div className="health-donut-inner">
             <strong>71%</strong>
-            <span>race-fit</span>
+            <span>Healthy</span>
           </div>
         </div>
 
         <div className="health-legend">
           <div>
             <span className="legend-dot race-fit" />
-            <strong>Race-fit</strong>
+            <strong>Healthy</strong>
             <b>34</b>
           </div>
 
@@ -242,10 +267,6 @@ function OpenItems() {
             <h2>Open items</h2>
           </div>
         </div>
-
-        <button className="register-horse-btn">
-          Register horse
-        </button>
       </div>
 
       <div className="items-table-wrapper">
@@ -291,7 +312,7 @@ export default function ManagerDashboard() {
           <div>
             <div className="manager-page-title">
               <span className="manager-diamond" aria-hidden="true" />
-              <h1>Academy overview</h1>
+              <h1>Club overview</h1>
             </div>
 
             <p>2026 season · Week 38</p>
@@ -304,7 +325,11 @@ export default function ManagerDashboard() {
               className="manager-search"
             />
 
-            <button type="button" className="manager-notification" aria-label="Notifications">
+            <button
+              type="button"
+              className="manager-notification"
+              aria-label="Notifications"
+            >
               <span className="manager-notification-dot" />
             </button>
 
@@ -317,7 +342,11 @@ export default function ManagerDashboard() {
             <StatCard value="48" label="Horses" type="pink" />
             <StatCard value="12" label="Active plans" type="gold" />
             <StatCard value="4" label="Under training lock" type="red" />
-            <StatCard value="¥184M" label="Quarterly operating cost" type="green" />
+            <StatCard
+              value="¥184M"
+              label="Quarterly operating cost"
+              type="green"
+            />
           </div>
 
           <div className="manager-middle">

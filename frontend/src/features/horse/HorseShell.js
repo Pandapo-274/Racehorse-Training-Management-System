@@ -1,14 +1,16 @@
-// src/features/horse/HorseShell.js
+﻿// src/features/horse/HorseShell.js
 // Khung chung cho ba màn của UC7/UC8: thanh bên, thanh tiêu đề, vùng nội dung.
 //
 // Vì sao không dùng lại .trainer-sidebar trong trainer.css: file đó dài 660
 // dòng và do người khác giữ, import vào đây là buộc hai màn khác nhau phải đi
 // cùng một file CSS mãi mãi. Dự án vốn đã cho mỗi dashboard một file css riêng,
 // nên làm theo cách đó - lớp ở đây đều mang tiền tố .hz-.
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUser, logout } from "../auth/authService";
 import { ProfileCard } from "../profile/ProfileLink";
-import { getHorseBasePath } from "./horseApi";
+import { getHorseBasePath, canReviewRequests, getRequestsPath } from "./horseApi";
+import { listRequests } from "./horseRequestApi";
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -57,12 +59,26 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   };
 
   const onHorses = location.pathname.startsWith(horseBase);
+  const mayReview = canReviewRequests(user);
+  const requestsPath = getRequestsPath(user);
+  const onRequests = location.pathname.startsWith(requestsPath);
+
+  // Số yêu cầu đang chờ, dán lên menu để Manager biết có việc cần duyệt.
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    if (!mayReview) return undefined;
+    const ctrl = new AbortController();
+    listRequests(ctrl.signal)
+      .then((rows) => setPending((rows || []).filter((r) => r.status === "PENDING").length))
+      .catch(() => {}); // huy hiệu chỉ là phụ, lỗi thì thôi không hiện
+    return () => ctrl.abort();
+  }, [mayReview, location.pathname]);
 
   return (
     <div className="hz-page">
       <aside className="hz-sidebar">
         <div className="hz-brand">
-          <img src="/logo.svg" alt="" />
+          <img src="/logo.png" alt="" />
           <div>
             <strong>TENMA</strong>
             <span>Racing Academy</span>
@@ -87,6 +103,17 @@ export default function HorseShell({ title, subtitle, actions, children }) {
             <HorseshoeIcon />
             Horses
           </button>
+
+          {mayReview && (
+            <button
+              className={`hz-nav-item${onRequests ? " active" : ""}`}
+              aria-current={onRequests ? "page" : undefined}
+              onClick={() => navigate(requestsPath)}
+            >
+              <HorseshoeIcon />
+              Registrations{pending > 0 ? ` (${pending})` : ""}
+            </button>
+          )}
         </nav>
 
         <div className="hz-sidebar-bottom">

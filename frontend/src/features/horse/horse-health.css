@@ -1,0 +1,36 @@
+/* Panel "Current condition" trên hồ sơ ngựa (chỉ đọc). Tiền tố .hh- */
+
+.hh-wide { grid-column: 1 / -1; }
+
+.hh-muted { margin: 0; color: #8e96b1; font-size: 13px; }
+
+.hh-injuries { margin: 0 0 14px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.hh-injuries li {
+  padding: 10px 14px;
+  border: 1px solid #f3dbe7;
+  border-left: 4px solid #ff5f6d;
+  border-radius: 10px;
+  background: #fff8fb;
+}
+.hh-injuries strong { display: block; font-size: 14px; }
+.hh-injuries span { display: block; margin-top: 2px; color: #69728f; font-size: 12.5px; }
+
+.hh-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.hh-facts div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
+.hh-facts dt { color: #8e96b1; font-size: 12.5px; font-weight: 700; }
+.hh-facts dd { margin: 0; font-size: 14px; line-height: 1.45; }
+
+.hh-lock {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fff0c9;
+  color: #7d5800;
+  font-size: 13px;
+}
+.hh-lock strong { display: block; }
+.hh-lock span { display: block; margin-top: 2px; }
+
+@media (max-width: 760px) {
+  .hh-facts div { grid-template-columns: 1fr; gap: 2px; }
+}

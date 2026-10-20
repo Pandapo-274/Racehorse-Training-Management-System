@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import "./horse-owner.css";
 import { useNavigate } from "react-router-dom";
 import { getUser, logout, handleAuthError } from "../auth/authService";
@@ -100,10 +100,10 @@ function Sidebar({ user }) {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -166,7 +166,7 @@ function Header({ user }) {
           <h1>My horses</h1>
         </div>
 
-        <p>3 horses stabled at Tenma Academy</p>
+        <p>3 horses stabled at Tenma CLub</p>
       </div>
 
       <div className="owner-header-actions">
@@ -481,15 +481,15 @@ function NoHorsesYet({ pendingCount }) {
       <h2>No horses in your name yet</h2>
 
       <p>
-        Horses are entered into the register by the academy. Send a request and they
+        Horses are entered into the register by the club. Send a request and they
         will add yours, assign a registration code and a stall.
       </p>
 
       {pendingCount > 0 && (
         <p className="owner-empty__pending">
           {pendingCount === 1
-            ? "You have one request waiting for the academy."
-            : `You have ${pendingCount} requests waiting for the academy.`}
+            ? "You have one request waiting for the club."
+            : `You have ${pendingCount} requests waiting for the club.`}
         </p>
       )}
 

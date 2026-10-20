@@ -19,9 +19,19 @@ public class TrainingSessionRepository {
         this.jdbc = jdbc;
     }
 
-    /** Thông tin giai đoạn kèm giáo án, để service kiểm tra mà không phải query nhiều lần. */
+    /**
+     * Thông tin giai đoạn kèm giáo án, để service kiểm tra mà không phải query
+     * nhiều lần.
+     */
     public record PhaseContext(int phaseId, int planId, String planStatus, int horseId,
-                               Integer distance, LocalDate startDate, LocalDate endDate) {}
+            Integer distance, LocalDate startDate, LocalDate endDate) {
+    }
+
+    /** Thông tin tối thiểu của Groom dùng trong biểu mẫu phân công. */
+    public record GroomOption(
+            int userId,
+            String fullName) {
+    }
 
     public Optional<PhaseContext> findPhaseContext(int phaseId) {
         return jdbc.sql("""
@@ -87,15 +97,21 @@ public class TrainingSessionRepository {
     /** Cả ba bộ lọc đều tùy chọn; chỉ ghép điều kiện khi có giá trị. */
     public List<TrainingSessionResponse> findAll(Integer horseId, String status, Integer assignedTo) {
         StringBuilder sql = new StringBuilder(SELECT_SESSION).append(" WHERE 1 = 1");
-        if (horseId != null)    sql.append(" AND s.horse_id = :horseId");
-        if (status != null)     sql.append(" AND s.status = :status");
-        if (assignedTo != null) sql.append(" AND s.assigned_to = :assignedTo");
+        if (horseId != null)
+            sql.append(" AND s.horse_id = :horseId");
+        if (status != null)
+            sql.append(" AND s.status = :status");
+        if (assignedTo != null)
+            sql.append(" AND s.assigned_to = :assignedTo");
         sql.append(" ORDER BY s.session_date DESC");
 
         JdbcClient.StatementSpec spec = jdbc.sql(sql.toString());
-        if (horseId != null)    spec = spec.param("horseId", horseId);
-        if (status != null)     spec = spec.param("status", status);
-        if (assignedTo != null) spec = spec.param("assignedTo", assignedTo);
+        if (horseId != null)
+            spec = spec.param("horseId", horseId);
+        if (status != null)
+            spec = spec.param("status", status);
+        if (assignedTo != null)
+            spec = spec.param("assignedTo", assignedTo);
         return spec.query(TrainingSessionRepository::mapSession).list();
     }
 
@@ -117,5 +133,46 @@ public class TrainingSessionRepository {
     public void markRunning(int sessionId) {
         jdbc.sql("UPDATE TRAINING_SESSION SET status = 'RUNNING' WHERE session_id = :id")
                 .param("id", sessionId).update();
+    }
+
+    /**
+     * Lấy danh sách tài khoản Groom đang hoạt động.
+     * Dùng cho dropdown phân công của Head Trainer.
+     */
+    public List<GroomOption> findActiveGrooms() {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'GROOM'
+                  AND u.status = 'ACTIVE'
+                ORDER BY u.full_name
+                """)
+                .query((rs, rowNum) -> new GroomOption(
+                        rs.getInt("user_id"),
+                        rs.getString("full_name")))
+                .list();
+    }
+
+    /**
+     * Chỉ đổi lịch khi buổi tập vẫn ở trạng thái SCHEDULED.
+     * Trả về số dòng được cập nhật.
+     */
+    public int updateSchedule(
+            int sessionId,
+            int assignedTo,
+            LocalDateTime sessionDate) {
+
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET assigned_to = :assignedTo,
+                    session_date = :sessionDate
+                WHERE session_id = :sessionId
+                  AND status = 'SCHEDULED'
+                """)
+                .param("assignedTo", assignedTo)
+                .param("sessionDate", sessionDate)
+                .param("sessionId", sessionId)
+                .update();
     }
 }

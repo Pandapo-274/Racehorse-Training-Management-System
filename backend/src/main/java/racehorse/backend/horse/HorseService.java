@@ -34,6 +34,7 @@ public class HorseService {
     public HorseResponse create(HorseRequest raw, AuthenticatedUser user, String ip) {
         HorseRequest request = normalize(raw);
         validate(request, 0);
+        validateTypeRules(request);
         int id;
         try {
             id = horseRepository.insert(request);
@@ -45,17 +46,40 @@ public class HorseService {
         return getOrThrow(id);
     }
 
+    /**
+     * Chủ ngựa sửa thông tin cơ bản của NGỰA CỦA MÌNH.
+     *
+     * Quyền sở hữu kiểm ở đây (không chỉ ở controller) vì controller chỉ biết
+     * role, còn "ngựa này có phải của người đang gọi không" là chuyện của dữ liệu.
+     * Mã đăng ký, chuồng, chủ, cân nặng, loại hồ sơ, trạng thái: giữ nguyên.
+     */
     @Transactional
-    public HorseResponse update(int horseId, HorseRequest raw, AuthenticatedUser user, String ip) {
-        getOrThrow(horseId);
-        HorseRequest request = normalize(raw);
-        validate(request, horseId);
-        try {
-            horseRepository.update(horseId, request);
-        } catch (DataIntegrityViolationException e) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "Dữ liệu vi phạm ràng buộc (mã đăng ký hoặc chuồng đã tồn tại)");
+    public HorseResponse updateByOwner(int horseId, HorseUpdateRequest raw,
+                                       AuthenticatedUser user, String ip) {
+        HorseResponse current = getOrThrow(horseId);
+        if (!"HORSE_OWNER".equals(user.role()) || current.ownerId() != user.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can only edit your own horses");
         }
+
+        HorseUpdateRequest request = new HorseUpdateRequest(
+                raw.horseName().trim(), blankToNull(raw.breed()), raw.horseGender(),
+                raw.dateOfBirth(), blankToNull(raw.color()), raw.sireId(), raw.damId());
+
+        Map<String, String> errors = new HashMap<>();
+        checkParent(request.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, horseId, errors);
+        checkParent(request.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, horseId, errors);
+        if (request.sireId() != null && request.sireId().equals(request.damId())) {
+            errors.put("damId", "Cha và mẹ không được là cùng một con");
+        }
+        // Sửa ngày sinh không được là cách lách luật tuổi.
+        String ageProblem = HorsePolicy.ageProblem(current.recordType(), request.dateOfBirth());
+        if (ageProblem != null) errors.put("dateOfBirth", ageProblem);
+
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+        }
+
+        horseRepository.updateBasics(horseId, request);
         userRepository.writeAudit(user.userId(), "HORSE_UPDATE", "HORSE", horseId, "SUCCESS", ip);
         return getOrThrow(horseId);
     }
@@ -120,7 +144,21 @@ public class HorseService {
         return new HorseRequest(r.ownerId(), r.sireId(), r.damId(), r.horseName().trim(),
                 r.registrationCode().trim().toUpperCase(), blankToNull(r.breed()),
                 r.horseGender(), r.dateOfBirth(), blankToNull(r.color()), r.weight(),
-                blankToNull(r.stallNo()));
+                blankToNull(r.stallNo()), HorsePolicy.normalizeType(r.recordType()));
+    }
+
+    /** Luật theo loại hồ sơ: tuổi cho ACADEMY; PEDIGREE không có chuồng và cân nặng. */
+    private void validateTypeRules(HorseRequest r) {
+        Map<String, String> errors = new HashMap<>();
+        String ageProblem = HorsePolicy.ageProblem(r.recordType(), r.dateOfBirth());
+        if (ageProblem != null) errors.put("dateOfBirth", ageProblem);
+        if (HorsePolicy.PEDIGREE.equals(r.recordType())) {
+            if (r.stallNo() != null) errors.put("stallNo", "A pedigree record has no stall");
+            if (r.weight() != null) errors.put("weight", "A pedigree record has no weight");
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+        }
     }
 
     private String blankToNull(String s) {

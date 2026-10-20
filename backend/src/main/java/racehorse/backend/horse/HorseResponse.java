@@ -9,5 +9,6 @@ public record HorseResponse(
         Integer sireId, Integer damId,
         String horseName, String registrationCode, String breed, String horseGender,
         LocalDate dateOfBirth, String color, BigDecimal weight, String stallNo,
-        String status, LocalDateTime createdAt, LocalDateTime updatedAt
+        String status, LocalDateTime createdAt, LocalDateTime updatedAt,
+        String recordType
 ) {}
