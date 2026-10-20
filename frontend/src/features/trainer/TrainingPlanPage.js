@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getUser, handleAuthError, logout } from "../auth/authService";
+import { handleAuthError, logout } from "../auth/authService";
 import { listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
@@ -11,7 +11,6 @@ import {
 import "./trainer.css";
 import "./training-plan.css";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const initialPhases = [
   {
     phaseName: "Base",
@@ -67,15 +66,7 @@ function HorseshoeIcon() {
 
 function TrainerSidebar({ active, onSignOut }) {
   const navigate = useNavigate();
-  const items = [
-    { label: "Herd progress", path: "/trainer" },
-    { label: "Horses", path: "/trainer/horses" },
-    { label: "Training plans", path: "/trainer/training-plans" },
-    { label: "Schedule", path: "/trainer/schedule" },
-    { label: "Live session", path: "/trainer/live-session" },
-    { label: "Session review", path: "/trainer/session-review" },
-    { label: "Races" },
-  ];
+
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
@@ -89,18 +80,64 @@ function TrainerSidebar({ active, onSignOut }) {
         <HorseshoeIcon /> MENU
       </div>
       <nav className="trainer-nav">
-        {items.map(({ label, path }) => (
-          <button
-            key={label}
-            type="button"
-            className={`trainer-nav-item ${active === label ? "active" : ""}`}
-            onClick={path ? () => navigate(path) : undefined}
-            disabled={!path}
-          >
-            <HorseshoeIcon />
-            {label}
-          </button>
-        ))}
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Herd progress" ? " active" : ""}`}
+          onClick={() => navigate("/trainer")}
+        >
+          <HorseshoeIcon />
+          Herd progress
+        </button>
+
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Horses" ? " active" : ""}`}
+          onClick={() => navigate("/trainer/horses")}
+        >
+          <HorseshoeIcon />
+          Horses
+        </button>
+
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Training plans" ? " active" : ""}`}
+          onClick={() => navigate("/trainer/training-plans")}
+        >
+          <HorseshoeIcon />
+          Training plans
+        </button>
+
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Schedule" ? " active" : ""}`}
+          onClick={() => navigate("/trainer/schedule")}
+        >
+          <HorseshoeIcon />
+          Schedule
+        </button>
+
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Live session" ? " active" : ""}`}
+          onClick={() => navigate("/trainer/live-session")}
+        >
+          <HorseshoeIcon />
+          Live session
+        </button>
+
+        <button
+          type="button"
+          className={`trainer-nav-item${active === "Session review" ? " active" : ""}`}
+          onClick={() => navigate("/trainer/session-review")}
+        >
+          <HorseshoeIcon />
+          Session review
+        </button>
+
+        <button type="button" className="trainer-nav-item">
+          <HorseshoeIcon />
+          Races
+        </button>
       </nav>
       <div className="trainer-sidebar-bottom">
         <button type="button" className="trainer-signout" onClick={onSignOut}>
@@ -149,7 +186,6 @@ function emptyPhase(index, startDate, endDate) {
 
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
-  const user = getUser();
   const [horses, setHorses] = useState([]);
   const [plans, setPlans] = useState([]);
   const [horseId, setHorseId] = useState("");

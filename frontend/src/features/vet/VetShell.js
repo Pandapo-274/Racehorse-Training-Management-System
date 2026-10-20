@@ -22,14 +22,6 @@ export function HorseshoeIcon() {
   );
 }
 
-const NAV = [
-  { key: "health", label: "Herd health", to: "/veterinarian" },
-  { key: "horses", label: "Horses", to: "/veterinarian/horses" },
-  { key: "examination", label: "Examination", to: "/veterinarian/examination" },
-  { key: "recovery", label: "Recovery", to: "/veterinarian/recovery" },
-  { key: "preventive", label: "Preventive care", to: null },
-];
-
 function VetSidebar({ active }) {
   const navigate = useNavigate();
 
@@ -53,18 +45,54 @@ function VetSidebar({ active }) {
       </div>
 
       <nav className="vet-nav">
-        {NAV.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`vet-nav-item${active === item.key ? " active" : ""}`}
-            aria-current={active === item.key ? "page" : undefined}
-            onClick={() => item.to && navigate(item.to)}
-          >
-            <HorseshoeIcon />
-            {item.label}
-          </button>
-        ))}
+        <button
+          type="button"
+          className={`vet-nav-item${active === "health" ? " active" : ""}`}
+          aria-current={active === "health" ? "page" : undefined}
+          onClick={() => navigate("/veterinarian")}
+        >
+          <HorseshoeIcon />
+          Herd health
+        </button>
+
+        <button
+          type="button"
+          className={`vet-nav-item${active === "horses" ? " active" : ""}`}
+          aria-current={active === "horses" ? "page" : undefined}
+          onClick={() => navigate("/veterinarian/horses")}
+        >
+          <HorseshoeIcon />
+          Horses
+        </button>
+
+        <button
+          type="button"
+          className={`vet-nav-item${active === "examination" ? " active" : ""}`}
+          aria-current={active === "examination" ? "page" : undefined}
+          onClick={() => navigate("/veterinarian/examination")}
+        >
+          <HorseshoeIcon />
+          Examination
+        </button>
+
+        <button
+          type="button"
+          className={`vet-nav-item${active === "recovery" ? " active" : ""}`}
+          aria-current={active === "recovery" ? "page" : undefined}
+          onClick={() => navigate("/veterinarian/recovery")}
+        >
+          <HorseshoeIcon />
+          Recovery
+        </button>
+
+        <button
+          type="button"
+          className={`vet-nav-item${active === "preventive" ? " active" : ""}`}
+          aria-current={active === "preventive" ? "page" : undefined}
+        >
+          <HorseshoeIcon />
+          Preventive care
+        </button>
       </nav>
 
       <div className="vet-sidebar-bottom">

@@ -123,22 +123,22 @@ function ManagerSidebar() {
           Registrations
         </button>
 
-        <button className="manager-nav-item">
+        <button type="button" className="manager-nav-item">
           <HorseshoeIcon />
           Staff
         </button>
 
-        <button className="manager-nav-item">
+        <button type="button" className="manager-nav-item">
           <HorseshoeIcon />
           Supplies &amp; feed
         </button>
 
-        <button className="manager-nav-item">
+        <button type="button" className="manager-nav-item">
           <HorseshoeIcon />
           Permissions
         </button>
 
-        <button className="manager-nav-item">
+        <button type="button" className="manager-nav-item">
           <HorseshoeIcon />
           Audit log
         </button>

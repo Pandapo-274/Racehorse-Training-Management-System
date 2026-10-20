@@ -1,8 +1,7 @@
-﻿import React from "react";
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import "./access-denied.css";
 
-function AccessDeniedPage() {
+export default function AccessDeniedPage() {
   const navigate = useNavigate();
 
   return (
@@ -38,6 +37,7 @@ function AccessDeniedPage() {
 
         {/* Back button */}
         <button
+          type="button"
           className="access-denied-button"
           onClick={() => navigate("/login")}
         >
@@ -48,5 +48,3 @@ function AccessDeniedPage() {
     </div>
   );
 }
-
-export default AccessDeniedPage;

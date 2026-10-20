@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import "./horse-owner.css";
 import { useNavigate } from "react-router-dom";
 import { getUser, logout, handleAuthError } from "../auth/authService";
@@ -501,7 +501,7 @@ function NoHorsesYet({ pendingCount }) {
   );
 }
 
-function HorseOwnerDashboard() {
+export default function HorseOwnerDashboard() {
   const user = getUser();
   const navigate = useNavigate();
 
@@ -565,5 +565,3 @@ function HorseOwnerDashboard() {
     </div>
   );
 }
-
-export default HorseOwnerDashboard;

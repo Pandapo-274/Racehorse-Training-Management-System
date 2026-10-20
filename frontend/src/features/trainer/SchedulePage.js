@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authFetch, handleAuthError, logout } from "../auth/authService";
-import { ProfileCard } from "../profile/ProfileLink";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import "./trainer.css";
 import "./schedule.css";
 
@@ -631,10 +631,7 @@ export default function SchedulePage() {
 
           <div className="schedule-header-right">
             <span className="schedule-role-label">HEAD TRAINER</span>
-            <ProfileCard
-              className="schedule-header-profile"
-              role="Head Trainer"
-            />
+            <ProfileCircle className="trainer-profile" />
           </div>
         </header>
 

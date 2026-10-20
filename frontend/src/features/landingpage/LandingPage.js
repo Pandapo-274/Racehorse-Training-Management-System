@@ -1,5 +1,4 @@
-﻿import React from "react";
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import "./landing.css";
 
 const flows = [
@@ -38,7 +37,7 @@ function SpeedLines() {
   return <div className="landing-speed-lines"></div>;
 }
 
-function LandingPage() {
+export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
@@ -72,6 +71,7 @@ function LandingPage() {
 
           <div className="hero-buttons">
             <button
+              type="button"
               className="landing-btn landing-btn-primary"
               onClick={() => navigate("/login")}
             >
@@ -79,6 +79,7 @@ function LandingPage() {
             </button>
 
             <button
+              type="button"
               className="landing-btn landing-btn-secondary"
               onClick={() => navigate("/register")}
             >
@@ -172,5 +173,3 @@ function LandingPage() {
     </div>
   );
 }
-
-export default LandingPage;

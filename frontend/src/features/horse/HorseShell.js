@@ -90,12 +90,13 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         </div>
 
         <nav className="hz-nav">
-          <button className="hz-nav-item" onClick={() => navigate(home)}>
+          <button type="button" className="hz-nav-item" onClick={() => navigate(home)}>
             <HorseshoeIcon />
             Dashboard
           </button>
 
           <button
+            type="button"
             className={`hz-nav-item${onHorses ? " active" : ""}`}
             aria-current={onHorses ? "page" : undefined}
             onClick={() => navigate(horseBase)}
@@ -106,6 +107,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
 
           {mayReview && (
             <button
+              type="button"
               className={`hz-nav-item${onRequests ? " active" : ""}`}
               aria-current={onRequests ? "page" : undefined}
               onClick={() => navigate(requestsPath)}
@@ -117,7 +119,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         </nav>
 
         <div className="hz-sidebar-bottom">
-          <button className="hz-signout" onClick={handleSignOut}>
+          <button type="button" className="hz-signout" onClick={handleSignOut}>
             Sign out
           </button>
 
