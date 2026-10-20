@@ -180,14 +180,15 @@ function ScheduleSidebar({ onSignOut }) {
   );
 }
 
-function SessionCard({ session, onEdit }) {
+function SessionCard({ session, onEdit, now }) {
   const canEdit = session.status === "SCHEDULED";
+  const due = canEdit && session.sessionDate && new Date(session.sessionDate) <= now;
 
   return (
     <article
       className={`schedule-session status-${String(
         session.status || "",
-      ).toLowerCase()}`}
+      ).toLowerCase()}${due ? " is-due" : ""}`}
     >
       <div className="schedule-session-time">
         {formatTime(session.sessionDate)}
@@ -206,7 +207,9 @@ function SessionCard({ session, onEdit }) {
         {session.assignedToName || `Groom #${session.assignedTo}`}
       </span>
 
-      <span className="schedule-status">{session.status || "UNKNOWN"}</span>
+      <span className="schedule-status">
+        {due ? "DUE · NOT STARTED" : session.status || "UNKNOWN"}
+      </span>
 
       {canEdit && (
         <button
@@ -444,10 +447,13 @@ export default function SchedulePage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [now, setNow] = useState(() => new Date());
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const [sessionData, planData, groomData] = await Promise.all([
@@ -471,6 +477,15 @@ export default function SchedulePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (modalOpen) return undefined; 
+    const timer = setInterval(() => {
+      setNow(new Date());
+      loadData(true);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [loadData, modalOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -739,6 +754,7 @@ export default function SchedulePage() {
                           key={session.sessionId}
                           session={session}
                           onEdit={openEditModal}
+                          now={now}
                         />
                       ))}
 

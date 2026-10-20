@@ -696,4 +696,18 @@
   .groom-stats { grid-template-columns: 1fr; }
   .task-row { grid-template-columns: 48px 16px minmax(0, 1fr); }
   .task-status { grid-column: 3; justify-self: start; }
+
+  .session-start-button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f7a4d;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.session-start-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 }

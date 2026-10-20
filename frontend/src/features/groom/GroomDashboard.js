@@ -1,7 +1,7 @@
-﻿import { useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./groom.css";
-import { logout } from "../auth/authService";
+import { authFetch, handleAuthError, logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 
 // Giao diện Groom dùng cùng khung với Head Trainer, Club Manager và Vet:
@@ -197,6 +197,120 @@ function TackCard({ items, cardRef }) {
   );
 }
 
+const SESSION_API = "/api/training-sessions";
+
+function formatSessionTime(value) {
+  return value ? String(value).slice(11, 16) : "--:--";
+}
+
+// Buổi tập Head Trainer giao cho groom đang đăng nhập (backend tự lọc theo người gọi).
+function AssignedSessionsCard() {
+  const navigate = useNavigate();
+  const [sessions, setSessions] = useState([]);
+  const [now, setNow] = useState(() => new Date());
+  const [busyId, setBusyId] = useState(null);
+  const [message, setMessage] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const [running, scheduled] = await Promise.all([
+        authFetch(`${SESSION_API}?status=RUNNING`),
+        authFetch(`${SESSION_API}?status=SCHEDULED`),
+      ]);
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+
+      const byTime = (a, b) => String(a.sessionDate).localeCompare(String(b.sessionDate));
+      setSessions([
+        ...(Array.isArray(running) ? running : []).sort(byTime),
+        ...(Array.isArray(scheduled) ? scheduled : [])
+          .filter((s) => new Date(s.sessionDate) <= endOfToday)
+          .sort(byTime),
+      ]);
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setMessage(err?.message || "Could not load your sessions.");
+      }
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => {
+      setNow(new Date());
+      load();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const start = async (sessionId) => {
+    setBusyId(sessionId);
+    setMessage("");
+    try {
+      await authFetch(`${SESSION_API}/${sessionId}/start`, { method: "PUT" });
+      await load();
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setMessage(err?.message || "Could not start the session.");
+      }
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="groom-card tack-card">
+      <div className="groom-card-title">
+        <span className="groom-diamond" aria-hidden="true" />
+        <div>
+          <h2>Assigned sessions</h2>
+          <p>{sessions.length} due or running</p>
+        </div>
+      </div>
+
+      {message && (
+        <div className="groom-inline-state" role="alert">
+          {message}
+        </div>
+      )}
+
+      {sessions.length === 0 ? (
+        <div className="groom-inline-state">No sessions assigned for today.</div>
+      ) : (
+        <div className="tack-list">
+          {sessions.map((s) => {
+            const notYet = new Date(s.sessionDate) > now;
+            return (
+              <div className="tack-item" key={s.sessionId}>
+                <div>
+                  <strong>
+                    {s.horseName} · {s.phaseName}
+                  </strong>
+                  <p>
+                    {formatSessionTime(s.sessionDate)} · {s.plannedDistance ?? "-"} m
+                  </p>
+                </div>
+                {s.status === "RUNNING" ? (
+                  <span className="tack-chip ready">Running</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="session-start-button"
+                    disabled={busyId === s.sessionId || notYet}
+                    onClick={() => start(s.sessionId)}
+                  >
+                    {busyId === s.sessionId ? "Starting..." : "Start"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GroomDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -317,6 +431,16 @@ export default function GroomDashboard() {
             <TasksCard items={visibleTasks} total={tasks.length} filter={statusFilter} />
 
             <div className="groom-right-column">
+              <div className="groom-right-column">
+                <AssignedSessionsCard />
+
+                <TackCard items={visibleTack} cardRef={tackRef} />
+
+                <button type="button" className="report-incident">
+                  Report a stable incident
+                </button>
+              </div>
+
               <TackCard items={visibleTack} cardRef={tackRef} />
 
               {/* TODO(fetch): chưa có API/route cho bắt đầu phiên tập và báo sự cố chuồng */}
