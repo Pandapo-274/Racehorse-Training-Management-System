@@ -33,6 +33,7 @@ function LiveSessionSidebar({ onSignOut }) {
         <button type="button" className="trainer-nav-item" onClick={() => navigate("/trainer/training-plans")}><HorseshoeIcon />Training plans</button>
         <button type="button" className="trainer-nav-item" onClick={() => navigate("/trainer/schedule")}><HorseshoeIcon />Schedule</button>
         <button type="button" className="trainer-nav-item active" onClick={() => navigate("/trainer/live-session")}><HorseshoeIcon />Live session</button>
+        <button type="button" className="trainer-nav-item" onClick={() => navigate("/trainer/session-review")}><HorseshoeIcon />Session review</button>
         <button type="button" className="trainer-nav-item"><HorseshoeIcon />Races</button>
       </nav>
       <div className="trainer-sidebar-bottom">

@@ -149,11 +149,22 @@ function ScheduleSidebar({ onSignOut }) {
           Live session
         </button>
 
+        <button
+          type="button"
+          className="trainer-nav-item"
+          onClick={() => navigate("/trainer/session-review")}
+        >
+          <HorseshoeIcon />
+          Session review
+        </button>
+
         <button type="button" className="trainer-nav-item">
           <HorseshoeIcon />
           Races
         </button>
       </nav>
+
+
 
       <div className="trainer-sidebar-bottom">
         <button type="button" className="trainer-signout" onClick={onSignOut}>

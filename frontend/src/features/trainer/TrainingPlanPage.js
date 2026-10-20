@@ -71,8 +71,9 @@ function TrainerSidebar({ active, onSignOut }) {
     { label: "Herd progress", path: "/trainer" },
     { label: "Horses", path: "/trainer/horses" },
     { label: "Training plans", path: "/trainer/training-plans" },
-    { label: "Schedule",  path: "/trainer/schedule" },
-    { label: "Live session" },
+    { label: "Schedule", path: "/trainer/schedule" },
+    { label: "Live session", path: "/trainer/live-session" },
+    { label: "Session review", path: "/trainer/session-review" },
     { label: "Races" },
   ];
   return (
@@ -121,10 +122,10 @@ function dateLabel(value) {
   return Number.isNaN(date.getTime())
     ? value
     : date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 }
 
 function statusClass(status) {
