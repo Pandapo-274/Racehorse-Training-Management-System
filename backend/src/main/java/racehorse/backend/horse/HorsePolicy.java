@@ -47,6 +47,26 @@ public final class HorsePolicy {
      * @return thông báo lỗi để gắn vào ô ngày sinh, hoặc null nếu hợp lệ.
      *         Loại PEDIGREE luôn hợp lệ (ngựa nào cũng có thể là tổ tiên).
      */
+    /**
+     * Hồ sơ PEDIGREE có được vào giáo án / buổi tập không.
+     *
+     * Luật này đã được phát biểu trong phần chú thích đầu lớp ngay từ V6
+     * ("không vào giáo án hay thi đấu"), nhưng package training chưa bao giờ
+     * hỏi đến, nên trên thực tế một hồ sơ tổ tiên 25 tuổi vẫn xếp được giáo án
+     * và vẫn giao được buổi tập. Đặt phép kiểm ở đây thay vì rải
+     * PEDIGREE.equals(...) khắp nơi: lớp này là nơi luật về loại hồ sơ sống,
+     * và đổi luật thì chỉ sửa một chỗ.
+     *
+     * @return thông báo lỗi, hoặc null nếu con ngựa được phép tập.
+     */
+    public static String trainingProblem(String recordType) {
+        if (PEDIGREE.equals(normalizeType(recordType))) {
+            return "This is a pedigree-only record, not an academy horse. "
+                    + "It cannot be put on a training plan or a training session.";
+        }
+        return null;
+    }
+
     public static String ageProblem(String recordType, LocalDate dateOfBirth) {
         if (!ACADEMY.equals(normalizeType(recordType))) return null;
         if (dateOfBirth == null) {

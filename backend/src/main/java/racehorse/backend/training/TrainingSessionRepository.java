@@ -94,8 +94,16 @@ public class TrainingSessionRepository {
                 .optional();
     }
 
-    /** Cả ba bộ lọc đều tùy chọn; chỉ ghép điều kiện khi có giá trị. */
-    public List<TrainingSessionResponse> findAll(Integer horseId, String status, Integer assignedTo) {
+    /**
+     * Bốn bộ lọc đều tùy chọn; chỉ ghép điều kiện khi có giá trị.
+     *
+     * ownerId lọc theo chủ ngựa, dùng cho vai trò HORSE_OWNER. Phép lọc này
+     * nằm trong SQL chứ không lọc danh sách ở Java sau khi đã đọc hết: lọc ở
+     * Java nghĩa là database vẫn trả về buổi tập của mọi con ngựa trong chuồng,
+     * và chỉ cần một chỗ quên gọi .filter là dữ liệu của chủ khác lọt ra.
+     */
+    public List<TrainingSessionResponse> findAll(Integer horseId, String status,
+                                                 Integer assignedTo, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT_SESSION).append(" WHERE 1 = 1");
         if (horseId != null)
             sql.append(" AND s.horse_id = :horseId");
@@ -103,6 +111,8 @@ public class TrainingSessionRepository {
             sql.append(" AND s.status = :status");
         if (assignedTo != null)
             sql.append(" AND s.assigned_to = :assignedTo");
+        if (ownerId != null)
+            sql.append(" AND h.owner_id = :ownerId");
         sql.append(" ORDER BY s.session_date DESC");
 
         JdbcClient.StatementSpec spec = jdbc.sql(sql.toString());
@@ -112,6 +122,8 @@ public class TrainingSessionRepository {
             spec = spec.param("status", status);
         if (assignedTo != null)
             spec = spec.param("assignedTo", assignedTo);
+        if (ownerId != null)
+            spec = spec.param("ownerId", ownerId);
         return spec.query(TrainingSessionRepository::mapSession).list();
     }
 

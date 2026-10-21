@@ -52,7 +52,7 @@ public class SessionRepository {
     }
 
     /** Chỉ nối điều kiện khi có giá trị, tránh kiểu "(:x IS NULL OR ...)" dễ lỗi kiểu dữ liệu trên SQL Server. */
-    public List<SessionResponse> search(String status, Integer horseId, int limit) {
+    public List<SessionResponse> search(String status, Integer horseId, int limit, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();
         if (status != null) {
@@ -63,6 +63,11 @@ public class SessionRepository {
             sql.append(" AND s.horse_id = :horseId");
             params.put("horseId", horseId);
         }
+        // Lọc theo chủ ngựa cho vai trò HORSE_OWNER - trong SQL, không lọc ở Java.
+        if (ownerId != null) {
+            sql.append(" AND h.owner_id = :ownerId");
+            params.put("ownerId", ownerId);
+        }
         // limit là int đã bị kẹp trong service nên nối thẳng vào chuỗi là an toàn.
         sql.append(" ORDER BY s.session_date DESC OFFSET 0 ROWS FETCH NEXT ").append(limit).append(" ROWS ONLY");
         return jdbc.sql(sql.toString()).params(params).query(SessionRepository::map).list();
@@ -72,6 +77,19 @@ public class SessionRepository {
         return jdbc.sql(SELECT + " WHERE s.session_id = :id")
                 .param("id", sessionId)
                 .query(SessionRepository::map)
+                .optional();
+    }
+
+    /** Chủ ngựa của con ngựa trong một buổi tập, để kiểm quyền xem. */
+    public Optional<Integer> findOwnerOfSession(int sessionId) {
+        return jdbc.sql("""
+                SELECT h.owner_id
+                FROM TRAINING_SESSION s
+                JOIN HORSE h ON h.horse_id = s.horse_id
+                WHERE s.session_id = :id
+                """)
+                .param("id", sessionId)
+                .query(Integer.class)
                 .optional();
     }
 

@@ -126,6 +126,30 @@ public class TrainingPlanRepository {
                 .update();
     }
 
+    /**
+     * Huỷ những buổi tập còn SCHEDULED của một giáo án đã kết thúc.
+     *
+     * Đi từ TRAINING_SESSION qua PLAN_PHASE vì buổi tập không trỏ thẳng vào
+     * giáo án - nó trỏ vào giai đoạn, còn giai đoạn mới trỏ vào giáo án.
+     *
+     * Chỉ chạm những buổi còn SCHEDULED: buổi đã RUNNING, COMPLETED hay
+     * STOPPED_EARLY là chuyện đã xảy ra, và viết lại lịch sử thì tệ hơn là để
+     * một giáo án kết thúc với vài buổi dở dang.
+     *
+     * @return số buổi đã huỷ, để service ghi audit khi khác 0.
+     */
+    public int cancelRemainingSessions(int planId) {
+        return jdbc.sql("""
+                UPDATE s
+                SET s.status = 'CANCELLED'
+                FROM TRAINING_SESSION s
+                JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
+                WHERE ph.plan_id = :planId AND s.status = 'SCHEDULED'
+                """)
+                .param("planId", planId)
+                .update();
+    }
+
     public void updateStatus(int planId, String status) {
         jdbc.sql("UPDATE TRAINING_PLAN SET status = :status WHERE plan_id = :id")
                 .param("status", status)
