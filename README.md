@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 21, 2026`
+- `[19:19]` `tusandthatsall` - Add V7_spread_ownership.sql 
 > #### `Oct 20, 2026`
 - `[10:50]` `ArichiAya` - Debug session - Refactor format for the WHOLE `Frontend` thing, wihtout touching any logic behind it. (need fixing avatars, feat. `tqt195`)
 - `[10:03]` `ArichiAya` - Debug session - `Trainer` Dashboard `Navbar`
