@@ -1,0 +1,146 @@
+/* Chuông thông báo. Bản thân nút giữ lớp CSS riêng của từng dashboard
+   (manager-notification, vet-notification, ...); file này chỉ lo phần bọc
+   ngoài và bảng thả xuống. */
+
+.notif {
+  position: relative;
+  display: flex;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border: 1px solid var(--line, #f2dee8);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(22, 32, 63, 0.14);
+  overflow: hidden;
+  text-align: left;
+}
+
+.notif-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line, #f2dee8);
+}
+
+.notif-panel__head strong {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  color: var(--text-900, #16203f);
+}
+
+.notif-panel__readall {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pink-700, #d93b87);
+  cursor: pointer;
+}
+
+.notif-panel__readall:hover {
+  text-decoration: underline;
+}
+
+.notif-panel__state {
+  margin: 0;
+  padding: 24px 16px;
+  font-size: 14px;
+  color: var(--text-600, #5c6480);
+  text-align: center;
+}
+
+.notif-panel__state--error {
+  color: var(--danger, #c81e3a);
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.notif-list li + li {
+  border-top: 1px solid var(--line, #f2dee8);
+}
+
+.notif-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 16px 12px 28px;
+  border: none;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.notif-item:hover,
+.notif-item:focus-visible {
+  background: var(--field-bg, #fdf4f9);
+}
+
+/* Chưa đọc: nền hồng nhạt và một chấm bên trái. Chữ đậm cũng đổi theo, để
+   không chỉ có màu mang nghĩa. */
+.notif-item--unread {
+  background: var(--page, #fdf0f6);
+}
+
+.notif-item--unread::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pink-500, #f55fa9);
+}
+
+.notif-item__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-900, #16203f);
+}
+
+.notif-item--unread .notif-item__title {
+  font-weight: 700;
+}
+
+.notif-item__message {
+  font-size: 13px;
+  color: var(--text-600, #5c6480);
+  overflow-wrap: anywhere;
+}
+
+.notif-item__time {
+  font-size: 12px;
+  color: var(--text-400, #a0a6bc);
+}
+
+/* Màn hẹp: chuông nằm sát mép phải nên bảng neo theo màn hình thay vì theo
+   nút, để không tràn ra ngoài. */
+@media (max-width: 600px) {
+  .notif-panel {
+    position: fixed;
+    top: 72px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+  }
+}

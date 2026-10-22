@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import NavItems from "../navigation/NavItems";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 import "./vet.css";
 
 export function HorseshoeIcon() {
@@ -66,7 +67,6 @@ export default function VetShell({
   subtitle,
   query,
   onQueryChange,
-  onBellClick,
   children,
 }) {
   const controlled = typeof onQueryChange === "function";
@@ -96,14 +96,7 @@ export default function VetShell({
                 : {})}
             />
 
-            <button
-              type="button"
-              className="vet-notification"
-              onClick={onBellClick}
-              aria-label="Notifications"
-            >
-              <span className="vet-notification-dot" />
-            </button>
+            <NotificationBell className="vet-notification" />
 
             <ProfileCircle className="vet-profile" />
           </div>

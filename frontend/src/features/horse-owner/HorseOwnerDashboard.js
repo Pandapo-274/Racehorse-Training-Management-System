@@ -7,6 +7,7 @@ import {
 } from "../horse/horseApi";
 import { listRequests, pendingOnly } from "../horse/horseRequestApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import {
   COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
@@ -25,10 +26,6 @@ function HorseshoeIcon() {
       />
     </svg>
   );
-}
-
-function scrollToId(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* =====================================================
@@ -113,15 +110,7 @@ function Header({ horseCount }) {
           aria-label="Search horses and records"
         />
 
-        <button
-          type="button"
-          className="owner-notification"
-          onClick={() => scrollToId("trainer-remarks")}
-          title="Jump to trainer's remarks"
-          aria-label="Jump to trainer's remarks"
-        >
-          <span className="owner-notification-dot" />
-        </button>
+        <NotificationBell className="owner-notification" />
 
         <ProfileCircle className="owner-header-avatar" />
       </div>

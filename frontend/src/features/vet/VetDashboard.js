@@ -272,9 +272,6 @@ export default function VetDashboard() {
     navigate(match ? `/veterinarian/examination/${match.id}` : "/veterinarian/examination");
   };
 
-  const scrollToAlert = () =>
-    alertRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-
   const today = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -295,7 +292,6 @@ export default function VetDashboard() {
       subtitle={`Live · ${today}`}
       query={query}
       onQueryChange={setQuery}
-      onBellClick={scrollToAlert}
     >
       {state?.notice && (
         <div className="vx-banner vx-banner--ok" role="status">

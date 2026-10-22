@@ -3,6 +3,7 @@ import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 
 // TODO(fetch): workloadData -> API tải trọng đàn theo tuần (WorkloadChart)
 const workloadData = [
@@ -286,13 +287,7 @@ export default function ManagerDashboard() {
               className="manager-search"
             />
 
-            <button
-              type="button"
-              className="manager-notification"
-              aria-label="Notifications"
-            >
-              <span className="manager-notification-dot" />
-            </button>
+            <NotificationBell className="manager-notification" />
 
             <ProfileCircle className="manager-profile" />
           </div>

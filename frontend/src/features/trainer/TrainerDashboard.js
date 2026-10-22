@@ -14,6 +14,7 @@ import {
 } from "./dashboardApi";
 import { getUser, logout, handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 
 // UC6 - View Master Fitness & Training Dashboard
 //
@@ -432,15 +433,7 @@ export default function TrainerDashboard() {
               aria-label="Search horses and training records"
             />
 
-            <button
-              type="button"
-              className="trainer-notification"
-              onClick={scrollToAlerts}
-              title="Jump to open alerts"
-              aria-label="Jump to open alerts"
-            >
-              <span className="trainer-notification-dot" />
-            </button>
+            <NotificationBell className="trainer-notification" />
 
             <ProfileCircle className="trainer-profile" />
           </div>

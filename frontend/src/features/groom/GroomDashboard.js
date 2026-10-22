@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import "./groom.css";
 import { handleAuthError, logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 import {
   formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
   startSession, toSessionStatus, toSeverityLabel, todayIso,
@@ -496,15 +497,7 @@ export default function GroomDashboard() {
               aria-label="Search today's sessions"
             />
 
-            <button
-              type="button"
-              className="groom-notification"
-              onClick={() => scrollTo(noticeRef)}
-              title="Jump to the latest notice"
-              aria-label="Jump to the latest notice"
-            >
-              <span className="groom-notification-dot" />
-            </button>
+            <NotificationBell className="groom-notification" />
 
             <ProfileCircle className="groom-profile" />
           </div>
