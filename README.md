@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 22, 2026` at `07:59` by `tqt195`
+### Last Commited: `Oct 22, 2026` at `10:16` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 22, 2026`
+- `[10:16]` `tqt195` - Merge `Staff` tab for `Club Manager` with `tusandthatsall`: keep `features/staff` (with backend `/api/staff`), remove duplicate `features/manager/StaffPage`; shared sidebar menu for every role (`features/navigation`); `Groom` page uses real training sessions (start session, send heart rate)
 - `[07:59]` `tqt195` - Add `Horse Owner` Dashboard with real data (`GET /api/owner/dashboard`), new training stats icons and numbers; add horse photo upload for `Horse Owner` (`V9__horse_photo.sql`, `POST/DELETE /api/horses/{id}/photo`); `Training Plan` horse list now skips pedigree records and allows `MONITOR`; rename `Academy` to `Club` in all displayed text (enum `ACADEMY` of `record_type` is kept)
 > #### `Oct 21, 2026`
 - `[19:19]` `tusandthatsall` - Add V7_spread_ownership.sql 
