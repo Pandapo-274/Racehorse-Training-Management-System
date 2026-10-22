@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError, logout } from "../auth/authService";
-import { listHorses } from "../horse/horseApi";
+import { isPedigreeOnly, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
   changeTrainingPlanStatus,
@@ -73,7 +73,7 @@ function TrainerSidebar({ active, onSignOut }) {
         <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
       <div className="trainer-menu-title">
@@ -208,8 +208,11 @@ export default function TrainingPlanPage() {
           listHorses(signal),
           listTrainingPlans({ signal }),
         ]);
+        // Khớp TRAINABLE ở backend (ELIGIBLE, MONITOR); hồ sơ PEDIGREE không vào giáo án.
         const eligibleHorses = (horseRows || []).filter(
-          (horse) => horse.status === "ELIGIBLE",
+          (horse) =>
+            !isPedigreeOnly(horse) &&
+            (horse.status === "ELIGIBLE" || horse.status === "MONITOR"),
         );
 
         setHorses(eligibleHorses);

@@ -13,9 +13,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "./HorseShell";
+import HorsePhoto from "./HorsePhoto";
 import {
   listHorses, getHorse, updateHorse, canEditHorse, getHorseBasePath,
   GENDER_OPTIONS, toGender, SIRE_GENDERS, DAM_GENDERS, ageProblem, isPedigreeOnly,
+  uploadHorsePhoto, removeHorsePhoto, checkHorsePhoto,
 } from "./horseApi";
 
 function todayIso() {
@@ -82,6 +84,8 @@ export default function HorseFormPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
   const load = useCallback(
     (signal) => {
@@ -155,6 +159,35 @@ export default function HorseFormPage() {
     }
   };
 
+  // Ảnh lưu ngay khi chọn, độc lập với nút "Save" của biểu mẫu - giống avatar ở ProfilePage.
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // chọn lại cùng một file vẫn kích hoạt onChange
+    if (!file) return;
+
+    setPhotoError("");
+    const problem = await checkHorsePhoto(file);
+    if (problem) {
+      setPhotoError(problem);
+      return;
+    }
+    await runPhoto(() => uploadHorsePhoto(id, file));
+  };
+
+  const runPhoto = async (action) => {
+    setPhotoBusy(true);
+    setPhotoError("");
+    try {
+      const updated = await action();
+      setHorse((prev) => ({ ...prev, photoUrl: updated.photoUrl }));
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setPhotoError(err.fieldErrors?.file || err.message);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   if (loading) {
     return <HorseShell title="Edit horse"><StateBlock title="Loading…" /></HorseShell>;
   }
@@ -193,8 +226,38 @@ export default function HorseFormPage() {
         </button>
       }
     >
+      <Card title="Photo" hint="JPEG, PNG or WebP, up to 2 MB. Saved as soon as you pick it.">
+        <div className="hz-photo-editor">
+          <HorsePhoto horse={horse} />
+
+          <div className="hz-photo-editor__actions">
+            <label className={`hz-btn${photoBusy ? " is-disabled" : ""}`}>
+              {photoBusy ? "Saving…" : horse.photoUrl ? "Replace photo" : "Upload a photo"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={pickPhoto}
+                disabled={photoBusy}
+                hidden
+              />
+            </label>
+
+            {horse.photoUrl && (
+              <button
+                type="button" className="hz-btn hz-btn--ghost" disabled={photoBusy}
+                onClick={() => runPhoto(() => removeHorsePhoto(id))}
+              >
+                Remove photo
+              </button>
+            )}
+
+            {photoError && <p className="hz-field__error" role="alert">{photoError}</p>}
+          </div>
+        </div>
+      </Card>
+
       <form onSubmit={submit} noValidate>
-        <Card title="Fixed by the academy"
+        <Card title="Fixed by the club"
               hint="These identify the horse in the system, so they cannot be changed here">
           <div className="hz-form-grid">
             <Field id="registrationCode" label="Registration code">

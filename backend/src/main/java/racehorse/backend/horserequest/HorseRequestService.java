@@ -99,7 +99,7 @@ public class HorseRequestService {
         if (code == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "A registration code is required to approve",
-                    Map.of("registrationCode", "Enter the code the academy assigns"));
+                    Map.of("registrationCode", "Enter the code the club assigns"));
         }
 
         // Ngựa ACADEMY bắt buộc có chuồng ngay lúc duyệt: mã đăng ký và chuồng
@@ -109,7 +109,7 @@ public class HorseRequestService {
         String stall = pedigreeOnly ? null : blankToNull(review.stallNo());
         if (!pedigreeOnly && stall == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "A stall is required to approve an academy horse",
+                    "A stall is required to approve a club horse",
                     Map.of("stallNo", "Assign a stall"));
         }
 

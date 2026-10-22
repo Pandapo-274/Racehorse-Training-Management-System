@@ -44,7 +44,7 @@ function PendingRow({ row, onDone }) {
 
   const approve = () => {
     const e = {};
-    if (!code.trim()) e.registrationCode = "Enter the code the academy assigns";
+    if (!code.trim()) e.registrationCode = "Enter the code the club assigns";
     if (!pedigreeOnly && !stall.trim()) e.stallNo = "Assign a stall";
     setErrors(e);
     if (Object.keys(e).length > 0) return;

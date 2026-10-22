@@ -81,7 +81,7 @@ export default function ForgotPasswordPage() {
               <h2 className="login-card__title">Forgot your password</h2>
 
               <p className="login-card__hint">
-                Enter the email on your academy account and we will send a link to set a
+                Enter the email on your club account and we will send a link to set a
                 new password.
               </p>
 

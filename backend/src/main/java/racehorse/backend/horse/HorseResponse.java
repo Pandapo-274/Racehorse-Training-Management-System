@@ -10,5 +10,6 @@ public record HorseResponse(
         String horseName, String registrationCode, String breed, String horseGender,
         LocalDate dateOfBirth, String color, BigDecimal weight, String stallNo,
         String status, LocalDateTime createdAt, LocalDateTime updatedAt,
-        String recordType
+        String recordType,
+        String photoUrl                 // null nếu chưa có ảnh
 ) {}

@@ -2,14 +2,18 @@ package racehorse.backend.horse;
 
 import java.util.List;
 
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -22,9 +26,11 @@ import racehorse.backend.auth.RequireRole;
 public class HorseController {
 
     private final HorseService horseService;
+    private final HorsePhotoService photoService;
 
-    public HorseController(HorseService horseService) {
+    public HorseController(HorseService horseService, HorsePhotoService photoService) {
         this.horseService = horseService;
+        this.photoService = photoService;
     }
 
     /*
@@ -43,6 +49,26 @@ public class HorseController {
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
         return horseService.updateByOwner(id, request, user, http.getRemoteAddr());
+    }
+
+    /** Chủ ngựa tải ảnh cho ngựa của mình. Tên phần phải là "file", giống avatar. */
+    @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireRole({"HORSE_OWNER"})
+    public HorseResponse uploadPhoto(
+            @PathVariable int id,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return photoService.upload(id, file, user, http.getRemoteAddr());
+    }
+
+    @DeleteMapping("/{id}/photo")
+    @RequireRole({"HORSE_OWNER"})
+    public HorseResponse removePhoto(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return photoService.remove(id, user, http.getRemoteAddr());
     }
 
     @GetMapping

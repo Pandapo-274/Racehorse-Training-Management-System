@@ -27,8 +27,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class TrainerDashboardService {
 
-    /** Công thức chỉ số thể lực, dùng lại trong nhiều query. */
-    private static final String FITNESS_EXPR = """
+    /**
+     * Công thức chỉ số thể lực, dùng lại trong nhiều query.
+     * Không để private: OwnerDashboardService dùng chung để hai màn ra cùng một con số.
+     */
+    static final String FITNESS_EXPR = """
             CASE
                 WHEN s.recovery_heart_rate IS NULL THEN NULL
                 WHEN s.recovery_heart_rate <= 80  THEN 100

@@ -9,8 +9,8 @@ const STATS = [
 export default function BrandPanel() {
   return (
     <aside className="brand">
-      <img src="/logo.png" alt="Tenma Academy" className="brand__logo" />
-      <h1 className="brand__title">TENMA ACADEMY</h1>
+      <img src="/logo.png" alt="Tenma Club" className="brand__logo" />
+      <h1 className="brand__title">TENMA CLUB</h1>
       <div className="brand__rule" />
       <p className="brand__sub">Racehorse training management system</p>
 

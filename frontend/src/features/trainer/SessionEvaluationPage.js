@@ -35,7 +35,7 @@ function SessionEvaluationSidebar({ onSignOut }) {
         <img src="/logo.png" alt="Tenma logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
 

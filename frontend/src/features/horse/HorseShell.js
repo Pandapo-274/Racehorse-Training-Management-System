@@ -81,7 +81,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
           <img src="/logo.png" alt="" />
           <div>
             <strong>TENMA</strong>
-            <span>Racing Academy</span>
+            <span>Racing Club</span>
           </div>
         </div>
 

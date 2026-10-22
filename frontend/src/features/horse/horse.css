@@ -408,3 +408,20 @@
 .hz-review__form .hz-field { margin-bottom: 8px; }
 @media (max-width: 900px) { .hz-list li.hz-review { grid-template-columns: 1fr; } }
 
+
+/* ---------- ảnh ngựa ---------- */
+
+.hz-photo-editor { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.hz-photo-editor__actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+.hz-photo {
+  width: 120px; height: 120px; flex-shrink: 0;
+  border-radius: 14px; border: 1px solid var(--line);
+  object-fit: cover; background: var(--field-bg);
+}
+.hz-photo--empty {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--pink-500); font: 800 34px var(--font-heading);
+}
+.hz-photo--sm { width: 88px; height: 88px; font-size: 26px; margin-bottom: 12px; }
+.hz-btn.is-disabled { opacity: .55; pointer-events: none; }

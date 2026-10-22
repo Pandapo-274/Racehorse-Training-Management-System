@@ -29,7 +29,7 @@ public final class HorsePolicy {
     /** Từ FOAL_BELOW đến tuổi này là tuổi đua (Racing). Trên đó là Retired. */
     public static final int RACING_MAX_AGE = 10;
     /** Trên tuổi này không nhận vào học viện, chỉ nhận làm hồ sơ PEDIGREE. */
-    public static final int ACADEMY_MAX_AGE = 25;
+    public static final int CLUB_MAX_AGE = 25;
 
     private HorsePolicy() {}
 
@@ -61,7 +61,7 @@ public final class HorsePolicy {
      */
     public static String trainingProblem(String recordType) {
         if (PEDIGREE.equals(normalizeType(recordType))) {
-            return "This is a pedigree-only record, not an academy horse. "
+            return "This is a pedigree-only record, not a club horse. "
                     + "It cannot be put on a training plan or a training session.";
         }
         return null;
@@ -70,12 +70,12 @@ public final class HorsePolicy {
     public static String ageProblem(String recordType, LocalDate dateOfBirth) {
         if (!ACADEMY.equals(normalizeType(recordType))) return null;
         if (dateOfBirth == null) {
-            return "Date of birth is required for an academy horse";
+            return "Date of birth is required for a club horse";
         }
         int age = ageOf(dateOfBirth);
-        if (age > ACADEMY_MAX_AGE) {
-            return "This horse is " + age + " years old, above the academy limit of "
-                    + ACADEMY_MAX_AGE + ". Register it as a pedigree record instead.";
+        if (age > CLUB_MAX_AGE) {
+            return "This horse is " + age + " years old, above the club limit of "
+                    + CLUB_MAX_AGE + ". Register it as a pedigree record instead.";
         }
         return null;
     }

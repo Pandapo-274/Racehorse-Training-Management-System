@@ -24,7 +24,7 @@ public class HorseRepository {
             SELECT h.horse_id, h.owner_id, u.full_name AS owner_name, h.sire_id, h.dam_id,
                    h.horse_name, h.registration_code, h.breed, h.horse_gender, h.date_of_birth,
                    h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at,
-                   h.record_type
+                   h.record_type, h.photo_url
             FROM HORSE h JOIN APP_USER u ON u.user_id = h.owner_id
             """;
 
@@ -39,7 +39,8 @@ public class HorseRepository {
                 rs.getString("stall_no"), rs.getString("status"),
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getObject("updated_at", LocalDateTime.class),
-                rs.getString("record_type"));
+                rs.getString("record_type"),
+                rs.getString("photo_url"));
     }
 
     public Optional<HorseResponse> findById(int horseId) {
@@ -132,6 +133,14 @@ public class HorseRepository {
                 .param("color", r.color())
                 .update();
     }
+    /** Đổi ảnh (url = null là gỡ ảnh). Tách khỏi updateBasics vì ảnh tải lên riêng, không đi cùng biểu mẫu. */
+    public int updatePhoto(int horseId, String url) {
+        return jdbc.sql("UPDATE HORSE SET photo_url = :url, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+                .param("url", url)
+                .param("id", horseId)
+                .update();
+    }
+
         public boolean isHorseOwner(int userId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id

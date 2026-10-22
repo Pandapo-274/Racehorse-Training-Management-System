@@ -55,7 +55,7 @@ export function rejectRequest(id, note) {
  * ------------------------------------------------------------------ */
 
 const STATUS = {
-  PENDING:  { label: "Waiting for the academy", tone: "warning" },
+  PENDING:  { label: "Waiting for the club", tone: "warning" },
   APPROVED: { label: "Approved", tone: "good" },
   REJECTED: { label: "Turned down", tone: "critical" },
 };

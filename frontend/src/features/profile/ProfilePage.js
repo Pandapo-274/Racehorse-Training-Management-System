@@ -307,7 +307,7 @@ export default function ProfilePage() {
               người dùng sẽ đi tìm nút sửa và nghĩ giao diện bị thiếu. */}
           <p className="pf-note">
             Username, role and account status are not editable here. Changing a role or
-            suspending an account is the academy manager's job, not your own.
+            suspending an account is the club manager's job, not your own.
           </p>
         </Card>
       </div>

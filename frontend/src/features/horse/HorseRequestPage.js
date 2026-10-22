@@ -122,7 +122,7 @@ export default function HorseRequestPage() {
   return (
     <HorseShell
       title="Register a horse"
-      subtitle="Ask the academy to add a horse to your name"
+      subtitle="Ask the club to add a horse to your name"
       actions={
         <button type="button" className="hz-btn hz-btn--ghost"
                 onClick={() => navigate("/horse-owner/horses")}>
@@ -133,7 +133,7 @@ export default function HorseRequestPage() {
       <form onSubmit={submit} noValidate>
         <Card
           title="About the horse"
-          hint="Name is required, plus date of birth for academy horses"
+          hint="Name is required, plus date of birth for club horses"
         >
           <div className="hz-form-grid">
             <Field id="horseName" label="Name" error={errors.horseName}>
@@ -148,7 +148,7 @@ export default function HorseRequestPage() {
               hint={
                 form.recordType === "PEDIGREE"
                   ? "Kept only as a parent or ancestor. No stall, no training, no health checks."
-                  : "A horse that will live and train at the academy."
+                  : "A horse that will live and train at the club."
               }
             >
               <select id="recordType" name="recordType" value={form.recordType} onChange={change}>
@@ -172,7 +172,7 @@ export default function HorseRequestPage() {
               id="dateOfBirth"
               label={form.recordType === "PEDIGREE" ? "Date of birth" : "Date of birth (required)"}
               error={errors.dateOfBirth}
-              hint="Academy horses must be 25 or younger. Older horses can be sent as pedigree records."
+              hint="Club horses must be 25 or younger. Older horses can be sent as pedigree records."
             >
               <input id="dateOfBirth" name="dateOfBirth" type="date"
                      value={form.dateOfBirth} onChange={change}
@@ -192,7 +192,7 @@ export default function HorseRequestPage() {
 
           <Field
             id="note"
-            label="Anything the academy should know"
+            label="Anything the club should know"
             error={errors.note}
             hint="Where the horse is now, when it can arrive, papers still on the way…"
           >
@@ -252,7 +252,7 @@ export default function HorseRequestPage() {
                     {/* Lý do từ chối phải hiện ra. Không có nó thì lần gửi lại
                         sẽ hỏng y như lần đầu. */}
                     {r.status === "REJECTED" && r.reviewNote && (
-                      <p className="hz-reject-note">Academy: {r.reviewNote}</p>
+                      <p className="hz-reject-note">Club: {r.reviewNote}</p>
                     )}
                   </div>
 

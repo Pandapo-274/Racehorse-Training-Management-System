@@ -53,7 +53,7 @@ export default function LoginForm() {
       {submitError && <p className="field__error form-error" role="alert">{submitError}</p>}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Signing in..." : "Enter academy"}
+        {loading ? "Signing in..." : "Enter club"}
       </Button>
 
       

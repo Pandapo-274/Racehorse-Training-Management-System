@@ -26,7 +26,7 @@ export default function AccessDeniedPage() {
 
         {/* Description */}
         <p className="access-denied-description">
-          Horse records are restricted to the Academy Manager.
+          Horse records are restricted to the Club Manager.
           Request access under Permissions, or contact the system administrator.
         </p>
 

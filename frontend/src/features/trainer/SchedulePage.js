@@ -95,7 +95,7 @@ function ScheduleSidebar({ onSignOut }) {
         <img src="/logo.png" alt="TENMA logo" />
         <div>
           <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <span>Racing Club</span>
         </div>
       </div>
 

@@ -90,7 +90,7 @@ export default function HorseListPage() {
       subtitle={
         user?.role === "HORSE_OWNER"
           ? "The horses registered in your name"
-          : "Every horse registered at the academy"
+          : "Every horse registered at the club"
       }
       actions={actions}
     >
@@ -150,7 +150,7 @@ export default function HorseListPage() {
                  mời họ bấm một nút sẽ trả 403, mà chỉ ra đường thật: gửi yêu
                  cầu để học viện đăng ký hộ. */
               <StateBlock title="No horses in your name yet">
-                Horses are entered into the register by the academy. Send a request and
+                Horses are entered into the register by the club. Send a request and
                 the club manager will review it, then assign a registration code and a stall.
                 <span className="hz-state-action">
                   <button type="button" className="hz-btn"
