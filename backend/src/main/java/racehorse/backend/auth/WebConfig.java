@@ -19,7 +19,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 // Cửa công khai. db-test để tạm cho team debug, nhớ khoá lại trước khi nộp.
                 .excludePathPatterns("/api/auth/login", "/api/auth/register",
-                        "/api/auth/forgot-password", "/api/auth/reset-password",
+                        "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/google",
                         "/api/hello", "/api/db-test");
     }
 }

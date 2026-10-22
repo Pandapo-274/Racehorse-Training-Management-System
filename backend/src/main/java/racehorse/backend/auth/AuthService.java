@@ -18,7 +18,7 @@ public class AuthService {
      * Vai trò được TỰ đăng ký. CLUB_MANAGER bị loại có chủ đích: không ai được
      * tự phong mình làm quản lý. Manager chỉ được tạo/đổi quyền qua UC Manage Roles (Sprint 3).
      */
-    private static final Set<String> SELF_REGISTER_ROLES =
+    static final Set<String> SELF_REGISTER_ROLES =
             Set.of("HORSE_OWNER", "GROOM", "HEAD_TRAINER", "VETERINARIAN");
 
     private final UserRepository users;
