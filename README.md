@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 22, 2026`
+- `[16:50]` `[DevilJack422]` - Add V13 migration for google login, Complete backend google login function
 - `[15:19]` `tusandthatsall` - Fix notification function
 - `[12:34]` `tusandthatsall` - Add backend codes for notification function
 - `[11:57]` `tqt195` - Add demo photos for 18 horses and 22 accounts (`frontend/public/seed/`) and `V11__demo_photos.sql` to attach them by registration code / username
