@@ -70,9 +70,9 @@ function TrainerSidebar({ active, onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
+          <strong>TRACEN</strong>
           <span>Racing Club</span>
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function TrainingPlanPage() {
   const [horses, setHorses] = useState([]);
   const [plans, setPlans] = useState([]);
   const [horseId, setHorseId] = useState("");
-  const [planName, setPlanName] = useState("Tenma Cup preparation");
+  const [planName, setPlanName] = useState("Tracen Cup preparation");
   const [startDate, setStartDate] = useState("2026-08-31");
   const [endDate, setEndDate] = useState("2026-11-22");
   const [phases, setPhases] = useState(initialPhases);
@@ -357,7 +357,7 @@ export default function TrainingPlanPage() {
           </div>
           <div className="trainer-header-actions">
             <span className="training-plan-target">
-              Target: Tenma Cup · 22 Nov 2026
+              Target: Tracen Cup · 22 Nov 2026
             </span>
             <ProfileCircle className="trainer-profile" />
           </div>
@@ -400,7 +400,7 @@ export default function TrainingPlanPage() {
                         onChange={(e) => setPlanName(e.target.value)}
                         maxLength={150}
                         required
-                        placeholder="e.g. Tenma Cup preparation"
+                        placeholder="e.g. Tracen Cup preparation"
                       />
                     </label>
                     <label className="training-field">

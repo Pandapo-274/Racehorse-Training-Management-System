@@ -33,9 +33,9 @@ function VetSidebar({ active }) {
   return (
     <aside className="vet-sidebar">
       <div className="vet-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
+          <strong>TRACEN</strong>
           <span>Racing Club</span>
         </div>
       </div>

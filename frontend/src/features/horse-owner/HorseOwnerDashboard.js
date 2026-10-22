@@ -45,9 +45,9 @@ function Sidebar({ user }) {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
+          <strong>TRACEN</strong>
           <span>Racing Club</span>
         </div>
       </div>
@@ -105,7 +105,7 @@ function Header({ horseCount }) {
 
   let subtitle = "Loading your horses…";
   if (horseCount != null) {
-    subtitle = `${horseCount} ${horseCount === 1 ? "horse" : "horses"} stabled at Tenma Club`;
+    subtitle = `${horseCount} ${horseCount === 1 ? "horse" : "horses"} stabled at Tracen Club`;
   }
 
   return (

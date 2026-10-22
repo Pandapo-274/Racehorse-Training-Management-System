@@ -80,7 +80,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         <div className="hz-brand">
           <img src="/logo.png" alt="" />
           <div>
-            <strong>TENMA</strong>
+            <strong>TRACEN</strong>
             <span>Racing Club</span>
           </div>
         </div>

@@ -29,7 +29,7 @@ const flows = [
 ];
 function Crest() {
   return (
-    <img className="landing-logo" src="/logo.png" alt="Tenma Racing Club" />
+    <img className="landing-logo" src="/logo.png" alt="Tracen Racing Club" />
   );
 }
 
@@ -57,7 +57,7 @@ export default function LandingPage() {
 
           <div className="hero-kicker">RACING CLUB · ESTABLISHED 1998</div>
 
-          <h1>TENMA</h1>
+          <h1>TRACEN</h1>
 
           <div className="hero-tagline">Every stride, on the record</div>
 
@@ -164,7 +164,7 @@ export default function LandingPage() {
           <div className="footer-brand">
             <Crest />
 
-            <span>Tenma Club · Racehorse Training & Management System </span>
+            <span>Tracen Club · Racehorse Training & Management System </span>
           </div>
 
           

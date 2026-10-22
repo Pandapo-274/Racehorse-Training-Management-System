@@ -56,9 +56,9 @@ function TrainerSidebar({ user, onSignOut }) {
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
+          <strong>TRACEN</strong>
           <span>Racing Club</span>
         </div>
       </div>
