@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 22, 2026`
+- `[17:00]` `[DevilJack422]` - Modified .env.example
 - `[16:50]` `[DevilJack422]` - Add V13 migration for google login, Complete backend google login function
 - `[15:19]` `tusandthatsall` - Fix notification function
 - `[12:34]` `tusandthatsall` - Add backend codes for notification function
