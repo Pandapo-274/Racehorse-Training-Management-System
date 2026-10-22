@@ -24,7 +24,7 @@ public class HorseRepository {
             SELECT h.horse_id, h.owner_id, u.full_name AS owner_name, h.sire_id, h.dam_id,
                    h.horse_name, h.registration_code, h.breed, h.horse_gender, h.date_of_birth,
                    h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at,
-                   h.record_type
+                   h.record_type, h.photo_url
             FROM HORSE h JOIN APP_USER u ON u.user_id = h.owner_id
             """;
 
@@ -39,7 +39,8 @@ public class HorseRepository {
                 rs.getString("stall_no"), rs.getString("status"),
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getObject("updated_at", LocalDateTime.class),
-                rs.getString("record_type"));
+                rs.getString("record_type"),
+                rs.getString("photo_url"));
     }
 
     public Optional<HorseResponse> findById(int horseId) {
@@ -132,6 +133,14 @@ public class HorseRepository {
                 .param("color", r.color())
                 .update();
     }
+    /** Đổi ảnh (url = null là gỡ ảnh). Tách khỏi updateBasics vì ảnh tải lên riêng, không đi cùng biểu mẫu. */
+    public int updatePhoto(int horseId, String url) {
+        return jdbc.sql("UPDATE HORSE SET photo_url = :url, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+                .param("url", url)
+                .param("id", horseId)
+                .update();
+    }
+
         public boolean isHorseOwner(int userId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
@@ -143,6 +152,50 @@ public class HorseRepository {
                               String horseGender, Integer sireId, Integer damId) {}
 
     /** Lấy tổ tiên bằng recursive CTE. maxDepth chặn luôn trường hợp dữ liệu vòng lặp. */
+    /**
+     * candidateId có nằm trong danh sách tổ tiên của horseId không.
+     *
+     * Dùng để chặn vòng lặp phả hệ: trước khi gán P làm cha/mẹ của H, phải
+     * chắc H chưa là tổ tiên của P. Không kiểm thì tạo được A là cha của B
+     * trong khi B đã là cha của A, và cây phả hệ hiện ra một con ngựa làm ông
+     * của chính nó.
+     *
+     * Hai điểm trong câu này đều có lý do:
+     *
+     *  - depth < 50 chứ không phải < 5 như findAncestors. findAncestors chỉ
+     *    cần đủ sâu cho màn hình (tối đa 5 đời); còn ở đây bỏ sót một vòng lặp
+     *    nằm sâu hơn nghĩa là cho phép tạo ra nó. 50 đời là quá đủ cho ngựa
+     *    thật, mà vẫn là một con số hữu hạn.
+     *
+     *  - Và nó phải chịu được dữ liệu ĐÃ có vòng lặp từ trước. Nếu database
+     *    hiện tại đã lẫn một vòng (vì phép kiểm này ra đời muộn), một CTE
+     *    không chặn độ sâu sẽ chạy đến khi SQL Server ném lỗi MAXRECURSION, và
+     *    phép kiểm an toàn lại chính là chỗ làm sập. Mốc 50 khiến câu này luôn
+     *    kết thúc.
+     */
+    public boolean isAncestorOf(int candidateId, int horseId) {
+        Integer hit = jdbc.sql("""
+                WITH tree AS (
+                    SELECT sire_id, dam_id, 0 AS depth
+                    FROM HORSE WHERE horse_id = :horseId
+                    UNION ALL
+                    SELECT h.sire_id, h.dam_id, t.depth + 1
+                    FROM HORSE h
+                    JOIN tree t ON h.horse_id = t.sire_id OR h.horse_id = t.dam_id
+                    WHERE t.depth < 50
+                )
+                SELECT TOP 1 1
+                FROM tree
+                WHERE sire_id = :candidateId OR dam_id = :candidateId
+                """)
+                .param("horseId", horseId)
+                .param("candidateId", candidateId)
+                .query(Integer.class)
+                .optional()
+                .orElse(null);
+        return hit != null;
+    }
+
     public List<PedigreeRow> findAncestors(int horseId, int maxDepth) {
         return jdbc.sql("""
                 WITH tree AS (

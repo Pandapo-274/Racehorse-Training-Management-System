@@ -1,4 +1,4 @@
-// src/features/auth/RegisterPage.js  (UC1) - cùng khung với LoginPage
+﻿// src/features/auth/RegisterPage.js  (UC1) - cùng khung với LoginPage
 import { useNavigate } from "react-router-dom";
 import BrandPanel from "./BrandPanel";
 import RegisterForm from "./RegisterForm";
@@ -24,7 +24,7 @@ export default function RegisterPage() {
 
           <h2 className="login-card__title">Create an account</h2>
           <p className="login-card__hint">
-            Register as a horse owner to follow your horses through the academy.
+            Register as a horse owner to follow your horses through the club.
           </p>
 
           <RegisterForm />

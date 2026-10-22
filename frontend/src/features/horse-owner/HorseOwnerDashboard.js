@@ -1,71 +1,18 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "./horse-owner.css";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getUser, logout, handleAuthError } from "../auth/authService";
-import { listHorses } from "../horse/horseApi";
+import {
+  formatDate, formatWeight, toAge, toEnumLabel, toInitials, toStatus,
+} from "../horse/horseApi";
 import { listRequests, pendingOnly } from "../horse/horseRequestApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
-
-// TODO(fetch): trainingStats -> API chỉ số huấn luyện của ngựa (HorseOverview)
-const trainingStats = [
-  { name: "Speed", value: 92, icon: "⚡", type: "speed" },
-  { name: "Stamina", value: 74, icon: "◉", type: "stamina" },
-  { name: "Power", value: 86, icon: "▰", type: "power" },
-  { name: "Guts", value: 68, icon: "♥", type: "guts" },
-  { name: "Wit", value: 80, icon: "●", type: "wit" },
-];
-
-// TODO(fetch): fitnessData -> API xu hướng thể lực theo tuần (FitnessTrend)
-const fitnessData = [
-  { week: "W26", value: 64 },
-  { week: "W27", value: 68 },
-  { week: "W28", value: 71 },
-  { week: "W29", value: 69 },
-  { week: "W30", value: 74 },
-  { week: "W31", value: 78 },
-  { week: "W32", value: 76 },
-  { week: "W33", value: 83 },
-];
-
-// TODO(fetch): costRows -> API chi phí & tiền thưởng (CostsAndPrizeMoney)
-const costRows = [
-  [
-    "Keep and stabling",
-    "¥4,200,000",
-    "¥3,800,000",
-    "¥4,100,000",
-    "¥12,100,000",
-  ],
-  [
-    "Veterinary",
-    "¥640,000",
-    "¥210,000",
-    "¥980,000",
-    "¥1,830,000",
-  ],
-  [
-    "Training",
-    "¥2,800,000",
-    "¥2,400,000",
-    "¥2,800,000",
-    "¥8,000,000",
-  ],
-  [
-    "Race prize money",
-    "+¥12,000,000",
-    "—",
-    "+¥4,500,000",
-    "+¥16,500,000",
-  ],
-];
-
-// TODO(fetch): ownerSummary -> API tổng quan ngựa của chủ ngựa (StatStrip)
-const ownerSummary = [
-  { value: "3", label: "Horses stabled", type: "pink" },
-  { value: "83", label: "Current fitness", type: "green" },
-  { value: "36 km", label: "Weekly distance", type: "gold" },
-  { value: "22 Nov", label: "Next race", type: "red" },
-];
+import NotificationBell from "../notification/NotificationBell";
+import NavItems, { useScrollToHash } from "../navigation/NavItems";
+import {
+  COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
+  formatShortDate, getOwnerDashboard, isPrizeRow, toCostLabel, toEvaluation, toStars,
+} from "./horseOwnerApi";
 
 function HorseshoeIcon() {
   return (
@@ -79,10 +26,6 @@ function HorseshoeIcon() {
       />
     </svg>
   );
-}
-
-function scrollToId(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* =====================================================
@@ -100,9 +43,9 @@ function Sidebar({ user }) {
   return (
     <aside className="owner-sidebar">
       <div className="owner-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
+          <strong>TRACEN</strong>
           <span>Racing Club</span>
         </div>
       </div>
@@ -112,25 +55,7 @@ function Sidebar({ user }) {
       </div>
 
       <nav className="owner-navigation">
-        <button type="button" className="owner-nav-item active">
-          <HorseshoeIcon />
-          Overview
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => navigate("/horse-owner/horses")}>
-          <HorseshoeIcon />
-          My horses
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => scrollToId("results-races")}>
-          <HorseshoeIcon />
-          Results &amp; races
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => scrollToId("costs-prizes")}>
-          <HorseshoeIcon />
-          Costs &amp; prizes
-        </button>
+        <NavItems role={user?.role} prefix="owner" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="owner-sidebar-bottom">
@@ -149,7 +74,7 @@ function Sidebar({ user }) {
    HEADER
 ===================================================== */
 
-function Header({ user }) {
+function Header({ horseCount }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
@@ -157,6 +82,11 @@ function Header({ user }) {
   const handleSearch = (event) => {
     if (event.key === "Enter") navigate("/horse-owner/horses");
   };
+
+  let subtitle = "Loading your horses…";
+  if (horseCount != null) {
+    subtitle = `${horseCount} ${horseCount === 1 ? "horse" : "horses"} stabled at Tracen Club`;
+  }
 
   return (
     <header className="owner-header">
@@ -166,7 +96,7 @@ function Header({ user }) {
           <h1>My horses</h1>
         </div>
 
-        <p>3 horses stabled at Tenma CLub</p>
+        <p>{subtitle}</p>
       </div>
 
       <div className="owner-header-actions">
@@ -180,15 +110,7 @@ function Header({ user }) {
           aria-label="Search horses and records"
         />
 
-        <button
-          type="button"
-          className="owner-notification"
-          onClick={() => scrollToId("trainer-remarks")}
-          title="Jump to trainer's remarks"
-          aria-label="Jump to trainer's remarks"
-        >
-          <span className="owner-notification-dot" />
-        </button>
+        <NotificationBell className="owner-notification" />
 
         <ProfileCircle className="owner-header-avatar" />
       </div>
@@ -200,11 +122,24 @@ function Header({ user }) {
    STAT STRIP
 ===================================================== */
 
-function StatStrip() {
+function StatStrip({ summary }) {
+  const next = summary.nextRace;
+  const items = [
+    { value: String(summary.horseCount), label: "Horses stabled", type: "pink" },
+    { value: summary.avgFitness ?? "—", label: "Current fitness", type: "green" },
+    { value: formatKm(summary.weeklyDistanceKm), label: "Weekly distance", type: "gold" },
+    {
+      value: next ? formatShortDate(next.raceDate) : "—",
+      label: next ? `Next race · ${next.horseName}` : "Next race",
+      title: next ? `${next.raceName} · ${formatDate(next.raceDate)}` : "No upcoming race",
+      type: "red",
+    },
+  ];
+
   return (
     <div className="owner-stats">
-      {ownerSummary.map((item) => (
-        <div className={`owner-stat-card ${item.type}`} key={item.label}>
+      {items.map((item) => (
+        <div className={`owner-stat-card ${item.type}`} key={item.type} title={item.title}>
           <span className="owner-stat-value">{item.value}</span>
           <span className="owner-stat-label">{item.label}</span>
         </div>
@@ -217,17 +152,59 @@ function StatStrip() {
    HORSE OVERVIEW
 ===================================================== */
 
-function HorseOverview() {
+/** Chỉ hiện khi chủ có từ hai con trở lên. */
+function HorseTabs({ horses, selectedId, onSelect }) {
+  if (horses.length < 2) return null;
+  return (
+    <div className="owner-horse-tabs" role="tablist" aria-label="Choose a horse">
+      {horses.map((h) => (
+        <button
+          key={h.horseId}
+          type="button"
+          role="tab"
+          aria-selected={h.horseId === selectedId}
+          className={`owner-horse-tab${h.horseId === selectedId ? " active" : ""}`}
+          onClick={() => onSelect(h.horseId)}
+        >
+          {h.horseName}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function HorseOverview({ horse }) {
+  // Ảnh không tải được (file đã bị xoá trên máy chủ) thì quay về chữ viết tắt.
+  const [photoBroken, setPhotoBroken] = useState(false);
+  useEffect(() => setPhotoBroken(false), [horse.photoUrl]);
+
+  const status = horse.locked
+    ? { label: "Training locked", tone: "critical", hint: "The vet has locked training" }
+    : toStatus(horse.status);
+  const stars = toStars(horse.stats);
+  const age = toAge(horse.dateOfBirth);
+  const subtitle = [horse.breed, age == null ? null : `${age} yrs`, horse.registrationCode]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <section className="horse-overview" id="results-races">
       <div className="horse-gradient"></div>
       <div className="horse-speed-lines"></div>
 
-      <div className="horse-photo">
-        <img
-          src="/symbolirudoff.jpg"
-          alt="Symboli Rudolf"
-        />
+      <Link
+        className="horse-photo"
+        to={`/horse-owner/horses/${horse.horseId}/edit`}
+        title={horse.photoUrl ? "Change photo" : "Add a photo"}
+        aria-label={`${horse.photoUrl ? "Change" : "Add a"} photo of ${horse.horseName}`}
+      >
+        {horse.photoUrl && !photoBroken ? (
+          <img src={horse.photoUrl} alt="" onError={() => setPhotoBroken(true)} />
+        ) : (
+          <div className="horse-photo-initials" aria-hidden="true">
+            {toInitials(horse.horseName)}
+          </div>
+        )}
 
         <div className="photo-overlay"></div>
 
@@ -235,22 +212,25 @@ function HorseOverview() {
         <div className="photo-corner top-right"></div>
         <div className="photo-corner bottom-left"></div>
         <div className="photo-corner bottom-right"></div>
-      </div>
+      </Link>
 
       <div className="horse-title-area">
-        <h2>Symboli Rudolf</h2>
+        <h2>{horse.horseName}</h2>
 
         <div className="horse-title-line"></div>
 
-        <p>Thoroughbred · 4 yrs · TM-0481</p>
+        <p>{subtitle}</p>
 
         <div className="horse-rating">
-          <span className="horse-stars" aria-label="5 stars">
-            ★★★★★
-          </span>
+          {stars != null && (
+            <span className="horse-stars" aria-label={`${stars} of 5 stars`}>
+              {"★".repeat(stars)}
+              <span className="horse-stars-empty">{"★".repeat(5 - stars)}</span>
+            </span>
+          )}
 
-          <span className="cleared-chip">
-            Cleared to race
+          <span className={`cleared-chip ${status.tone}`} title={status.hint}>
+            {status.label}
           </span>
         </div>
       </div>
@@ -258,50 +238,47 @@ function HorseOverview() {
       <div className="horse-metrics">
         <div className="metric">
           <span>Fitness</span>
-          <strong>83</strong>
+          <strong>{horse.fitness ?? "—"}</strong>
         </div>
 
         <div className="metric">
           <span>Weight</span>
-          <strong>486 kg</strong>
+          <strong>{formatWeight(horse.weight)}</strong>
         </div>
 
         <div className="metric">
           <span>Weekly distance</span>
-          <strong>36 km</strong>
+          <strong>{formatKm(horse.weeklyDistanceKm)}</strong>
         </div>
 
-        <div className="metric">
+        <div className="metric" title={horse.nextRace?.raceName}>
           <span>Next race</span>
-          <strong>22 Nov</strong>
+          <strong>{horse.nextRace ? formatShortDate(horse.nextRace.raceDate) : "—"}</strong>
         </div>
       </div>
 
       <div className="training-stats">
-        <h3>Training stats</h3>
+        <h3>Training stats · last 4 weeks</h3>
 
-        {trainingStats.map((stat) => (
-          <div className="training-row" key={stat.name}>
-            <div className={`training-icon ${stat.type}`}>
-              {stat.icon}
+        {TRAINING_STATS.map((stat) => {
+          const value = horse.stats?.[stat.key];
+          return (
+            <div className="training-row" key={stat.key} title={stat.hint}>
+              <img className="training-icon" src={stat.icon} alt="" aria-hidden="true" />
+
+              <span className="training-name">{stat.label}</span>
+
+              <div className="training-meter">
+                <div
+                  className={`training-meter-fill ${stat.key}`}
+                  style={{ width: `${value ?? 0}%` }}
+                ></div>
+              </div>
+
+              <span className="training-value">{value ?? "—"}</span>
             </div>
-
-            <span className="training-name">
-              {stat.name}
-            </span>
-
-            <div className="training-meter">
-              <div
-                className={`training-meter-fill ${stat.type}`}
-                style={{ width: `${stat.value}%` }}
-              ></div>
-            </div>
-
-            <span className="training-value">
-              {stat.value}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -311,7 +288,9 @@ function HorseOverview() {
    FITNESS TREND
 ===================================================== */
 
-function FitnessTrend() {
+function FitnessTrend({ horse }) {
+  const points = horse.fitnessTrend || [];
+
   return (
     <section className="owner-card fitness-card">
       <div className="card-heading">
@@ -325,38 +304,31 @@ function FitnessTrend() {
         </div>
 
         <div className="fitness-current">
-          <strong>83</strong>
+          <strong>{horse.fitness ?? "—"}</strong>
           <span>current</span>
         </div>
       </div>
 
-      <div className="fitness-chart">
-        {fitnessData.map((item, index) => (
-          <div
-            className="fitness-column"
-            key={item.week}
-          >
-            <div className="fitness-value">
-              {item.value}
-            </div>
+      {points.length === 0 ? (
+        <p className="owner-card-empty">No training sessions in the last eight weeks.</p>
+      ) : (
+        <div className="fitness-chart">
+          {points.map((item, index) => (
+            <div className="fitness-column" key={item.weekStart}>
+              <div className="fitness-value">{item.fitnessIndex}</div>
 
-            <div className="fitness-bar-area">
-              <div
-                className={`fitness-bar ${
-                  index === fitnessData.length - 1
-                    ? "current"
-                    : ""
-                }`}
-                style={{
-                  height: `${item.value}%`,
-                }}
-              ></div>
-            </div>
+              <div className="fitness-bar-area">
+                <div
+                  className={`fitness-bar ${index === points.length - 1 ? "current" : ""}`}
+                  style={{ height: `${item.fitnessIndex}%` }}
+                ></div>
+              </div>
 
-            <span>{item.week}</span>
-          </div>
-        ))}
-      </div>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -365,7 +337,9 @@ function FitnessTrend() {
    TRAINER REMARKS
 ===================================================== */
 
-function TrainerRemarks() {
+function TrainerRemarks({ horse }) {
+  const latest = horse.remarks?.[0];
+
   return (
     <section className="owner-card remarks-card" id="trainer-remarks">
       <div className="card-heading">
@@ -375,21 +349,29 @@ function TrainerRemarks() {
         </h3>
       </div>
 
-      <div className="remark-date">
-        13 Sep 2026
-      </div>
+      {!latest ? (
+        <p className="owner-card-empty">The head trainer has not evaluated a session yet.</p>
+      ) : (
+        <>
+          <div className="remark-date">
+            {formatDate(latest.sessionDate)} · {toEvaluation(latest.evaluation)}
+          </div>
 
-      <p className="remark-text">
-        Held rhythm through laps 1–3, lost breathing
-        cadence when the pace lifted. Session stopped
-        early on a system alert. Load cut 15% next week.
-      </p>
+          <p className="remark-text">
+            {latest.remarks || "Rated without a written remark."}
+          </p>
 
-      <div className="trial-box">
-        <span className="trial-icon">▶</span>
-        <span>1,600 m trial · 12 Sep</span>
-        <span className="trial-arrow">→</span>
-      </div>
+          <div className="trial-box">
+            <span className="trial-icon">▶</span>
+            <span>
+              {latest.actualDistance != null
+                ? `${latest.actualDistance.toLocaleString("en-US")} m`
+                : "Distance not recorded"}{" "}
+              · {latest.phaseName} · {toEnumLabel(latest.status)}
+            </span>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -398,12 +380,13 @@ function TrainerRemarks() {
    COSTS & PRIZE MONEY
 ===================================================== */
 
-function CostsAndPrizeMoney() {
+function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
+  const range = costs.from
+    ? `${formatDate(costs.from)} – ${formatDate(costs.to)}`
+    : `Up to ${formatDate(costs.to)}`;
+
   return (
-    <section
-      className="owner-card costs-card"
-      id="costs-prizes"
-    >
+    <section className="owner-card costs-card" id="costs-prizes">
       <div className="card-heading costs-heading">
         <div>
           <h3>
@@ -411,16 +394,19 @@ function CostsAndPrizeMoney() {
             Costs and prize money
           </h3>
 
-          <p>Q3 2026</p>
+          <p>{range}</p>
         </div>
 
-        <button
-          type="button"
+        <select
           className="cost-period"
+          value={period}
+          onChange={(event) => onPeriodChange(event.target.value)}
+          aria-label="Cost period"
         >
-          Q3 2026
-          <span>⌄</span>
-        </button>
+          {Object.entries(COST_PERIODS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="cost-table-wrapper">
@@ -428,26 +414,26 @@ function CostsAndPrizeMoney() {
           <thead>
             <tr>
               <th>Line item</th>
-              <th>Symboli Rudolf</th>
-              <th>Almond Eye</th>
-              <th>Gold Ship</th>
+              {costs.horses.map((h) => (
+                <th key={h.horseId}>{h.horseName}</th>
+              ))}
               <th>Total</th>
             </tr>
           </thead>
 
           <tbody>
-            {costRows.map((row) => (
-              <tr key={row[0]}>
-                {row.map((cell, index) => (
-                  <td
-                    key={`${row[0]}-${index}`}
-                    className={index === 0 ? "line-item" : ""}
-                  >
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {costs.rows.map((row) => {
+              const prize = isPrizeRow(row.category);
+              return (
+                <tr key={row.category}>
+                  <td className="line-item">{toCostLabel(row.category)}</td>
+                  {row.amounts.map((amount, index) => (
+                    <td key={costs.horses[index].horseId}>{formatMoney(amount, { prize })}</td>
+                  ))}
+                  <td>{formatMoney(row.total, { prize })}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -501,69 +487,105 @@ function NoHorsesYet({ pendingCount }) {
   );
 }
 
-function HorseOwnerDashboard() {
+export default function HorseOwnerDashboard() {
   const user = getUser();
   const navigate = useNavigate();
 
   // null = chưa biết. Chỉ phân nhánh sau khi máy chủ đã trả lời, nếu không
   // trang sẽ nháy qua màn trống một cái rồi mới hiện nội dung.
-  const [horses, setHorses] = useState(null);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
   const [pending, setPending] = useState(0);
-  const [failed, setFailed] = useState(false);
+  const [period, setPeriod] = useState(DEFAULT_COST_PERIOD);
+  const [selectedId, setSelectedId] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const ctrl = new AbortController();
+    setError("");
 
-    listHorses(ctrl.signal)
-      .then((rows) => setHorses(rows || []))
+    getOwnerDashboard(period, ctrl.signal)
+      .then((res) => {
+        setData(res);
+        // Giữ con đang chọn khi đổi kỳ chi phí; con đó không còn thì về con đầu.
+        setSelectedId((current) =>
+          res.horses.some((h) => h.horseId === current) ? current : res.horses[0]?.horseId ?? null,
+        );
+      })
       .catch((err) => {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
-        // Gọi hỏng thì giữ nguyên trang như cũ thay vì khẳng định "không có
-        // con nào" - nói sai còn tệ hơn không nói.
-        setFailed(true);
+        setError(err.message || "Could not load your dashboard.");
       });
 
+    return () => ctrl.abort();
+  }, [navigate, period, reloadKey]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
     listRequests(ctrl.signal)
       .then((rows) => setPending(pendingOnly(rows).length))
       .catch(() => {}); // chỉ là con số phụ, hỏng thì bỏ qua
-
     return () => ctrl.abort();
-  }, [navigate]);
+  }, []);
 
-  const empty = !failed && horses !== null && horses.length === 0;
+  const horse = data?.horses.find((h) => h.horseId === selectedId);
+
+  // Mục "Results & races" / "Costs & prizes" ở sidebar là lối tắt #hash; từ trang
+  // ngựa bấm sang thì phải đợi dữ liệu về, phần tử có id mới nằm trên trang.
+  useScrollToHash(!!data);
+
+  let content;
+  if (error && !data) {
+    content = (
+      <div className="owner-empty" role="alert">
+        <h2>Could not load your dashboard</h2>
+        <p>{error}</p>
+        <button type="button" className="owner-empty__btn" onClick={() => setReloadKey((k) => k + 1)}>
+          Try again
+        </button>
+      </div>
+    );
+  } else if (!data) {
+    content = (
+      <div className="owner-empty" role="status">
+        <p>Loading your horses…</p>
+      </div>
+    );
+  } else if (data.horses.length === 0) {
+    content = <NoHorsesYet pendingCount={pending} />;
+  } else {
+    content = (
+      <>
+        {error && <p className="owner-inline-error" role="alert">{error}</p>}
+
+        <StatStrip summary={data.summary} />
+
+        <HorseTabs horses={data.horses} selectedId={selectedId} onSelect={setSelectedId} />
+
+        {horse && <HorseOverview horse={horse} />}
+
+        {horse && (
+          <div className="owner-middle">
+            <FitnessTrend horse={horse} />
+            <TrainerRemarks horse={horse} />
+          </div>
+        )}
+
+        <CostsAndPrizeMoney costs={data.costs} period={period} onPeriodChange={setPeriod} />
+      </>
+    );
+  }
 
   return (
     <div className="owner-page">
       <Sidebar user={user} />
 
       <main className="owner-main">
-        <Header user={user} />
+        <Header horseCount={data ? data.summary.horseCount : null} />
 
-        <div className="owner-content">
-          {empty ? (
-            <NoHorsesYet pendingCount={pending} />
-          ) : (
-            <>
-              {/* TODO(fetch): bốn khối dưới vẫn là dữ liệu mẫu. Chúng chỉ còn
-                  hiện khi tài khoản thật sự có ngựa, nên không còn mâu thuẫn
-                  với màn "My horses" nữa, nhưng số liệu thì vẫn chưa thật. */}
-              <StatStrip />
-
-              <HorseOverview />
-
-              <div className="owner-middle">
-                <FitnessTrend />
-                <TrainerRemarks />
-              </div>
-
-              <CostsAndPrizeMoney />
-            </>
-          )}
-        </div>
+        <div className="owner-content">{content}</div>
       </main>
     </div>
   );
 }
-
-export default HorseOwnerDashboard;

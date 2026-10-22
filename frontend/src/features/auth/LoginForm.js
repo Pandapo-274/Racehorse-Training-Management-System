@@ -1,4 +1,4 @@
-// src/features/auth/LoginForm.js
+﻿// src/features/auth/LoginForm.js
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TextField from "../../components/ui/TextField";
@@ -53,7 +53,7 @@ export default function LoginForm() {
       {submitError && <p className="field__error form-error" role="alert">{submitError}</p>}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Signing in..." : "Enter academy"}
+        {loading ? "Signing in..." : "Enter club"}
       </Button>
 
       

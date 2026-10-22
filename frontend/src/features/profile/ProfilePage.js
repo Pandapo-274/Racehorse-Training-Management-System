@@ -1,4 +1,4 @@
-// src/features/profile/ProfilePage.js
+﻿// src/features/profile/ProfilePage.js
 // UC4 - Profile. Màn này mở được với mọi vai trò, vì ai cũng có hồ sơ của mình.
 //
 // Backend chỉ nhận userId từ token, không bao giờ nhận từ client, nên không có
@@ -307,7 +307,7 @@ export default function ProfilePage() {
               người dùng sẽ đi tìm nút sửa và nghĩ giao diện bị thiếu. */}
           <p className="pf-note">
             Username, role and account status are not editable here. Changing a role or
-            suspending an account is the academy manager's job, not your own.
+            suspending an account is the club manager's job, not your own.
           </p>
         </Card>
       </div>

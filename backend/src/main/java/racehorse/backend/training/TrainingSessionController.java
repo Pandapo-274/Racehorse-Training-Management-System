@@ -39,7 +39,7 @@ public class TrainingSessionController {
     }
 
     @GetMapping
-    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM" })
+    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM", "HORSE_OWNER" })
     public List<TrainingSessionResponse> list(
             @RequestParam(required = false) Integer horseId,
             @RequestParam(required = false) String status,
@@ -58,7 +58,7 @@ public class TrainingSessionController {
     }
 
     @GetMapping("/{id}")
-    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM" })
+    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER", "GROOM", "HORSE_OWNER" })
     public TrainingSessionResponse get(@PathVariable int id,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.get(id, user);

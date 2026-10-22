@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 17, 2026` at `23:22` by `ArichiAya`
+### Last Commited: `Oct 22, 2026` at `15:19` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,18 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 22, 2026`
+- `[15:19]` `tusandthatsall` - Fix notification function
+- `[12:34]` `tusandthatsall` - Add backend codes for notification function
+- `[11:57]` `tqt195` - Add demo photos for 18 horses and 22 accounts (`frontend/public/seed/`) and `V11__demo_photos.sql` to attach them by registration code / username
+- `[10:34]` `tqt195` - Update `Staff` Page using English (role group titles); move `StaffPage.js`, `staff.css`, `staffApi.js` into `features/manager`
+- `[10:16]` `tqt195` - Merge `Staff` tab for `Club Manager` with `tusandthatsall`: keep `features/staff` (with backend `/api/staff`), remove duplicate `features/manager/StaffPage`; shared sidebar menu for every role (`features/navigation`); `Groom` page uses real training sessions (start session, send heart rate)
+- `[07:59]` `tqt195` - Add `Horse Owner` Dashboard with real data (`GET /api/owner/dashboard`), new training stats icons and numbers; add horse photo upload for `Horse Owner` (`V9__horse_photo.sql`, `POST/DELETE /api/horses/{id}/photo`); `Training Plan` horse list now skips pedigree records and allows `MONITOR`; rename `Academy` to `Club` in all displayed text (enum `ACADEMY` of `record_type` is kept)
+> #### `Oct 21, 2026`
+- `[19:19]` `tusandthatsall` - Add V7_spread_ownership.sql 
+> #### `Oct 20, 2026`
+- `[10:50]` `ArichiAya` - Debug session - Refactor format for the WHOLE `Frontend` thing, wihtout touching any logic behind it. (need fixing avatars, feat. `tqt195`)
+- `[10:03]` `ArichiAya` - Debug session - `Trainer` Dashboard `Navbar`
 > #### `Oct 17, 2026`
 - `[23:22]` `ArichiAya` - Implement and refine the workflows for `UC9` (Training Plan Builder), `UC10` (Schedule Assignment), `UC11` (Live Session Monitor), `UC12` (Session Evaluation), `UC13` (Health Status Board), and `UC15` (2D Injury Marker).
 > #### `Oct 16, 2026`

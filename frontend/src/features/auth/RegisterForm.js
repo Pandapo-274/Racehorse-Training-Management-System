@@ -1,4 +1,4 @@
-// src/features/auth/RegisterForm.js  (UC1)
+﻿// src/features/auth/RegisterForm.js  (UC1)
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import TextField from "../../components/ui/TextField";
@@ -92,7 +92,7 @@ export default function RegisterForm() {
   if (created) {
     return (
       <div className="register-done" role="status">
-        <h3 className="register-done__title">Welcome to the academy, {created.fullName}</h3>
+        <h3 className="register-done__title">Welcome to the club, {created.fullName}</h3>
         <p className="register-done__text">
           Your username is <strong>{created.username}</strong>. Sign in with it and the password you just chose.
         </p>
@@ -130,7 +130,7 @@ export default function RegisterForm() {
         <span className="register-role__label">Account type</span>
         <div className="register-role__box">
           <strong>Horse Owner</strong>
-          <span>Trainer, veterinarian, groom and manager accounts are issued by the academy manager.</span>
+          <span>Trainer, veterinarian, groom and manager accounts are issued by the club manager.</span>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-// src/features/horse/HorseDetailPage.js
+﻿// src/features/horse/HorseDetailPage.js
 
 // Hồ sơ một con ngựa, ba thẻ: Overview và Pedigree thuộc UC7, Vitals thuộc UC8.
 //
@@ -14,6 +14,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import PedigreeTree from "./PedigreeTree";
+import HorsePhoto from "./HorsePhoto";
 import VitalsPanel from "./VitalsPanel";
 import HorseHealthPanel from "./HorseHealthPanel";
 
@@ -219,6 +220,8 @@ export default function HorseDetailPage() {
       {tab === "overview" && (
         <div className="hz-detail-grid">
           <Card title="Identity">
+            <HorsePhoto horse={horse} className="hz-photo--sm" />
+
             <Row label="Name">
               {horse.horseName}
             </Row>

@@ -1,8 +1,10 @@
 package racehorse.backend.training;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
@@ -11,12 +13,18 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseVitalsRepository;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class TrainingSessionService {
+
+    private static final DateTimeFormatter WHEN =
+            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH);
 
     /** Trạng thái ngựa cho phép tập. */
     private static final Set<String> TRAINABLE = Set.of("ELIGIBLE", "MONITOR");
@@ -25,13 +33,16 @@ public class TrainingSessionService {
     private final HorseRepository horseRepository;
     private final HorseVitalsRepository vitalsRepository;
     private final UserRepository userRepository;
+    private final NotificationService notifications;
 
     public TrainingSessionService(TrainingSessionRepository repository, HorseRepository horseRepository,
-            HorseVitalsRepository vitalsRepository, UserRepository userRepository) {
+            HorseVitalsRepository vitalsRepository, UserRepository userRepository,
+            NotificationService notifications) {
         this.repository = repository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
+        this.notifications = notifications;
     }
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
@@ -70,7 +81,14 @@ public class TrainingSessionService {
         Integer planned = r.plannedDistance() != null ? r.plannedDistance() : ctx.distance();
         int id = repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
         userRepository.writeAudit(user.userId(), "TRAINING_SESSION_ASSIGN", "TRAINING_SESSION", id, "SUCCESS", ip);
-        return getOrThrow(id);
+
+        TrainingSessionResponse created = getOrThrow(id);
+        notifications.notifyUser(created.assignedTo(), new Notice(
+                "TRAINING_SESSION_ASSIGNED",
+                "New training session assigned",
+                created.horseName() + " on " + created.sessionDate().format(WHEN) + ".",
+                Notice.TRAINING_SESSION, id));
+        return created;
     }
 
     /**
@@ -86,8 +104,23 @@ public class TrainingSessionService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Only a SCHEDULED session can be started (currently " + s.status() + ")");
         }
+        /* Giáo án phải còn ACTIVE. create() và reschedule() đều đã kiểm điều
+           này; chỉ start() bỏ qua, nên tạm dừng một giáo án không dừng được
+           những buổi đã lên lịch của nó - Groom vẫn bấm Start được và buổi tập
+           vẫn chạy như không có gì xảy ra. Đó là đúng cái việc mà nút Pause
+           sinh ra để làm. */
+        TrainingSessionRepository.PhaseContext ctx = repository.findPhaseContext(s.phaseId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
+                        "Training phase of this session not found"));
+        if (!"ACTIVE".equals(ctx.planStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Training plan is not active (current status: " + ctx.planStatus() + ")");
+        }
         checkHorseCanTrain(s.horseId());
-        repository.markRunning(sessionId);
+        if (repository.markRunning(sessionId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just been started by someone else");
+        }
         userRepository.writeAudit(user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS",
                 ip);
         return getOrThrow(sessionId);
@@ -100,9 +133,17 @@ public class TrainingSessionService {
     }
 
     public List<TrainingSessionResponse> list(Integer horseId, String status, AuthenticatedUser user) {
-        // Groom chỉ thấy buổi tập của mình; các role khác thấy toàn bộ.
+        /* Groom chỉ thấy buổi tập được giao cho mình; chủ ngựa chỉ thấy buổi
+           tập của ngựa mình; các vai trò còn lại thấy toàn bộ.
+
+           Hai bộ lọc này loại trừ nhau trên thực tế (một người không thể vừa
+           là GROOM vừa là HORSE_OWNER) nhưng vẫn truyền cả hai xuống
+           repository thay vì viết if/else trả về hai câu khác nhau: nếu sau
+           này có vai trò kép, cả hai điều kiện cùng áp và kết quả vẫn đúng
+           theo nghĩa hẹp nhất. */
         Integer assignedTo = "GROOM".equals(user.role()) ? user.userId() : null;
-        return repository.findAll(horseId, status, assignedTo);
+        Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
+        return repository.findAll(horseId, status, assignedTo, ownerId);
     }
     
 /**
@@ -203,8 +244,33 @@ public TrainingSessionResponse reschedule(
             "SUCCESS",
             ip);
 
-    // 11. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
-    return getOrThrow(sessionId);
+    // 11. Báo cho Groom. Đổi người phụ trách thì người cũ cũng phải biết
+    // mình không còn buổi này nữa, nếu không họ vẫn ra chuồng đúng giờ cũ.
+    TrainingSessionResponse updatedSession = getOrThrow(sessionId);
+    String when = updatedSession.sessionDate().format(WHEN);
+
+    if (current.assignedTo() != updatedSession.assignedTo()) {
+        notifications.notifyUser(current.assignedTo(), new Notice(
+                "TRAINING_SESSION_UNASSIGNED",
+                "Training session reassigned",
+                updatedSession.horseName() + " is now handled by "
+                        + updatedSession.assignedToName() + ".",
+                null, null));
+        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                "TRAINING_SESSION_ASSIGNED",
+                "New training session assigned",
+                updatedSession.horseName() + " on " + when + ".",
+                Notice.TRAINING_SESSION, sessionId));
+    } else {
+        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                "TRAINING_SESSION_RESCHEDULED",
+                "Training session rescheduled",
+                updatedSession.horseName() + " moved to " + when + ".",
+                Notice.TRAINING_SESSION, sessionId));
+    }
+
+    // 12. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
+    return updatedSession;
 }
 
     // ---------- helper ----------
@@ -214,16 +280,41 @@ public TrainingSessionResponse reschedule(
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Session #" + sessionId + " not found"));
     }
 
-    /** Groom chỉ thao tác trên buổi tập của chính mình. */
+    /**
+     * Groom chỉ thao tác trên buổi tập của chính mình; chủ ngựa chỉ xem được
+     * buổi tập của ngựa mình.
+     *
+     * Phép kiểm chủ ngựa phải có ở ĐÂY, không chỉ ở list(). Thêm HORSE_OWNER
+     * vào @RequireRole của controller mà chỉ lọc ở danh sách thì GET
+     * /api/training-sessions/{id} vẫn trả về buổi tập của bất kỳ con ngựa nào
+     * - chỉ cần đoán số id. Mở quyền xem mà quên chỗ này là biến một lỗi thiếu
+     * quyền thành một lỗ lộ dữ liệu.
+     */
     private void checkCanAct(TrainingSessionResponse s, AuthenticatedUser user) {
         if ("GROOM".equals(user.role()) && s.assignedTo() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This session is not assigned to you");
+        }
+        if ("HORSE_OWNER".equals(user.role())) {
+            HorseResponse horse = horseRepository.findById(s.horseId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this session not found"));
+            if (horse.ownerId() != user.userId()) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This session belongs to another owner's horse");
+            }
         }
     }
 
     private void checkHorseCanTrain(int horseId) {
         HorseResponse horse = horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this phase not found"));
+        /* Hồ sơ PEDIGREE không phải ngựa của học viện nên không giao buổi tập.
+           Phép kiểm nằm ở đây, trong checkHorseCanTrain, chứ không rải ra ba
+           chỗ gọi: create(), start() và reschedule() đều đi qua hàm này, nên
+           đặt một lần là cả ba đường đều được bảo vệ - và đường thứ tư, nếu
+           sau này có, cũng vậy. */
+        String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
+        if (typeProblem != null) {
+            throw new ApiException(HttpStatus.CONFLICT, typeProblem);
+        }
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Horse status is " + horse.status() + ", cannot train");

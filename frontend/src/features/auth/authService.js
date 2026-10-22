@@ -1,4 +1,4 @@
-// src/features/auth/authService.js
+﻿// src/features/auth/authService.js
 // Toàn bộ việc nói chuyện với /api/auth/* và quản lý phiên đăng nhập nằm ở đây.
 // Các feature khác (trainer, manager, vet, ...) chỉ import authFetch / getUser /
 // logout / handleAuthError từ file này, không tự đụng vào localStorage.

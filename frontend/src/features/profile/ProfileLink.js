@@ -1,4 +1,4 @@
-// src/features/profile/ProfileLink.js
+﻿// src/features/profile/ProfileLink.js
 // Hai lối vào màn hồ sơ, dùng chung cho cả năm dashboard và HorseShell:
 // vòng tròn ở góc phải trên, và khối tên ở đáy thanh bên.
 //

@@ -14,6 +14,8 @@ import racehorse.backend.auth.UserRepository;
 import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseService;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class HorseRequestService {
@@ -21,12 +23,14 @@ public class HorseRequestService {
     private final HorseRequestRepository requests;
     private final HorseService horseService;
     private final UserRepository users;
+    private final NotificationService notifications;
 
     public HorseRequestService(HorseRequestRepository requests, HorseService horseService,
-                               UserRepository users) {
+                               UserRepository users, NotificationService notifications) {
         this.requests = requests;
         this.horseService = horseService;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /* ------------------------------------------------------------------ *
@@ -61,7 +65,14 @@ public class HorseRequestService {
 
         int id = requests.insert(me.userId(), clean);
         users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
-        return getOrThrow(id);
+
+        HorseRequestRow saved = getOrThrow(id);
+        notifications.notifyRole("CLUB_MANAGER", me, new Notice(
+                "HORSE_REQUEST_SUBMITTED",
+                "New horse registration request",
+                saved.ownerName() + " asked to register " + saved.horseName() + ".",
+                Notice.HORSE_REQUEST, id));
+        return saved;
     }
 
     /* ------------------------------------------------------------------ *
@@ -99,7 +110,7 @@ public class HorseRequestService {
         if (code == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "A registration code is required to approve",
-                    Map.of("registrationCode", "Enter the code the academy assigns"));
+                    Map.of("registrationCode", "Enter the code the club assigns"));
         }
 
         // Ngựa ACADEMY bắt buộc có chuồng ngay lúc duyệt: mã đăng ký và chuồng
@@ -109,7 +120,7 @@ public class HorseRequestService {
         String stall = pedigreeOnly ? null : blankToNull(review.stallNo());
         if (!pedigreeOnly && stall == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "A stall is required to approve an academy horse",
+                    "A stall is required to approve a club horse",
                     Map.of("stallNo", "Assign a stall"));
         }
 
@@ -138,13 +149,22 @@ public class HorseRequestService {
 
         users.writeAudit(me.userId(), "HORSE_REQUEST_APPROVE", "HORSE_REQUEST",
                 requestId, "SUCCESS", ip);
+
+        // Trỏ thẳng tới con ngựa vừa tạo: việc tiếp theo chủ ngựa muốn làm là
+        // mở hồ sơ của nó, không phải xem lại tờ yêu cầu.
+        notifications.notifyUser(req.ownerId(), new Notice(
+                "HORSE_REQUEST_APPROVED",
+                "Horse registration approved",
+                req.horseName() + " is now registered with the club.",
+                Notice.HORSE, created.horseId()));
         return getOrThrow(requestId);
     }
 
     @Transactional
     public HorseRequestRow reject(int requestId, ReviewRequest review,
                                   AuthenticatedUser me, String ip) {
-        requirePending(getOrThrow(requestId));
+        HorseRequestRow req = getOrThrow(requestId);
+        requirePending(req);
 
         String note = review == null ? null : blankToNull(review.note());
         if (note == null) {
@@ -162,6 +182,14 @@ public class HorseRequestService {
 
         users.writeAudit(me.userId(), "HORSE_REQUEST_REJECT", "HORSE_REQUEST",
                 requestId, "SUCCESS", ip);
+
+        // Kèm lý do ngay trong thông báo, để chủ ngựa biết phải sửa gì mà
+        // không phải mở thêm trang nào.
+        notifications.notifyUser(req.ownerId(), new Notice(
+                "HORSE_REQUEST_REJECTED",
+                "Horse registration declined",
+                req.horseName() + ": " + note,
+                Notice.HORSE_REQUEST, requestId));
         return getOrThrow(requestId);
     }
 

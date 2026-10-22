@@ -1,4 +1,4 @@
-// src/features/horse/horseRequestApi.js
+﻿// src/features/horse/horseRequestApi.js
 // Yêu cầu đăng ký ngựa - đường để chủ ngựa nói với học viện rằng mình có ngựa
 // muốn gửi.
 //
@@ -55,7 +55,7 @@ export function rejectRequest(id, note) {
  * ------------------------------------------------------------------ */
 
 const STATUS = {
-  PENDING:  { label: "Waiting for the academy", tone: "warning" },
+  PENDING:  { label: "Waiting for the club", tone: "warning" },
   APPROVED: { label: "Approved", tone: "good" },
   REJECTED: { label: "Turned down", tone: "critical" },
 };

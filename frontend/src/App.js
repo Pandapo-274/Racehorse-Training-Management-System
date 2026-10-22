@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
-import ManagerDashboard from "./features/manager/ManagerDashboard"
-import TrainerDashboard from "./features/trainer/TrainerDashboard"
+import ManagerDashboard from "./features/manager/ManagerDashboard";
+import StaffPage from "./features/manager/StaffPage";
+import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
 import VetDashboard from "./features/vet/VetDashboard";
@@ -24,7 +25,7 @@ import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
 import ResetPasswordPage from "./features/password/ResetPasswordPage";
 import LiveSessionMonitorPage from "./features/trainer/LiveSessionMonitorPage";
-import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage"
+import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage";
 
 /* UC4 - mọi vai trò đều có hồ sơ của mình, nên liệt kê cả năm thay vì thêm một
    loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
@@ -63,7 +64,11 @@ export default function App() {
         <Route path="/change-password" element={<RoleRoute roles={EVERY_ROLE}><ChangePasswordPage /></RoleRoute>} />
 
         {/* Club Manager */}
-        <Route path="/manager" element={<ManagerDashboard/>} />
+        <Route path="/manager" element={<ManagerDashboard />} />
+          {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
+        <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
+        <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
+        <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
         <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
@@ -73,24 +78,16 @@ export default function App() {
         {/* Veterinarian */}
         <Route path="/veterinarian" element={<VetDashboard />} />
         {/* Groom */}
-        <Route path="/groom" element={<GroomDashboard/>} />
+        <Route path="/groom" element={<GroomDashboard />} />
         {/* Horse Owner */}
-        <Route path="/horse-owner" element={<HorseOwnerDashboard/>} />
+        <Route path="/horse-owner" element={<HorseOwnerDashboard />} />
 
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
-        {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
-        <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
-        <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
+      
 
         <Route path="/trainer/horses" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseListPage /></RoleRoute>} />
-        <Route path="/trainer/horse-requests" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseReviewPage /></RoleRoute>} />
         <Route path="/trainer/horses/:id" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseDetailPage /></RoleRoute>} />
-
-        {/* Hai mục trên sidebar của Head Trainer. Thiếu hai route này thì navigate()
-            rơi vào path="*" ở cuối và bị đá về /login. */}
-        <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
-        <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
 
         <Route path="/veterinarian/horses" element={<RoleRoute roles={["VETERINARIAN"]}><HorseListPage /></RoleRoute>} />
         <Route path="/veterinarian/horses/:id" element={<RoleRoute roles={["VETERINARIAN"]}><HorseDetailPage /></RoleRoute>} />

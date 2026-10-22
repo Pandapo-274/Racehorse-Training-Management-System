@@ -29,7 +29,7 @@ public final class HorsePolicy {
     /** Từ FOAL_BELOW đến tuổi này là tuổi đua (Racing). Trên đó là Retired. */
     public static final int RACING_MAX_AGE = 10;
     /** Trên tuổi này không nhận vào học viện, chỉ nhận làm hồ sơ PEDIGREE. */
-    public static final int ACADEMY_MAX_AGE = 25;
+    public static final int CLUB_MAX_AGE = 25;
 
     private HorsePolicy() {}
 
@@ -47,15 +47,35 @@ public final class HorsePolicy {
      * @return thông báo lỗi để gắn vào ô ngày sinh, hoặc null nếu hợp lệ.
      *         Loại PEDIGREE luôn hợp lệ (ngựa nào cũng có thể là tổ tiên).
      */
+    /**
+     * Hồ sơ PEDIGREE có được vào giáo án / buổi tập không.
+     *
+     * Luật này đã được phát biểu trong phần chú thích đầu lớp ngay từ V6
+     * ("không vào giáo án hay thi đấu"), nhưng package training chưa bao giờ
+     * hỏi đến, nên trên thực tế một hồ sơ tổ tiên 25 tuổi vẫn xếp được giáo án
+     * và vẫn giao được buổi tập. Đặt phép kiểm ở đây thay vì rải
+     * PEDIGREE.equals(...) khắp nơi: lớp này là nơi luật về loại hồ sơ sống,
+     * và đổi luật thì chỉ sửa một chỗ.
+     *
+     * @return thông báo lỗi, hoặc null nếu con ngựa được phép tập.
+     */
+    public static String trainingProblem(String recordType) {
+        if (PEDIGREE.equals(normalizeType(recordType))) {
+            return "This is a pedigree-only record, not a club horse. "
+                    + "It cannot be put on a training plan or a training session.";
+        }
+        return null;
+    }
+
     public static String ageProblem(String recordType, LocalDate dateOfBirth) {
         if (!ACADEMY.equals(normalizeType(recordType))) return null;
         if (dateOfBirth == null) {
-            return "Date of birth is required for an academy horse";
+            return "Date of birth is required for a club horse";
         }
         int age = ageOf(dateOfBirth);
-        if (age > ACADEMY_MAX_AGE) {
-            return "This horse is " + age + " years old, above the academy limit of "
-                    + ACADEMY_MAX_AGE + ". Register it as a pedigree record instead.";
+        if (age > CLUB_MAX_AGE) {
+            return "This horse is " + age + " years old, above the club limit of "
+                    + CLUB_MAX_AGE + ". Register it as a pedigree record instead.";
         }
         return null;
     }

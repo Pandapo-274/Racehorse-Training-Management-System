@@ -56,8 +56,16 @@ public class TrainingLockController {
         return service.release(id, user, http.getRemoteAddr());
     }
 
-    /** Màn quản lý: mọi lệnh đang hiệu lực, FULL lên trước, lệnh cũ lên trước. */
+    /**
+     * Màn quản lý: mọi lệnh đang hiệu lực, FULL lên trước, lệnh cũ lên trước.
+     *
+     * KHÔNG mở cho HORSE_OWNER. Danh sách này là toàn chuồng và mỗi dòng mang
+     * theo lý do khoá - tức là tình trạng chấn thương của ngựa người khác.
+     * Chủ ngựa xem lệnh khoá của ngựa mình qua GET /api/training-locks?horseId=N,
+     * nơi listForHorse có phép kiểm quyền sở hữu.
+     */
     @GetMapping("/active")
+    @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "CLUB_MANAGER", "GROOM"})
     public List<TrainingLockRow> active() {
         return service.listActive();
     }

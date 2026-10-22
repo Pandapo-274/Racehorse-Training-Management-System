@@ -1,4 +1,4 @@
-// src/features/auth/LoginPage.js
+﻿// src/features/auth/LoginPage.js
 import { Link, useNavigate } from "react-router-dom";
 import BrandPanel from "./BrandPanel";
 import LoginForm from "./LoginForm";
@@ -25,7 +25,7 @@ export default function LoginPage() {
           <h2 className="login-card__title">Sign in</h2>
 
           <p className="login-card__hint">
-            Accounts are issued by role within the academy.
+            Accounts are issued by role within the club.
           </p>
 
           <LoginForm />

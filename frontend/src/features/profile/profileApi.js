@@ -1,4 +1,4 @@
-// src/features/profile/profileApi.js
+﻿// src/features/profile/profileApi.js
 // UC4 - Profile.
 //
 // Ba endpoint, nhưng chỉ hai cái đi qua authFetch được.
@@ -134,7 +134,7 @@ export function toRoleLabel(role) {
 /** ACTIVE / SUSPENDED - hai giá trị CK_USER_status cho phép. */
 export function toAccountStatus(status) {
   return status === "SUSPENDED"
-    ? { label: "Suspended", tone: "critical", hint: "Ask the academy manager to restore it" }
+    ? { label: "Suspended", tone: "critical", hint: "Ask the club manager to restore it" }
     : { label: "Active", tone: "good", hint: "" };
 }
 

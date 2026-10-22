@@ -1,5 +1,35 @@
 /* =========================================================
-   TENMA ACADEMY - LANDING PAGE
+   LOGO
+========================================================= */
+
+/* Logo trang chủ: ảnh gốc 256px, để ≤ 160px thì còn nét trên màn hình thường
+   và vừa đủ nét trên màn hình có tỉ lệ 2x. */
+.landing-logo {
+  display: block;
+  width: 132px;
+  height: 132px;
+  object-fit: contain;
+  margin-bottom: 25px;
+  filter: drop-shadow(0 6px 22px rgba(245, 95, 169, 0.35));
+}
+
+/* Logo nhỏ ở chân trang */
+.footer-brand .landing-logo {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  filter: none;
+}
+
+@media (max-width: 920px) {
+  .landing-logo {
+    width: 96px;
+    height: 96px;
+  }
+}
+
+/* =========================================================
+   TRACEN CLUB - LANDING PAGE
 ========================================================= */
 
 .landing-page {

@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseVitalsRepository;
@@ -67,17 +68,66 @@ public class TrainingPlanService {
         if ("ACTIVE".equals(newStatus)) {
             checkCanActivate(plan);
         }
-        planRepository.updateStatus(planId, newStatus);
+        /* Truyền plan.status() làm trạng thái mong đợi: nếu giữa lúc đọc và
+           lúc ghi có người khác đổi, câu UPDATE không trúng dòng nào và cả
+           giao dịch bị huỷ, thay vì hai yêu cầu cùng thắng và kết quả tuỳ thứ
+           tự ghi. */
+        if (planRepository.updateStatus(planId, plan.status(), newStatus) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Someone else has just changed this plan's status");
+        }
+
+        /* COMPLETED là điểm cuối (xem TRANSITIONS), nên những buổi tập còn
+           SCHEDULED của giáo án này sẽ không bao giờ chạy được nữa. Để nguyên
+           thì lịch của Groom vẫn hiện việc đã chết, và không ai biết vì sao
+           bấm Start lại báo lỗi.
+
+           PAUSED thì CỐ Ý không huỷ. Tạm dừng là tạm thời - huỷ buổi tập lúc
+           này là phá đúng cái lịch mà người dùng muốn lấy lại khi chạy tiếp.
+           Trường hợp PAUSED do start() chặn: nó kiểm trạng thái giáo án nên
+           buổi tập vẫn còn đó mà không chạy được, đúng như mong đợi.
+
+           Hai lỗi này hay bị gộp thành một, nhưng chúng khác nhau: một là lỗ
+           hổng CƯỠNG CHẾ (buổi tập có được bắt đầu không), một là lỗ hổng
+           TRẠNG THÁI (lịch còn hiện việc sẽ không bao giờ xảy ra). Sửa một
+           cái vẫn để lại cái kia. */
+        int cancelled = 0;
+        if ("COMPLETED".equals(newStatus)) {
+            cancelled = planRepository.cancelRemainingSessions(planId);
+        }
+
         userRepository.writeAudit(user.userId(), "TRAINING_PLAN_" + newStatus, "TRAINING_PLAN", planId, "SUCCESS", ip);
+        if (cancelled > 0) {
+            userRepository.writeAudit(user.userId(), "TRAINING_SESSION_CANCEL_BULK",
+                    "TRAINING_PLAN", planId, "SUCCESS", ip);
+        }
         return getOrThrow(planId);
     }
 
-    public TrainingPlanResponse get(int planId) {
-        return getOrThrow(planId);
+    /**
+     * Đọc một giáo án, có kiểm quyền.
+     *
+     * Nhận AuthenticatedUser chứ không chỉ planId: mở @RequireRole cho
+     * HORSE_OWNER mà chỉ lọc ở list() thì GET /api/training-plans/{id} vẫn
+     * trả về giáo án của bất kỳ con ngựa nào, chỉ cần đoán số id.
+     */
+    public TrainingPlanResponse get(int planId, AuthenticatedUser user) {
+        TrainingPlanResponse plan = getOrThrow(planId);
+        if ("HORSE_OWNER".equals(user.role())) {
+            HorseResponse horse = horseRepository.findById(plan.horseId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
+            if (horse.ownerId() != user.userId()) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This plan belongs to another owner's horse");
+            }
+        }
+        return plan;
     }
 
-    public List<TrainingPlanResponse.Summary> list(Integer horseId, String status) {
-        return planRepository.findSummaries(horseId, status);
+    public List<TrainingPlanResponse.Summary> list(Integer horseId, String status,
+                                                   AuthenticatedUser user) {
+        // Chủ ngựa chỉ thấy giáo án của ngựa mình; lọc trong SQL.
+        Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
+        return planRepository.findSummaries(horseId, status, ownerId);
     }
 
     // ---------- helper ----------
@@ -90,6 +140,14 @@ public class TrainingPlanService {
     private void checkCanActivate(TrainingPlanResponse plan) {
         HorseResponse horse = horseRepository.findById(plan.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
+        /* Kiểm lại loại hồ sơ ở đây, không chỉ ở validate() lúc tạo: loại hồ
+           sơ của một con ngựa có thể bị đổi sang PEDIGREE sau khi giáo án đã
+           được tạo ở trạng thái DRAFT. Kiểm một lần lúc tạo là tin rằng dữ
+           liệu không đổi giữa lúc tạo và lúc kích hoạt. */
+        String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
+        if (typeProblem != null) {
+            throw new ApiException(HttpStatus.CONFLICT, typeProblem);
+        }
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Horse status is " + horse.status() + ", cannot start training yet");
@@ -106,11 +164,30 @@ public class TrainingPlanService {
     private void validate(TrainingPlanRequest r) {
         Map<String, String> errors = new LinkedHashMap<>();
 
-        if (!horseRepository.existsById(r.horseId())) {
+        /* findById thay cho existsById: cần chính con ngựa để đọc recordType,
+           chứ không chỉ cần biết nó có tồn tại. */
+        HorseResponse horse = horseRepository.findById(r.horseId()).orElse(null);
+        if (horse == null) {
             errors.put("horseId", "Horse does not exist");
+        } else {
+            /* Hồ sơ PEDIGREE là bản ghi tham chiếu để làm cha mẹ trong phả hệ,
+               không phải ngựa của học viện - HorsePolicy đã nói thế từ V6.
+               Không kiểm ở đây thì một hồ sơ tổ tiên 25 tuổi, không chuồng,
+               vẫn xếp được giáo án. Frontend có ẩn chúng đi, nhưng đó chỉ là
+               lớp che: API vẫn nhận. */
+            String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
+            if (typeProblem != null) {
+                errors.put("horseId", typeProblem);
+            }
         }
         if (r.endDate().isBefore(r.startDate())) {
             errors.put("endDate", "End date must be on or after start date");
+        }
+        /* Giáo án là kế hoạch cho tương lai; ngày bắt đầu đã qua nghĩa là các
+           buổi tập của nó không bao giờ xếp được (TrainingSessionService chặn
+           buổi tập trong quá khứ), nên giáo án sinh ra là đã chết. */
+        if (r.startDate().isBefore(LocalDate.now())) {
+            errors.put("startDate", "Start date cannot be in the past");
         }
 
         LocalDate prevEnd = null;

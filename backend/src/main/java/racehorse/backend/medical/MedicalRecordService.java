@@ -13,6 +13,8 @@ import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class MedicalRecordService {
@@ -22,12 +24,14 @@ public class MedicalRecordService {
     private final MedicalRecordRepository records;
     private final HorseRepository horses;
     private final UserRepository users;
+    private final NotificationService notifications;
 
     public MedicalRecordService(MedicalRecordRepository records, HorseRepository horses,
-                                UserRepository users) {
+                                UserRepository users, NotificationService notifications) {
         this.records = records;
         this.horses = horses;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /**
@@ -65,6 +69,17 @@ public class MedicalRecordService {
         }
 
         users.writeAudit(vet.userId(), "MEDICAL_EXAM", "MEDICAL_RECORD", recordId, "SUCCESS", ip);
+
+        /* Chỉ báo khi tình trạng thật sự đổi. Một lần khám định kỳ giữ nguyên
+           tình trạng thì không phải tin gì mới, và chuông kêu cho mọi lần khám
+           sẽ dạy người ta bỏ qua chuông. */
+        if (raw.healthStatus() != null && !raw.healthStatus().equals(horse.status())) {
+            notifications.notifyHorseWatchers(horse.ownerId(), vet, new Notice(
+                    "HEALTH_STATUS_CHANGED",
+                    "Health status changed",
+                    horse.horseName() + ": " + horse.status() + " to " + raw.healthStatus() + ".",
+                    Notice.HORSE, horse.horseId()));
+        }
 
         return records.findById(recordId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,

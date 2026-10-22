@@ -1,4 +1,4 @@
-// src/components/ui/EyeIcon.js
+﻿// src/components/ui/EyeIcon.js
 // Con mắt cho nút hiện/ẩn mật khẩu. `off` = mắt gạch chéo (mật khẩu đang hiện,
 // bấm để ẩn). Dùng currentColor để màu đổi theo CSS của nút.
 export default function EyeIcon({ off = false }) {

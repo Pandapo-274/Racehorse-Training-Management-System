@@ -1,4 +1,4 @@
-// src/features/auth/BrandPanel.js
+﻿// src/features/auth/BrandPanel.js
 
 const STATS = [
   { value: 48, label: "Horses", color: "var(--pink-500)" },
@@ -9,8 +9,8 @@ const STATS = [
 export default function BrandPanel() {
   return (
     <aside className="brand">
-      <img src="/logo.svg" alt="Tenma Academy" className="brand__logo" />
-      <h1 className="brand__title">TENMA ACADEMY</h1>
+      <img src="/logo.png" alt="Tracen Club" className="brand__logo" />
+      <h1 className="brand__title">TRACEN CLUB</h1>
       <div className="brand__rule" />
       <p className="brand__sub">Racehorse training management system</p>
 

@@ -1,5 +1,4 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import "./landing.css";
 
 const flows = [
@@ -30,7 +29,7 @@ const flows = [
 ];
 function Crest() {
   return (
-    <img className="landing-logo" src="/logo.svg" alt="Tenma Racing Club" />
+    <img className="landing-logo" src="/logo.png" alt="Tracen Racing Club" />
   );
 }
 
@@ -38,7 +37,7 @@ function SpeedLines() {
   return <div className="landing-speed-lines"></div>;
 }
 
-function LandingPage() {
+export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
@@ -58,7 +57,7 @@ function LandingPage() {
 
           <div className="hero-kicker">RACING CLUB · ESTABLISHED 1998</div>
 
-          <h1>TENMA</h1>
+          <h1>TRACEN</h1>
 
           <div className="hero-tagline">Every stride, on the record</div>
 
@@ -72,6 +71,7 @@ function LandingPage() {
 
           <div className="hero-buttons">
             <button
+              type="button"
               className="landing-btn landing-btn-primary"
               onClick={() => navigate("/login")}
             >
@@ -79,6 +79,7 @@ function LandingPage() {
             </button>
 
             <button
+              type="button"
               className="landing-btn landing-btn-secondary"
               onClick={() => navigate("/register")}
             >
@@ -163,7 +164,7 @@ function LandingPage() {
           <div className="footer-brand">
             <Crest />
 
-            <span>Tenma Club · Racehorse Training & Management System </span>
+            <span>Tracen Club · Racehorse Training & Management System </span>
           </div>
 
           
@@ -172,5 +173,3 @@ function LandingPage() {
     </div>
   );
 }
-
-export default LandingPage;

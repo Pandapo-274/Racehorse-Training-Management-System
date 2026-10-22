@@ -1,4 +1,4 @@
-// src/features/horse/HorseShell.js
+﻿// src/features/horse/HorseShell.js
 // Khung chung cho ba màn của UC7/UC8: thanh bên, thanh tiêu đề, vùng nội dung.
 //
 // Vì sao không dùng lại .trainer-sidebar trong trainer.css: file đó dài 660
@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUser, logout } from "../auth/authService";
 import { ProfileCard } from "../profile/ProfileLink";
-import { getHorseBasePath, canReviewRequests, getRequestsPath } from "./horseApi";
+import NavItems from "../navigation/NavItems";
+import { canReviewRequests } from "./horseApi";
 import { listRequests } from "./horseRequestApi";
 import "./horse.css";
 
@@ -19,14 +20,6 @@ const ROLE_LABEL = {
   VETERINARIAN: "Veterinarian",
   GROOM: "Groom",
   HORSE_OWNER: "Horse Owner",
-};
-
-const HOME_BY_ROLE = {
-  CLUB_MANAGER: "/manager",
-  HEAD_TRAINER: "/trainer",
-  VETERINARIAN: "/veterinarian",
-  GROOM: "/groom",
-  HORSE_OWNER: "/horse-owner",
 };
 
 /* Biểu tượng móng ngựa - cùng kiểu với sidebar màn Herd progress */
@@ -50,18 +43,13 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   const user = getUser();
 
   const role = ROLE_LABEL[user?.role] || "—";
-  const home = HOME_BY_ROLE[user?.role] || "/login";
-  const horseBase = getHorseBasePath(user);
 
   const handleSignOut = () => {
     logout();
     navigate("/login", { replace: true });
   };
 
-  const onHorses = location.pathname.startsWith(horseBase);
   const mayReview = canReviewRequests(user);
-  const requestsPath = getRequestsPath(user);
-  const onRequests = location.pathname.startsWith(requestsPath);
 
   // Số yêu cầu đang chờ, dán lên menu để Manager biết có việc cần duyệt.
   const [pending, setPending] = useState(0);
@@ -78,10 +66,10 @@ export default function HorseShell({ title, subtitle, actions, children }) {
     <div className="hz-page">
       <aside className="hz-sidebar">
         <div className="hz-brand">
-          <img src="/logo.svg" alt="" />
+          <img src="/logo.png" alt="" />
           <div>
-            <strong>TENMA</strong>
-            <span>Racing Academy</span>
+            <strong>TRACEN</strong>
+            <span>Racing Club</span>
           </div>
         </div>
 
@@ -90,34 +78,16 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         </div>
 
         <nav className="hz-nav">
-          <button className="hz-nav-item" onClick={() => navigate(home)}>
-            <HorseshoeIcon />
-            Dashboard
-          </button>
-
-          <button
-            className={`hz-nav-item${onHorses ? " active" : ""}`}
-            aria-current={onHorses ? "page" : undefined}
-            onClick={() => navigate(horseBase)}
-          >
-            <HorseshoeIcon />
-            Horses
-          </button>
-
-          {mayReview && (
-            <button
-              className={`hz-nav-item${onRequests ? " active" : ""}`}
-              aria-current={onRequests ? "page" : undefined}
-              onClick={() => navigate(requestsPath)}
-            >
-              <HorseshoeIcon />
-              Registrations{pending > 0 ? ` (${pending})` : ""}
-            </button>
-          )}
+          <NavItems
+            role={user?.role}
+            prefix="hz"
+            icon={<HorseshoeIcon />}
+            badges={{ registrations: pending }}
+          />
         </nav>
 
         <div className="hz-sidebar-bottom">
-          <button className="hz-signout" onClick={handleSignOut}>
+          <button type="button" className="hz-signout" onClick={handleSignOut}>
             Sign out
           </button>
 

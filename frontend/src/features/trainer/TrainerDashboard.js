@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import "./trainer.css";
 import "./trainer-data.css";
@@ -13,6 +14,7 @@ import {
 } from "./dashboardApi";
 import { getUser, logout, handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 
 // UC6 - View Master Fitness & Training Dashboard
 //
@@ -51,15 +53,14 @@ function HorseshoeIcon() {
 }
 
 function TrainerSidebar({ user, onSignOut }) {
-  const navigate = useNavigate();
 
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.svg" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <strong>TRACEN</strong>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -68,60 +69,7 @@ function TrainerSidebar({ user, onSignOut }) {
       </div>
 
       <nav className="trainer-nav">
-        <button type="button" className="trainer-nav-item active">
-          <HorseshoeIcon />
-          Herd progress
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/horses")}
-        >
-          <HorseshoeIcon />
-          Horses
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/training-plans")}
-        >
-          <HorseshoeIcon />
-          Training plans
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/schedule")}
-        >
-          <HorseshoeIcon />
-          Schedule
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/live-session")}
-        >
-          <HorseshoeIcon />
-          Live session
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/session-review")}
-        >
-          <HorseshoeIcon />
-          Session review
-        </button>
-
-        <button type="button" className="trainer-nav-item">
-          <HorseshoeIcon />
-          Races
-        </button>
+        <NavItems role="HEAD_TRAINER" prefix="trainer" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="trainer-sidebar-bottom">
@@ -485,15 +433,7 @@ export default function TrainerDashboard() {
               aria-label="Search horses and training records"
             />
 
-            <button
-              type="button"
-              className="trainer-notification"
-              onClick={scrollToAlerts}
-              title="Jump to open alerts"
-              aria-label="Jump to open alerts"
-            >
-              <span className="trainer-notification-dot" />
-            </button>
+            <NotificationBell className="trainer-notification" />
 
             <ProfileCircle className="trainer-profile" />
           </div>

@@ -17,7 +17,20 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                // Cửa công khai. db-test để tạm cho team debug, nhớ khoá lại trước khi nộp.
+                /* Cửa công khai - chỉ bốn đường này, và cả bốn đều BUỘC phải
+                   công khai: không đăng nhập được thì không thể đăng nhập.
+
+                   /api/hello và /api/db-test đã bị bỏ khỏi danh sách cùng lúc
+                   với hai controller của chúng. /api/db-test là đáng kể: nó
+                   mở kết nối database rồi trả về tên database và toàn bộ bảng
+                   ROLE cho BẤT KỲ AI gọi tới, không cần token - vì nó nằm
+                   trong chính danh sách này. Chú thích cũ ở đây có ghi "nhớ
+                   khoá lại trước khi nộp"; một lời nhắc trong chú thích không
+                   phải một phép kiểm, và nó đã nằm đó qua nhiều sprint.
+
+                   Thêm đường nào vào danh sách này là mở một cửa không cần
+                   token, nên mỗi dòng phải trả lời được: tại sao người chưa
+                   đăng nhập cần gọi nó? */
                 .excludePathPatterns("/api/auth/login", "/api/auth/register",
                         "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/google",
                         "/api/hello", "/api/db-test");

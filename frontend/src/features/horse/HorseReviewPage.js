@@ -1,4 +1,4 @@
-// src/features/horse/HorseReviewPage.js
+﻿// src/features/horse/HorseReviewPage.js
 // Club Manager (và Head Trainer) duyệt yêu cầu đăng ký ngựa do chủ ngựa gửi.
 //
 // Duyệt = cấp mã đăng ký + chuồng, rồi backend tạo hồ sơ ngựa. Hai thứ này sau
@@ -44,7 +44,7 @@ function PendingRow({ row, onDone }) {
 
   const approve = () => {
     const e = {};
-    if (!code.trim()) e.registrationCode = "Enter the code the academy assigns";
+    if (!code.trim()) e.registrationCode = "Enter the code the club assigns";
     if (!pedigreeOnly && !stall.trim()) e.stallNo = "Assign a stall";
     setErrors(e);
     if (Object.keys(e).length > 0) return;

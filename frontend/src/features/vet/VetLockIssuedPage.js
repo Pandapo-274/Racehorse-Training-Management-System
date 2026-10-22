@@ -1,4 +1,4 @@
-// src/features/vet/VetLockIssuedPage.js
+﻿// src/features/vet/VetLockIssuedPage.js
 // Màn 18 - Training lock issued.
 //
 // Mở ngay sau khi ra lệnh nên nhận kết quả qua location.state; nếu tải lại

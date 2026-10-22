@@ -200,6 +200,18 @@ public class HorseService {
             if (parent.horseGender() != null && !allowedGenders.contains(parent.horseGender())) {
                 errors.put(field, label + " có giới tính không phù hợp");
             }
+            /* Chặn vòng lặp phả hệ. Phép kiểm parentId == selfId ở trên chỉ bắt
+               được vòng dài một bước (tự làm cha mình); vòng dài hai bước -
+               A là cha của B trong khi B đã là cha của A - vẫn lọt, và kết quả
+               là cây phả hệ hiện một con ngựa làm ông của chính nó.
+
+               selfId = 0 khi đang TẠO ngựa mới: con ngựa chưa tồn tại nên
+               chưa thể là tổ tiên của ai, bỏ qua luôn khỏi phải hỏi database. */
+            if (selfId > 0 && horseRepository.isAncestorOf(selfId, parentId)) {
+                errors.put(field, label + " không hợp lệ: con ngựa này đã là tổ tiên của "
+                        + (parent.horseName() == null ? "con ngựa đó" : parent.horseName())
+                        + ", gán như vậy sẽ tạo vòng lặp trong phả hệ");
+            }
         }, () -> errors.put(field, label + " không tồn tại"));
     }
 }
