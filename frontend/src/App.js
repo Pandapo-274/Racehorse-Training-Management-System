@@ -2,6 +2,7 @@
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
+import StaffPage from "./features/staff/StaffPage";
 import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
@@ -81,6 +82,7 @@ export default function App() {
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
         {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
         <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
+        <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
 
         <Route path="/trainer/horses" element={<RoleRoute roles={["HEAD_TRAINER"]}><HorseListPage /></RoleRoute>} />
