@@ -1,4 +1,4 @@
-// src/features/staff/StaffPage.js
+// src/features/manager/StaffPage.js
 // The club manager's Staff screen: every account in the system, grouped by role.
 //
 // This screen is READ-ONLY. Changing a role or a permission belongs to the
@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import {
-  listStaff, matchesQuery, initialsOf, statusTone, statusLabel,
+  listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
 } from "./staffApi";
 import "./staff.css";
 
@@ -67,11 +67,8 @@ function RoleGroup({ group, query, onOpenPermissions }) {
      are different facts, and what the reader should do next differs too:
      clear the search, or hire someone.
 
-     The role label is deliberately NOT spliced into the sentence. Labels come
-     from ROLE.description, which the database stores in the club's own
-     language, so dropping one into the middle of an English sentence produces
-     something that is neither grammatical nor easy to read. The card heading
-     already says which group this is. */
+     The role label is deliberately NOT spliced into the sentence: the card
+     heading already says which group this is. */
   const emptyText = group.members.length === 0
     ? "No accounts in this role yet"
     : "No one here matches your search";
@@ -79,7 +76,7 @@ function RoleGroup({ group, query, onOpenPermissions }) {
   return (
     <Card
       className="st-group"
-      title={group.roleLabel}
+      title={groupTitle(group)}
       hint={`${group.members.length} ${group.members.length === 1 ? "account" : "accounts"}`}
     >
       {shown.length === 0 ? (

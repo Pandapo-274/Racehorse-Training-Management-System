@@ -1,4 +1,4 @@
-// src/features/staff/staffApi.js
+// src/features/manager/staffApi.js
 // Calls GET /api/staff.
 //
 // The backend returns data ALREADY GROUPED:
@@ -10,9 +10,22 @@
 // once here. Both the label and the order now come from the ROLE table, which
 // is the only place that knows them.
 import { authFetch } from "../auth/authService";
+import { toRoleLabel } from "../profile/profileApi";
 
 export function listStaff() {
   return authFetch("/api/staff");
+}
+
+/**
+ * Heading of a role group. ROLE.description is stored in the club's own
+ * language (Vietnamese), so the screen shows the English label from the same
+ * table the profile page uses, keyed by the role code. A role the table does
+ * not know yet falls back to the text the backend sent, so a new role still
+ * shows something readable instead of a bare code.
+ */
+export function groupTitle(group) {
+  const label = toRoleLabel(group.roleName);
+  return label === group.roleName ? group.roleLabel || group.roleName : label;
 }
 
 /** Match against name, username, email or phone. */
