@@ -1,0 +1,108 @@
+/* src/features/staff/staff.css
+   The Staff screen. Only the classes this screen needs - the shell, cards,
+   chips and inputs are reused from horse.css (hz-), so the page belongs to the
+   same system as the others and follows the design tokens.
+
+   The st- prefix keeps these clear of hz- (horse pages), owner- and manager-. */
+
+.st-filters { align-items: center; gap: 8px; }
+
+.st-search {
+  width: 280px; max-width: 100%;
+  padding: 9px 13px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--field-bg); color: var(--text-900);
+  font: 400 12.5px var(--font-body);
+}
+.st-search:focus { outline: 2px solid var(--pink-300); outline-offset: 1px; }
+
+.st-count {
+  margin: 0 0 4px; font-size: 12px; color: var(--text-600);
+}
+
+.st-group + .st-group { margin-top: 14px; }
+
+.st-list { margin: 0; padding: 0; list-style: none; }
+
+/* One row = avatar | name | contact | status | action.
+   The contact column uses minmax(0, …) so a long email wraps or truncates
+   instead of pushing the row out of shape. */
+.st-row {
+  display: grid;
+  grid-template-columns: 40px minmax(140px, 1.2fr) minmax(0, 1.6fr) auto auto;
+  align-items: center; gap: 14px;
+  padding: 11px 2px;
+  border-top: 1px solid var(--line);
+}
+.st-list .st-row:first-child { border-top: 0; }
+
+.st-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  object-fit: cover; background: var(--field-bg);
+}
+.st-avatar--text {
+  display: grid; place-items: center;
+  background: var(--pink-500); color: #fff;
+  font: 700 12px var(--font-body); letter-spacing: .3px;
+}
+
+.st-identity { min-width: 0; }
+.st-name {
+  margin: 0; font: 700 13px var(--font-body); color: var(--text-900);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.st-username { margin: 0; font-size: 11.5px; color: var(--text-400); }
+
+.st-contact { min-width: 0; }
+.st-email {
+  display: block; font-size: 12px; color: var(--text-600); text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.st-email:hover { text-decoration: underline; }
+.st-phone { margin: 0; font-size: 11.5px; color: var(--text-400); }
+
+.st-meta { display: flex; align-items: center; gap: 10px; }
+.st-horses { font-size: 11.5px; color: var(--text-600); white-space: nowrap; }
+
+.st-action {
+  white-space: nowrap;
+  padding: 7px 14px;
+  border: 1px solid var(--line); border-radius: 19px;
+  background: transparent; color: var(--text-600);
+  font: 700 11.5px var(--font-body); cursor: pointer;
+}
+.st-action:hover { background: var(--field-bg); color: var(--text-900); }
+.st-action:focus-visible { outline: 2px solid var(--pink-300); outline-offset: 1px; }
+
+/* This deliberately does NOT use hz-btn. The action repeats on EVERY row, and
+   hz-btn is the solid-pink primary button - ten pink buttons stacked down the
+   page pull the eye harder than the people's names, while the job of this
+   screen is reading.
+
+   It does not use hz-btn--ghost either: that class currently sets
+   background #ed74b7 (still solid pink) and lightens to near-white on hover,
+   the opposite direction from every other button. That looks like an existing
+   bug in horse.css, but other screens use the class, so changing it there
+   would change their appearance - leaving it alone and reporting it is the
+   right call. */
+
+/* Narrow screens: drop the column layout and stack. The action moves to its
+   own line but stays left-aligned rather than stretching, so it reads as the
+   secondary action it is. */
+@media (max-width: 860px) {
+  .st-row {
+    grid-template-columns: 40px 1fr;
+    grid-template-areas:
+      "avatar identity"
+      "contact contact"
+      "meta meta"
+      "action action";
+    gap: 8px 12px;
+  }
+  .st-avatar { grid-area: avatar; }
+  .st-identity { grid-area: identity; }
+  .st-contact { grid-area: contact; }
+  .st-meta { grid-area: meta; }
+  .st-action { grid-area: action; justify-self: start; }
+  .st-search { width: 100%; }
+}
