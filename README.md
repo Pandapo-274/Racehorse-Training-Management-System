@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 22, 2026` at `15:19` by `tusandthatsall`
+### Last Commited: `Oct 22, 2026` at `17:49` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 22, 2026`
+- `[17:49]` `tqt195` - Login with Gmail Account Frontend: Google button on the login page (`@react-oauth/google`), outcome notices (`REGISTERED`, `LINKED`), `frontend/.env.example` with `REACT_APP_GOOGLE_CLIENT_ID`
 - `[17:00]` `[DevilJack422]` - Modified .env.example
 - `[16:50]` `[DevilJack422]` - Add V13 migration for google login, Complete backend google login function
 - `[15:19]` `tusandthatsall` - Fix notification function
