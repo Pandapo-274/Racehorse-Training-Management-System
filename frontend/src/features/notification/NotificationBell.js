@@ -24,6 +24,25 @@ import "./notification.css";
 
 const POLL_MS = 30000;
 
+function BellIcon() {
+  return (
+    <svg
+      className="notif-bell__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
 export default function NotificationBell({ className = "" }) {
   const navigate = useNavigate();
   const wrapRef = useRef(null);
@@ -129,14 +148,15 @@ export default function NotificationBell({ className = "" }) {
     <div className="notif" ref={wrapRef}>
       <button
         type="button"
-        className={className}
+        className={`notif-bell ${className}`}
         onClick={() => setOpen((v) => !v)}
         aria-label={label}
         title={label}
         aria-haspopup="true"
         aria-expanded={open}
       >
-        {unread > 0 && <span className={`${className}-dot`} />}
+        <BellIcon />
+        {unread > 0 && <span className={`notif-bell__dot ${className}-dot`} />}
       </button>
 
       {open && (

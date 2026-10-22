@@ -7,6 +7,32 @@
   display: flex;
 }
 
+/* z-index 50 của bảng chỉ có nghĩa trong header. Header của dashboard phải
+   nằm trên phần nội dung (vd. .trainer-header z-index 20 > .trainer-content
+   z-index 1), nếu không các thẻ thống kê sẽ đè lên bảng thông báo. */
+
+/* Lớp riêng của dashboard lo kích thước, viền, nền; ở đây chỉ thêm icon chuông
+   và đưa chấm đỏ lên góc trên phải thay vì nằm giữa nút. */
+.notif-bell {
+  position: relative;
+  color: var(--pink-700, #d93b87);
+}
+
+.notif-bell__icon {
+  width: 50%;
+  height: 50%;
+}
+
+.notif-bell .notif-bell__dot {
+  position: absolute;
+  top: 14%;
+  right: 14%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
 .notif-panel {
   position: absolute;
   top: calc(100% + 10px);
