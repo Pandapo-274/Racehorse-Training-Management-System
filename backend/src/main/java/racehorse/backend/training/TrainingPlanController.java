@@ -41,16 +41,18 @@ public class TrainingPlanController {
     }
 
     @GetMapping
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
     public List<TrainingPlanResponse.Summary> list(@RequestParam(required = false) Integer horseId,
-                                                   @RequestParam(required = false) String status) {
-        return service.list(horseId, status);
+                                                   @RequestParam(required = false) String status,
+                                                   @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.list(horseId, status, user);
     }
 
     @GetMapping("/{id}")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
-    public TrainingPlanResponse get(@PathVariable int id) {
-        return service.get(id);
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
+    public TrainingPlanResponse get(@PathVariable int id,
+                                    @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.get(id, user);
     }
 
     @PutMapping("/{id}/status")

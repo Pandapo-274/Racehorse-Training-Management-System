@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Kiểu dữ liệu trả về cho UC6 - View Master Fitness & Training Dashboard.
  *
- * Dùng record thay cho Map<String,Object> như DbTestController, vì màn này có
+ * Dùng record thay cho Map<String,Object>, vì màn này có
  * cấu trúc lồng nhiều tầng: Map lồng Map sẽ không ai biết JSON thực sự có
  * trường gì nếu không đọc hết query. Record khai báo hợp đồng ngay tại đây,
  * frontend đọc là biết.

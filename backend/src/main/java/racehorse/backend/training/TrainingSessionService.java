@@ -100,7 +100,10 @@ public class TrainingSessionService {
                     "Training plan is not active (current status: " + ctx.planStatus() + ")");
         }
         checkHorseCanTrain(s.horseId());
-        repository.markRunning(sessionId);
+        if (repository.markRunning(sessionId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just been started by someone else");
+        }
         userRepository.writeAudit(user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS",
                 ip);
         return getOrThrow(sessionId);

@@ -142,9 +142,27 @@ public class TrainingSessionRepository {
                 .single();
     }
 
-    public void markRunning(int sessionId) {
-        jdbc.sql("UPDATE TRAINING_SESSION SET status = 'RUNNING' WHERE session_id = :id")
-                .param("id", sessionId).update();
+    /**
+     * SCHEDULED -> RUNNING.
+     *
+     * Điều kiện `AND status = 'SCHEDULED'` nằm trong chính câu UPDATE chứ
+     * không chỉ ở phép kiểm của service: hai cú bấm Start đồng thời đều đọc
+     * thấy SCHEDULED, đều qua được phép kiểm kia, rồi cả hai cùng ghi RUNNING
+     * và cùng báo thành công - trong khi chỉ có một buổi tập. Người sau nhận
+     * 0 dòng và service biết là mình đến muộn.
+     *
+     * Từ V8 điều kiện này còn chặn thêm một việc: một buổi đã CANCELLED
+     * (do giáo án chuyển COMPLETED) không bị dựng lại thành RUNNING.
+     *
+     * @return số dòng đã đổi; 0 nghĩa là buổi tập đã rời trạng thái SCHEDULED.
+     */
+    public int markRunning(int sessionId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'RUNNING'
+                WHERE session_id = :id AND status = 'SCHEDULED'
+                """)
+                .param("id", sessionId)
+                .update();
     }
 
     /**

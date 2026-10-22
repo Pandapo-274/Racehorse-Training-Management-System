@@ -68,7 +68,14 @@ public class TrainingPlanService {
         if ("ACTIVE".equals(newStatus)) {
             checkCanActivate(plan);
         }
-        planRepository.updateStatus(planId, newStatus);
+        /* Truyền plan.status() làm trạng thái mong đợi: nếu giữa lúc đọc và
+           lúc ghi có người khác đổi, câu UPDATE không trúng dòng nào và cả
+           giao dịch bị huỷ, thay vì hai yêu cầu cùng thắng và kết quả tuỳ thứ
+           tự ghi. */
+        if (planRepository.updateStatus(planId, plan.status(), newStatus) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Someone else has just changed this plan's status");
+        }
 
         /* COMPLETED là điểm cuối (xem TRANSITIONS), nên những buổi tập còn
            SCHEDULED của giáo án này sẽ không bao giờ chạy được nữa. Để nguyên
@@ -97,12 +104,30 @@ public class TrainingPlanService {
         return getOrThrow(planId);
     }
 
-    public TrainingPlanResponse get(int planId) {
-        return getOrThrow(planId);
+    /**
+     * Đọc một giáo án, có kiểm quyền.
+     *
+     * Nhận AuthenticatedUser chứ không chỉ planId: mở @RequireRole cho
+     * HORSE_OWNER mà chỉ lọc ở list() thì GET /api/training-plans/{id} vẫn
+     * trả về giáo án của bất kỳ con ngựa nào, chỉ cần đoán số id.
+     */
+    public TrainingPlanResponse get(int planId, AuthenticatedUser user) {
+        TrainingPlanResponse plan = getOrThrow(planId);
+        if ("HORSE_OWNER".equals(user.role())) {
+            HorseResponse horse = horseRepository.findById(plan.horseId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
+            if (horse.ownerId() != user.userId()) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This plan belongs to another owner's horse");
+            }
+        }
+        return plan;
     }
 
-    public List<TrainingPlanResponse.Summary> list(Integer horseId, String status) {
-        return planRepository.findSummaries(horseId, status);
+    public List<TrainingPlanResponse.Summary> list(Integer horseId, String status,
+                                                   AuthenticatedUser user) {
+        // Chủ ngựa chỉ thấy giáo án của ngựa mình; lọc trong SQL.
+        Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
+        return planRepository.findSummaries(horseId, status, ownerId);
     }
 
     // ---------- helper ----------
