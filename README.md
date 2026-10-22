@@ -46,6 +46,8 @@ npm start
 
 ## Changelogs
 > #### `Oct 22, 2026`
+- `[12:34]` `tusandthatsall` - Add backend codes for notification function
+
 - `[11:57]` `tqt195` - Add demo photos for 18 horses and 22 accounts (`frontend/public/seed/`) and `V11__demo_photos.sql` to attach them by registration code / username
 - `[10:34]` `tqt195` - Update `Staff` Page using English (role group titles); move `StaffPage.js`, `staff.css`, `staffApi.js` into `features/manager`
 - `[10:16]` `tqt195` - Merge `Staff` tab for `Club Manager` with `tusandthatsall`: keep `features/staff` (with backend `/api/staff`), remove duplicate `features/manager/StaffPage`; shared sidebar menu for every role (`features/navigation`); `Groom` page uses real training sessions (start session, send heart rate)
