@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class AlertService {
@@ -19,10 +21,13 @@ public class AlertService {
 
     private final AlertRepository alerts;
     private final UserRepository users;
+    private final NotificationService notifications;
 
-    public AlertService(AlertRepository alerts, UserRepository users) {
+    public AlertService(AlertRepository alerts, UserRepository users,
+                        NotificationService notifications) {
         this.alerts = alerts;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /**
@@ -61,6 +66,20 @@ public class AlertService {
         }
         int alertId = alerts.insertAlert(sessionId, HEART_RATE,
                 BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr), severity);
+
+        /* Chỉ mức HIGH mới lên chuông. LOW / MEDIUM đã hiện trên màn Live
+           Session của Head Trainer; đưa cả chúng vào chuông thì một buổi tập
+           nặng sinh hàng chục thông báo và cái quan trọng bị chìm. Bác sĩ
+           cũng nhận, vì vượt ngưỡng 10% là lúc có thể cần khám ngay. */
+        if ("HIGH".equals(severity)) {
+            Notice notice = new Notice(
+                    "THRESHOLD_ALERT_HIGH",
+                    "High heart-rate alert",
+                    "Session #" + sessionId + ": " + hr + " bpm, ceiling is " + ceiling + " bpm.",
+                    Notice.THRESHOLD_ALERT, alertId);
+            notifications.notifyRole("HEAD_TRAINER", me, notice);
+            notifications.notifyRole("VETERINARIAN", me, notice);
+        }
         return new VitalsResult(hr, ceiling, true, severity, alertId);
     }
 

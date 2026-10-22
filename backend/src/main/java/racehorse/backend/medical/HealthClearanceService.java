@@ -16,6 +16,8 @@ import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 /**
  * UC18 - Clear Horse Health Status (Recovery Confirmation).
@@ -40,19 +42,22 @@ public class HealthClearanceService {
     private final TrainingLockRepository locks;
     private final HorseRepository horses;
     private final UserRepository users;
+    private final NotificationService notifications;
 
     public HealthClearanceService(MedicalRecordRepository records,
                                   HealthClearanceRepository clearance,
                                   InjuryRepository injuries,
                                   TrainingLockRepository locks,
                                   HorseRepository horses,
-                                  UserRepository users) {
+                                  UserRepository users,
+                                  NotificationService notifications) {
         this.records = records;
         this.clearance = clearance;
         this.injuries = injuries;
         this.locks = locks;
         this.horses = horses;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /**
@@ -119,6 +124,12 @@ public class HealthClearanceService {
         }
 
         users.writeAudit(vet.userId(), "HEALTH_CLEARED", "HORSE", horse.horseId(), "SUCCESS", ip);
+
+        notifications.notifyHorseWatchers(horse.ownerId(), vet, new Notice(
+                "HEALTH_CLEARED",
+                "Horse cleared to train",
+                horse.horseName() + " has recovered and is eligible to train again.",
+                Notice.HORSE, horse.horseId()));
 
         MedicalRecordRow row = records.findById(recordId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,

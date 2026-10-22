@@ -1,8 +1,10 @@
 package racehorse.backend.training;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
@@ -15,9 +17,14 @@ import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseVitalsRepository;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class TrainingSessionService {
+
+    private static final DateTimeFormatter WHEN =
+            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH);
 
     /** Trạng thái ngựa cho phép tập. */
     private static final Set<String> TRAINABLE = Set.of("ELIGIBLE", "MONITOR");
@@ -26,13 +33,16 @@ public class TrainingSessionService {
     private final HorseRepository horseRepository;
     private final HorseVitalsRepository vitalsRepository;
     private final UserRepository userRepository;
+    private final NotificationService notifications;
 
     public TrainingSessionService(TrainingSessionRepository repository, HorseRepository horseRepository,
-            HorseVitalsRepository vitalsRepository, UserRepository userRepository) {
+            HorseVitalsRepository vitalsRepository, UserRepository userRepository,
+            NotificationService notifications) {
         this.repository = repository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
+        this.notifications = notifications;
     }
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
@@ -71,7 +81,14 @@ public class TrainingSessionService {
         Integer planned = r.plannedDistance() != null ? r.plannedDistance() : ctx.distance();
         int id = repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
         userRepository.writeAudit(user.userId(), "TRAINING_SESSION_ASSIGN", "TRAINING_SESSION", id, "SUCCESS", ip);
-        return getOrThrow(id);
+
+        TrainingSessionResponse created = getOrThrow(id);
+        notifications.notifyUser(created.assignedTo(), new Notice(
+                "TRAINING_SESSION_ASSIGNED",
+                "New training session assigned",
+                created.horseName() + " on " + created.sessionDate().format(WHEN) + ".",
+                Notice.TRAINING_SESSION, id));
+        return created;
     }
 
     /**
@@ -227,8 +244,33 @@ public TrainingSessionResponse reschedule(
             "SUCCESS",
             ip);
 
-    // 11. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
-    return getOrThrow(sessionId);
+    // 11. Báo cho Groom. Đổi người phụ trách thì người cũ cũng phải biết
+    // mình không còn buổi này nữa, nếu không họ vẫn ra chuồng đúng giờ cũ.
+    TrainingSessionResponse updatedSession = getOrThrow(sessionId);
+    String when = updatedSession.sessionDate().format(WHEN);
+
+    if (current.assignedTo() != updatedSession.assignedTo()) {
+        notifications.notifyUser(current.assignedTo(), new Notice(
+                "TRAINING_SESSION_UNASSIGNED",
+                "Training session reassigned",
+                updatedSession.horseName() + " is now handled by "
+                        + updatedSession.assignedToName() + ".",
+                null, null));
+        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                "TRAINING_SESSION_ASSIGNED",
+                "New training session assigned",
+                updatedSession.horseName() + " on " + when + ".",
+                Notice.TRAINING_SESSION, sessionId));
+    } else {
+        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                "TRAINING_SESSION_RESCHEDULED",
+                "Training session rescheduled",
+                updatedSession.horseName() + " moved to " + when + ".",
+                Notice.TRAINING_SESSION, sessionId));
+    }
+
+    // 12. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
+    return updatedSession;
 }
 
     // ---------- helper ----------
