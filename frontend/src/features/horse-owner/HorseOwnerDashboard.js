@@ -7,6 +7,7 @@ import {
 } from "../horse/horseApi";
 import { listRequests, pendingOnly } from "../horse/horseRequestApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import {
   COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
   formatShortDate, getOwnerDashboard, isPrizeRow, toCostLabel, toEvaluation, toStars,
@@ -57,25 +58,7 @@ function Sidebar({ user }) {
       </div>
 
       <nav className="owner-navigation">
-        <button type="button" className="owner-nav-item active">
-          <HorseshoeIcon />
-          Overview
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => navigate("/horse-owner/horses")}>
-          <HorseshoeIcon />
-          My horses
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => scrollToId("results-races")}>
-          <HorseshoeIcon />
-          Results &amp; races
-        </button>
-
-        <button type="button" className="owner-nav-item" onClick={() => scrollToId("costs-prizes")}>
-          <HorseshoeIcon />
-          Costs &amp; prizes
-        </button>
+        <NavItems role={user?.role} prefix="owner" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="owner-sidebar-bottom">
@@ -558,6 +541,10 @@ export default function HorseOwnerDashboard() {
   }, []);
 
   const horse = data?.horses.find((h) => h.horseId === selectedId);
+
+  // Mục "Results & races" / "Costs & prizes" ở sidebar là lối tắt #hash; từ trang
+  // ngựa bấm sang thì phải đợi dữ liệu về, phần tử có id mới nằm trên trang.
+  useScrollToHash(!!data);
 
   let content;
   if (error && !data) {

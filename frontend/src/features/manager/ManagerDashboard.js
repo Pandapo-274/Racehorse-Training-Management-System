@@ -1,4 +1,5 @@
 ﻿import "./manager.css";
+import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -101,47 +102,7 @@ function ManagerSidebar() {
       </div>
 
       <nav className="manager-nav">
-        <button type="button" className="manager-nav-item active">
-          <HorseshoeIcon />
-          Overview
-        </button>
-
-        <button
-          type="button"
-          className="manager-nav-item"
-          onClick={() => navigate("/manager/horses")}
-        >
-          <HorseshoeIcon />
-          Horses
-        </button>
-        <button
-          type="button"
-          className="manager-nav-item"
-          onClick={() => navigate("/manager/horse-requests")}
-        >
-          <HorseshoeIcon />
-          Registrations
-        </button>
-
-        <button type="button" className="manager-nav-item">
-          <HorseshoeIcon />
-          Staff
-        </button>
-
-        <button type="button" className="manager-nav-item">
-          <HorseshoeIcon />
-          Supplies &amp; feed
-        </button>
-
-        <button type="button" className="manager-nav-item">
-          <HorseshoeIcon />
-          Permissions
-        </button>
-
-        <button type="button" className="manager-nav-item">
-          <HorseshoeIcon />
-          Audit log
-        </button>
+        <NavItems role="CLUB_MANAGER" prefix="manager" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="manager-sidebar-bottom">

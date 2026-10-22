@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { authFetch, handleAuthError, logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -87,7 +88,6 @@ function HorseshoeIcon() {
 }
 
 function ScheduleSidebar({ onSignOut }) {
-  const navigate = useNavigate();
 
   return (
     <aside className="trainer-sidebar">
@@ -104,64 +104,7 @@ function ScheduleSidebar({ onSignOut }) {
       </div>
 
       <nav className="trainer-nav">
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer")}
-        >
-          <HorseshoeIcon />
-          Herd progress
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/horses")}
-        >
-          <HorseshoeIcon />
-          Horses
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/training-plans")}
-        >
-          <HorseshoeIcon />
-          Training plans
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item active"
-          onClick={() => navigate("/trainer/schedule")}
-        >
-          <HorseshoeIcon />
-          Schedule
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/live-session")}
-        >
-          <HorseshoeIcon />
-          Live session
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/session-review")}
-        >
-          <HorseshoeIcon />
-          Session review
-        </button>
-
-        <button type="button" className="trainer-nav-item">
-          <HorseshoeIcon />
-          Races
-        </button>
+        <NavItems role="HEAD_TRAINER" prefix="trainer" icon={<HorseshoeIcon />} />
       </nav>
 
 

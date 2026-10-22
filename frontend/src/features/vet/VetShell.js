@@ -4,6 +4,7 @@
 // `active`, `title`, `subtitle` rồi đặt nội dung vào children.
 
 import { useNavigate } from "react-router-dom";
+import NavItems from "../navigation/NavItems";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import "./vet.css";
@@ -45,54 +46,7 @@ function VetSidebar({ active }) {
       </div>
 
       <nav className="vet-nav">
-        <button
-          type="button"
-          className={`vet-nav-item${active === "health" ? " active" : ""}`}
-          aria-current={active === "health" ? "page" : undefined}
-          onClick={() => navigate("/veterinarian")}
-        >
-          <HorseshoeIcon />
-          Herd health
-        </button>
-
-        <button
-          type="button"
-          className={`vet-nav-item${active === "horses" ? " active" : ""}`}
-          aria-current={active === "horses" ? "page" : undefined}
-          onClick={() => navigate("/veterinarian/horses")}
-        >
-          <HorseshoeIcon />
-          Horses
-        </button>
-
-        <button
-          type="button"
-          className={`vet-nav-item${active === "examination" ? " active" : ""}`}
-          aria-current={active === "examination" ? "page" : undefined}
-          onClick={() => navigate("/veterinarian/examination")}
-        >
-          <HorseshoeIcon />
-          Examination
-        </button>
-
-        <button
-          type="button"
-          className={`vet-nav-item${active === "recovery" ? " active" : ""}`}
-          aria-current={active === "recovery" ? "page" : undefined}
-          onClick={() => navigate("/veterinarian/recovery")}
-        >
-          <HorseshoeIcon />
-          Recovery
-        </button>
-
-        <button
-          type="button"
-          className={`vet-nav-item${active === "preventive" ? " active" : ""}`}
-          aria-current={active === "preventive" ? "page" : undefined}
-        >
-          <HorseshoeIcon />
-          Preventive care
-        </button>
+        <NavItems role="VETERINARIAN" prefix="vet" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="vet-sidebar-bottom">
