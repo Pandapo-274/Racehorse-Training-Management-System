@@ -1,17 +1,20 @@
 // src/features/manager/StaffPage.js
 // The club manager's Staff screen: every account in the system, grouped by role.
 //
-// This screen is READ-ONLY. Changing a role or a permission belongs to the
-// Permissions screen - and the backend has no write route for it either (see
-// StaffController). The button on each row therefore says so rather than
-// pretending to act.
+// The manager can add staff accounts (Head Trainer, Vet, Groom) and suspend /
+// activate any non-manager account. Changing a role or a permission still
+// belongs to the Permissions screen, which is not built - that button says so
+// rather than pretending to act.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { handleAuthError } from "../auth/authService";
+import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
+import PasswordField from "../password/PasswordField";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
+  createStaff, setStaffStatus, STAFF_ROLE_OPTIONS,
 } from "./staffApi";
+import "../password/password.css"; // styles for PasswordField (.pw-*)
 import "./staff.css";
 
 function Avatar({ row }) {
@@ -25,7 +28,11 @@ function Avatar({ row }) {
   );
 }
 
-function MemberRow({ row, onOpenPermissions }) {
+const EMPTY_FORM = {
+  fullName: "", username: "", email: "", phone: "", roleName: "GROOM", password: "",
+};
+
+function MemberRow({ row, onOpenPermissions, canToggle, onToggleStatus, busy }) {
   return (
     <li className="st-row">
       <Avatar row={row} />
@@ -53,14 +60,26 @@ function MemberRow({ row, onOpenPermissions }) {
         <StatusChip tone={statusTone(row.status)} label={statusLabel(row.status)} />
       </div>
 
-      <button type="button" className="st-action" onClick={() => onOpenPermissions(row)}>
-        Permissions
-      </button>
+      <div className="st-actions">
+        {canToggle && (
+          <button
+            type="button"
+            className="st-action"
+            disabled={busy}
+            onClick={() => onToggleStatus(row)}
+          >
+            {row.status === "ACTIVE" ? "Suspend" : "Activate"}
+          </button>
+        )}
+        <button type="button" className="st-action" onClick={() => onOpenPermissions(row)}>
+          Permissions
+        </button>
+      </div>
     </li>
   );
 }
 
-function RoleGroup({ group, query, onOpenPermissions }) {
+function RoleGroup({ group, query, onOpenPermissions, myId, busyId, onToggleStatus }) {
   const shown = group.members.filter((m) => matchesQuery(m, query));
 
   /* "Empty because of the filter" and "empty because nobody holds this role"
@@ -84,7 +103,14 @@ function RoleGroup({ group, query, onOpenPermissions }) {
       ) : (
         <ul className="st-list">
           {shown.map((row) => (
-            <MemberRow key={row.userId} row={row} onOpenPermissions={onOpenPermissions} />
+            <MemberRow
+              key={row.userId}
+              row={row}
+              onOpenPermissions={onOpenPermissions}
+              canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
+              onToggleStatus={onToggleStatus}
+              busy={busyId === row.userId}
+            />
           ))}
         </ul>
       )}
@@ -97,6 +123,16 @@ export default function StaffPage() {
   const [groups, setGroups] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const myId = getUser()?.userId;
+
+  // Add-staff form + suspend/activate state.
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(() => {
     setError("");
@@ -130,6 +166,57 @@ export default function StaffPage() {
     window.alert("The Permissions screen is not built yet. Role changes will live there.");
   };
 
+  const setField = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.value }));
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setForm(EMPTY_FORM);
+    setFieldErrors({});
+    setFormError("");
+  };
+
+  const submitForm = (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setFieldErrors({});
+    setFormError("");
+    createStaff(form)
+      .then((created) => {
+        closeForm();
+        setNotice(`Created account @${created.username}. Give them the password you just set.`);
+        load();
+      })
+      .catch((err) => {
+        if (handleAuthError(err, navigate)) return;
+        setFieldErrors(err.fieldErrors || {});
+        setFormError(err.message);
+      })
+      .finally(() => setSaving(false));
+  };
+
+  /* Replace the one row in place instead of reloading: reloading blanks the
+     whole screen to "Loading staff…" for a change that touches a single row. */
+  const toggleStatus = (row) => {
+    const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    if (next === "SUSPENDED" && !window.confirm(`Suspend @${row.username}? They will be signed out and cannot log in.`)) {
+      return;
+    }
+    setBusyId(row.userId);
+    setNotice("");
+    setStaffStatus(row.userId, next)
+      .then((updated) => {
+        setGroups((prev) => (prev || []).map((g) => ({
+          ...g,
+          members: g.members.map((m) => (m.userId === updated.userId ? updated : m)),
+        })));
+      })
+      .catch((err) => {
+        if (handleAuthError(err, navigate)) return;
+        setNotice(err.message);
+      })
+      .finally(() => setBusyId(null));
+  };
+
   return (
     <HorseShell
       title="Staff"
@@ -149,6 +236,9 @@ export default function StaffPage() {
               Clear
             </button>
           )}
+          <button type="button" className="hz-btn" onClick={() => setFormOpen((v) => !v)}>
+            {formOpen ? "Close" : "Add staff"}
+          </button>
         </div>
       }
     >
@@ -161,6 +251,61 @@ export default function StaffPage() {
       {!error && groups === null && (
         <StateBlock kind="info" title="Loading staff…" />
       )}
+
+      {formOpen && (
+        <Card title="Add staff account" hint="Head Trainer, Veterinarian or Groom">
+          <form className="st-form" onSubmit={submitForm} noValidate>
+            <label className="st-field">
+              Full name
+              <input value={form.fullName} onChange={setField("fullName")} />
+              {fieldErrors.fullName && <span className="st-field__error">{fieldErrors.fullName}</span>}
+            </label>
+            <label className="st-field">
+              Role
+              <select value={form.roleName} onChange={setField("roleName")}>
+                {STAFF_ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {fieldErrors.roleName && <span className="st-field__error">{fieldErrors.roleName}</span>}
+            </label>
+            <label className="st-field">
+              Username
+              <input value={form.username} onChange={setField("username")} autoComplete="off" />
+              {fieldErrors.username && <span className="st-field__error">{fieldErrors.username}</span>}
+            </label>
+            <label className="st-field">
+              Email
+              <input type="email" value={form.email} onChange={setField("email")} />
+              {fieldErrors.email && <span className="st-field__error">{fieldErrors.email}</span>}
+            </label>
+            <label className="st-field">
+              Phone (optional)
+              <input value={form.phone} onChange={setField("phone")} />
+              {fieldErrors.phone && <span className="st-field__error">{fieldErrors.phone}</span>}
+            </label>
+            {/* Reuses the shared password box (eye toggle + live rules) from UC5. */}
+            <PasswordField
+              id="staffPassword"
+              label="Initial password"
+              value={form.password}
+              onChange={setField("password")}
+              error={fieldErrors.password}
+              autoComplete="new-password"
+              showRules
+            />
+            <div className="st-form__foot">
+              <button type="submit" className="hz-btn" disabled={saving}>
+                {saving ? "Creating…" : "Create account"}
+              </button>
+              <button type="button" className="st-action" onClick={closeForm}>Cancel</button>
+              {formError && <span className="st-field__error" role="alert">{formError}</span>}
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {notice && <p className="st-notice" role="status">{notice}</p>}
 
       {!error && groups !== null && (
         <>
@@ -175,6 +320,9 @@ export default function StaffPage() {
               group={group}
               query={query}
               onOpenPermissions={openPermissions}
+              myId={myId}
+              busyId={busyId}
+              onToggleStatus={toggleStatus}
             />
           ))}
         </>

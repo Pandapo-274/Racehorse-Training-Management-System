@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 23, 2026` at `10:25` by `tqt195`
+### Last Commited: `Oct 23, 2026` at `14` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -8,8 +8,8 @@
 > ### Database: `SQLServer`
 
 ## Contributors
-1. [ArichiAya](https://github.com/NekomataRin) - `React App Frontend`
-2. [tqt195](https://github.com/tqt195) - `React App Frontend`
+1. [ArichiAya](https://github.com/NekomataRin) 
+2. [tqt195](https://github.com/tqt195)
 3. [Pandapo274](https://github.com/Pandapo-274)
 4. [tusandthatsall](https://github.com/tusandthatsall)
 5. [DevilJack422](https://github.com/DevilJack422)
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 23, 2026`
+- `[14:06]` `ArichiAya` - Fix Register `RBAC` v1
 - `[10:25]` `tqt195` - Fix register account page: `Password` and `Repeat password` fields no longer stick together or overflow the card
 > #### `Oct 22, 2026`
 - `[17:49]` `tqt195` - Login with Gmail Account Frontend: Google button on the login page (`@react-oauth/google`), outcome notices (`REGISTERED`, `LINKED`), `frontend/.env.example` with `REACT_APP_GOOGLE_CLIENT_ID`

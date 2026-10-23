@@ -1,5 +1,5 @@
 // src/features/manager/staffApi.js
-// Calls GET /api/staff.
+// Calls GET /api/staff, POST /api/staff (create) and PUT /api/staff/{id}/status (suspend / activate).
 //
 // The backend returns data ALREADY GROUPED:
 //   [{ roleName, roleLabel, members: [...] }]
@@ -14,6 +14,26 @@ import { toRoleLabel } from "../profile/profileApi";
 
 export function listStaff() {
   return authFetch("/api/staff");
+}
+
+/** Roles the manager can create. Owners sign up themselves; managers are not created here. */
+export const STAFF_ROLE_OPTIONS = [
+  { value: "HEAD_TRAINER", label: "Head Trainer" },
+  { value: "VETERINARIAN", label: "Veterinarian" },
+  { value: "GROOM", label: "Groom" },
+];
+
+/** 201 -> the new row. Errors: 400/409 with fieldErrors (username, email, ...). */
+export function createStaff(body) {
+  return authFetch("/api/staff", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** status: "ACTIVE" | "SUSPENDED". Returns the updated row. */
+export function setStaffStatus(userId, status) {
+  return authFetch(`/api/staff/${userId}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
 }
 
 /**

@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -105,5 +106,21 @@ public class StaffRepository {
                             everyone.stream().filter(u -> roleName.equals(u.roleName())).toList());
                 })
                 .list();
+    }
+
+    /** Một tài khoản theo id, cùng dạng với từng dòng của danh sách Staff. */
+    public Optional<StaffRow> findRow(int userId) {
+        return jdbc.sql(SELECT_STAFF + " WHERE u.user_id = :id")
+                .param("id", userId)
+                .query(StaffRepository::map)
+                .optional();
+    }
+
+    /** Khoá / mở khoá: chỉ đổi cột status (CK_USER_status chỉ nhận ACTIVE, SUSPENDED). */
+    public int updateStatus(int userId, String status) {
+        return jdbc.sql("UPDATE APP_USER SET status = :status WHERE user_id = :id")
+                .param("status", status)
+                .param("id", userId)
+                .update();
     }
 }

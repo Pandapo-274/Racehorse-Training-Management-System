@@ -15,11 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     /**
-     * Vai trò được TỰ đăng ký. CLUB_MANAGER bị loại có chủ đích: không ai được
-     * tự phong mình làm quản lý. Manager chỉ được tạo/đổi quyền qua UC Manage Roles (Sprint 3).
+     * Vai trò được TỰ đăng ký: chỉ HORSE_OWNER. Tài khoản nhân viên (GROOM, HEAD_TRAINER,
+     * VETERINARIAN) và CLUB_MANAGER không ai được tự phong; do Club Manager cấp (xem Staff).
      */
     static final Set<String> SELF_REGISTER_ROLES =
-            Set.of("HORSE_OWNER", "GROOM", "HEAD_TRAINER", "VETERINARIAN");
+            Set.of("HORSE_OWNER");
 
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
