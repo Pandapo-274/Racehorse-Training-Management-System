@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 22, 2026` at `17:49` by `tqt195`
+### Last Commited: `Oct 23, 2026` at `10:25` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 23, 2026`
+- `[10:25]` `tqt195` - Fix register account page: `Password` and `Repeat password` fields no longer stick together or overflow the card
 > #### `Oct 22, 2026`
 - `[17:49]` `tqt195` - Login with Gmail Account Frontend: Google button on the login page (`@react-oauth/google`), outcome notices (`REGISTERED`, `LINKED`), `frontend/.env.example` with `REACT_APP_GOOGLE_CLIENT_ID`
 - `[17:00]` `[DevilJack422]` - Modified .env.example
