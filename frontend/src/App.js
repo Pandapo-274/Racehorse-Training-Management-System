@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+﻿import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
@@ -33,7 +33,13 @@ import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage";
 const EVERY_ROLE = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"];
 function RoleRoute({ roles, children }) {
   const user = getUser();
+  const { pathname } = useLocation();
   if (!user) return <Navigate to="/login" replace />;
+  /* Mật khẩu tạm do Club Manager đặt (V14): chỉ cho vào trang đổi mật khẩu.
+     Đây là lớp tiện lợi; backend trả 428 cho mọi API khác dù có vào được. */
+  if (user.mustChangePassword && pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
   if (!roles.includes(user.role)) return <Navigate to="/access-denied" replace />;
   return children;
 }

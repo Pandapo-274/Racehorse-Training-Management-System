@@ -16,6 +16,15 @@ export const HOME_BY_ROLE = {
   HORSE_OWNER: "/horse-owner",
 };
 
+/**
+ * Trang đầu tiên sau khi đăng nhập. Tài khoản đang dùng mật khẩu tạm do Club
+ * Manager đặt (V14) phải đổi mật khẩu trước, nên đi thẳng tới trang đó.
+ */
+export function homeFor(user) {
+  if (user?.mustChangePassword) return "/change-password";
+  return HOME_BY_ROLE[user?.role] || "/access-denied";
+}
+
 /* ------------------------------------------------------------------ *
  * Phiên đăng nhập
  * ------------------------------------------------------------------ */
@@ -117,6 +126,7 @@ export async function authFetch(url, options = {}) {
  * Dùng trong .catch() của mọi màn có gọi API:
  *   - 401 (hết phiên / chưa đăng nhập) -> xoá phiên, về /login
  *   - 403 (sai role)                   -> sang /access-denied
+ *   - 428 (còn mật khẩu tạm, V14)      -> sang /change-password
  * Trả true nếu đã xử lý (màn không cần hiện lỗi nữa), false nếu là lỗi khác.
  */
 export function handleAuthError(err, navigate) {
@@ -128,6 +138,11 @@ export function handleAuthError(err, navigate) {
   }
   if (err.status === 403) {
     navigate("/access-denied", { replace: true });
+    return true;
+  }
+  if (err.status === 428) {
+    updateStoredUser({ mustChangePassword: true });
+    navigate("/change-password", { replace: true });
     return true;
   }
   return false;

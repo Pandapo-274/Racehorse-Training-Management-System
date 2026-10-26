@@ -12,7 +12,7 @@
 // biến một cú văng ra khó hiểu thành một bước có chủ đích.
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { handleAuthError, logout } from "../auth/authService";
+import { getUser, handleAuthError, logout } from "../auth/authService";
 import HorseShell, { Card } from "../horse/HorseShell";
 import PasswordField from "./PasswordField";
 import { changePassword, checkNewPassword } from "./passwordApi";
@@ -93,6 +93,20 @@ export default function ChangePasswordPage() {
       subtitle="You will be signed out everywhere once it is changed"
     >
       <form onSubmit={submit} noValidate className="pw-page">
+        {/* V14: tài khoản do Club Manager tạo. Nói rõ vì sao không vào được
+            trang nào khác, và "mật khẩu hiện tại" là mật khẩu nào. */}
+        {getUser()?.mustChangePassword && (
+          <div className="pw-warning" role="status">
+            <span className="pw-warning__mark" aria-hidden="true">!</span>
+            <div>
+              <strong>Choose your own password to continue</strong>
+              <p>
+                Your account was created by the club manager with a temporary password.
+                Enter that password as your current password, then pick a new one only you know.
+              </p>
+            </div>
+          </div>
+        )}
         <Card title="New password">
           {/* Nói trước hậu quả, không để nó là một bất ngờ sau khi bấm nút.
               Ai đang đăng nhập trên điện thoại cần biết mình sắp bị đăng xuất

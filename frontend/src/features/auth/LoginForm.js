@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import TextField from "../../components/ui/TextField";
 import Button from "../../components/ui/Button";
 import { GoogleLogin } from "@react-oauth/google";
-import { login, loginWithGoogle, HOME_BY_ROLE, GOOGLE_CLIENT_ID } from "./authService";
+import { login, loginWithGoogle, homeFor, GOOGLE_CLIENT_ID } from "./authService";
 
 /**
  * Lời nhắn sau khi đăng nhập Google, theo `outcome` của backend.
@@ -48,7 +48,7 @@ export default function LoginForm() {
     setSubmitError("");
     try {
       const user = await login(username, password); // login() đã lưu token + user
-      navigate(HOME_BY_ROLE[user.role] || "/access-denied", { replace: true });
+      navigate(homeFor(user), { replace: true });
     } catch (err) {
       setSubmitError(err.message);
     } finally {
@@ -62,7 +62,7 @@ export default function LoginForm() {
     setSubmitError("");
     try {
       const { user, outcome } = await loginWithGoogle(credential);
-      const home = HOME_BY_ROLE[user.role] || "/access-denied";
+      const home = homeFor(user);
       if (GOOGLE_NOTICE[outcome]) {
         setGoogleDone({ outcome, home });
       } else {
