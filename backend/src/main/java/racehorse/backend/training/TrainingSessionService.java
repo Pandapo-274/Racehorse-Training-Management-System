@@ -17,6 +17,7 @@ import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseVitalsRepository;
+import racehorse.backend.incident.IncidentGuard;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
 
@@ -34,15 +35,17 @@ public class TrainingSessionService {
     private final HorseVitalsRepository vitalsRepository;
     private final UserRepository userRepository;
     private final NotificationService notifications;
+    private final IncidentGuard incidentGuard;
 
     public TrainingSessionService(TrainingSessionRepository repository, HorseRepository horseRepository,
             HorseVitalsRepository vitalsRepository, UserRepository userRepository,
-            NotificationService notifications) {
+            NotificationService notifications, IncidentGuard incidentGuard) {
         this.repository = repository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
         this.notifications = notifications;
+        this.incidentGuard = incidentGuard;
     }
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
@@ -322,5 +325,8 @@ public TrainingSessionResponse reschedule(
         if (vitalsRepository.findActiveLock(horseId).isPresent()) {
             throw new ApiException(HttpStatus.CONFLICT, "Horse is under an active training lock");
         }
+        /* Còn báo cáo sự cố chưa được bác sĩ khám (vd. ngựa vừa bị dừng giữa buổi) thì không
+           xếp, không đổi lịch và không Start. Nằm trong hàm này nên cả ba đường đều được chặn. */
+        incidentGuard.assertNoOpenReport(horseId);
     }
 }

@@ -63,7 +63,8 @@ public class TrainingSessionRepository {
                    s.planned_distance, s.actual_distance, s.duration_minutes, s.avg_heart_rate,
                    s.peak_heart_rate, s.recovery_heart_rate, s.peak_velocity, s.evaluation,
                    s.remarks, s.status, ph.heart_rate_ceiling,
-                   (SELECT COUNT(*) FROM THRESHOLD_ALERT a WHERE a.session_id = s.session_id) AS alert_count
+                   (SELECT COUNT(*) FROM THRESHOLD_ALERT a WHERE a.session_id = s.session_id) AS alert_count,
+                   s.is_trial_run, s.video_url
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
             JOIN HORSE h       ON h.horse_id  = s.horse_id
@@ -84,7 +85,8 @@ public class TrainingSessionRepository {
                 rs.getObject("recovery_heart_rate", Integer.class),
                 rs.getObject("peak_velocity", BigDecimal.class),
                 rs.getString("evaluation"), rs.getString("remarks"), rs.getString("status"),
-                rs.getObject("heart_rate_ceiling", Integer.class), rs.getInt("alert_count"));
+                rs.getObject("heart_rate_ceiling", Integer.class), rs.getInt("alert_count"),
+                rs.getBoolean("is_trial_run"), rs.getString("video_url"));
     }
 
     public Optional<TrainingSessionResponse> findById(int sessionId) {
