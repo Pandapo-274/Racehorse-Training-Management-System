@@ -7,7 +7,8 @@ import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import {
   formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
-  startSession, toSessionStatus, toSeverityLabel, todayIso,
+  startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
+  COMMON_SYMPTOMS, URGENCY_OPTIONS,
 } from "./groomApi";
 
 // Giao diện Groom dùng cùng khung với Head Trainer, Club Manager và Vet:
@@ -167,6 +168,9 @@ function SessionPanel({ session, onChanged, navigate }) {
   const [heartRate, setHeartRate] = useState("");
   const [velocity, setVelocity] = useState("");
   const [lastReading, setLastReading] = useState(null);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stop, setStop] = useState({ symptoms: "", description: "", urgency: "HIGH" });
+  const [stopResult, setStopResult] = useState(null);
 
   // Đổi buổi tập thì xoá trạng thái của buổi trước.
   useEffect(() => {
@@ -174,6 +178,9 @@ function SessionPanel({ session, onChanged, navigate }) {
     setHeartRate("");
     setVelocity("");
     setLastReading(null);
+    setStopOpen(false);
+    setStop({ symptoms: "", description: "", urgency: "HIGH" });
+    setStopResult(null);
   }, [session?.sessionId]);
 
   if (!session) {
@@ -230,6 +237,26 @@ function SessionPanel({ session, onChanged, navigate }) {
       setHeartRate("");
       setVelocity("");
       onChanged(null); // tải lại để thấy nhịp tim đỉnh và số cảnh báo mới
+    }
+  };
+
+  /* Ngựa bất thường giữa buổi: dừng buổi và mở báo cáo sự cố cho bác sĩ thú y.
+     Bắt buộc ghi triệu chứng: bác sĩ cần biết ngựa bị gì trước khi tới. */
+  const submitStop = async (event) => {
+    event.preventDefault();
+    if (!stop.symptoms.trim()) {
+      setError("Describe what you saw so the vet knows what to check.");
+      return;
+    }
+    const result = await run(() => stopSession(session.sessionId, {
+      symptoms: stop.symptoms.trim(),
+      description: stop.description.trim(),
+      urgency: stop.urgency,
+    }));
+    if (result) {
+      setStopResult(result.report);
+      setStopOpen(false);
+      onChanged(null);
     }
   };
 
@@ -291,6 +318,65 @@ function SessionPanel({ session, onChanged, navigate }) {
             {busy ? "Sending…" : "Send reading"}
           </button>
         </form>
+      )}
+
+      {session.status === "RUNNING" && !stopOpen && (
+        <button type="button" className="report-incident" onClick={() => setStopOpen(true)} disabled={busy}>
+          Horse unwell? Stop this session
+        </button>
+      )}
+
+      {session.status === "RUNNING" && stopOpen && (
+        <form className="stop-form" onSubmit={submitStop} noValidate>
+          <p className="stop-form__lead">
+            The session stops now and the veterinarian is notified. The horse cannot train
+            again until a vet has examined it.
+          </p>
+          <label>
+            What did you see?
+            <input
+              list="common-symptoms"
+              value={stop.symptoms}
+              maxLength={255}
+              onChange={(e) => setStop((s) => ({ ...s, symptoms: e.target.value }))}
+              placeholder="e.g. Limping on the left foreleg"
+              required
+            />
+            <datalist id="common-symptoms">
+              {COMMON_SYMPTOMS.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          </label>
+          <label>
+            Details (optional)
+            <textarea
+              rows={2}
+              maxLength={2000}
+              value={stop.description}
+              onChange={(e) => setStop((s) => ({ ...s, description: e.target.value }))}
+              placeholder="When it started, which lap, anything else the vet should know"
+            />
+          </label>
+          <label>
+            How urgent?
+            <select value={stop.urgency} onChange={(e) => setStop((s) => ({ ...s, urgency: e.target.value }))}>
+              {URGENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <div className="stop-form__actions">
+            <button type="submit" className="stop-button" disabled={busy}>
+              {busy ? "Stopping…" : "Stop session and call the vet"}
+            </button>
+            <button type="button" className="stop-cancel" onClick={() => setStopOpen(false)} disabled={busy}>
+              Keep training
+            </button>
+          </div>
+        </form>
+      )}
+
+      {stopResult && (
+        <p className="vitals-result alert" role="status">
+          Session stopped. Incident report #{stopResult.reportId} was sent to the veterinarian.
+        </p>
       )}
 
       {lastReading && (

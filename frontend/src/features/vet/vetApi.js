@@ -18,6 +18,46 @@ const post = (url, body) =>
  * Endpoint
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * Báo cáo sự cố (hàng chờ khám)
+ * ------------------------------------------------------------------ */
+
+/**
+ * GET /api/incident-reports. status mặc định OPEN = PENDING + RECEIVED, khẩn
+ * cấp lên trước. Báo cáo sinh ra khi Groom / Head Trainer dừng buổi tập vì
+ * ngựa bất thường.
+ */
+export function listIncidentReports(signal, status = "OPEN") {
+  return authFetch(`/api/incident-reports?status=${status}`, { signal });
+}
+
+export function getIncidentReport(reportId, signal) {
+  return authFetch(`/api/incident-reports/${reportId}`, { signal });
+}
+
+/** PUT /api/incident-reports/{id}/receive: bác sĩ nhận ca (PENDING -> RECEIVED). */
+export function receiveIncidentReport(reportId) {
+  return authFetch(`/api/incident-reports/${reportId}/receive`, { method: "PUT" });
+}
+
+/** Mức khẩn cấp của báo cáo. cls là lớp CSS của chip trong vet.css. */
+const URGENCY = {
+  HIGH: { label: "Urgent", cls: "urgent" },
+  MEDIUM: { label: "Soon", cls: "soon" },
+  LOW: { label: "Routine", cls: "normal" },
+};
+
+export function toUrgency(u) {
+  return URGENCY[u] || { label: u || "—", cls: "normal" };
+}
+
+/** "27 Oct, 09:45" theo giờ máy. reportedAt là Instant (có Z) nên new Date đọc đúng. */
+export function formatReportTime(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
 /** GET /api/medical-records?horseId= - mới nhất lên trước. */
 export function listMedicalRecords(horseId, signal) {
   return authFetch(`/api/medical-records?horseId=${horseId}`, { signal });

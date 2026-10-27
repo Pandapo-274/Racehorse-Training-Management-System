@@ -49,3 +49,13 @@
 .session-review-form-footer button:disabled { opacity: .6; cursor: wait; }
 @media (max-width: 1150px) { .session-review-layout { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .session-review-fields, .session-review-context { grid-template-columns: 1fr; } .session-review-form-footer { align-items: stretch; flex-direction: column; } .session-review-form-footer button { width: 100%; } .session-review-panel-heading { align-items: flex-start; flex-direction: column; } }
+
+/* ---------- Lượt chạy thử và video ---------- */
+.trial-run-form { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.trial-run-head { display: grid; gap: 2px; }
+.trial-run-head small { color: var(--text-600); }
+.trial-run-check { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.trial-run-check input { width: 18px; height: 18px; }
+.trial-run-link { color: var(--pink-700); font-weight: 700; font-size: 13px; }
+.trial-run-error { margin: 0; color: var(--danger); font-size: 13px; font-weight: 700; }
+.trial-run-ok { margin: 0; color: #3f7a19; font-size: 13px; font-weight: 700; }

@@ -3,7 +3,7 @@ import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError, logout } from "../auth/authService";
-import { evaluateSession, fetchSessions } from "./sessionEvaluationApi";
+import { evaluateSession, fetchSessions, hasNotRun, updateTrialRun } from "./sessionEvaluationApi";
 import "./trainer.css";
 import "./schedule.css";
 import "./session-evaluation.css";
@@ -88,6 +88,77 @@ function emptyForm(session) {
   };
 }
 
+/**
+ * Lượt chạy thử và video. Lưu riêng với form đánh giá: video thường có sau khi
+ * đã chấm điểm (phải tải lên YouTube / Drive trước), và ngược lại.
+ */
+function TrialRunCard({ session, onSaved }) {
+  const navigate = useNavigate();
+  const [trialRun, setTrialRun] = useState(!!session.trialRun);
+  const [videoUrl, setVideoUrl] = useState(session.videoUrl || "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await updateTrialRun(session.sessionId, {
+        trialRun,
+        videoUrl: trialRun ? videoUrl.trim() : "",
+      });
+      onSaved(result);
+      if (!trialRun) setVideoUrl("");
+      setMessage(result.videoUrl
+        ? "Saved. The owner has been told a trial run video is available."
+        : "Saved.");
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setError(err.fieldErrors?.videoUrl || err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form className="session-review-form trial-run-form" onSubmit={save}>
+      <div className="trial-run-head">
+        <strong>Trial run</strong>
+        <small>Mark a timed trial and attach its recording for the owner.</small>
+      </div>
+      <label className="trial-run-check">
+        <input type="checkbox" checked={trialRun} onChange={(e) => setTrialRun(e.target.checked)} />
+        This session was a trial run
+      </label>
+      {trialRun && (
+        <label>
+          Video link (YouTube, Google Drive…)
+          <input
+            type="url"
+            value={videoUrl}
+            maxLength={500}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder="https://"
+          />
+        </label>
+      )}
+      {session.videoUrl && (
+        <a className="trial-run-link" href={session.videoUrl} target="_blank" rel="noopener noreferrer">
+          Open the current video
+        </a>
+      )}
+      {error && <p className="trial-run-error" role="alert">{error}</p>}
+      {message && <p className="trial-run-ok" role="status">{message}</p>}
+      <div className="session-review-form-footer">
+        <span>Only http(s) links are accepted. The file itself is not uploaded here.</span>
+        <button type="submit" disabled={saving}>{saving ? "Saving…" : "Save trial run"}</button>
+      </div>
+    </form>
+  );
+}
+
 export default function SessionEvaluationPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
@@ -108,8 +179,8 @@ export default function SessionEvaluationPage() {
       setSelectedId((current) => {
         if (current && next.some((item) => item.sessionId === current)) return current;
         return (
-          next.find((item) => item.status !== "SCHEDULED" && !item.evaluation)?.sessionId ??
-          next.find((item) => item.status !== "SCHEDULED")?.sessionId ??
+          next.find((item) => !hasNotRun(item.status) && !item.evaluation)?.sessionId ??
+          next.find((item) => !hasNotRun(item.status))?.sessionId ??
           null
         );
       });
@@ -141,7 +212,7 @@ export default function SessionEvaluationPage() {
   const visibleSessions = useMemo(
     () =>
       sessions
-        .filter((session) => session.status !== "SCHEDULED")
+        .filter((session) => !hasNotRun(session.status))
         .filter(
           (session) =>
             filter === "ALL" ||
@@ -449,6 +520,17 @@ export default function SessionEvaluationPage() {
                       </button>
                     </div>
                   </form>
+                )}
+                {!hasNotRun(selectedSession.status) && (
+                  <TrialRunCard
+                    key={selectedSession.sessionId}
+                    session={selectedSession}
+                    onSaved={(result) =>
+                      setSessions((current) => current.map((item) =>
+                        item.sessionId === result.sessionId
+                          ? { ...item, trialRun: result.trialRun, videoUrl: result.videoUrl }
+                          : item))}
+                  />
                 )}
               </>
             )}

@@ -13,6 +13,7 @@ import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
 import VetRecoveryPage from "./features/vet/VetRecoveryPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
+import OwnerTrainingPage from "./features/horse-owner/OwnerTrainingPage";
 import LandingPage from "./features/landingpage/LandingPage";
 import RegisterPage from "./features/auth/RegisterPage";
 import { getUser } from "./features/auth/authService";
@@ -114,6 +115,8 @@ export default function App() {
         <Route path="/groom/horses" element={<RoleRoute roles={["GROOM"]}><HorseListPage /></RoleRoute>} />
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />
 
+        {/* Chủ ngựa xem giáo án, lịch tập, nhận xét của HLV và video chạy thử. */}
+        <Route path="/horse-owner/training" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerTrainingPage /></RoleRoute>} />
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
         {/* Chủ ngựa xin học viện đăng ký ngựa. Không phải /horse-owner/horses/new:
             đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}

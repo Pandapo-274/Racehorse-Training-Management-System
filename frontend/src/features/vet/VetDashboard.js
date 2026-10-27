@@ -2,26 +2,17 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import VetShell, { VetState } from "./VetShell";
-import { listHorses, toBoardStatus } from "./vetApi";
-import { isWithdrawn } from "../horse/horseApi";
+import {
+  listHorses, toBoardStatus, listIncidentReports, receiveIncidentReport, toUrgency, formatReportTime,
+} from "./vetApi";
+import { isPedigreeOnly, isWithdrawn } from "../horse/horseApi";
 
 // Màn 16 - Herd health board. Cùng khung với Trainer và Manager (xem VetShell).
 //
 // Sơ đồ chuồng và các thẻ đếm lấy từ GET /api/horses (status + stallNo).
-// Danh sách chờ khám và báo cáo sự cố vẫn là dữ liệu mẫu: backend chưa có
-// endpoint liệt kê INCIDENT_REPORT.
-
-// TODO(fetch): waitingHorses -> API ngựa đang chờ khám (WaitingList)
-const waitingHorses = [
-  { name: "Air Groove", description: "Lame, left hind", priority: "urgent" },
-  { name: "TM Opera O", description: "Follow-up after treatment", priority: "normal" },
-  { name: "Gold Ship", description: "Routine hoof check", priority: "normal" },
-];
-
-// TODO(fetch): incident -> API báo cáo sự cố mới nhất
-const incident = {
-  message: "Air Groove is lame with swelling in the left hind hock.",
-};
+// Hàng chờ khám và banner sự cố lấy từ GET /api/incident-reports: báo cáo còn
+// mở (PENDING, RECEIVED), sinh ra khi Groom / Head Trainer dừng buổi tập vì
+// ngựa bất thường. Khám kèm reportId thì báo cáo đóng (EXAMINED) và rời hàng chờ.
 
 const STATUS_META = {
   fit: { label: "Healthy" },
@@ -149,8 +140,9 @@ function HealthCard({ counts, total }) {
   );
 }
 
-function WaitingList({ items, onExamine }) {
-  const urgent = items.find((item) => item.priority === "urgent");
+function WaitingList({ items, total, onExamine, onReceive, busyId }) {
+  // Backend đã xếp khẩn cấp lên trước, nên dòng đầu là ca cần khám nhất.
+  const first = items[0];
 
   return (
     <div className="vet-card waiting-card">
@@ -160,43 +152,75 @@ function WaitingList({ items, onExamine }) {
           <div>
             <h2>Waiting to be seen</h2>
             <p>
-              {items.length} horse{items.length === 1 ? "" : "s"} in the queue
+              {total} open incident report{total === 1 ? "" : "s"}
             </p>
           </div>
         </div>
 
-        {urgent && (
-          <button type="button" className="examine-button" onClick={() => onExamine(urgent)}>
-            Examine {urgent.name} now
+        {first && (
+          <button type="button" className="examine-button" onClick={() => onExamine(first)}>
+            Examine {first.horseName} now
           </button>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="vet-inline-state">No horses are waiting for an examination.</div>
+        <div className="vet-inline-state">
+          {total === 0 ? "No horses are waiting for an examination." : "No report matches your search."}
+        </div>
       ) : (
         <div className="waiting-table-wrapper">
           <table className="waiting-table">
             <thead>
               <tr>
-                <th>Horses</th>
-                <th>Reason</th>
+                <th>Horse</th>
+                <th>Symptoms</th>
+                <th>Reported</th>
                 <th>Priority</th>
+                <th>Case</th>
               </tr>
             </thead>
 
             <tbody>
-              {items.map((horse) => (
-                <tr key={horse.name}>
-                  <td className="horse-name">{horse.name}</td>
-                  <td>{horse.description}</td>
-                  <td>
-                    <span className={`waiting-status ${horse.priority}`}>
-                      {horse.priority === "urgent" ? "Urgent" : "Routine"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {items.map((r) => {
+                const urgency = toUrgency(r.urgency);
+                return (
+                  <tr key={r.reportId}>
+                    <td className="horse-name">
+                      {r.horseName}
+                      {r.stallNo && <span className="waiting-sub">Stall {r.stallNo}</span>}
+                    </td>
+                    <td>
+                      {r.symptoms}
+                      {r.sessionId && <span className="waiting-sub">Stopped during a training session</span>}
+                    </td>
+                    <td>
+                      {formatReportTime(r.reportedAt)}
+                      <span className="waiting-sub">by {r.reporterName}</span>
+                    </td>
+                    <td>
+                      <span className={`waiting-status ${urgency.cls}`}>{urgency.label}</span>
+                    </td>
+                    <td className="waiting-actions">
+                      {r.status === "PENDING" ? (
+                        <button
+                          type="button"
+                          className="waiting-action"
+                          disabled={busyId === r.reportId}
+                          onClick={() => onReceive(r)}
+                        >
+                          Take case
+                        </button>
+                      ) : (
+                        <span className="waiting-sub">Taken by {r.receivedByName}</span>
+                      )}
+                      <button type="button" className="waiting-action waiting-action--main" onClick={() => onExamine(r)}>
+                        Examine
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -215,6 +239,9 @@ export default function VetDashboard() {
   const [reload, setReload] = useState(0);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [reports, setReports] = useState([]);
+  const [busyId, setBusyId] = useState(null);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -229,11 +256,25 @@ export default function VetDashboard() {
     return () => ctrl.abort();
   }, [navigate, reload]);
 
+  // Hàng chờ khám. Lỗi ở đây không chặn bảng sức khoẻ: chỉ hiện dưới khối hàng chờ.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listIncidentReports(ctrl.signal)
+      .then((rows) => setReports(rows || []))
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return;
+        setActionError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [navigate, reload]);
+
   const horses = useMemo(
     () =>
       (apiHorses || [])
-        // Ngựa đã rút không còn trong chuồng nên không lên bảng sức khoẻ.
-        .filter((h) => !isWithdrawn(h))
+        // Ngựa đã rút không còn trong chuồng, hồ sơ PEDIGREE chỉ là tổ tiên
+        // trong phả hệ: cả hai đều không lên bảng sức khoẻ.
+        .filter((h) => !isWithdrawn(h) && !isPedigreeOnly(h))
         .map((h) => ({
           id: h.horseId,
           stall: h.stallNo || "—",
@@ -260,20 +301,36 @@ export default function VetDashboard() {
       horse.name.toLowerCase().includes(normalizedQuery) ||
       horse.stall.toLowerCase().includes(normalizedQuery));
 
-  const visibleWaiting = waitingHorses.filter(
-    (horse) =>
+  const visibleWaiting = reports.filter(
+    (r) =>
       !normalizedQuery ||
-      horse.name.toLowerCase().includes(normalizedQuery) ||
-      horse.description.toLowerCase().includes(normalizedQuery)
+      r.horseName.toLowerCase().includes(normalizedQuery) ||
+      r.symptoms.toLowerCase().includes(normalizedQuery)
   );
 
   const openExamination = (horse) => navigate(`/veterinarian/examination/${horse.id}`);
 
-  // Danh sách chờ là dữ liệu mẫu nên chỉ có tên: tìm con ngựa thật cùng tên.
-  const examineWaiting = (item) => {
-    const match = horses.find((h) => h.name.toLowerCase() === item.name.toLowerCase());
-    navigate(match ? `/veterinarian/examination/${match.id}` : "/veterinarian/examination");
+  // Khám kèm reportId: lưu bản khám xong thì backend đóng báo cáo này.
+  const examineWaiting = (report) =>
+    navigate(`/veterinarian/examination/${report.horseId}?reportId=${report.reportId}`);
+
+  const receiveReport = (report) => {
+    setBusyId(report.reportId);
+    setActionError("");
+    receiveIncidentReport(report.reportId)
+      .then((updated) =>
+        setReports((rows) => rows.map((r) => (r.reportId === updated.reportId ? updated : r))))
+      .catch((err) => {
+        if (handleAuthError(err, navigate)) return;
+        setActionError(err.message);
+      })
+      .finally(() => setBusyId(null));
   };
+
+  // Banner: báo cáo mới nhất chưa ai nhận.
+  const newest = reports
+    .filter((r) => r.status === "PENDING")
+    .sort((a, b) => String(b.reportedAt).localeCompare(String(a.reportedAt)))[0];
 
   const today = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -325,10 +382,15 @@ export default function VetDashboard() {
             ))}
           </div>
 
-          <div ref={alertRef} className="vet-alert" role="alert">
-            <strong>New incident report:</strong>
-            <span>{incident.message}</span>
-          </div>
+          {newest && (
+            <div ref={alertRef} className="vet-alert" role="alert">
+              <strong>New incident report:</strong>
+              <span>
+                {newest.horseName}: {newest.symptoms} ({toUrgency(newest.urgency).label.toLowerCase()},
+                reported by {newest.reporterName}).
+              </span>
+            </div>
+          )}
 
           <div className="vet-middle">
             <StableMap
@@ -342,7 +404,14 @@ export default function VetDashboard() {
             <HealthCard counts={counts} total={horses.length} />
           </div>
 
-          <WaitingList items={visibleWaiting} onExamine={examineWaiting} />
+          {actionError && <p className="waiting-error" role="alert">{actionError}</p>}
+          <WaitingList
+            items={visibleWaiting}
+            total={reports.length}
+            onExamine={examineWaiting}
+            onReceive={receiveReport}
+            busyId={busyId}
+          />
         </>
       )}
     </VetShell>

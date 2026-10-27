@@ -1,6 +1,6 @@
 ﻿
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import { toAge } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
@@ -10,6 +10,8 @@ import {
   listLocksForHorse,
   listInjuries,
   createMedicalRecord,
+  getIncidentReport,
+  toUrgency,
   createInjury,
   issueLock,
   releaseLock,
@@ -164,6 +166,10 @@ function HorseModel({ marker, existingMarkers = [], onMark }) {
 
 export default function VetExaminationPage() {
   const { horseId } = useParams();
+  // Mở từ hàng chờ khám: khám này trả lời báo cáo sự cố đó (backend đóng báo cáo khi lưu).
+  const [searchParams] = useSearchParams();
+  const reportParam = Number(searchParams.get("reportId"));
+  const reportId = Number.isInteger(reportParam) && reportParam > 0 ? reportParam : null;
 
   if (!horseId) {
     return <VetHorsePicker mode="examination" />;
@@ -171,8 +177,9 @@ export default function VetExaminationPage() {
 
   return (
     <ExaminationForm
-      key={horseId}
+      key={`${horseId}-${reportId || ""}`}
       horseId={Number(horseId)}
+      reportId={reportId}
     />
   );
 }
@@ -186,9 +193,19 @@ function Field({ label, full, children }) {
   );
 }
 
-function ExaminationForm({ horseId }) {
+function ExaminationForm({ horseId, reportId }) {
   const navigate = useNavigate();
   const user = getUser();
+  const [report, setReport] = useState(null);
+
+  useEffect(() => {
+    if (!reportId) return undefined;
+    const ctrl = new AbortController();
+    getIncidentReport(reportId, ctrl.signal)
+      .then(setReport)
+      .catch(() => {}); // banner chỉ là phụ; backend vẫn kiểm reportId khi lưu
+    return () => ctrl.abort();
+  }, [reportId]);
 
   const [horse, setHorse] = useState(null);
   const [locks, setLocks] = useState([]);
@@ -339,6 +356,7 @@ function ExaminationForm({ horseId }) {
       if (!done.record) {
         done.record = await createMedicalRecord({
           horseId,
+          reportId,
           recordType: "EXAM",
           examDate: examTimestamp(examDate),
           diagnosis: diagnosis.trim(),
@@ -477,6 +495,19 @@ function ExaminationForm({ horseId }) {
         .join(" · ")}
     >
       <VetError error={error} />
+
+      {report && (
+        <div className="vx-banner vx-banner--warn" role="status">
+          <strong>
+            Incident report #{report.reportId} · {toUrgency(report.urgency).label}
+          </strong>
+          <span>
+            {report.symptoms}
+            {report.description ? ` — ${report.description}` : ""} (reported by {report.reporterName}).
+            Saving this examination closes the report and lets the horse train again.
+          </span>
+        </div>
+      )}
 
       <div className="vx-grid vx-grid--exam">
         <VetCard

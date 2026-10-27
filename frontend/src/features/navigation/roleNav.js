@@ -20,6 +20,7 @@ export const ROLE_NAV = {
   HORSE_OWNER: [
     { key: "overview", label: "Overview", path: "/horse-owner", exact: true },
     { key: "horses", label: "My horses", path: "/horse-owner/horses" },
+    { key: "training", label: "Training", path: "/horse-owner/training" },
     { key: "results", label: "Results & races", path: "/horse-owner", hash: "results-races" },
     { key: "costs", label: "Costs & prizes", path: "/horse-owner", hash: "costs-prizes" },
   ],

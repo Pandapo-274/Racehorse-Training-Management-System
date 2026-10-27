@@ -25,6 +25,35 @@ export function sendVitals(sessionId, { heartRate, velocity }) {
   });
 }
 
+/**
+ * PUT /api/training-sessions/{id}/stop: ngựa có dấu hiệu bất thường giữa buổi.
+ * Buổi chuyển STOPPED_EARLY và backend mở báo cáo sự cố cho bác sĩ thú y; tới
+ * khi bác sĩ khám xong, con ngựa không được bắt đầu buổi tập nào nữa.
+ * Trả về { sessionId, sessionStatus, report }.
+ */
+export function stopSession(sessionId, { symptoms, description, urgency }) {
+  return authFetch(`/api/training-sessions/${sessionId}/stop`, {
+    method: "PUT",
+    body: JSON.stringify({ symptoms, description: description || null, urgency }),
+  });
+}
+
+/** Triệu chứng hay gặp, để Groom chọn nhanh; vẫn sửa tay được. */
+export const COMMON_SYMPTOMS = [
+  "Limping / lame",
+  "Laboured breathing",
+  "Refusing to run",
+  "Signs of colic (pain in the belly)",
+  "Bleeding from the nose",
+  "Swelling on a leg",
+];
+
+export const URGENCY_OPTIONS = [
+  { value: "HIGH", label: "Urgent – vet should come now" },
+  { value: "MEDIUM", label: "Soon – today" },
+  { value: "LOW", label: "Routine – when available" },
+];
+
 /* ------------------------------------------------------------------ *
  * Từ vựng hiển thị
  * ------------------------------------------------------------------ */

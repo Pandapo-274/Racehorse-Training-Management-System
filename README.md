@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 27, 2026` at `10:00` by `tqt195`
+### Last Commited: `Oct 27, 2026` at `10:48` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 27, 2026`
+- `[10:48]` `tqt195` - Frontend for incident and trial run: `Groom` stops a session when the horse is unwell, `Vet` incident queue (take case, examine with report), `Head Trainer` marks trial runs with video, new `Horse Owner` `Training` page (plan, schedule, remarks, videos); mail is off by default again
 - `[10:12]` `DevilJack422` - Rename incident/trial-run migration to V16, drop suspended-account guard
 > #### `Oct 26, 2026`
 - `[08:44]` `DevilJack422` - Add incident stop-session flow, trial-run video, lock stops running session (V14)
