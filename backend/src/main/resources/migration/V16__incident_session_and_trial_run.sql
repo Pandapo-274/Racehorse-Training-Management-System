@@ -1,5 +1,5 @@
 /* =============================================================================
-   V14 - Hai thứ còn thiếu cho "dừng buổi tập vì ngựa bất thường" và "video chạy thử".
+   V16 (trước đây đặt là V14, đổi số vì trùng V14 trên main) - Hai thứ còn thiếu cho "dừng buổi tập vì ngựa bất thường" và "video chạy thử".
 
    1) INCIDENT_REPORT
       - session_id : báo cáo này sinh ra từ buổi tập nào (NULL = báo cáo không gắn buổi tập,
@@ -58,7 +58,7 @@ IF COL_LENGTH('INCIDENT_REPORT', 'session_id') IS NULL
    OR COL_LENGTH('INCIDENT_REPORT', 'received_by') IS NULL
    OR COL_LENGTH('TRAINING_SESSION', 'is_trial_run') IS NULL
    OR COL_LENGTH('TRAINING_SESSION', 'video_url') IS NULL
-    THROW 50140, N'V14: thieu cot moi tren INCIDENT_REPORT hoac TRAINING_SESSION.', 1;
+    THROW 50160, N'V16: thieu cot moi tren INCIDENT_REPORT hoac TRAINING_SESSION.', 1;
 
-PRINT 'V14 hoan tat.';
+PRINT 'V16 hoan tat.';
 GO

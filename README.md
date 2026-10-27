@@ -25,7 +25,7 @@ git pull [use when others pushed the files to the repo]
 git add . [use when you have new files added]
 git commit -am "[<GitHub Username>] <Date>-<Time> <Commit Message>"
 
-Example: 
+Example: `
 git add .
 git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
@@ -45,6 +45,10 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 27, 2026`
+- `[10:12]` `DevilJack422` - Rename incident/trial-run migration to V16, drop suspended-account guard
+> #### `Oct 26, 2026`
+- `[08:44]` `DevilJack422` - Add incident stop-session flow, trial-run video, lock stops running session (V14)
 > #### `Oct 23, 2026`
 - `[14:06]` `ArichiAya` - Fix Register `RBAC` v1
 - `[10:25]` `tqt195` - Fix register account page: `Password` and `Repeat password` fields no longer stick together or overflow the card
