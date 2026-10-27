@@ -4,6 +4,7 @@ import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
 import StaffPage from "./features/manager/StaffPage";
 import PermissionsPage from "./features/manager/PermissionsPage";
+import AuditLogPage from "./features/manager/AuditLogPage";
 import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
@@ -15,6 +16,7 @@ import VetPreventiveCarePage from "./features/vet/VetPreventiveCarePage";
 import VetPrescriptionPage from "./features/vet/VetPrescriptionPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
+import OwnerTrainingPage from "./features/horse-owner/OwnerTrainingPage";
 import LandingPage from "./features/landingpage/LandingPage";
 import RegisterPage from "./features/auth/RegisterPage";
 import { getUser } from "./features/auth/authService";
@@ -82,6 +84,8 @@ export default function App() {
         <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
         {/* UC19 phần xem: vai trò nào được làm gì, đọc từ chính @RequireRole của backend. */}
         <Route path="/manager/permissions" element={<RoleRoute roles={["CLUB_MANAGER"]}><PermissionsPage /></RoleRoute>} />
+        {/* Nhật ký thao tác hệ thống: chỉ đọc. */}
+        <Route path="/manager/audit-log" element={<RoleRoute roles={["CLUB_MANAGER"]}><AuditLogPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
         <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
@@ -120,6 +124,8 @@ export default function App() {
         <Route path="/groom/horses" element={<RoleRoute roles={["GROOM"]}><HorseListPage /></RoleRoute>} />
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />
 
+        {/* Chủ ngựa xem giáo án, lịch tập, nhận xét của HLV và video chạy thử. */}
+        <Route path="/horse-owner/training" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerTrainingPage /></RoleRoute>} />
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
         {/* Chủ ngựa xin học viện đăng ký ngựa. Không phải /horse-owner/horses/new:
             đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}

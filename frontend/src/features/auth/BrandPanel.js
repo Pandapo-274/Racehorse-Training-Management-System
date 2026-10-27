@@ -1,12 +1,15 @@
 ﻿// src/features/auth/BrandPanel.js
-
-const STATS = [
-  { value: 48, label: "Horses", color: "var(--pink-500)" },
-  { value: 12, label: "Active plans", color: "var(--gold-500)" },
-  { value: 7, label: "G1 races in 2026", color: "var(--rose-500)" },
-];
+import { formatStat, useClubStats } from "../landingpage/clubStatsApi";
 
 export default function BrandPanel() {
+  // Số thật từ GET /api/public/club-stats (xem clubStatsApi.js).
+  const club = useClubStats();
+  const STATS = [
+    { value: formatStat(club?.horsesInTraining), label: "Horses", color: "var(--pink-500)" },
+    { value: formatStat(club?.activePlans), label: "Active plans", color: "var(--gold-500)" },
+    { value: formatStat(club?.racesThisSeason), label: `Races in ${club?.season ?? new Date().getFullYear()}`, color: "var(--rose-500)" },
+  ];
+
   return (
     <aside className="brand">
       <img src="/logo.png" alt="Tracen Club" className="brand__logo" />

@@ -1,5 +1,6 @@
 ﻿import { useNavigate } from "react-router-dom";
 import "./landing.css";
+import { formatStat, useClubStats } from "./clubStatsApi";
 
 const flows = [
   {
@@ -39,6 +40,8 @@ function SpeedLines() {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  // Ba số ở dải thống kê: lấy thật từ GET /api/public/club-stats.
+  const club = useClubStats();
 
   return (
     <div className="landing-page">
@@ -140,21 +143,21 @@ export default function LandingPage() {
 
         <div className="statistics-grid">
           <div className="stat-item">
-            <strong>48</strong>
+            <strong>{formatStat(club?.horsesInTraining)}</strong>
             <span>Horses in training</span>
           </div>
 
           <div className="stat-divider"></div>
          <div className="stat-item">
-            <strong>12</strong>
+            <strong>{formatStat(club?.activePlans)}</strong>
             <span>Active plans</span>
           </div>
 
           <div className="stat-divider"></div>
 
           <div className="stat-item">
-            <strong>7</strong>
-            <span>G1 races this season</span>
+            <strong>{formatStat(club?.racesThisSeason)}</strong>
+            <span>Races this season</span>
           </div>
         </div>
 

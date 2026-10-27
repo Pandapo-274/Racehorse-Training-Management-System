@@ -1,0 +1,41 @@
+/* src/features/manager/audit-log.css - trang Audit log của Club Manager. */
+
+.al-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.al-tile {
+  display: grid; gap: 2px; padding: 14px 18px; text-align: left;
+  border: 1px solid var(--line); border-radius: 14px; background: #fff;
+  font: inherit; color: var(--text-900); cursor: pointer;
+}
+.al-tile:disabled { cursor: default; }
+.al-tile strong { font: 800 26px var(--font-heading); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.al-tile span { font-weight: 700; font-size: 13px; }
+.al-tile small { color: var(--text-400); font-size: 11px; }
+.al-tile--bad { border-color: #f3b9c3; background: #fff5f7; }
+.al-tile--bad strong { color: var(--danger); }
+.al-tile--ok strong { color: #3f7a19; }
+
+.al-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.al-filters label { display: grid; gap: 4px; font-size: 11px; font-weight: 700; color: var(--text-600); }
+.al-filters select,
+.al-filters input {
+  height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--field-bg); font: 500 13px var(--font-body); color: var(--text-900);
+}
+.al-filters__user { flex: 1; min-width: 200px; }
+
+/* Bảng rộng hơn màn hình điện thoại thì cuộn ngang trong khung. */
+.al-scroll { overflow-x: auto; }
+.al-table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 13px; }
+.al-table th,
+.al-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.al-table thead th {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-600);
+}
+.al-table tbody tr:last-child td { border-bottom: 0; }
+.al-table small { display: block; margin-top: 2px; color: var(--text-400); font-size: 11px; }
+.al-table tr.is-denied td { background: #fff5f7; }
+.al-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.al-code { display: block; margin-top: 2px; font: 500 11px ui-monospace, Consolas, monospace; color: var(--text-400); word-break: break-all; }
+.al-ip { font: 500 12px ui-monospace, Consolas, monospace; color: var(--text-600); }
+.al-muted { color: var(--text-400); font-style: italic; }
+.al-more { display: flex; justify-content: center; margin-top: 12px; }

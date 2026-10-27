@@ -768,3 +768,28 @@ button.task-row.selected { outline: 2px solid #f55fa9; outline-offset: -2px; bor
   font-weight: 700;
   cursor: pointer;
 }
+
+/* ---------- Dừng buổi tập vì ngựa bất thường ---------- */
+.session-card .report-incident { margin-top: 12px; width: 100%; }
+.stop-form {
+  margin-top: 12px; padding: 14px; display: grid; gap: 10px;
+  border: 2px solid #f3c3cc; border-radius: 14px; background: #fff6f8;
+}
+.stop-form__lead { margin: 0; font-size: 13px; color: #6d708b; }
+.stop-form label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #6d708b; }
+.stop-form input,
+.stop-form textarea,
+.stop-form select {
+  padding: 9px 12px; border: 1px solid #f2dee8; border-radius: 10px;
+  background: #fff; font: inherit; color: var(--text-900);
+}
+.stop-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.stop-button {
+  padding: 10px 16px; border: 0; border-radius: 12px;
+  background: #e63148; color: #fff; font: inherit; font-weight: 800; cursor: pointer;
+}
+.stop-button:disabled { opacity: .6; cursor: default; }
+.stop-cancel {
+  padding: 10px 16px; border: 1px solid #f2dee8; border-radius: 12px;
+  background: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}

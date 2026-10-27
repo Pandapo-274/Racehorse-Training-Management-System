@@ -15,7 +15,9 @@ public class WebConfig implements WebMvcConfigurer {
     public static final String[] PUBLIC_PATHS = {
             "/api/auth/login", "/api/auth/register",
             "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/google",
-            "/api/hello", "/api/db-test"};
+            "/api/hello", "/api/db-test",
+            // Ba số tổng trên trang chủ / trang đăng nhập, mở trước khi đăng nhập (ClubStatsController).
+            "/api/public/club-stats"};
 
     private final AuthInterceptor authInterceptor;
 

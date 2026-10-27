@@ -1399,3 +1399,15 @@ button.stable-box:focus-visible {
   line-height: 1.5;
 }
 .vx-injury-history__note { margin-top: 12px; }
+
+/* ---------- Hàng chờ khám từ báo cáo sự cố ---------- */
+.waiting-status.soon { background: #fff0c9; color: #9c6d00; }
+.waiting-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 500; color: var(--text-600); }
+.waiting-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.waiting-action {
+  padding: 5px 12px; border: 1px solid var(--line); border-radius: 14px;
+  background: #fff; color: var(--text-900); font: 700 11px var(--font-body); cursor: pointer;
+}
+.waiting-action:disabled { opacity: .55; cursor: default; }
+.waiting-action--main { border-color: var(--pink-500); background: var(--pink-500); color: #fff; }
+.waiting-error { margin: 0 0 8px; color: var(--danger); font-size: 12px; font-weight: 700; }
