@@ -101,6 +101,27 @@ public class IncidentRepository {
                 .single();
     }
 
+    /**
+     * Báo cáo không gắn buổi tập: Groom thấy ngựa bất thường tại chuồng (bỏ ăn,
+     * đau bụng, sốt, móng xước...). session_id NULL nên không đụng UX_INC_session.
+     */
+    public int insertStandaloneReport(int horseId, int reporterId, String symptoms,
+                                      String description, String urgency, String photoUrl) {
+        return jdbc.sql("""
+                INSERT INTO INCIDENT_REPORT (horse_id, reporter_id, symptoms, description, urgency, photo_url)
+                OUTPUT INSERTED.report_id
+                VALUES (:horseId, :reporterId, :symptoms, :description, :urgency, :photo)
+                """)
+                .param("horseId", horseId)
+                .param("reporterId", reporterId)
+                .param("symptoms", symptoms)
+                .param("description", description)
+                .param("urgency", urgency)
+                .param("photo", photoUrl)
+                .query(Integer.class)
+                .single();
+    }
+
     public Optional<IncidentReportResponse> findById(int reportId) {
         return jdbc.sql(SELECT_REPORT + " WHERE r.report_id = :id")
                 .param("id", reportId)

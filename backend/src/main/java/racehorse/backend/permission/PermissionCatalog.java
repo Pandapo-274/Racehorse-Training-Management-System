@@ -35,6 +35,8 @@ final class PermissionCatalog {
     private static final String HORSES = "Horses & registration";
     private static final String TRAINING = "Training";
     private static final String HEALTH = "Health & injuries";
+    private static final String CARE = "Stable care & supplies";
+    private static final String RACES = "Races & results";
     private static final String REPORTS = "Reports";
 
     static final List<Entry> ENTRIES = List.of(
@@ -77,6 +79,7 @@ final class PermissionCatalog {
             // ---------- Flow 3: y tế ----------
             new Entry(HEALTH, "View the herd health board", "GET /api/health/overview", NONE),
             new Entry(HEALTH, "View incident reports", "GET /api/incident-reports", GROOM_OWNER),
+            new Entry(HEALTH, "Report an incident at the stable", "POST /api/incident-reports", NONE),
             new Entry(HEALTH, "Take an incident case", "PUT /api/incident-reports/{id}/receive", NONE),
             new Entry(HEALTH, "Record examinations", "POST /api/medical-records", NONE),
             new Entry(HEALTH, "Prescribe treatment", "POST /api/treatments", NONE),
@@ -85,6 +88,23 @@ final class PermissionCatalog {
             new Entry(HEALTH, "Release a training lock", "POST /api/training-locks/{id}/release", NONE),
             new Entry(HEALTH, "Confirm recovery", "POST /api/recovery-confirmations", NONE),
             new Entry(HEALTH, "View the preventive care schedule", "GET /api/preventive-care", NONE),
+
+            // ---------- Chăm sóc chuồng trại, dinh dưỡng, vật tư (Flow 4) ----------
+            new Entry(CARE, "View approved rations", "GET /api/feeding", NONE),
+            new Entry(CARE, "Approve a horse's ration", "PUT /api/feeding/horse/{horseId}", NONE),
+            new Entry(CARE, "View daily care tasks", "GET /api/daily-tasks", GROOM),
+            new Entry(CARE, "Assign daily care tasks", "POST /api/daily-tasks", NONE),
+            new Entry(CARE, "Mark a care task done", "PUT /api/daily-tasks/{id}/complete", GROOM),
+            new Entry(CARE, "View supplies", "GET /api/supplies", NONE),
+            new Entry(CARE, "Add or edit supply items", "POST /api/supplies", NONE),
+            new Entry(CARE, "Update stock counts", "PUT /api/supplies/{id}/count", NONE),
+
+            // ---------- Giải đua (Flow 5) ----------
+            new Entry(RACES, "View race entries and results", "GET /api/races", OWNER),
+            new Entry(RACES, "Register horses for races", "POST /api/races", NONE),
+            new Entry(RACES, "Record race results", "PUT /api/races/{id}/result", NONE),
+            new Entry(RACES, "Scratch a race entry", "PUT /api/races/{id}/scratch", NONE),
+            new Entry(RACES, "View race performance and prize totals", "GET /api/races/summary", NONE),
 
             // ---------- Báo cáo ----------
             new Entry(REPORTS, "View the owner dashboard (costs, prizes)", "GET /api/owner/dashboard", OWNER));
