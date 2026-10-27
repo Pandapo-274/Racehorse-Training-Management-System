@@ -18,7 +18,8 @@ public class SessionRepository {
                    s.horse_id, h.horse_name, s.assigned_to, g.full_name AS groom_name,
                    s.session_date, s.planned_distance, s.actual_distance, s.duration_minutes,
                    s.avg_heart_rate, s.peak_heart_rate, s.recovery_heart_rate, s.peak_velocity,
-                   s.evaluation, s.remarks, s.evaluated_by, s.status
+                   s.evaluation, s.remarks, s.evaluated_by, s.status,
+                   s.is_trial_run, s.video_url
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
             JOIN HORSE h ON h.horse_id = s.horse_id
@@ -48,7 +49,8 @@ public class SessionRepository {
                 rs.getBigDecimal("peak_velocity"),
                 rs.getString("evaluation"), rs.getString("remarks"),
                 rs.getObject("evaluated_by", Integer.class),
-                rs.getString("status"));
+                rs.getString("status"),
+                rs.getBoolean("is_trial_run"), rs.getString("video_url"));
     }
 
     /** Chỉ nối điều kiện khi có giá trị, tránh kiểu "(:x IS NULL OR ...)" dễ lỗi kiểu dữ liệu trên SQL Server. */
