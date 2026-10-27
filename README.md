@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 27, 2026` at `11:30` by `Pandapo274`
+### Last Commited: `Oct 27, 2026` at `12:58` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 27, 2026`
+- `[12:58]` `Pandapo274` - Remove the old duplicate preventive reminder scheduler (its notices were rejected by `CK_NOTIF_target`); due-session highlight on `Schedule` now shows on every screen size
 - `[11:30]` `Pandapo274` - Vet flow: daily preventive-care reminders (`V17__preventive_reminder_log.sql`, notification digest for Vet + owner notices), Vet Preventive Care and Prescription pages; Health board and Preventive Care board
 - `[11:08]` `tqt195` - Add `Audit Log` page for `Club Manager` (`/manager/audit-log`, read-only `GET /api/audit-logs`): filters, 24-hour security summary, readable action names, denied rows highlighted
 - `[10:53]` `tqt195` - Real club stats on landing and login pages (public `GET /api/public/club-stats`: horses in training, active plans, races this season)

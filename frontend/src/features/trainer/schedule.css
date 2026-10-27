@@ -577,12 +577,13 @@
   .schedule-modal {
     padding: 18px;
   }
+}
 
-  .schedule-session.is-due {
-    border-color: #c98a1a;
-  }
-  .schedule-session.is-due .schedule-status {
-    color: #c98a1a;
-    font-weight: 700;
-  }
+/* Buổi đã tới giờ mà Groom chưa bấm Start. Đặt ngoài @media để hiện ở mọi cỡ màn hình. */
+.schedule-session.is-due {
+  border-color: #c98a1a;
+}
+.schedule-session.is-due .schedule-status {
+  color: #c98a1a;
+  font-weight: 700;
 }

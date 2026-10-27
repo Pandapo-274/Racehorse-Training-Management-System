@@ -29,7 +29,7 @@ import racehorse.backend.preventive.PreventiveReminderLogRepository.ReminderKey;
  *   UNSCHEDULED - KHÔNG nhắc: bản ghi không có ngày hẹn nên không biết nhắc "khi nào";
  *   nó vẫn hiện trên bảng UC17.
  *
- * Khi nào nhắc lại: xem PREVENTIVE_REMINDER_LOG (V14). DUE_SOON một lần; OVERDUE và
+ * Khi nào nhắc lại: xem PREVENTIVE_REMINDER_LOG (V17). DUE_SOON một lần; OVERDUE và
  * NEVER nhắc lại sau REPEAT_AFTER_DAYS nếu vẫn chưa ai làm.
  */
 @Service
