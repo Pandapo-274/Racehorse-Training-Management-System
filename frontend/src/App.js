@@ -3,6 +3,7 @@ import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
 import StaffPage from "./features/manager/StaffPage";
+import PermissionsPage from "./features/manager/PermissionsPage";
 import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
@@ -77,6 +78,8 @@ export default function App() {
         <Route path="/manager/withdrawals" element={<RoleRoute roles={["CLUB_MANAGER"]}><WithdrawalReviewPage /></RoleRoute>} />
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
         <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
+        {/* UC19 phần xem: vai trò nào được làm gì, đọc từ chính @RequireRole của backend. */}
+        <Route path="/manager/permissions" element={<RoleRoute roles={["CLUB_MANAGER"]}><PermissionsPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
         <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
