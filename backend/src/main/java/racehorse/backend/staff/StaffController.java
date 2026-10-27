@@ -34,9 +34,10 @@ import racehorse.backend.auth.RequireRole;
  *
  * Write half: staff accounts (Head Trainer, Vet, Groom) are no longer
  * self-registered - AuthService only lets HORSE_OWNER sign up - so the manager
- * creates them here, and can suspend / re-activate any non-manager account.
- * Changing a role or a permission still belongs to the Permissions screen,
- * which is not built.
+ * creates them here, moves them between the three staff roles, and can
+ * suspend / re-activate any non-manager account. Permissions belong to roles
+ * (RBAC), so changing someone's role is how the manager changes what they can
+ * do. See StaffService for the rules.
  */
 @RestController
 @RequestMapping("/api/staff")
@@ -68,7 +69,7 @@ public class StaffController {
 
     @PutMapping("/{id}/status")
     @RequireRole({"CLUB_MANAGER"})
-    public StaffRow setStatus(
+    public StaffService.StaffUpdate setStatus(
             @PathVariable int id,
             @Valid @RequestBody StatusRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
@@ -76,7 +77,18 @@ public class StaffController {
         return service.setStatus(id, request.status(), user, http.getRemoteAddr());
     }
 
-    /** Cùng luật kiểm với RegisterRequest; mật khẩu là mật khẩu ban đầu do manager đặt. */
+    @PutMapping("/{id}/role")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffService.StaffUpdate changeRole(
+            @PathVariable int id,
+            @Valid @RequestBody RoleRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.changeRole(id, request.roleName(), user, http.getRemoteAddr());
+    }
+
+    /** Cùng luật kiểm với RegisterRequest. Mật khẩu là mật khẩu TẠM do manager đặt:
+        người dùng phải đổi ở lần đăng nhập đầu (V14). */
     public record CreateRequest(
             @NotBlank(message = "Username is required")
             @Size(min = 3, max = 50, message = "Username must be 3-50 characters")
@@ -100,6 +112,10 @@ public class StaffController {
             @Pattern(regexp = "^(\\+?[0-9]{9,15})?$", message = "Phone number is invalid")
             String phone,
 
+            @NotBlank(message = "Role is required")
+            String roleName) {}
+
+    public record RoleRequest(
             @NotBlank(message = "Role is required")
             String roleName) {}
 

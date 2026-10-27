@@ -116,6 +116,31 @@ public class StaffRepository {
                 .optional();
     }
 
+    /** Đổi vai trò: chỉ đổi role_id. Service đã kiểm vai trò đích hợp lệ. */
+    public int updateRole(int userId, int roleId) {
+        return jdbc.sql("UPDATE APP_USER SET role_id = :roleId WHERE user_id = :id")
+                .param("roleId", roleId)
+                .param("id", userId)
+                .update();
+    }
+
+    /**
+     * Số buổi tập đang giao cho người này mà chưa xong: đang chạy, hoặc đã lên
+     * lịch từ hôm nay trở đi. Buổi SCHEDULED của ngày đã qua không tính: không
+     * ai giao lại được một buổi trong quá khứ.
+     */
+    public int countOpenAssignments(int userId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM TRAINING_SESSION
+                WHERE assigned_to = :id
+                  AND (status = 'RUNNING'
+                       OR (status = 'SCHEDULED' AND session_date >= CAST(GETDATE() AS DATE)))
+                """)
+                .param("id", userId)
+                .query(Integer.class)
+                .single();
+    }
+
     /** Khoá / mở khoá: chỉ đổi cột status (CK_USER_status chỉ nhận ACTIVE, SUSPENDED). */
     public int updateStatus(int userId, String status) {
         return jdbc.sql("UPDATE APP_USER SET status = :status WHERE user_id = :id")

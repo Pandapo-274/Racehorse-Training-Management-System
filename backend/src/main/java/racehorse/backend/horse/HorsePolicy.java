@@ -67,6 +67,17 @@ public final class HorsePolicy {
         return null;
     }
 
+    /**
+     * Ngựa đã rút khỏi học viện (V15) thì không xếp giáo án, không giao buổi
+     * tập, không bắt đầu buổi tập. Gọi cùng chỗ với trainingProblem(recordType).
+     */
+    public static String withdrawnProblem(HorseResponse horse) {
+        if (horse != null && horse.isWithdrawn()) {
+            return horse.horseName() + " has been withdrawn from the club and cannot train.";
+        }
+        return null;
+    }
+
     public static String ageProblem(String recordType, LocalDate dateOfBirth) {
         if (!ACADEMY.equals(normalizeType(recordType))) return null;
         if (dateOfBirth == null) {

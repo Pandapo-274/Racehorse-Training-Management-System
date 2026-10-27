@@ -15,7 +15,7 @@ import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
 } from "./horseApi";
-import { listRequests, submitRequest, toRequestStatus } from "./horseRequestApi";
+import { listRequests, submitRequest, cancelRequest, toRequestStatus } from "./horseRequestApi";
 
 const EMPTY = {
   horseName: "", breed: "", horseGender: "", dateOfBirth: "", color: "", note: "",
@@ -68,6 +68,8 @@ export default function HorseRequestPage() {
   const [sending, setSending] = useState(false);
   const [rows, setRows] = useState(null);
   const [loadError, setLoadError] = useState("");
+  const [cancellingId, setCancellingId] = useState(null);
+  const [listError, setListError] = useState("");
 
   const load = useCallback(
     (signal) => {
@@ -116,6 +118,24 @@ export default function HorseRequestPage() {
       else setSubmitError(err.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  /* Huỷ yêu cầu còn chờ. Hỏi lại một lần trước khi gửi: huỷ xong không mở
+     lại được, chỉ gửi yêu cầu mới. */
+  const cancel = async (r) => {
+    if (!window.confirm(`Cancel the registration request for ${r.horseName}?`)) return;
+    setCancellingId(r.requestId);
+    setListError("");
+    try {
+      await cancelRequest(r.requestId);
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setListError(err.message);
+      load(); // có thể Club Manager vừa xử lý xong, nạp lại cho đúng trạng thái
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -232,6 +252,8 @@ export default function HorseRequestPage() {
         ) : rows.length === 0 ? (
           <p className="hz-empty">You have not sent a request yet.</p>
         ) : (
+          <>
+          {listError && <p className="hz-form-error" role="alert">{listError}</p>}
           <ul className="hz-list">
             {rows.map((r) => {
               const st = toRequestStatus(r.status);
@@ -256,11 +278,25 @@ export default function HorseRequestPage() {
                     )}
                   </div>
 
-                  <StatusChip tone={st.tone} label={st.label} />
+                  <div className="hz-row-action">
+                    <StatusChip tone={st.tone} label={st.label} />
+                    {r.status === "PENDING" && (
+                      <button
+                        type="button"
+                        className="hz-btn hz-btn--ghost"
+                        style={{ marginLeft: 8 }}
+                        disabled={cancellingId === r.requestId}
+                        onClick={() => cancel(r)}
+                      >
+                        {cancellingId === r.requestId ? "Cancelling…" : "Cancel request"}
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
             })}
           </ul>
+          </>
         )}
       </Card>
     </HorseShell>

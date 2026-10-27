@@ -75,6 +75,24 @@ public class HorseRequestService {
         return saved;
     }
 
+    /**
+     * Chủ ngựa huỷ yêu cầu còn đang chờ (V15). Không cần Club Manager duyệt:
+     * chưa có hồ sơ ngựa nào, nên huỷ chỉ là đóng lời đề nghị lại.
+     */
+    @Transactional
+    public HorseRequestRow cancel(int requestId, AuthenticatedUser me, String ip) {
+        HorseRequestRow req = getOrThrow(requestId);
+        if (req.ownerId() != me.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This request belongs to another owner");
+        }
+        requirePending(req);
+        if (requests.markCancelled(requestId, me.userId()) == 0) {
+            throw alreadyHandled();
+        }
+        users.writeAudit(me.userId(), "HORSE_REQUEST_CANCEL", "HORSE_REQUEST", requestId, "SUCCESS", ip);
+        return getOrThrow(requestId);
+    }
+
     /* ------------------------------------------------------------------ *
      * Xem
      * ------------------------------------------------------------------ */

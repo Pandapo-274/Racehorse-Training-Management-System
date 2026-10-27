@@ -7,6 +7,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    /**
+     * Cửa công khai, không cần token (xem chú thích trong addInterceptors).
+     * Là hằng số để trang Permissions (PermissionService) đọc lại đúng danh
+     * sách này thay vì chép một bản thứ hai.
+     */
+    public static final String[] PUBLIC_PATHS = {
+            "/api/auth/login", "/api/auth/register",
+            "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/google",
+            "/api/hello", "/api/db-test"};
+
     private final AuthInterceptor authInterceptor;
 
     public WebConfig(AuthInterceptor authInterceptor) {
@@ -31,8 +41,6 @@ public class WebConfig implements WebMvcConfigurer {
                    Thêm đường nào vào danh sách này là mở một cửa không cần
                    token, nên mỗi dòng phải trả lời được: tại sao người chưa
                    đăng nhập cần gọi nó? */
-                .excludePathPatterns("/api/auth/login", "/api/auth/register",
-                        "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/google",
-                        "/api/hello", "/api/db-test");
+                .excludePathPatterns(PUBLIC_PATHS);
     }
 }

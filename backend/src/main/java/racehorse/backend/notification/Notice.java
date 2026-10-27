@@ -17,4 +17,6 @@ public record Notice(String type, String title, String message,
     public static final String HORSE_REQUEST = "HORSE_REQUEST";
     public static final String TRAINING_SESSION = "TRAINING_SESSION";
     public static final String THRESHOLD_ALERT = "THRESHOLD_ALERT";
+    /** Từ V15: yêu cầu rút ngựa, mở hàng chờ duyệt của Club Manager. */
+    public static final String HORSE_WITHDRAWAL = "HORSE_WITHDRAWAL";
 }

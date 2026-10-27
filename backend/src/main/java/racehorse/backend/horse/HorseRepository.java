@@ -24,7 +24,7 @@ public class HorseRepository {
             SELECT h.horse_id, h.owner_id, u.full_name AS owner_name, h.sire_id, h.dam_id,
                    h.horse_name, h.registration_code, h.breed, h.horse_gender, h.date_of_birth,
                    h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at,
-                   h.record_type, h.photo_url
+                   h.record_type, h.photo_url, h.activity_status, h.withdrawn_at
             FROM HORSE h JOIN APP_USER u ON u.user_id = h.owner_id
             """;
 
@@ -40,7 +40,9 @@ public class HorseRepository {
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getObject("updated_at", LocalDateTime.class),
                 rs.getString("record_type"),
-                rs.getString("photo_url"));
+                rs.getString("photo_url"),
+                rs.getString("activity_status"),
+                rs.getObject("withdrawn_at", LocalDateTime.class));
     }
 
     public Optional<HorseResponse> findById(int horseId) {
@@ -52,6 +54,13 @@ public class HorseRepository {
 
     public List<HorseResponse> findAll() {
         return jdbc.sql(SELECT_HORSE + " ORDER BY h.horse_name")
+                .query(HorseRepository::mapHorse)
+                .list();
+    }
+
+    /** Chỉ ngựa còn ở học viện. Dùng cho Groom: ngựa đã rút không còn trong chuồng. */
+    public List<HorseResponse> findActive() {
+        return jdbc.sql(SELECT_HORSE + " WHERE h.activity_status = 'ACTIVE' ORDER BY h.horse_name")
                 .query(HorseRepository::mapHorse)
                 .list();
     }
@@ -141,7 +150,28 @@ public class HorseRepository {
                 .update();
     }
 
-        public boolean isHorseOwner(int userId) {
+    /**
+     * Đánh dấu ngựa đã rút và trả chuồng, CHỈ khi nó vẫn đang ACTIVE.
+     *
+     * Trả chuồng (stall_no = NULL) vì con ngựa đã rời học viện: giữ số chuồng
+     * thì UX_HORSE_stall chặn không cho xếp ngựa khác vào ô đó.
+     *
+     * @return 1 nếu đổi được, 0 nếu ngựa đã rút từ trước.
+     */
+    public int markWithdrawn(int horseId) {
+        return jdbc.sql("""
+                UPDATE HORSE
+                SET activity_status = 'WITHDRAWN',
+                    withdrawn_at = SYSUTCDATETIME(),
+                    stall_no = NULL,
+                    updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id AND activity_status = 'ACTIVE'
+                """)
+                .param("id", horseId)
+                .update();
+    }
+
+    public boolean isHorseOwner(int userId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
                 WHERE u.user_id = :id AND r.role_name = 'HORSE_OWNER'

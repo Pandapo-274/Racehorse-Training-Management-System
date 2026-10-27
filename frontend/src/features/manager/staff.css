@@ -124,3 +124,5 @@
   .st-form { grid-template-columns: 1fr; }
   .st-search { width: 100%; }
 }
+/* Chọn vai trò ngay trên dòng nhân viên: cùng kích thước với nút Suspend. */
+.st-role { padding-right: 8px; cursor: pointer; }

@@ -1,0 +1,40 @@
+/* src/features/manager/permissions.css - trang Permissions (UC19, phần xem). */
+
+.pm-intro { display: grid; gap: 12px; font-size: 13px; color: var(--text-600); line-height: 1.55; }
+.pm-intro p { margin: 0; max-width: 72ch; }
+.pm-intro a { color: var(--pink-700); font-weight: 700; }
+
+.pm-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.pm-legend li { display: flex; align-items: center; gap: 8px; }
+.pm-chip {
+  min-width: 34px; padding: 2px 8px; border-radius: 999px;
+  text-align: center; font-size: 12px; font-weight: 800;
+}
+
+/* Bảng rộng hơn màn hình điện thoại thì cuộn ngang trong khung, không đẩy cả trang. */
+.pm-scroll { overflow-x: auto; }
+
+.pm-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13px; }
+.pm-table th,
+.pm-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: center; }
+.pm-table thead th {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-600); white-space: nowrap;
+}
+.pm-table tbody tr:last-child th,
+.pm-table tbody tr:last-child td { border-bottom: 0; }
+.pm-table .pm-fn { text-align: left; width: 38%; font-weight: 600; color: var(--text-900); }
+.pm-endpoint {
+  display: block; margin-top: 3px;
+  font: 500 11px ui-monospace, Consolas, monospace; color: var(--text-400);
+}
+
+.pm-cell { font-weight: 800; }
+.pm-cell--all  { background: #e7f5d8; color: #3f7a19; }
+.pm-cell--own  { background: #fff0c9; color: #8a5f00; }
+.pm-cell--none { color: var(--text-400); }
+
+.pm-table--api { min-width: 560px; }
+.pm-table--api th,
+.pm-table--api td { text-align: left; }
+.pm-table--api code { font: 500 12px ui-monospace, Consolas, monospace; }

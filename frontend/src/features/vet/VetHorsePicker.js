@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import VetShell, { VetCard, VetState } from "./VetShell";
 import { listHorses, toBoardStatus, statusLabel } from "./vetApi";
+import { isWithdrawn } from "../horse/horseApi";
 
 const ORDER = { injured: 0, quarantine: 1, monitor: 2, fit: 3 };
 
@@ -51,6 +52,7 @@ export default function VetHorsePicker({ mode }) {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (horses || [])
+      .filter((h) => !isWithdrawn(h))
       .filter((h) => (mode === "recovery" ? h.status !== "ELIGIBLE" : true))
       .filter(
         (h) =>

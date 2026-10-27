@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import VetShell, { VetState } from "./VetShell";
 import { listHorses, toBoardStatus } from "./vetApi";
+import { isWithdrawn } from "../horse/horseApi";
 
 // Màn 16 - Herd health board. Cùng khung với Trainer và Manager (xem VetShell).
 //
@@ -231,6 +232,8 @@ export default function VetDashboard() {
   const horses = useMemo(
     () =>
       (apiHorses || [])
+        // Ngựa đã rút không còn trong chuồng nên không lên bảng sức khoẻ.
+        .filter((h) => !isWithdrawn(h))
         .map((h) => ({
           id: h.horseId,
           stall: h.stallNo || "—",

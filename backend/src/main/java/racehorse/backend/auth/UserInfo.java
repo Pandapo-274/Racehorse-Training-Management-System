@@ -7,4 +7,6 @@ public record UserInfo(int userId, String username, String fullName, String emai
                           mỗi lần đăng nhập lại là ghi đè mất avatarUrl mà màn hồ sơ vừa
                           ghi vào. Ảnh vẫn nằm nguyên trong cơ sở dữ liệu - chỉ là trình
                           duyệt không còn biết đường dẫn. */
-                       String avatarUrl) {}
+                       String avatarUrl,
+                       /* V14: true thì frontend đưa thẳng tới trang đổi mật khẩu. */
+                       boolean mustChangePassword) {}

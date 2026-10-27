@@ -1,10 +1,11 @@
 // src/features/manager/StaffPage.js
 // The club manager's Staff screen: every account in the system, grouped by role.
 //
-// The manager can add staff accounts (Head Trainer, Vet, Groom) and suspend /
-// activate any non-manager account. Changing a role or a permission still
-// belongs to the Permissions screen, which is not built - that button says so
-// rather than pretending to act.
+// The manager can add staff accounts (Head Trainer, Vet, Groom), move them
+// between those three roles, and suspend / activate any non-manager account.
+// Permissions belong to roles (RBAC), so the role picker on each staff row is
+// how the manager changes what someone can do. New accounts get a temporary
+// password that the person must change at their first sign-in.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
@@ -12,7 +13,8 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import PasswordField from "../password/PasswordField";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
-  createStaff, setStaffStatus, STAFF_ROLE_OPTIONS,
+  createStaff, setStaffStatus, changeStaffRole, reassignNotice,
+  STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES,
 } from "./staffApi";
 import "../password/password.css"; // styles for PasswordField (.pw-*)
 import "./staff.css";
@@ -32,7 +34,7 @@ const EMPTY_FORM = {
   fullName: "", username: "", email: "", phone: "", roleName: "GROOM", password: "",
 };
 
-function MemberRow({ row, onOpenPermissions, canToggle, onToggleStatus, busy }) {
+function MemberRow({ row, canToggle, canChangeRole, onToggleStatus, onChangeRole, busy }) {
   return (
     <li className="st-row">
       <Avatar row={row} />
@@ -71,15 +73,25 @@ function MemberRow({ row, onOpenPermissions, canToggle, onToggleStatus, busy }) 
             {row.status === "ACTIVE" ? "Suspend" : "Activate"}
           </button>
         )}
-        <button type="button" className="st-action" onClick={() => onOpenPermissions(row)}>
-          Permissions
-        </button>
+        {canChangeRole && (
+          <select
+            className="st-action st-role"
+            value={row.roleName}
+            disabled={busy}
+            onChange={(e) => onChangeRole(row, e.target.value)}
+            aria-label={`Role of ${row.fullName}`}
+          >
+            {STAFF_ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
       </div>
     </li>
   );
 }
 
-function RoleGroup({ group, query, onOpenPermissions, myId, busyId, onToggleStatus }) {
+function RoleGroup({ group, query, myId, busyId, onToggleStatus, onChangeRole }) {
   const shown = group.members.filter((m) => matchesQuery(m, query));
 
   /* "Empty because of the filter" and "empty because nobody holds this role"
@@ -106,9 +118,10 @@ function RoleGroup({ group, query, onOpenPermissions, myId, busyId, onToggleStat
             <MemberRow
               key={row.userId}
               row={row}
-              onOpenPermissions={onOpenPermissions}
               canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
+              canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
               onToggleStatus={onToggleStatus}
+              onChangeRole={onChangeRole}
               busy={busyId === row.userId}
             />
           ))}
@@ -159,13 +172,6 @@ export default function StaffPage() {
     [everyone, query],
   );
 
-  /* The Permissions screen does not exist yet (roleNav lists that item with no
-     path). Say so plainly instead of letting the button do nothing - a silent
-     button makes people think they clicked wrong. */
-  const openPermissions = () => {
-    window.alert("The Permissions screen is not built yet. Role changes will live there.");
-  };
-
   const setField = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.value }));
 
   const closeForm = () => {
@@ -183,7 +189,8 @@ export default function StaffPage() {
     createStaff(form)
       .then((created) => {
         closeForm();
-        setNotice(`Created account @${created.username}. Give them the password you just set.`);
+        setNotice(`Created account @${created.username}. Give them the temporary password you set; `
+          + "they will be asked to choose their own password the first time they sign in.");
         load();
       })
       .catch((err) => {
@@ -204,11 +211,38 @@ export default function StaffPage() {
     setBusyId(row.userId);
     setNotice("");
     setStaffStatus(row.userId, next)
-      .then((updated) => {
-        setGroups((prev) => (prev || []).map((g) => ({
-          ...g,
-          members: g.members.map((m) => (m.userId === updated.userId ? updated : m)),
-        })));
+      .then(({ member, sessionsToReassign }) => {
+        replaceRow(member);
+        setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
+          + reassignNotice(member.fullName, sessionsToReassign));
+      })
+      .catch((err) => {
+        if (handleAuthError(err, navigate)) return;
+        setNotice(err.message);
+      })
+      .finally(() => setBusyId(null));
+  };
+
+  const replaceRow = (updated) => setGroups((prev) => (prev || []).map((g) => ({
+    ...g,
+    members: g.members.map((m) => (m.userId === updated.userId ? updated : m)),
+  })));
+
+  /* A role change moves the person to another group, so reload instead of
+     patching one row. They are signed out everywhere: their token carried the
+     old role. */
+  const changeRole = (row, roleName) => {
+    if (roleName === row.roleName) return;
+    const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
+    if (!window.confirm(`Change @${row.username} to ${label}? They will be signed out and get the new permissions when they sign in again.`)) {
+      return;
+    }
+    setBusyId(row.userId);
+    setNotice("");
+    changeStaffRole(row.userId, roleName)
+      .then(({ member, sessionsToReassign }) => {
+        setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign));
+        load();
       })
       .catch((err) => {
         if (handleAuthError(err, navigate)) return;
@@ -287,7 +321,7 @@ export default function StaffPage() {
             {/* Reuses the shared password box (eye toggle + live rules) from UC5. */}
             <PasswordField
               id="staffPassword"
-              label="Initial password"
+              label="Temporary password"
               value={form.password}
               onChange={setField("password")}
               error={fieldErrors.password}
@@ -319,10 +353,10 @@ export default function StaffPage() {
               key={group.roleName}
               group={group}
               query={query}
-              onOpenPermissions={openPermissions}
               myId={myId}
               busyId={busyId}
               onToggleStatus={toggleStatus}
+              onChangeRole={changeRole}
             />
           ))}
         </>

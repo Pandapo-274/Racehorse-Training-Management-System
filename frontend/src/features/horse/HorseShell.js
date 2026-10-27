@@ -12,6 +12,7 @@ import { ProfileCard } from "../profile/ProfileLink";
 import NavItems from "../navigation/NavItems";
 import { canReviewRequests } from "./horseApi";
 import { listRequests } from "./horseRequestApi";
+import { listWithdrawals } from "./withdrawalApi";
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -53,12 +54,17 @@ export default function HorseShell({ title, subtitle, actions, children }) {
 
   // Số yêu cầu đang chờ, dán lên menu để Manager biết có việc cần duyệt.
   const [pending, setPending] = useState(0);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
   useEffect(() => {
     if (!mayReview) return undefined;
     const ctrl = new AbortController();
+    const countPending = (rows) => (rows || []).filter((r) => r.status === "PENDING").length;
     listRequests(ctrl.signal)
-      .then((rows) => setPending((rows || []).filter((r) => r.status === "PENDING").length))
+      .then((rows) => setPending(countPending(rows)))
       .catch(() => {}); // huy hiệu chỉ là phụ, lỗi thì thôi không hiện
+    listWithdrawals({ signal: ctrl.signal })
+      .then((rows) => setPendingWithdrawals(countPending(rows)))
+      .catch(() => {});
     return () => ctrl.abort();
   }, [mayReview, location.pathname]);
 
@@ -82,7 +88,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
             role={user?.role}
             prefix="hz"
             icon={<HorseshoeIcon />}
-            badges={{ registrations: pending }}
+            badges={{ registrations: pending, withdrawals: pendingWithdrawals }}
           />
         </nav>
 

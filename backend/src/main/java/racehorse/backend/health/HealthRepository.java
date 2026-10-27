@@ -17,11 +17,11 @@ public class HealthRepository {
         this.jdbc = jdbc;
     }
 
-    /** Đếm theo trạng thái trên TOÀN đàn (không bị ảnh hưởng bởi bộ lọc). */
+    /** Đếm theo trạng thái trên TOÀN đàn (không bị ảnh hưởng bởi bộ lọc). Ngựa đã rút (V15) không tính. */
     public Map<String, Integer> countByStatus() {
         Map<String, Integer> result = new LinkedHashMap<>();
         for (String s : List.of("ELIGIBLE", "MONITOR", "INJURED", "QUARANTINE")) result.put(s, 0);
-        jdbc.sql("SELECT status, COUNT(*) AS cnt FROM HORSE GROUP BY status")
+        jdbc.sql("SELECT status, COUNT(*) AS cnt FROM HORSE WHERE activity_status = 'ACTIVE' GROUP BY status")
                 .query((rs, i) -> Map.entry(rs.getString("status"), rs.getInt("cnt")))
                 .list()
                 .forEach(e -> result.put(e.getKey(), e.getValue()));
@@ -31,6 +31,7 @@ public class HealthRepository {
     /**
      * OUTER APPLY lấy ĐÚNG 1 lần khám gần nhất của mỗi con ngựa (nếu chưa khám lần nào thì cột để NULL).
      * LEFT JOIN TRAINING_LOCK chỉ lấy lệnh khoá đang ACTIVE (schema đảm bảo tối đa 1 lệnh/ngựa).
+     * Ngựa đã rút (activity_status = WITHDRAWN, V15) không còn trên bảng sức khoẻ.
      */
     public List<HorseHealthItem> findHorses(String statusFilter) {
         StringBuilder sql = new StringBuilder("""
@@ -44,7 +45,7 @@ public class HealthRepository {
                     ORDER BY exam_date DESC
                 ) m
                 LEFT JOIN TRAINING_LOCK l ON l.horse_id = h.horse_id AND l.status = 'ACTIVE'
-                WHERE 1 = 1
+                WHERE h.activity_status = 'ACTIVE'
                 """);
         Map<String, Object> params = new HashMap<>();
         if (statusFilter != null) {

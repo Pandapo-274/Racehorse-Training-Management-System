@@ -2,7 +2,7 @@
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError, logout } from "../auth/authService";
-import { isPedigreeOnly, listHorses } from "../horse/horseApi";
+import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
   changeTrainingPlanStatus,
@@ -151,10 +151,12 @@ export default function TrainingPlanPage() {
           listHorses(signal),
           listTrainingPlans({ signal }),
         ]);
-        // Khớp TRAINABLE ở backend (ELIGIBLE, MONITOR); hồ sơ PEDIGREE không vào giáo án.
+        // Khớp TRAINABLE ở backend (ELIGIBLE, MONITOR); hồ sơ PEDIGREE và ngựa
+        // đã rút khỏi học viện không vào giáo án.
         const eligibleHorses = (horseRows || []).filter(
           (horse) =>
             !isPedigreeOnly(horse) &&
+            !isWithdrawn(horse) &&
             (horse.status === "ELIGIBLE" || horse.status === "MONITOR"),
         );
 

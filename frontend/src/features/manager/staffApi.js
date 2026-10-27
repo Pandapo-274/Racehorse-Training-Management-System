@@ -1,5 +1,6 @@
 // src/features/manager/staffApi.js
-// Calls GET /api/staff, POST /api/staff (create) and PUT /api/staff/{id}/status (suspend / activate).
+// Calls GET /api/staff, POST /api/staff (create), PUT /api/staff/{id}/role (change role)
+// and PUT /api/staff/{id}/status (suspend / activate).
 //
 // The backend returns data ALREADY GROUPED:
 //   [{ roleName, roleLabel, members: [...] }]
@@ -28,12 +29,34 @@ export function createStaff(body) {
   return authFetch("/api/staff", { method: "POST", body: JSON.stringify(body) });
 }
 
-/** status: "ACTIVE" | "SUSPENDED". Returns the updated row. */
+/** Staff role codes the manager can move people between (same as STAFF_ROLES in StaffService). */
+export const STAFF_ROLE_CODES = new Set(STAFF_ROLE_OPTIONS.map((o) => o.value));
+
+/**
+ * status: "ACTIVE" | "SUSPENDED".
+ * Returns { member, sessionsToReassign }: sessionsToReassign > 0 means a groom
+ * still had unfinished sessions, and the head trainers were told to reassign them.
+ */
 export function setStaffStatus(userId, status) {
   return authFetch(`/api/staff/${userId}/status`, {
     method: "PUT",
     body: JSON.stringify({ status }),
   });
+}
+
+/** roleName: one of STAFF_ROLE_OPTIONS. Same response shape as setStaffStatus. */
+export function changeStaffRole(userId, roleName) {
+  return authFetch(`/api/staff/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ roleName }),
+  });
+}
+
+/** Sentence for the manager after a change that left sessions without a groom. */
+export function reassignNotice(fullName, count) {
+  if (!count) return "";
+  return ` ${fullName} still had ${count} unfinished training ${count === 1 ? "session" : "sessions"}; `
+    + "the head trainers have been asked to reassign them.";
 }
 
 /**

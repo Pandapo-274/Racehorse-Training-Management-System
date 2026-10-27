@@ -1,8 +1,9 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+﻿import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
 import StaffPage from "./features/manager/StaffPage";
+import PermissionsPage from "./features/manager/PermissionsPage";
 import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
@@ -20,6 +21,7 @@ import HorseDetailPage from "./features/horse/HorseDetailPage";
 import HorseFormPage from "./features/horse/HorseFormPage";
 import HorseRequestPage from "./features/horse/HorseRequestPage";
 import HorseReviewPage from "./features/horse/HorseReviewPage";
+import WithdrawalReviewPage from "./features/horse/WithdrawalReviewPage";
 import ProfilePage from "./features/profile/ProfilePage";
 import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
@@ -33,7 +35,13 @@ import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage";
 const EVERY_ROLE = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"];
 function RoleRoute({ roles, children }) {
   const user = getUser();
+  const { pathname } = useLocation();
   if (!user) return <Navigate to="/login" replace />;
+  /* Mật khẩu tạm do Club Manager đặt (V14): chỉ cho vào trang đổi mật khẩu.
+     Đây là lớp tiện lợi; backend trả 428 cho mọi API khác dù có vào được. */
+  if (user.mustChangePassword && pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
   if (!roles.includes(user.role)) return <Navigate to="/access-denied" replace />;
   return children;
 }
@@ -67,8 +75,11 @@ export default function App() {
         <Route path="/manager" element={<ManagerDashboard />} />
           {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
         <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
+        <Route path="/manager/withdrawals" element={<RoleRoute roles={["CLUB_MANAGER"]}><WithdrawalReviewPage /></RoleRoute>} />
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
         <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
+        {/* UC19 phần xem: vai trò nào được làm gì, đọc từ chính @RequireRole của backend. */}
+        <Route path="/manager/permissions" element={<RoleRoute roles={["CLUB_MANAGER"]}><PermissionsPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
         <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />

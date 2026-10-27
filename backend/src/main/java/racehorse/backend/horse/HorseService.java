@@ -95,6 +95,11 @@ public class HorseService {
         if ("HORSE_OWNER".equals(user.role())) {
             return horseRepository.findByOwner(user.userId());
         }
+        // Groom làm việc với ngựa trong chuồng; ngựa đã rút không còn ở đó.
+        // Manager, Trainer, Vet vẫn thấy cả ngựa đã rút để tra lịch sử.
+        if ("GROOM".equals(user.role())) {
+            return horseRepository.findActive();
+        }
         return horseRepository.findAll();
     }
         /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */

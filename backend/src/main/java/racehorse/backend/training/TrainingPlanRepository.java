@@ -182,6 +182,24 @@ public class TrainingPlanRepository {
                 .update();
     }
 
+    /**
+     * Kết thúc mọi giáo án chưa COMPLETED của một con ngựa (khi ngựa bị rút).
+     *
+     * Đi thẳng tới COMPLETED, kể cả từ DRAFT, không qua bảng TRANSITIONS của
+     * TrainingPlanService: đây không phải Head Trainer đổi trạng thái, mà là
+     * con ngựa đã rời học viện, nên không giáo án nào của nó còn chạy tiếp được.
+     *
+     * @return số giáo án đã kết thúc.
+     */
+    public int completeOpenPlansByHorse(int horseId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN SET status = 'COMPLETED'
+                WHERE horse_id = :horseId AND status <> 'COMPLETED'
+                """)
+                .param("horseId", horseId)
+                .update();
+    }
+
     /** excludeId = id giáo án đang xét, để nó không tự tính là "đã có giáo án khác". */
     public boolean existsActivePlan(int horseId, int excludeId) {
         return jdbc.sql("""

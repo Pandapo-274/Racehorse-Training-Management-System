@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 23, 2026` at `14` by `tqt195`
+### Last Commited: `Oct 27, 2026` at `10:00` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -49,6 +49,9 @@ npm start
 - `[10:12]` `DevilJack422` - Rename incident/trial-run migration to V16, drop suspended-account guard
 > #### `Oct 26, 2026`
 - `[08:44]` `DevilJack422` - Add incident stop-session flow, trial-run video, lock stops running session (V14)
+- `[10:00]` `tqt195` - Add `Permissions` page for `Club Manager` (`/manager/permissions`, `GET /api/permissions`): read-only role x function matrix built from the `@RequireRole` rules the backend enforces, plus the full API endpoint list
+- `[07:22]` `tqt195` - Add Horse withdrawls: `Horse Owner` requests to withdraw a horse from its profile (`Leave the club`), `Club Manager` approves or rejects on the new `Withdrawals` page; approval cancels scheduled sessions (grooms are notified), ends training plans, releases the stall and marks the horse `WITHDRAWN`. Withdrawn horses are hidden from training plans, the health board, preventive care and the groom schedule. Owners can also cancel a pending registration request. Migration `V15__horse_withdrawal.sql`
+- `[06:47]` `tqt195` - Fix manager permission: `Club Manager` changes staff role (Head Trainer / Vet / Groom) on the `Staff` page, staff accounts get a temporary password that must be changed at first sign-in (`V14__staff_must_change_password.sql`), head trainers are notified when a suspended or re-roled groom still has sessions to reassign
 > #### `Oct 23, 2026`
 - `[14:06]` `ArichiAya` - Fix Register `RBAC` v1
 - `[10:25]` `tqt195` - Fix register account page: `Password` and `Repeat password` fields no longer stick together or overflow the card

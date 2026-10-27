@@ -3,6 +3,7 @@ package racehorse.backend.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
@@ -16,6 +17,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class AuthInterceptor implements HandlerInterceptor {
 
     public static final String USER_ATTR = "authUser";
+
+    /** Những API vẫn gọi được khi tài khoản còn phải đổi mật khẩu tạm. */
+    private static final Set<String> PASSWORD_CHANGE_ALLOWED = Set.of(
+            "/api/auth/change-password", "/api/auth/me", "/api/auth/logout");
 
     private final JwtService jwt;
     private final UserRepository users;
@@ -43,6 +48,16 @@ public class AuthInterceptor implements HandlerInterceptor {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Token has been revoked, please log in again");
         }
         req.setAttribute(USER_ATTR, user);
+
+        /* V14: tài khoản đang dùng mật khẩu tạm do Club Manager đặt chỉ được đổi
+           mật khẩu (và xem /me, đăng xuất). Chặn ở đây chứ không chỉ ở frontend:
+           Manager biết mật khẩu tạm, nên chỉ chặn trên giao diện thì người khác
+           cầm mật khẩu đó vẫn gọi thẳng API được. 428 = phải làm một việc trước. */
+        if (!PASSWORD_CHANGE_ALLOWED.contains(req.getRequestURI())
+                && users.mustChangePassword(user.userId())) {
+            throw new ApiException(HttpStatus.PRECONDITION_REQUIRED,
+                    "Please change your temporary password before continuing");
+        }
 
         if (handler instanceof HandlerMethod hm) {
             RequireRole rule = hm.getMethodAnnotation(RequireRole.class);

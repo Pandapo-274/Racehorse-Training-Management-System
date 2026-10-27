@@ -34,7 +34,12 @@ public class GoogleAuthRepository {
 
     /** Gắn Google vào tài khoản có sẵn và đồng thời vô hiệu mật khẩu cũ (xem giải thích ở GoogleAuthService). */
     public void linkGoogle(int userId, String sub, String unusablePasswordHash) {
-        jdbc.sql("UPDATE APP_USER SET google_sub = :sub, password_hash = :h WHERE user_id = :id")
+        // Mật khẩu bị thay bằng chuỗi ngẫu nhiên nên mật khẩu tạm (V14) cũng hết hiệu lực:
+        // tắt cờ, nếu không người dùng bị bắt đổi một mật khẩu mà họ không thể biết.
+        jdbc.sql("""
+                UPDATE APP_USER SET google_sub = :sub, password_hash = :h, must_change_password = 0
+                WHERE user_id = :id
+                """)
                 .param("sub", sub)
                 .param("h", unusablePasswordHash)
                 .param("id", userId)

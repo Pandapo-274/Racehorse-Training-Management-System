@@ -14,7 +14,8 @@ public class PasswordRepository {
     }
 
     public void updatePasswordHash(int userId, String hash) {
-        jdbc.sql("UPDATE APP_USER SET password_hash = :h WHERE user_id = :id")
+        // Có mật khẩu mới do chính người dùng chọn thì mật khẩu tạm (V14) không còn.
+        jdbc.sql("UPDATE APP_USER SET password_hash = :h, must_change_password = 0 WHERE user_id = :id")
                 .param("h", hash)
                 .param("id", userId)
                 .update();
