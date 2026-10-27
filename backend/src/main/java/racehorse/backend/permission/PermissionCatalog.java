@@ -43,6 +43,7 @@ final class PermissionCatalog {
             new Entry(ACCOUNTS, "Change a staff member's role", "PUT /api/staff/{id}/role", NONE),
             new Entry(ACCOUNTS, "Suspend or activate accounts", "PUT /api/staff/{id}/status", NONE),
             new Entry(ACCOUNTS, "View this permission matrix", "GET /api/permissions", NONE),
+            new Entry(ACCOUNTS, "View the audit log", "GET /api/audit-logs", NONE),
 
             // ---------- Flow 1: hồ sơ ngựa ----------
             new Entry(HORSES, "View the horse list", "GET /api/horses", OWNER),

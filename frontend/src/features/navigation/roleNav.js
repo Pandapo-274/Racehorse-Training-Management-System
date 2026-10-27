@@ -33,7 +33,7 @@ export const ROLE_NAV = {
     { key: "staff", label: "Staff", path: "/manager/staff" },
     { key: "supplies", label: "Supplies & feed" },
     { key: "permissions", label: "Permissions", path: "/manager/permissions" },
-    { key: "audit", label: "Audit log" },
+    { key: "audit", label: "Audit log", path: "/manager/audit-log" },
   ],
 
   HEAD_TRAINER: [
