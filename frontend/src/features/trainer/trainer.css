@@ -231,7 +231,7 @@
 
 .trainer-header {
   position: relative;
-  z-index: 1;
+  z-index: 20;
   height: 84px;
   display: flex;
   align-items: center;

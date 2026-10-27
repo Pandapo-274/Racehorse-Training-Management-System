@@ -95,6 +95,11 @@ public class HorseService {
         if ("HORSE_OWNER".equals(user.role())) {
             return horseRepository.findByOwner(user.userId());
         }
+        // Groom làm việc với ngựa trong chuồng; ngựa đã rút không còn ở đó.
+        // Manager, Trainer, Vet vẫn thấy cả ngựa đã rút để tra lịch sử.
+        if ("GROOM".equals(user.role())) {
+            return horseRepository.findActive();
+        }
         return horseRepository.findAll();
     }
         /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
@@ -199,6 +204,18 @@ public class HorseService {
         horseRepository.findById(parentId).ifPresentOrElse(parent -> {
             if (parent.horseGender() != null && !allowedGenders.contains(parent.horseGender())) {
                 errors.put(field, label + " có giới tính không phù hợp");
+            }
+            /* Chặn vòng lặp phả hệ. Phép kiểm parentId == selfId ở trên chỉ bắt
+               được vòng dài một bước (tự làm cha mình); vòng dài hai bước -
+               A là cha của B trong khi B đã là cha của A - vẫn lọt, và kết quả
+               là cây phả hệ hiện một con ngựa làm ông của chính nó.
+
+               selfId = 0 khi đang TẠO ngựa mới: con ngựa chưa tồn tại nên
+               chưa thể là tổ tiên của ai, bỏ qua luôn khỏi phải hỏi database. */
+            if (selfId > 0 && horseRepository.isAncestorOf(selfId, parentId)) {
+                errors.put(field, label + " không hợp lệ: con ngựa này đã là tổ tiên của "
+                        + (parent.horseName() == null ? "con ngựa đó" : parent.horseName())
+                        + ", gán như vậy sẽ tạo vòng lặp trong phả hệ");
             }
         }, () -> errors.put(field, label + " không tồn tại"));
     }

@@ -3,6 +3,8 @@
 // Các feature khác (trainer, manager, vet, ...) chỉ import authFetch / getUser /
 // logout / handleAuthError từ file này, không tự đụng vào localStorage.
 
+import { googleLogout } from "@react-oauth/google";
+
 const TOKEN_KEY = "token";
 const USER_KEY = "user"; // giữ tên key cũ để code đang đọc "user" vẫn chạy
 
@@ -13,6 +15,15 @@ export const HOME_BY_ROLE = {
   GROOM: "/groom",
   HORSE_OWNER: "/horse-owner",
 };
+
+/**
+ * Trang đầu tiên sau khi đăng nhập. Tài khoản đang dùng mật khẩu tạm do Club
+ * Manager đặt (V14) phải đổi mật khẩu trước, nên đi thẳng tới trang đó.
+ */
+export function homeFor(user) {
+  if (user?.mustChangePassword) return "/change-password";
+  return HOME_BY_ROLE[user?.role] || "/access-denied";
+}
 
 /* ------------------------------------------------------------------ *
  * Phiên đăng nhập
@@ -40,6 +51,9 @@ function saveSession(token, user) {
 export function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Để lần sau Google không tự chọn lại tài khoản cũ. Chưa từng mở nút Google
+  // thì hàm này không làm gì, nên gọi cho mọi kiểu đăng xuất.
+  googleLogout();
 }
 
 /**
@@ -112,6 +126,7 @@ export async function authFetch(url, options = {}) {
  * Dùng trong .catch() của mọi màn có gọi API:
  *   - 401 (hết phiên / chưa đăng nhập) -> xoá phiên, về /login
  *   - 403 (sai role)                   -> sang /access-denied
+ *   - 428 (còn mật khẩu tạm, V14)      -> sang /change-password
  * Trả true nếu đã xử lý (màn không cần hiện lỗi nữa), false nếu là lỗi khác.
  */
 export function handleAuthError(err, navigate) {
@@ -123,6 +138,11 @@ export function handleAuthError(err, navigate) {
   }
   if (err.status === 403) {
     navigate("/access-denied", { replace: true });
+    return true;
+  }
+  if (err.status === 428) {
+    updateStoredUser({ mustChangePassword: true });
+    navigate("/change-password", { replace: true });
     return true;
   }
   return false;
@@ -148,6 +168,45 @@ export async function login(username, password) {
   const { token, user } = await res.json();
   saveSession(token, user);
   return user;
+}
+
+/**
+ * Client ID của Google, đọc từ frontend/.env (REACT_APP_GOOGLE_CLIENT_ID).
+ * Rỗng thì ẩn nút Google: chưa cấu hình mà vẫn hiện nút thì bấm vào chỉ ra lỗi
+ * khó hiểu từ phía Google. Phải trùng GOOGLE_CLIENT_ID trong backend/.env.
+ */
+export const GOOGLE_CLIENT_ID = (process.env.REACT_APP_GOOGLE_CLIENT_ID || "").trim();
+
+/**
+ * POST /api/auth/google. idToken là `credential` Google vừa trả cho nút đăng
+ * nhập; chỉ gửi đi, KHÔNG lưu và KHÔNG log (đó là token của Google, không
+ * phải của hệ thống). Thành công: lưu token + user của hệ thống y như login().
+ *
+ * Trả về { user, outcome }:
+ *   LOGIN      - đã từng dùng Google, vào thẳng
+ *   REGISTERED - lần đầu, vừa tạo tài khoản mới (mặc định HORSE_OWNER)
+ *   LINKED     - email đã có tài khoản thường, vừa gắn Google; mật khẩu cũ bị vô hiệu
+ *
+ * roleName chỉ có tác dụng ở lần đầu (REGISTERED); không truyền = HORSE_OWNER.
+ * Không gọi được backend (tắt máy chủ, mất mạng): throw ApiError status 0 với
+ * câu dễ hiểu, thay vì để lọt TypeError "Failed to fetch".
+ */
+export async function loginWithGoogle(idToken, roleName) {
+  let res;
+  try {
+    res = await fetch("/api/auth/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(roleName ? { idToken, roleName } : { idToken }),
+    });
+  } catch {
+    throw new ApiError(0, "Cannot reach the server. Please try again in a moment.");
+  }
+  if (!res.ok) throw await toApiError(res);
+
+  const { token, user, outcome } = await res.json();
+  saveSession(token, user);
+  return { user, outcome };
 }
 
 /** GET /api/auth/me - lấy lại thông tin user theo token hiện có. */

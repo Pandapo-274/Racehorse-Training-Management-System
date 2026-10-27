@@ -1,7 +1,8 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { authFetch, handleAuthError, logout } from "../auth/authService";
-import { ProfileCard } from "../profile/ProfileLink";
+import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import "./trainer.css";
 import "./schedule.css";
 
@@ -87,15 +88,14 @@ function HorseshoeIcon() {
 }
 
 function ScheduleSidebar({ onSignOut }) {
-  const navigate = useNavigate();
 
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.png" alt="TENMA logo" />
+        <img src="/logo.png" alt="TRACEN logo" />
         <div>
-          <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <strong>TRACEN</strong>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -104,64 +104,7 @@ function ScheduleSidebar({ onSignOut }) {
       </div>
 
       <nav className="trainer-nav">
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer")}
-        >
-          <HorseshoeIcon />
-          Herd progress
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/horses")}
-        >
-          <HorseshoeIcon />
-          Horses
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/training-plans")}
-        >
-          <HorseshoeIcon />
-          Training plans
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item active"
-          onClick={() => navigate("/trainer/schedule")}
-        >
-          <HorseshoeIcon />
-          Schedule
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/live-session")}
-        >
-          <HorseshoeIcon />
-          Live session
-        </button>
-
-        <button
-          type="button"
-          className="trainer-nav-item"
-          onClick={() => navigate("/trainer/session-review")}
-        >
-          <HorseshoeIcon />
-          Session review
-        </button>
-
-        <button type="button" className="trainer-nav-item">
-          <HorseshoeIcon />
-          Races
-        </button>
+        <NavItems role="HEAD_TRAINER" prefix="trainer" icon={<HorseshoeIcon />} />
       </nav>
 
 
@@ -646,10 +589,7 @@ export default function SchedulePage() {
 
           <div className="schedule-header-right">
             <span className="schedule-role-label">HEAD TRAINER</span>
-            <ProfileCard
-              className="schedule-header-profile"
-              role="Head Trainer"
-            />
+            <ProfileCircle className="trainer-profile" />
           </div>
         </header>
 

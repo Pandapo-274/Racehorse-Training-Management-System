@@ -4,8 +4,10 @@
 // `active`, `title`, `subtitle` rồi đặt nội dung vào children.
 
 import { useNavigate } from "react-router-dom";
+import NavItems from "../navigation/NavItems";
 import { logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
+import NotificationBell from "../notification/NotificationBell";
 import "./vet.css";
 
 export function HorseshoeIcon() {
@@ -22,14 +24,6 @@ export function HorseshoeIcon() {
   );
 }
 
-const NAV = [
-  { key: "health", label: "Herd health", to: "/veterinarian" },
-  { key: "horses", label: "Horses", to: "/veterinarian/horses" },
-  { key: "examination", label: "Examination", to: "/veterinarian/examination" },
-  { key: "recovery", label: "Recovery", to: "/veterinarian/recovery" },
-  { key: "preventive", label: "Preventive care", to: null },
-];
-
 function VetSidebar({ active }) {
   const navigate = useNavigate();
 
@@ -41,10 +35,10 @@ function VetSidebar({ active }) {
   return (
     <aside className="vet-sidebar">
       <div className="vet-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <strong>TRACEN</strong>
+          <span>Racing Club</span>
         </div>
       </div>
 
@@ -53,18 +47,7 @@ function VetSidebar({ active }) {
       </div>
 
       <nav className="vet-nav">
-        {NAV.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`vet-nav-item${active === item.key ? " active" : ""}`}
-            aria-current={active === item.key ? "page" : undefined}
-            onClick={() => item.to && navigate(item.to)}
-          >
-            <HorseshoeIcon />
-            {item.label}
-          </button>
-        ))}
+        <NavItems role="VETERINARIAN" prefix="vet" icon={<HorseshoeIcon />} />
       </nav>
 
       <div className="vet-sidebar-bottom">
@@ -84,7 +67,6 @@ export default function VetShell({
   subtitle,
   query,
   onQueryChange,
-  onBellClick,
   children,
 }) {
   const controlled = typeof onQueryChange === "function";
@@ -114,14 +96,7 @@ export default function VetShell({
                 : {})}
             />
 
-            <button
-              type="button"
-              className="vet-notification"
-              onClick={onBellClick}
-              aria-label="Notifications"
-            >
-              <span className="vet-notification-dot" />
-            </button>
+            <NotificationBell className="vet-notification" />
 
             <ProfileCircle className="vet-profile" />
           </div>

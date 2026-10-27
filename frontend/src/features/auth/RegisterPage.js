@@ -24,7 +24,7 @@ export default function RegisterPage() {
 
           <h2 className="login-card__title">Create an account</h2>
           <p className="login-card__hint">
-            Register as a horse owner to follow your horses through the academy.
+            Register as a horse owner to follow your horses through the club.
           </p>
 
           <RegisterForm />

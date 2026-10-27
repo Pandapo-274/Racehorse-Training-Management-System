@@ -8,7 +8,11 @@
 // Toàn bộ phép quy đổi giữa từ vựng cơ sở dữ liệu (ELIGIBLE, COLT, HIGH) và từ
 // vựng hiển thị nằm ở đây, không rải trong JSX.
 
-import { authFetch } from "../auth/authService";
+import { ApiError, authFetch, getToken } from "../auth/authService";
+
+/* Ảnh ngựa dùng đúng luật của avatar (2 MB; JPEG, PNG, WebP), nên kiểm trước
+   bằng chính hàm của profileApi thay vì chép lại. */
+export { checkAvatar as checkHorsePhoto } from "../profile/profileApi";
 
 const API = "/api/horses";
 
@@ -39,6 +43,41 @@ export function getVitals(id, signal) {
 
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/**
+ * POST multipart, không qua authFetch vì authFetch tự đặt Content-Type JSON
+ * (xem ghi chú đầu profileApi.js). Chỉ chủ ngựa gọi được, và chỉ ngựa của mình.
+ */
+export async function uploadHorsePhoto(id, file) {
+  const body = new FormData();
+  body.append("file", file);
+
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API}/${id}/photo`, { method: "POST", headers, body });
+
+  if (!res.ok) {
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch {
+      /* thân rỗng hoặc không phải JSON */
+    }
+    throw new ApiError(
+      res.status,
+      payload?.message || `Upload failed (HTTP ${res.status})`,
+      payload?.errors || {}
+    );
+  }
+
+  return res.json();
+}
+
+export function removeHorsePhoto(id) {
+  return authFetch(`${API}/${id}/photo`, { method: "DELETE" });
 }
 
 /* ------------------------------------------------------------------ *
@@ -111,15 +150,43 @@ export function toStatus(status) {
 
 export const STATUS_OPTIONS = Object.keys(STATUS_TEXT);
 
+/**
+ * Ngựa còn ở học viện hay đã rút (HORSE.activity_status, V15). Khác hẳn
+ * trạng thái sức khoẻ ở trên: ngựa đã rút vẫn giữ trạng thái sức khoẻ cuối cùng.
+ */
+const ACTIVITY_TEXT = {
+  ACTIVE:    { label: "At the club", tone: "good",    hint: "Stabled and training at the club" },
+  WITHDRAWN: { label: "Withdrawn",   tone: "neutral", hint: "Has left the club. No stall, plans or sessions." },
+};
+
+export function toActivity(activityStatus) {
+  return ACTIVITY_TEXT[activityStatus || "ACTIVE"] || { label: activityStatus, tone: "neutral", hint: "" };
+}
+
+export const ACTIVITY_OPTIONS = Object.keys(ACTIVITY_TEXT);
+
+/** Ngựa đã rút: không vào giáo án, bảng sức khoẻ, lịch Groom. */
+export function isWithdrawn(horse) {
+  return horse?.activityStatus === "WITHDRAWN";
+}
+
+/**
+ * Chủ ngựa xin rút được ngựa của chính mình, khi nó là ngựa của học viện
+ * (không phải hồ sơ PEDIGREE) và còn ở học viện. Khớp WithdrawalService.submit.
+ */
+export function canRequestWithdrawal(user, horse) {
+  return canEditHorse(user, horse) && !isPedigreeOnly(horse) && !isWithdrawn(horse);
+}
+
 /* ------------------------------------------------------------------ *
  * Loại hồ sơ và phân loại theo tuổi
  * ------------------------------------------------------------------ */
 
 /** PHẢI khớp HorsePolicy.java ở backend. Đổi mốc thì đổi cả hai nơi. */
-export const AGE_RULES = { foalBelow: 2, racingMax: 10, academyMax: 25 };
+export const AGE_RULES = { foalBelow: 2, racingMax: 10, clubMax: 25 };
 
 export const RECORD_TYPES = {
-  ACADEMY:  "Academy horse",
+  ACADEMY:  "Club horse",
   PEDIGREE: "Pedigree record only",
 };
 
@@ -177,10 +244,10 @@ export function healthApplies(horse) {
 /** Cùng luật với HorsePolicy.ageProblem: trả thông báo lỗi hoặc null. */
 export function ageProblem(recordType, dateOfBirth) {
   if (recordType === "PEDIGREE") return null;
-  if (!dateOfBirth) return "Date of birth is required for an academy horse";
+  if (!dateOfBirth) return "Date of birth is required for a club horse";
   const age = toAge(dateOfBirth);
-  if (age != null && age > AGE_RULES.academyMax) {
-    return `This horse is ${age} years old, above the academy limit of ${AGE_RULES.academyMax}. Register it as a pedigree record instead.`;
+  if (age != null && age > AGE_RULES.clubMax) {
+    return `This horse is ${age} years old, above the club limit of ${AGE_RULES.clubMax}. Register it as a pedigree record instead.`;
   }
   return null;
 }

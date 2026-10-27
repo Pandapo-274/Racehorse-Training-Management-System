@@ -11,8 +11,11 @@
 .field__error { margin: 0; font-size: 12px; color: var(--danger); }
 
 /* Ô mật khẩu có con mắt hiện/ẩn. */
-.field__control { position: relative; display: grid; }
-.field__input--with-toggle { padding-right: 48px; }
+.field__control { position: relative; display: grid; min-width: 0; }
+/* Trong grid, <input> mặc định không co nhỏ hơn bề rộng tự nhiên của nó (~20
+   ký tự + phần đệm cho con mắt). Hai ô mật khẩu xếp cạnh nhau ở trang đăng ký
+   vì thế lấn sang nhau và tràn khỏi khung. min-width: 0 cho phép co lại. */
+.field__input--with-toggle { padding-right: 48px; min-width: 0; width: 100%; }
 /* Edge tự vẽ một con mắt riêng trong ô mật khẩu (::-ms-reveal). Tắt nó đi,
    nếu không người dùng Edge sẽ thấy hai con mắt chồng lên nhau. */
 .field__input--with-toggle::-ms-reveal,

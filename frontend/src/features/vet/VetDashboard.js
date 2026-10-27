@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import VetShell, { VetState } from "./VetShell";
 import { listHorses, toBoardStatus } from "./vetApi";
+import { isWithdrawn } from "../horse/horseApi";
 
 // Màn 16 - Herd health board. Cùng khung với Trainer và Manager (xem VetShell).
 //
@@ -231,6 +232,8 @@ export default function VetDashboard() {
   const horses = useMemo(
     () =>
       (apiHorses || [])
+        // Ngựa đã rút không còn trong chuồng nên không lên bảng sức khoẻ.
+        .filter((h) => !isWithdrawn(h))
         .map((h) => ({
           id: h.horseId,
           stall: h.stallNo || "—",
@@ -272,9 +275,6 @@ export default function VetDashboard() {
     navigate(match ? `/veterinarian/examination/${match.id}` : "/veterinarian/examination");
   };
 
-  const scrollToAlert = () =>
-    alertRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-
   const today = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -295,7 +295,6 @@ export default function VetDashboard() {
       subtitle={`Live · ${today}`}
       query={query}
       onQueryChange={setQuery}
-      onBellClick={scrollToAlert}
     >
       {state?.notice && (
         <div className="vx-banner vx-banner--ok" role="status">

@@ -27,8 +27,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class TrainerDashboardService {
 
-    /** Công thức chỉ số thể lực, dùng lại trong nhiều query. */
-    private static final String FITNESS_EXPR = """
+    /**
+     * Công thức chỉ số thể lực, dùng lại trong nhiều query.
+     * Không để private: OwnerDashboardService dùng chung để hai màn ra cùng một con số.
+     */
+    static final String FITNESS_EXPR = """
             CASE
                 WHEN s.recovery_heart_rate IS NULL THEN NULL
                 WHEN s.recovery_heart_rate <= 80  THEN 100
@@ -59,7 +62,7 @@ public class TrainerDashboardService {
     private TrainerDashboard.Summary loadSummary() {
         String sql = """
                 SELECT
-                    (SELECT COUNT(*) FROM HORSE)                                        AS total_horses,
+                    (SELECT COUNT(*) FROM HORSE WHERE activity_status = 'ACTIVE')       AS total_horses,
                     (SELECT COUNT(*) FROM TRAINING_PLAN WHERE status = 'ACTIVE')        AS active_plans,
                     (SELECT COUNT(*) FROM TRAINING_LOCK WHERE status = 'ACTIVE')        AS locked_horses,
                     (SELECT COUNT(*) FROM THRESHOLD_ALERT WHERE resolved_by IS NULL)    AS open_alerts
@@ -108,6 +111,7 @@ public class TrainerDashboardService {
         String sql = """
                 SELECT status, COUNT(*) AS cnt
                 FROM HORSE
+                WHERE activity_status = 'ACTIVE'
                 GROUP BY status
                 ORDER BY status
                 """;
@@ -177,6 +181,7 @@ public class TrainerDashboardService {
                     ORDER BY s.session_date DESC
                 ) last_s
 
+                WHERE h.activity_status = 'ACTIVE'
                 ORDER BY h.horse_name
                 """.formatted(FITNESS_EXPR);
 

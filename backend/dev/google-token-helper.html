@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Google ID token helper (dev only)</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>body{font-family:Arial,sans-serif;max-width:720px;margin:32px auto;padding:0 16px}
+         input,textarea{width:100%;box-sizing:border-box;margin:6px 0}</style>
+</head>
+<body>
+  <h3>Google ID token helper (dev only)</h3>
+  <p>1) Paste your Google Client ID, 2) click Start, 3) sign in, 4) copy the token below and send it to
+     <code>POST /api/auth/google</code>.</p>
+  <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com">
+  <button onclick="start()">Start</button>
+  <div id="btn" style="margin:16px 0"></div>
+  <textarea id="out" rows="8" placeholder="ID token will appear here"></textarea>
+  <script>
+    function start() {
+      google.accounts.id.initialize({
+        client_id: document.getElementById('cid').value.trim(),
+        callback: function (resp) { document.getElementById('out').value = resp.credential; }
+      });
+      google.accounts.id.renderButton(document.getElementById('btn'), { theme: 'outline', size: 'large' });
+    }
+  </script>
+</body>
+</html>

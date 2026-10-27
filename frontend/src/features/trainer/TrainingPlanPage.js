@@ -1,7 +1,8 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
-import { getUser, handleAuthError, logout } from "../auth/authService";
-import { listHorses } from "../horse/horseApi";
+import { handleAuthError, logout } from "../auth/authService";
+import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
   changeTrainingPlanStatus,
@@ -11,7 +12,6 @@ import {
 import "./trainer.css";
 import "./training-plan.css";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const initialPhases = [
   {
     phaseName: "Base",
@@ -66,41 +66,21 @@ function HorseshoeIcon() {
 }
 
 function TrainerSidebar({ active, onSignOut }) {
-  const navigate = useNavigate();
-  const items = [
-    { label: "Herd progress", path: "/trainer" },
-    { label: "Horses", path: "/trainer/horses" },
-    { label: "Training plans", path: "/trainer/training-plans" },
-    { label: "Schedule", path: "/trainer/schedule" },
-    { label: "Live session", path: "/trainer/live-session" },
-    { label: "Session review", path: "/trainer/session-review" },
-    { label: "Races" },
-  ];
+
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
-        <img src="/logo.png" alt="Tenma logo" />
+        <img src="/logo.png" alt="Tracen logo" />
         <div>
-          <strong>TENMA</strong>
-          <span>Racing Academy</span>
+          <strong>TRACEN</strong>
+          <span>Racing Club</span>
         </div>
       </div>
       <div className="trainer-menu-title">
         <HorseshoeIcon /> MENU
       </div>
       <nav className="trainer-nav">
-        {items.map(({ label, path }) => (
-          <button
-            key={label}
-            type="button"
-            className={`trainer-nav-item ${active === label ? "active" : ""}`}
-            onClick={path ? () => navigate(path) : undefined}
-            disabled={!path}
-          >
-            <HorseshoeIcon />
-            {label}
-          </button>
-        ))}
+        <NavItems role="HEAD_TRAINER" prefix="trainer" icon={<HorseshoeIcon />} />
       </nav>
       <div className="trainer-sidebar-bottom">
         <button type="button" className="trainer-signout" onClick={onSignOut}>
@@ -149,11 +129,10 @@ function emptyPhase(index, startDate, endDate) {
 
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
-  const user = getUser();
   const [horses, setHorses] = useState([]);
   const [plans, setPlans] = useState([]);
   const [horseId, setHorseId] = useState("");
-  const [planName, setPlanName] = useState("Tenma Cup preparation");
+  const [planName, setPlanName] = useState("Tracen Cup preparation");
   const [startDate, setStartDate] = useState("2026-08-31");
   const [endDate, setEndDate] = useState("2026-11-22");
   const [phases, setPhases] = useState(initialPhases);
@@ -172,8 +151,13 @@ export default function TrainingPlanPage() {
           listHorses(signal),
           listTrainingPlans({ signal }),
         ]);
+        // Khớp TRAINABLE ở backend (ELIGIBLE, MONITOR); hồ sơ PEDIGREE và ngựa
+        // đã rút khỏi học viện không vào giáo án.
         const eligibleHorses = (horseRows || []).filter(
-          (horse) => horse.status === "ELIGIBLE",
+          (horse) =>
+            !isPedigreeOnly(horse) &&
+            !isWithdrawn(horse) &&
+            (horse.status === "ELIGIBLE" || horse.status === "MONITOR"),
         );
 
         setHorses(eligibleHorses);
@@ -318,7 +302,7 @@ export default function TrainingPlanPage() {
           </div>
           <div className="trainer-header-actions">
             <span className="training-plan-target">
-              Target: Tenma Cup · 22 Nov 2026
+              Target: Tracen Cup · 22 Nov 2026
             </span>
             <ProfileCircle className="trainer-profile" />
           </div>
@@ -361,7 +345,7 @@ export default function TrainingPlanPage() {
                         onChange={(e) => setPlanName(e.target.value)}
                         maxLength={150}
                         required
-                        placeholder="e.g. Tenma Cup preparation"
+                        placeholder="e.g. Tracen Cup preparation"
                       />
                     </label>
                     <label className="training-field">

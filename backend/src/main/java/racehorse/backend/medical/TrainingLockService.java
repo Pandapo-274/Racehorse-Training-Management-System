@@ -14,6 +14,9 @@ import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
+import racehorse.backend.incident.SessionStopper;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 /**
  * UC16 - Issue Emergency Training Block (Training Lock Management).
@@ -43,13 +46,18 @@ public class TrainingLockService {
     private final InjuryRepository injuries;
     private final HorseRepository horses;
     private final UserRepository users;
+    private final NotificationService notifications;
+    private final SessionStopper sessionStopper;
 
     public TrainingLockService(TrainingLockRepository locks, InjuryRepository injuries,
-                               HorseRepository horses, UserRepository users) {
+                               HorseRepository horses, UserRepository users,
+                               NotificationService notifications, SessionStopper sessionStopper) {
         this.locks = locks;
         this.injuries = injuries;
         this.horses = horses;
         this.users = users;
+        this.notifications = notifications;
+        this.sessionStopper = sessionStopper;
     }
 
     @Transactional
@@ -78,9 +86,24 @@ public class TrainingLockService {
         users.writeAudit(issuer.userId(), "TRAINING_LOCK_ISSUED", "TRAINING_LOCK", lockId,
                 "SUCCESS", ip);
 
-        return locks.findById(lockId)
+        TrainingLockRow issued = locks.findById(lockId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "The lock was issued but could not be read back"));
+
+        /* Buổi đang chạy của con ngựa này bị dừng ngay và Groom phụ trách được báo: lệnh khoá mà
+           ngoài sân vẫn đang tập thì chốt an toàn chưa chốt được gì. */
+        sessionStopper.stopRunningSessions(horse.horseId(), horse.horseName(),
+                issued.lockLevel(), issued.reason(), issuer, ip);
+
+        /* Huấn luyện viên trưởng là người xếp lịch, nên phải biết ngay con
+           ngựa không được tập nữa; chủ ngựa thì có quyền biết ngựa mình bị
+           dừng. Người ra lệnh không cần chuông báo cho chính mình. */
+        notifications.notifyHorseWatchers(horse.ownerId(), issuer, new Notice(
+                "TRAINING_LOCK_ISSUED",
+                "Training lock issued",
+                horse.horseName() + " is locked (" + issued.lockLevel() + "): " + issued.reason(),
+                Notice.HORSE, horse.horseId()));
+        return issued;
     }
 
     /**
@@ -122,9 +145,19 @@ public class TrainingLockService {
         users.writeAudit(user.userId(), "TRAINING_LOCK_RELEASED", "TRAINING_LOCK", lockId,
                 "SUCCESS", ip);
 
-        return locks.findById(lockId)
+        TrainingLockRow released = locks.findById(lockId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "The lock was released but could not be read back"));
+
+        horses.findById(lock.horseId()).ifPresent(horse -> notifications.notifyHorseWatchers(
+                horse.ownerId(), user,
+                new Notice(
+                        "TRAINING_LOCK_RELEASED",
+                        "Training lock released",
+                        horse.horseName() + " is no longer locked. Its health status is still "
+                                + horse.status() + ".",
+                        Notice.HORSE, horse.horseId())));
+        return released;
     }
 
     /** Màn Training Lock Management: mọi lệnh đang hiệu lực trong chuồng. */

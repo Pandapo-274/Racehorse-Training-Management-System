@@ -253,3 +253,42 @@
     padding: 24px;
   }
 }
+
+/* ---------- Đăng nhập Google ---------- */
+
+.login-divider {
+  margin: 16px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-400);
+  font-size: 12px;
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* Nút do Google vẽ trong iframe, chỉ căn giữa được khung ngoài. */
+.google-login { display: flex; justify-content: center; }
+
+.login-google-hint {
+  margin: 10px 0 0;
+  color: var(--text-600);
+  font-size: 12px;
+  text-align: center;
+}
+
+.google-notice {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--field-bg);
+}
+.google-notice strong { color: var(--text-900); }
+.google-notice p { margin: 0 0 6px; color: var(--text-600); font-size: 13px; }

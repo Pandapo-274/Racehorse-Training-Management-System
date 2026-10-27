@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import racehorse.backend.auth.RequireRole;
+
 /**
  * UC6 - View Master Fitness & Training Dashboard.
  *
@@ -12,8 +14,14 @@ import org.springframework.web.bind.annotation.RestController;
  * frontend phải gọi 5 lần và tự ghép, trong khi màn này luôn hiện cả 5 khối
  * cùng lúc - không có khối nào tải riêng lẻ.
  *
- * Chưa có kiểm tra quyền. Khi nhóm thêm Spring Security, màn này chỉ dành cho
- * HEAD_TRAINER và CLUB_MANAGER - gắn @PreAuthorize vào đây.
+ * Chỉ HEAD_TRAINER và CLUB_MANAGER xem được.
+ *
+ * Chú thích cũ ở đây nói sẽ gắn @PreAuthorize "khi nhóm thêm Spring
+ * Security". Không cần chờ: @RequireRole của AuthInterceptor đã làm đúng
+ * việc đó và đang được dùng ở mọi controller khác. Trong lúc chờ, màn này để
+ * ngỏ cho MỌI tài khoản đã đăng nhập - chủ ngựa và groom đọc được toàn bộ
+ * tổng quan cả chuồng: số ngựa, giáo án đang chạy, ngựa bị khoá, cảnh báo
+ * đang mở. Hoãn một phép kiểm quyền để chờ một cơ chế khác là để ngỏ thật.
  */
 @RestController
 @RequestMapping("/api/trainer/dashboard")
@@ -34,6 +42,7 @@ public class TrainerDashboardController {
      *              query quét toàn bộ bảng.
      */
     @GetMapping
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
     public TrainerDashboard.Response get(
             @RequestParam(defaultValue = "" + DEFAULT_WEEKS) int weeks) {
         int safeWeeks = Math.max(1, Math.min(MAX_WEEKS, weeks));

@@ -25,19 +25,28 @@ public class SessionController {
         this.service = service;
     }
 
-    /** Màn "Session Evaluation": lọc theo trạng thái (vd. RUNNING, STOPPED_EARLY) để tìm ca cần chấm. */
+    /**
+     * Màn "Session Evaluation": lọc theo trạng thái (vd. RUNNING, STOPPED_EARLY)
+     * để tìm ca cần chấm.
+     *
+     * HORSE_OWNER đọc được, nhưng service lọc theo owner_id nên chủ ngựa chỉ
+     * thấy nhận xét của ngựa mình. Thêm vai trò ở đây mà không lọc dưới kia là
+     * cho mọi chủ ngựa đọc nhận xét của cả chuồng.
+     */
     @GetMapping
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
     public List<SessionResponse> list(@RequestParam(value = "status", required = false) String status,
                                       @RequestParam(value = "horseId", required = false) Integer horseId,
-                                      @RequestParam(value = "limit", defaultValue = "50") int limit) {
-        return service.list(status, horseId, limit);
+                                      @RequestParam(value = "limit", defaultValue = "50") int limit,
+                                      @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me) {
+        return service.list(status, horseId, limit, me);
     }
 
     @GetMapping("/{id}")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
-    public SessionResponse get(@PathVariable("id") int id) {
-        return service.get(id);
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
+    public SessionResponse get(@PathVariable("id") int id,
+                               @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me) {
+        return service.get(id, me);
     }
 
     @PutMapping("/{id}/evaluation")

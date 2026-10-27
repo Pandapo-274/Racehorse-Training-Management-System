@@ -230,7 +230,7 @@
 
 .groom-header {
   position: relative;
-  z-index: 1;
+  z-index: 20;
   height: 84px;
   display: flex;
   align-items: center;
@@ -696,18 +696,75 @@
   .groom-stats { grid-template-columns: 1fr; }
   .task-row { grid-template-columns: 48px 16px minmax(0, 1fr); }
   .task-status { grid-column: 3; justify-self: start; }
+}
+/* =====================================================
+   Flow 2 - buổi tập thật của Groom
+===================================================== */
 
-  .session-start-button {
-  padding: 8px 16px;
+.task-status.stopped   { background: #ffe2cc; color: #b85a12; }
+.task-status.cancelled { background: #eceef4; color: #8a8fa3; text-decoration: line-through; }
+
+/* Hàng buổi tập giờ là nút bấm để chọn. */
+button.task-row {
+  width: 100%;
   border: 0;
-  border-radius: 10px;
-  background: #1f7a4d;
-  color: #fff;
-  font-weight: 700;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.session-start-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+button.task-row.selected { outline: 2px solid #f55fa9; outline-offset: -2px; border-radius: 12px; }
+
+.session-card { border-top: 6px solid #66b42e; padding: 22px 24px 20px; }
+.session-card .groom-card-title .task-status { margin-left: auto; }
+
+.session-facts {
+  margin: 4px 0 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
 }
+.session-facts dt { color: #8e93a8; font-size: 12px; }
+.session-facts dd { margin: 2px 0 0; font-weight: 800; font-size: 16px; }
+
+.vitals-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.vitals-form label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #6d708b; }
+.vitals-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #f2dee8;
+  border-radius: 10px;
+  background: #fdf4f9;
+  font: inherit;
+}
+.vitals-form .start-session { grid-column: 1 / -1; }
+
+.start-session:disabled { opacity: .6; cursor: default; }
+
+.vitals-result {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #e7f5d8;
+  color: #3f7a19;
+  font-size: 13px;
+  font-weight: 700;
+}
+.vitals-result.alert { background: #ffdbe0; color: #b0213a; }
+
+.session-note { margin: 12px 0 0; color: #6d708b; font-size: 13px; }
+.session-error { margin: 12px 0 0; color: #c81e3a; font-size: 13px; font-weight: 700; }
+
+.groom-alert.error { border-color: #e63148; background: #ffe9ec; }
+.groom-retry {
+  margin-left: auto;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #e63148;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }

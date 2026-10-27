@@ -11,5 +11,7 @@ public record TrainingSessionResponse(
         Integer recoveryHeartRate, BigDecimal peakVelocity, String evaluation,
         String remarks, String status,
         Integer heartRateCeiling,   // ngưỡng nhịp tim của giai đoạn
-        int alertCount              // số cảnh báo đã sinh từ buổi tập này
+        int alertCount,             // số cảnh báo đã sinh từ buổi tập này
+        boolean trialRun,           // lượt chạy thử
+        String videoUrl             // link video chạy thử, null nếu chưa có
 ) {}

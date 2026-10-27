@@ -44,7 +44,7 @@ function PendingRow({ row, onDone }) {
 
   const approve = () => {
     const e = {};
-    if (!code.trim()) e.registrationCode = "Enter the code the academy assigns";
+    if (!code.trim()) e.registrationCode = "Enter the code the club assigns";
     if (!pedigreeOnly && !stall.trim()) e.stallNo = "Assign a stall";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
@@ -181,7 +181,7 @@ export default function HorseReviewPage() {
                     <li key={r.requestId}>
                       <div>
                         <strong>{r.horseName}</strong>
-                        <p>{r.ownerName} · {r.reviewerName ? `by ${r.reviewerName}` : ""} {formatDateTime(r.reviewedAt)}</p>
+                        <p>{r.ownerName} · {r.reviewerName && r.status !== "CANCELLED" ? `by ${r.reviewerName}` : ""} {formatDateTime(r.reviewedAt)}</p>
                         {r.reviewNote && <p className="hz-reject-note">{r.reviewNote}</p>}
                       </div>
                       <StatusChip tone={st.tone} label={st.label} />

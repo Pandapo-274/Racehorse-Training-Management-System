@@ -23,5 +23,7 @@ public record SessionResponse(
         String evaluation,
         String remarks,
         Integer evaluatedBy,
-        String status
+        String status,
+        boolean trialRun,       // lượt chạy thử
+        String videoUrl         // link video chạy thử, null nếu chưa có
 ) {}

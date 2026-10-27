@@ -65,7 +65,13 @@ public class TrainingPlanRepository {
     }
 
     /** horseId và status đều tùy chọn; chỉ ghép điều kiện khi có giá trị. */
-    public List<TrainingPlanResponse.Summary> findSummaries(Integer horseId, String status) {
+    /**
+     * ownerId lọc theo chủ ngựa, dùng cho vai trò HORSE_OWNER. Lọc trong SQL,
+     * không lọc danh sách ở Java sau khi đã đọc hết - cùng lý do như
+     * TrainingSessionRepository.findAll.
+     */
+    public List<TrainingPlanResponse.Summary> findSummaries(Integer horseId, String status,
+                                                            Integer ownerId) {
         StringBuilder sql = new StringBuilder("""
                 SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.start_date,
                        tp.end_date, tp.status,
@@ -76,11 +82,13 @@ public class TrainingPlanRepository {
                 """);
         if (horseId != null) sql.append(" AND tp.horse_id = :horseId");
         if (status != null)  sql.append(" AND tp.status = :status");
+        if (ownerId != null) sql.append(" AND h.owner_id = :ownerId");
         sql.append(" ORDER BY tp.created_at DESC");
 
         JdbcClient.StatementSpec spec = jdbc.sql(sql.toString());
         if (horseId != null) spec = spec.param("horseId", horseId);
         if (status != null)  spec = spec.param("status", status);
+        if (ownerId != null) spec = spec.param("ownerId", ownerId);
 
         return spec.query((rs, n) -> new TrainingPlanResponse.Summary(
                         rs.getInt("plan_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
@@ -126,10 +134,69 @@ public class TrainingPlanRepository {
                 .update();
     }
 
-    public void updateStatus(int planId, String status) {
-        jdbc.sql("UPDATE TRAINING_PLAN SET status = :status WHERE plan_id = :id")
+    /**
+     * Huỷ những buổi tập còn SCHEDULED của một giáo án đã kết thúc.
+     *
+     * Đi từ TRAINING_SESSION qua PLAN_PHASE vì buổi tập không trỏ thẳng vào
+     * giáo án - nó trỏ vào giai đoạn, còn giai đoạn mới trỏ vào giáo án.
+     *
+     * Chỉ chạm những buổi còn SCHEDULED: buổi đã RUNNING, COMPLETED hay
+     * STOPPED_EARLY là chuyện đã xảy ra, và viết lại lịch sử thì tệ hơn là để
+     * một giáo án kết thúc với vài buổi dở dang.
+     *
+     * @return số buổi đã huỷ, để service ghi audit khi khác 0.
+     */
+    public int cancelRemainingSessions(int planId) {
+        return jdbc.sql("""
+                UPDATE s
+                SET s.status = 'CANCELLED'
+                FROM TRAINING_SESSION s
+                JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
+                WHERE ph.plan_id = :planId AND s.status = 'SCHEDULED'
+                """)
+                .param("planId", planId)
+                .update();
+    }
+
+    /**
+     * Đổi trạng thái giáo án, với điều kiện nó vẫn đang ở trạng thái mà
+     * service vừa đọc được.
+     *
+     * Không có điều kiện `AND status = :expected` thì hai yêu cầu đồng thời
+     * đều đọc thấy ACTIVE, đều qua được bảng TRANSITIONS, rồi một cái ghi
+     * PAUSED và một cái ghi COMPLETED - thứ tự ghi quyết định kết quả, và
+     * giáo án có thể dừng lại ở PAUSED sau khi đã bị tuyên COMPLETED (lúc đó
+     * những buổi tập còn lại đã bị huỷ). Cùng một lớp lỗi với
+     * markReportExamined ở UC14.
+     *
+     * @return số dòng đã đổi; 0 nghĩa là có người đổi trước.
+     */
+    public int updateStatus(int planId, String expectedStatus, String status) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN SET status = :status
+                WHERE plan_id = :id AND status = :expected
+                """)
+                .param("expected", expectedStatus)
                 .param("status", status)
                 .param("id", planId)
+                .update();
+    }
+
+    /**
+     * Kết thúc mọi giáo án chưa COMPLETED của một con ngựa (khi ngựa bị rút).
+     *
+     * Đi thẳng tới COMPLETED, kể cả từ DRAFT, không qua bảng TRANSITIONS của
+     * TrainingPlanService: đây không phải Head Trainer đổi trạng thái, mà là
+     * con ngựa đã rời học viện, nên không giáo án nào của nó còn chạy tiếp được.
+     *
+     * @return số giáo án đã kết thúc.
+     */
+    public int completeOpenPlansByHorse(int horseId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN SET status = 'COMPLETED'
+                WHERE horse_id = :horseId AND status <> 'COMPLETED'
+                """)
+                .param("horseId", horseId)
                 .update();
     }
 

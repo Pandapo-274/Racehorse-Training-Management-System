@@ -16,7 +16,7 @@ public class UserRepository {
 
     private static final String SELECT_USER = """
             SELECT u.user_id, u.username, u.password_hash, u.full_name, u.email, u.status,
-                   u.avatar_url, r.role_name
+                   u.avatar_url, u.must_change_password, r.role_name
             FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
             """;
 
@@ -24,7 +24,27 @@ public class UserRepository {
         return new UserRecord(rs.getInt("user_id"), rs.getString("username"),
                 rs.getString("password_hash"), rs.getString("full_name"),
                 rs.getString("email"), rs.getString("status"), rs.getString("role_name"),
-                rs.getString("avatar_url"));
+                rs.getString("avatar_url"),
+                rs.getBoolean("must_change_password"));
+    }
+
+    /**
+     * Cờ "phải đổi mật khẩu" (V14). AuthInterceptor gọi ở mỗi request, nên chỉ
+     * đọc đúng một cột theo khoá chính.
+     */
+    public boolean mustChangePassword(int userId) {
+        return jdbc.sql("SELECT must_change_password FROM APP_USER WHERE user_id = :id")
+                .param("id", userId)
+                .query(Boolean.class)
+                .optional()
+                .orElse(false);
+    }
+
+    public void setMustChangePassword(int userId, boolean value) {
+        jdbc.sql("UPDATE APP_USER SET must_change_password = :v WHERE user_id = :id")
+                .param("v", value)
+                .param("id", userId)
+                .update();
     }
 
     /** Đăng nhập bằng username HOẶC email. Username cấm ký tự @ nên hai loại không bao giờ đụng nhau. */

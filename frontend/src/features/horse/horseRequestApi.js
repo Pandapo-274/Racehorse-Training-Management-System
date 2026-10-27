@@ -43,6 +43,11 @@ export function approveRequest(id, { registrationCode, stallNo, note }) {
   });
 }
 
+/** Chủ ngựa huỷ yêu cầu của mình khi nó còn đang chờ (V15). */
+export function cancelRequest(id) {
+  return authFetch(`${API}/${id}/cancel`, { method: "PUT" });
+}
+
 export function rejectRequest(id, note) {
   return authFetch(`${API}/${id}/reject`, {
     method: "PUT",
@@ -55,9 +60,10 @@ export function rejectRequest(id, note) {
  * ------------------------------------------------------------------ */
 
 const STATUS = {
-  PENDING:  { label: "Waiting for the academy", tone: "warning" },
+  PENDING:  { label: "Waiting for the club", tone: "warning" },
   APPROVED: { label: "Approved", tone: "good" },
   REJECTED: { label: "Turned down", tone: "critical" },
+  CANCELLED: { label: "Cancelled by owner", tone: "neutral" },
 };
 
 export function toRequestStatus(status) {
