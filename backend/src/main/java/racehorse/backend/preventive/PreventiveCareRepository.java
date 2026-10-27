@@ -92,7 +92,7 @@ public class PreventiveCareRepository {
     /** Toàn đàn, ba ô mỗi con. Thứ tự cuối cùng do service xếp theo mức cấp thiết. */
     public List<PreventiveCareRow> findAll() {
         // Ngựa đã rút (V15) không còn ở học viện nên không còn lịch tiêm, tẩy giun, đóng móng.
-        return jdbc.sql(SELECT_BOARD + " WHERE h.activity_status = 'ACTIVE'")
+                return jdbc.sql(SELECT_BOARD + " AND h.activity_status = 'ACTIVE'")
                 .query(PreventiveCareRepository::map)
                 .list();
     }
