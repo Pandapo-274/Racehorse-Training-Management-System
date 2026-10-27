@@ -4,11 +4,13 @@ import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import racehorse.backend.auth.AuthInterceptor;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.RequireRole;
@@ -29,9 +31,12 @@ import racehorse.backend.auth.RequireRole;
 public class PreventiveCareController {
 
     private final PreventiveCareService service;
+    private final PreventiveReminderService reminders;
 
-    public PreventiveCareController(PreventiveCareService service) {
+    public PreventiveCareController(PreventiveCareService service,
+                                    PreventiveReminderService reminders) {
         this.service = service;
+        this.reminders = reminders;
     }
 
     /**
@@ -46,6 +51,21 @@ public class PreventiveCareController {
             @RequestParam(required = false) Integer dueWithinDays,
             @RequestParam(defaultValue = "false") boolean includeOk) {
         return service.board(dueWithinDays, includeOk);
+    }
+
+    /**
+     * Chạy tác vụ nhắc lịch ngay bây giờ, thay vì chờ 07:00 sáng mai.
+     *
+     * Dùng khi demo, và để bù khi máy tắt đúng giờ chạy. Cùng một service với tác vụ
+     * định kỳ nên idempotent: bấm hai lần liên tiếp thì lần hai trả skipped, không gửi
+     * trùng thông báo. Bác sĩ và quản lý được bấm; không phải việc của groom hay chủ ngựa.
+     */
+    @PostMapping("/reminders/run")
+    @RequireRole({"VETERINARIAN", "CLUB_MANAGER"})
+    public PreventiveReminderResult runReminders(
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return reminders.run(user.userId(), http.getRemoteAddr());
     }
 
     /** Lịch của một con ngựa, cả ba loại, kể cả loại đang ổn. */

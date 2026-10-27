@@ -33,7 +33,7 @@ public class PreventiveCareService {
 
     /** Mặc định 14 ngày: đủ sớm để đặt lịch bác sĩ, chưa sớm đến mức màn hình
         lúc nào cũng đầy việc chưa cần làm. */
-    private static final int DEFAULT_DUE_WITHIN_DAYS = 14;
+    static final int DEFAULT_DUE_WITHIN_DAYS = 14;
 
     private static final List<String> STATUSES =
             List.of("OVERDUE", "NEVER", "DUE_SOON", "UNSCHEDULED", "OK");

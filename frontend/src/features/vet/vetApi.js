@@ -1,6 +1,6 @@
 ﻿// src/features/vet/vetApi.js
 // Flow 3 phía bác sĩ thú y: UC14 (khám), UC15 (ghim chấn thương), UC16 (khoá tập),
-// UC18 (xác nhận hồi phục).
+// UC18 (xác nhận hồi phục), UC17 (lịch chăm sóc phòng ngừa) và đơn thuốc.
 //
 // Mọi lời gọi đi qua authFetch nên tự có Bearer token; lỗi HTTP thành ApiError
 // có .status và .fieldErrors. Backend lấy vetId / issuedBy từ token, nên không
@@ -62,6 +62,48 @@ export function confirmRecovery(body) {
   return post("/api/recovery-confirmations", body);
 }
 
+/* ---------- UC17: chăm sóc phòng ngừa ---------- */
+
+/**
+ * GET /api/preventive-care?includeOk=true -> { counts, items }.
+ * Lấy cả ô đang ổn: số đếm trong `counts` luôn là của toàn bảng, còn màn hình tự
+ * lọc ở phía mình nên đổi bộ lọc không phải gọi lại backend.
+ */
+export function getPreventiveBoard(signal) {
+  return authFetch("/api/preventive-care?includeOk=true", { signal });
+}
+
+/**
+ * POST /api/preventive-care/reminders/run (VETERINARIAN, CLUB_MANAGER).
+ * Chạy ngay tác vụ nhắc lịch mà backend vẫn tự chạy lúc 07:00. Chạy lại liên tiếp
+ * không gửi trùng: lần sau chỉ trả về `skipped`.
+ */
+export function runPreventiveReminders() {
+  return authFetch("/api/preventive-care/reminders/run", { method: "POST" });
+}
+
+/* ---------- Đơn thuốc ---------- */
+
+/** GET /api/treatments/active - mọi mục điều trị đang có hiệu lực hôm nay, toàn đàn. */
+export function listActiveTreatments(signal) {
+  return authFetch("/api/treatments/active", { signal });
+}
+
+/** GET /api/treatments?horseId= - cả mục đã hết hạn, mới nhất lên trước. */
+export function listTreatmentsForHorse(horseId, signal) {
+  return authFetch(`/api/treatments?horseId=${horseId}`, { signal });
+}
+
+/** POST /api/treatments (chỉ VETERINARIAN). Kê theo một lần khám (recordId). */
+export function createTreatment(body) {
+  return post("/api/treatments", body);
+}
+
+/** PUT /api/treatments/{id}/end (chỉ VETERINARIAN). Không có đường xoá: bệnh sử giữ nguyên. */
+export function endTreatment(id) {
+  return authFetch(`/api/treatments/${id}/end`, { method: "PUT" });
+}
+
 /* ------------------------------------------------------------------ *
  * Từ vựng hiển thị
  * ------------------------------------------------------------------ */
@@ -96,6 +138,50 @@ export const LOCK_LEVELS = [
 
 export function lockLevelLabel(level) {
   return LOCK_LEVELS.find((l) => l.value === level)?.label || level || "—";
+}
+
+/** Ba loại chăm sóc định kỳ của UC17 (record_type khác EXAM). */
+export const CARE_TYPES = [
+  { value: "VACCINATION", label: "Vaccination" },
+  { value: "DEWORMING", label: "Deworming" },
+  { value: "FARRIER", label: "Farrier" },
+];
+
+export function careTypeLabel(type) {
+  return CARE_TYPES.find((t) => t.value === type)?.label || type || "—";
+}
+
+/** careStatus của backend -> chữ và tông màu (red | pink | gold | green | muted). */
+const CARE_STATUS = {
+  OVERDUE: { label: "Overdue", tone: "red" },
+  NEVER: { label: "Never done", tone: "pink" },
+  DUE_SOON: { label: "Due soon", tone: "gold" },
+  UNSCHEDULED: { label: "No due date", tone: "muted" },
+  OK: { label: "Up to date", tone: "green" },
+};
+
+export function careStatusMeta(status) {
+  return CARE_STATUS[status] || { label: status || "—", tone: "muted" };
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** Câu nói rõ "còn / quá bao lâu" cho một ô nhắc lịch. */
+export function describeDue(item) {
+  const d = item.daysUntilDue;
+  switch (item.careStatus) {
+    case "OVERDUE":
+      return `${plural(-d, "day")} overdue`;
+    case "DUE_SOON":
+    case "OK":
+      return d === 0 ? "Due today" : `In ${plural(d, "day")}`;
+    case "NEVER":
+      return item.daysSinceRegistered != null
+        ? `In the stable ${plural(item.daysSinceRegistered, "day")}`
+        : "Never recorded";
+    default:
+      return "Next date unknown";
+  }
 }
 
 export const SEVERITIES = [
@@ -141,6 +227,20 @@ export function formatShortDate(iso) {
   return Number.isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
+/** "13 Sep 2026". Nhận cả "2026-09-13" (DATE) lẫn chuỗi ngày giờ. */
+export function formatDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Ngày mai, yyyy-MM-dd: ngày hẹn kế tiếp phải ở tương lai (backend @Future). */
+export function tomorrowInputValue() {
+  return todayInputValue(new Date(Date.now() + 86400000));
 }
 
 export function daysSince(iso) {

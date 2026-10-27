@@ -89,6 +89,27 @@ public class TreatmentRepository {
                 .list();
     }
 
+    /**
+     * Mọi mục điều trị đang có hiệu lực hôm nay trên toàn đàn, xếp theo tên ngựa.
+     *
+     * Cùng điều kiện "đang điều trị" với cột is_active của SELECT_TREATMENT (kể cả
+     * end_date NULL = chưa định ngày kết thúc). Mục kê trước cho đợt sau
+     * (start_date > hôm nay) chưa tính là đang dùng nên không có mặt ở đây.
+     *
+     * Chỉ ngựa ACADEMY: hồ sơ PEDIGREE không nằm trong chuồng nên không ai cho
+     * thuốc, cùng lý do với bảng sức khoẻ và bảng nhắc lịch.
+     */
+    public List<TreatmentRow> findActive() {
+        return jdbc.sql(SELECT_TREATMENT + """
+                 WHERE h.record_type = 'ACADEMY'
+                   AND t.start_date <= CAST(GETDATE() AS DATE)
+                   AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
+                 ORDER BY h.horse_name, t.start_date DESC, t.treatment_id DESC
+                """)
+                .query(TreatmentRepository::map)
+                .list();
+    }
+
     public int insert(TreatmentRequest r) {
         return jdbc.sql("""
                 INSERT INTO TREATMENT
