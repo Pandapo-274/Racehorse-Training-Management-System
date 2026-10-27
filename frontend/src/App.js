@@ -20,6 +20,7 @@ import HorseDetailPage from "./features/horse/HorseDetailPage";
 import HorseFormPage from "./features/horse/HorseFormPage";
 import HorseRequestPage from "./features/horse/HorseRequestPage";
 import HorseReviewPage from "./features/horse/HorseReviewPage";
+import WithdrawalReviewPage from "./features/horse/WithdrawalReviewPage";
 import ProfilePage from "./features/profile/ProfilePage";
 import ChangePasswordPage from "./features/password/ChangePasswordPage";
 import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="/manager" element={<ManagerDashboard />} />
           {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
         <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
+        <Route path="/manager/withdrawals" element={<RoleRoute roles={["CLUB_MANAGER"]}><WithdrawalReviewPage /></RoleRoute>} />
         <Route path="/manager/horses/:id" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseDetailPage /></RoleRoute>} />
         <Route path="/manager/staff" element={<RoleRoute roles={["CLUB_MANAGER"]}><StaffPage /></RoleRoute>} />
         {/* Head Trainer */}

@@ -148,6 +148,10 @@ public class TrainingPlanService {
         if (typeProblem != null) {
             throw new ApiException(HttpStatus.CONFLICT, typeProblem);
         }
+        String withdrawn = HorsePolicy.withdrawnProblem(horse);
+        if (withdrawn != null) {
+            throw new ApiException(HttpStatus.CONFLICT, withdrawn);
+        }
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Horse status is " + horse.status() + ", cannot start training yet");
@@ -178,6 +182,10 @@ public class TrainingPlanService {
             String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
             if (typeProblem != null) {
                 errors.put("horseId", typeProblem);
+            }
+            String withdrawn = HorsePolicy.withdrawnProblem(horse);
+            if (withdrawn != null) {
+                errors.put("horseId", withdrawn);
             }
         }
         if (r.endDate().isBefore(r.startDate())) {

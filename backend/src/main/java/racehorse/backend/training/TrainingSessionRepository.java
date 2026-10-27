@@ -103,7 +103,8 @@ public class TrainingSessionRepository {
      * và chỉ cần một chỗ quên gọi .filter là dữ liệu của chủ khác lọt ra.
      */
     public List<TrainingSessionResponse> findAll(Integer horseId, String status,
-                                                 Integer assignedTo, Integer ownerId) {
+                                                 Integer assignedTo, Integer ownerId,
+                                                 boolean activeHorsesOnly) {
         StringBuilder sql = new StringBuilder(SELECT_SESSION).append(" WHERE 1 = 1");
         if (horseId != null)
             sql.append(" AND s.horse_id = :horseId");
@@ -113,6 +114,8 @@ public class TrainingSessionRepository {
             sql.append(" AND s.assigned_to = :assignedTo");
         if (ownerId != null)
             sql.append(" AND h.owner_id = :ownerId");
+        if (activeHorsesOnly)
+            sql.append(" AND h.activity_status = 'ACTIVE'");
         sql.append(" ORDER BY s.session_date DESC");
 
         JdbcClient.StatementSpec spec = jdbc.sql(sql.toString());
@@ -162,6 +165,46 @@ public class TrainingSessionRepository {
                 WHERE session_id = :id AND status = 'SCHEDULED'
                 """)
                 .param("id", sessionId)
+                .update();
+    }
+
+    /** Buổi tập còn SCHEDULED của một con ngựa: ai phụ trách, lúc nào. */
+    public record ScheduledSlot(int sessionId, int assignedTo, LocalDateTime sessionDate) {
+    }
+
+    public List<ScheduledSlot> findScheduledByHorse(int horseId) {
+        return jdbc.sql("""
+                SELECT session_id, assigned_to, session_date
+                FROM TRAINING_SESSION
+                WHERE horse_id = :horseId AND status = 'SCHEDULED'
+                ORDER BY session_date
+                """)
+                .param("horseId", horseId)
+                .query((rs, n) -> new ScheduledSlot(
+                        rs.getInt("session_id"), rs.getInt("assigned_to"),
+                        rs.getObject("session_date", LocalDateTime.class)))
+                .list();
+    }
+
+    public boolean hasRunningSession(int horseId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM TRAINING_SESSION
+                WHERE horse_id = :horseId AND status = 'RUNNING'
+                """)
+                .param("horseId", horseId)
+                .query(Integer.class).single() > 0;
+    }
+
+    /**
+     * Huỷ mọi buổi tập còn SCHEDULED của một con ngựa (khi ngựa bị rút).
+     * Như cancelRemainingSessions của giáo án: chỉ chạm buổi chưa diễn ra.
+     */
+    public int cancelScheduledByHorse(int horseId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'CANCELLED'
+                WHERE horse_id = :horseId AND status = 'SCHEDULED'
+                """)
+                .param("horseId", horseId)
                 .update();
     }
 

@@ -57,6 +57,16 @@ public class HorseRequestController {
         return service.list(user);
     }
 
+    /** Chủ ngựa huỷ yêu cầu của mình khi nó còn đang chờ (V15). */
+    @PutMapping("/{id}/cancel")
+    @RequireRole({"HORSE_OWNER"})
+    public HorseRequestRow cancel(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.cancel(id, user, http.getRemoteAddr());
+    }
+
     @PutMapping("/{id}/approve")
     @RequireRole({"CLUB_MANAGER"})
     public HorseRequestRow approve(

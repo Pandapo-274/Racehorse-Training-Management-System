@@ -17,10 +17,11 @@ import PedigreeTree from "./PedigreeTree";
 import HorsePhoto from "./HorsePhoto";
 import VitalsPanel from "./VitalsPanel";
 import HorseHealthPanel from "./HorseHealthPanel";
+import HorseWithdrawalPanel from "./HorseWithdrawalPanel";
 
 import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
-  canViewPedigree, canViewVitals,
+  canViewPedigree, canViewVitals, isWithdrawn, toActivity,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
 
@@ -144,6 +145,8 @@ export default function HorseDetailPage() {
   const pedigreeOnly = isPedigreeOnly(horse);
   const mayEdit = canEditHorse(user, horse);
   const age = toAge(horse.dateOfBirth);
+  const withdrawn = isWithdrawn(horse);
+  const act = toActivity(horse.activityStatus);
 
   return (
     <HorseShell
@@ -154,6 +157,10 @@ export default function HorseDetailPage() {
       actions={
         <>
           <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
+
+          {withdrawn && (
+            <StatusChip tone={act.tone} label={act.label} title={act.hint} />
+          )}
 
           {healthApplies(horse) && (
             <StatusChip tone={st.tone} label={st.label} title={st.hint} />
@@ -168,7 +175,7 @@ export default function HorseDetailPage() {
             </button>
           )}
 
-          {isVet && !pedigreeOnly && (
+          {isVet && !pedigreeOnly && !withdrawn && (
             <button
               type="button" className="hz-btn"
               onClick={() => navigate(`/veterinarian/examination/${id}`)}
@@ -177,7 +184,7 @@ export default function HorseDetailPage() {
             </button>
           )}
 
-          {isVet && !pedigreeOnly && horse.status !== "ELIGIBLE" && (
+          {isVet && !pedigreeOnly && !withdrawn && horse.status !== "ELIGIBLE" && (
             <button
               type="button" className="hz-btn hz-btn--ghost"
               onClick={() => navigate(`/veterinarian/recovery/${id}`)}
@@ -298,6 +305,8 @@ export default function HorseDetailPage() {
           </Card>
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
+
+          <HorseWithdrawalPanel horse={horse} user={user} />
         </div>
       )}
 

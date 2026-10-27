@@ -150,6 +150,34 @@ export function toStatus(status) {
 
 export const STATUS_OPTIONS = Object.keys(STATUS_TEXT);
 
+/**
+ * Ngựa còn ở học viện hay đã rút (HORSE.activity_status, V15). Khác hẳn
+ * trạng thái sức khoẻ ở trên: ngựa đã rút vẫn giữ trạng thái sức khoẻ cuối cùng.
+ */
+const ACTIVITY_TEXT = {
+  ACTIVE:    { label: "At the club", tone: "good",    hint: "Stabled and training at the club" },
+  WITHDRAWN: { label: "Withdrawn",   tone: "neutral", hint: "Has left the club. No stall, plans or sessions." },
+};
+
+export function toActivity(activityStatus) {
+  return ACTIVITY_TEXT[activityStatus || "ACTIVE"] || { label: activityStatus, tone: "neutral", hint: "" };
+}
+
+export const ACTIVITY_OPTIONS = Object.keys(ACTIVITY_TEXT);
+
+/** Ngựa đã rút: không vào giáo án, bảng sức khoẻ, lịch Groom. */
+export function isWithdrawn(horse) {
+  return horse?.activityStatus === "WITHDRAWN";
+}
+
+/**
+ * Chủ ngựa xin rút được ngựa của chính mình, khi nó là ngựa của học viện
+ * (không phải hồ sơ PEDIGREE) và còn ở học viện. Khớp WithdrawalService.submit.
+ */
+export function canRequestWithdrawal(user, horse) {
+  return canEditHorse(user, horse) && !isPedigreeOnly(horse) && !isWithdrawn(horse);
+}
+
 /* ------------------------------------------------------------------ *
  * Loại hồ sơ và phân loại theo tuổi
  * ------------------------------------------------------------------ */

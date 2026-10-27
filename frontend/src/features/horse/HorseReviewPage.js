@@ -181,7 +181,7 @@ export default function HorseReviewPage() {
                     <li key={r.requestId}>
                       <div>
                         <strong>{r.horseName}</strong>
-                        <p>{r.ownerName} · {r.reviewerName ? `by ${r.reviewerName}` : ""} {formatDateTime(r.reviewedAt)}</p>
+                        <p>{r.ownerName} · {r.reviewerName && r.status !== "CANCELLED" ? `by ${r.reviewerName}` : ""} {formatDateTime(r.reviewedAt)}</p>
                         {r.reviewNote && <p className="hz-reject-note">{r.reviewNote}</p>}
                       </div>
                       <StatusChip tone={st.tone} label={st.label} />

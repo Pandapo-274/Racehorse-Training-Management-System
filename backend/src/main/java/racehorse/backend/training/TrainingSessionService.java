@@ -143,7 +143,11 @@ public class TrainingSessionService {
            theo nghĩa hẹp nhất. */
         Integer assignedTo = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        return repository.findAll(horseId, status, assignedTo, ownerId);
+        /* Lịch của Groom bỏ hẳn ngựa đã rút: buổi tập của chúng đã bị huỷ lúc
+           duyệt rút, và con ngựa không còn trong chuồng nữa. Các vai trò khác
+           vẫn thấy để tra lại lịch sử. */
+        boolean activeHorsesOnly = assignedTo != null;
+        return repository.findAll(horseId, status, assignedTo, ownerId, activeHorsesOnly);
     }
     
 /**
@@ -314,6 +318,10 @@ public TrainingSessionResponse reschedule(
         String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
         if (typeProblem != null) {
             throw new ApiException(HttpStatus.CONFLICT, typeProblem);
+        }
+        String withdrawn = HorsePolicy.withdrawnProblem(horse);
+        if (withdrawn != null) {
+            throw new ApiException(HttpStatus.CONFLICT, withdrawn);
         }
         if (!TRAINABLE.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,

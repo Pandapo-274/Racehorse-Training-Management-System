@@ -12,6 +12,7 @@ import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   listHorses, canEditHorse, getHorseBasePath, toStatus, toGender,
   toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly, healthApplies,
+  isWithdrawn, toActivity, ACTIVITY_OPTIONS,
 } from "./horseApi";
 
 export default function HorseListPage() {
@@ -27,6 +28,7 @@ export default function HorseListPage() {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("ALL");
   const [status, setStatus] = useState("ALL");
+  const [activity, setActivity] = useState("ALL");
 
   const load = useCallback(
     (signal) => {
@@ -55,6 +57,7 @@ export default function HorseListPage() {
     return (horses || []).filter((h) => {
       if (stage !== "ALL" && toStage(h).key !== stage) return false;
       if (status !== "ALL" && (!healthApplies(h) || h.status !== status)) return false;
+      if (activity !== "ALL" && (h.activityStatus || "ACTIVE") !== activity) return false;
       if (!q) return true;
       return (
         (h.horseName || "").toLowerCase().includes(q) ||
@@ -63,7 +66,7 @@ export default function HorseListPage() {
         (h.stallNo || "").toLowerCase().includes(q)
       );
     });
-  }, [horses, query, stage, status]);
+  }, [horses, query, stage, status, activity]);
 
   // Đếm theo phân loại để dán số lên từng nút lọc. Đếm trên toàn đàn, không
   // phải trên kết quả đang hiển thị - nếu không, bấm sang bộ lọc khác sẽ thấy
@@ -138,6 +141,14 @@ export default function HorseListPage() {
                 <option value="ALL">Any health status</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>{toStatus(s).label}</option>
+                ))}
+              </select>
+
+              <select className="hz-search" value={activity} aria-label="Filter by club membership"
+                      onChange={(e) => setActivity(e.target.value)}>
+                <option value="ALL">At the club or withdrawn</option>
+                {ACTIVITY_OPTIONS.map((a) => (
+                  <option key={a} value={a}>{toActivity(a).label}</option>
                 ))}
               </select>
             </div>
@@ -219,7 +230,11 @@ export default function HorseListPage() {
                           <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
                         </td>
                         <td>
-                          {!healthApplies(h) ? (
+                          {isWithdrawn(h) ? (
+                            <StatusChip tone={toActivity(h.activityStatus).tone}
+                                        label={toActivity(h.activityStatus).label}
+                                        title={toActivity(h.activityStatus).hint} />
+                          ) : !healthApplies(h) ? (
                             <span
                               className="hz-muted"
                               title={pedigree ? "Reference record, not tracked" : "Retired, not on the training programme"}
@@ -244,7 +259,7 @@ export default function HorseListPage() {
                             </button>
                           )}
 
-                          {isVet && !pedigree && (
+                          {isVet && !pedigree && !isWithdrawn(h) && (
                             <>
                               {h.status !== "ELIGIBLE" && (
                                 <button

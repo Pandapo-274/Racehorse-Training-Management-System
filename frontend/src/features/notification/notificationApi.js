@@ -54,6 +54,9 @@ export function notificationTarget(n, user) {
       if (role === "GROOM") return "/groom";
       if (role === "HEAD_TRAINER") return "/trainer/schedule";
       return null;
+    case "HORSE_WITHDRAWAL":
+      if (role === "CLUB_MANAGER") return "/manager/withdrawals";
+      return null;
     case "THRESHOLD_ALERT":
       if (role === "HEAD_TRAINER") return "/trainer/live-session";
       if (role === "VETERINARIAN") return "/veterinarian";

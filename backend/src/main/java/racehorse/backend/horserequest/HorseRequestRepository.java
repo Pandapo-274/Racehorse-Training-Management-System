@@ -114,6 +114,26 @@ public class HorseRequestRepository {
      *
      * @return số dòng bị ảnh hưởng: 1 nếu thắng, 0 nếu người khác đã xử lý.
      */
+    /**
+     * Chủ ngựa huỷ yêu cầu của chính mình. Cùng điều kiện như markReviewed:
+     * owner_id và status = 'PENDING' nằm ngay trong câu UPDATE, nên nếu
+     * Club Manager vừa duyệt xong thì lệnh huỷ nhận 0 dòng chứ không đè lên.
+     *
+     * @return 1 nếu huỷ được, 0 nếu yêu cầu không còn chờ.
+     */
+    public int markCancelled(int requestId, int ownerId) {
+        return jdbc.sql("""
+                UPDATE HORSE_REQUEST
+                SET status = 'CANCELLED',
+                    reviewed_by = :owner,
+                    reviewed_at = SYSUTCDATETIME()
+                WHERE request_id = :id AND owner_id = :owner AND status = 'PENDING'
+                """)
+                .param("owner", ownerId)
+                .param("id", requestId)
+                .update();
+    }
+
     public int markReviewed(int requestId, String status, int reviewerId,
                             Integer horseId, String note) {
         return jdbc.sql("""

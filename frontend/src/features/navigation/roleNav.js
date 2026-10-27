@@ -28,6 +28,7 @@ export const ROLE_NAV = {
     { key: "overview", label: "Overview", path: "/manager", exact: true },
     { key: "horses", label: "Horses", path: "/manager/horses" },
     { key: "registrations", label: "Registrations", path: "/manager/horse-requests" },
+    { key: "withdrawals", label: "Withdrawals", path: "/manager/withdrawals" },
     { key: "staff", label: "Staff", path: "/manager/staff" },
     { key: "supplies", label: "Supplies & feed" },
     { key: "permissions", label: "Permissions" },

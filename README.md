@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 27, 2026` at `06:47` by `tqt195`
+### Last Commited: `Oct 27, 2026` at `07:22` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 27, 2026`
+- `[07:22]` `tqt195` - Add Horse withdrawls: `Horse Owner` requests to withdraw a horse from its profile (`Leave the club`), `Club Manager` approves or rejects on the new `Withdrawals` page; approval cancels scheduled sessions (grooms are notified), ends training plans, releases the stall and marks the horse `WITHDRAWN`. Withdrawn horses are hidden from training plans, the health board, preventive care and the groom schedule. Owners can also cancel a pending registration request. Migration `V15__horse_withdrawal.sql`
 - `[06:47]` `tqt195` - Fix manager permission: `Club Manager` changes staff role (Head Trainer / Vet / Groom) on the `Staff` page, staff accounts get a temporary password that must be changed at first sign-in (`V14__staff_must_change_password.sql`), head trainers are notified when a suspended or re-roled groom still has sessions to reassign
 > #### `Oct 23, 2026`
 - `[14:06]` `ArichiAya` - Fix Register `RBAC` v1
