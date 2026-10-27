@@ -37,9 +37,15 @@ public class NotificationService {
         notifications.insertForUser(userId, notice);
     }
 
-    /** Gửi cho mọi tài khoản ACTIVE của vai trò này, trừ người vừa làm việc đó. */
-    public void notifyRole(String role, AuthenticatedUser actor, Notice notice) {
-        notifications.insertForRole(role, actor == null ? 0 : actor.userId(), notice);
+    /**
+     * Gửi cho mọi tài khoản ACTIVE của vai trò này, trừ người vừa làm việc đó.
+     *
+     * @param actor null nếu việc do hệ thống làm (tác vụ định kỳ), khi đó không loại ai.
+     * @return số người đã nhận. Các chỗ gọi cũ bỏ qua giá trị này; tác vụ nhắc lịch
+     *         cần nó để không đánh dấu "đã nhắc" khi chẳng có ai nhận.
+     */
+    public int notifyRole(String role, AuthenticatedUser actor, Notice notice) {
+        return notifications.insertForRole(role, actor == null ? 0 : actor.userId(), notice);
     }
 
     /**

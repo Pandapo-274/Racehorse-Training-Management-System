@@ -71,6 +71,14 @@ public class TreatmentService {
         return treatments.findByHorse(horseId);
     }
 
+    /**
+     * Đơn thuốc đang dùng trên toàn đàn. Không có tham số ngựa nên không có phép kiểm
+     * quyền sở hữu ở đây: controller đã giới hạn cho nhân sự trong chuồng.
+     */
+    public List<TreatmentRow> listActive() {
+        return treatments.findActive();
+    }
+
     /** Đơn thuốc kê theo một lần khám cụ thể. */
     public List<TreatmentRow> listForRecord(int recordId, AuthenticatedUser user) {
         MedicalRecordRow record = records.findById(recordId)

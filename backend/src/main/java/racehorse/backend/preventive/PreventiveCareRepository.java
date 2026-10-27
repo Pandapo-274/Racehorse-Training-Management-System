@@ -45,6 +45,11 @@ public class PreventiveCareRepository {
      * LEFT JOIN APP_USER vì m.vet_id là NULL ở mọi ô chưa từng làm - nối
      * trong sẽ xoá sạch đúng những ô ấy, lặp lại chính cái lỗi mà CROSS JOIN
      * ở trên sinh ra để tránh.
+     *
+     * WHERE record_type = 'ACADEMY': hồ sơ PEDIGREE không sống trong chuồng nên
+     * không có gì để tiêm hay tẩy giun. Không lọc thì mỗi hồ sơ tổ tiên sinh ra
+     * ba ô NEVER và chúng luôn nằm ở đầu danh sách (hồ sơ càng cũ càng "cấp"),
+     * che mất đúng những con ngựa thật đang cần việc.
      */
     private static final String SELECT_BOARD = """
             SELECT h.horse_id, h.horse_name, h.registration_code, h.stall_no, h.created_at,
@@ -60,6 +65,7 @@ public class PreventiveCareRepository {
                 ORDER BY r.exam_date DESC
             ) m
             LEFT JOIN APP_USER u ON u.user_id = m.vet_id
+            WHERE h.record_type = 'ACADEMY'
             """;
 
     private static PreventiveCareRow map(ResultSet rs, int rowNum) throws SQLException {
@@ -93,7 +99,7 @@ public class PreventiveCareRepository {
 
     /** Ba ô của một con ngựa. */
     public List<PreventiveCareRow> findByHorse(int horseId) {
-        return jdbc.sql(SELECT_BOARD + " WHERE h.horse_id = :id")
+        return jdbc.sql(SELECT_BOARD + " AND h.horse_id = :id")
                 .param("id", horseId)
                 .query(PreventiveCareRepository::map)
                 .list();

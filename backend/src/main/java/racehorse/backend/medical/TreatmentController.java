@@ -60,6 +60,19 @@ public class TreatmentController {
         return service.listForHorse(horseId, user);
     }
 
+    /**
+     * Mọi đơn thuốc đang dùng trên toàn đàn: danh sách mở đầu của trang đơn thuốc.
+     *
+     * Giới hạn cho nhân sự trong chuồng, giống bảng nhắc lịch UC17: chủ ngựa không
+     * xem được thuốc của cả đàn mà chỉ xem ngựa của mình qua GET ?horseId=. Groom
+     * nằm trong danh sách vì họ là người cho thuốc theo đơn.
+     */
+    @GetMapping("/active")
+    @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "GROOM", "CLUB_MANAGER"})
+    public List<TreatmentRow> listActive() {
+        return service.listActive();
+    }
+
     /** Đơn thuốc kê theo một lần khám cụ thể. */
     @GetMapping("/by-record/{recordId}")
     public List<TreatmentRow> listForRecord(

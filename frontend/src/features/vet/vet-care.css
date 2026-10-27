@@ -1,0 +1,165 @@
+/* Hai màn Preventive care và Prescriptions của Vet.
+   Dùng lại khung, thẻ, nút, biểu mẫu của vet.css (.vx-*); mọi lớp ở đây mang tiền tố .vc- */
+
+/* ---------- đầu thẻ có nút ---------- */
+
+.vc-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.vc-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ---------- bảng ---------- */
+
+.vc-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.vc-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.vc-table th {
+  padding: 0 12px 12px 0;
+  border-bottom: 1px solid #efe0e8;
+  text-align: left;
+  color: var(--v-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vc-table td {
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid #f5e8ee;
+  color: #202a49;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.vc-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.vc-name {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.vc-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--v-muted);
+  font-size: 12.5px;
+}
+
+.vc-instruction {
+  max-width: 320px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.vc-cell-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* ---------- chip trạng thái ---------- */
+
+.vc-pill {
+  display: inline-flex;
+  padding: 6px 13px;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vc-pill--red   { background: #ffe1e5; color: #dc3f52; }
+.vc-pill--pink  { background: #fde1ef; color: #c4337f; }
+.vc-pill--gold  { background: #fff0c9; color: #9c6d00; }
+.vc-pill--green { background: #e7f5d8; color: #4f8f22; }
+.vc-pill--muted { background: #eceef5; color: #5e6682; }
+
+/* ---------- nút nhỏ trong bảng ---------- */
+
+.vc-btn {
+  height: 34px;
+  padding: 0 16px;
+  border: 2px solid #f3d9e6;
+  border-radius: 17px;
+  background: #fff;
+  color: var(--text-900);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.vc-btn:hover:not(:disabled) { transform: translateY(-1px); background: #fff7fb; }
+.vc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vc-btn:focus-visible { outline: 2px solid var(--pink-300); outline-offset: 2px; }
+.vc-btn--danger { border-color: #ffc4cc; color: #c81e3a; }
+
+.vc-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.vc-more .vx-btn { min-width: 220px; height: 40px; }
+
+/* ---------- biểu mẫu trong hộp thoại ---------- */
+
+.vc-dialog-wide { width: min(620px, 100%); }
+
+.vet-page select {
+  font-family: inherit;
+}
+
+.vc-select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.vc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+}
+.vc-form-grid .vx-field--full { grid-column: 1 / -1; }
+
+.vc-hint {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fff8fb;
+  color: #69728f;
+  font-size: 12.5px;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 760px) {
+  .vc-form-grid { grid-template-columns: 1fr; }
+  .vc-actions { margin-left: 0; justify-content: flex-start; }
+}
+
+/* Thẻ nằm ngay dưới hàng thẻ đếm hoặc thẻ khác. */
+.vc-section { margin-top: 24px; }

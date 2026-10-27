@@ -1,4 +1,4 @@
-﻿// src/features/vet/VetHorsePicker.js
+// src/features/vet/VetHorsePicker.js
 // Trang /veterinarian/examination và /veterinarian/recovery khi chưa chọn con
 // ngựa nào (bấm từ sidebar). Danh sách lấy từ GET /api/horses.
 
@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import VetShell, { VetCard, VetState } from "./VetShell";
+import { isPedigreeOnly, isWithdrawn } from "../horse/horseApi";
 import { listHorses, toBoardStatus, statusLabel } from "./vetApi";
-import { isWithdrawn } from "../horse/horseApi";
 
 const ORDER = { injured: 0, quarantine: 1, monitor: 2, fit: 3 };
 
@@ -52,7 +52,7 @@ export default function VetHorsePicker({ mode }) {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (horses || [])
-      .filter((h) => !isWithdrawn(h))
+            .filter((h) => !isWithdrawn(h) && !isPedigreeOnly(h)) // đã rút hoặc hồ sơ PEDIGREE thì không khám, không hồi phục
       .filter((h) => (mode === "recovery" ? h.status !== "ELIGIBLE" : true))
       .filter(
         (h) =>

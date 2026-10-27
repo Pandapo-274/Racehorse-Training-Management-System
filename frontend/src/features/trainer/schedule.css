@@ -577,4 +577,12 @@
   .schedule-modal {
     padding: 18px;
   }
+
+  .schedule-session.is-due {
+    border-color: #c98a1a;
+  }
+  .schedule-session.is-due .schedule-status {
+    color: #c98a1a;
+    font-weight: 700;
+  }
 }
