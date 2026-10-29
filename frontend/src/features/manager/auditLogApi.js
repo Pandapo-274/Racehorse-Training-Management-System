@@ -52,6 +52,11 @@ export const ACTION_GROUPS = [
   { value: "RESOLVE_ALERT", label: "Alerts" },
   { value: "MEDICAL_EXAM", label: "Examinations" },
   { value: "TRAINING_LOCK_", label: "Training locks" },
+  { value: "INCIDENT_", label: "Incident reports" },
+  { value: "DAILY_TASK_", label: "Daily care tasks" },
+  { value: "FEEDING_", label: "Rations" },
+  { value: "SUPPLY_", label: "Supplies" },
+  { value: "RACE_", label: "Races" },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -104,6 +109,7 @@ const ACTION_TEXT = {
   SESSION_TRIAL_RUN_UPDATE: "Updated a trial run / video",
   EVALUATE_SESSION: "Evaluated a training session",
   INCIDENT_RECEIVE: "Took an incident case",
+  INCIDENT_REPORT_CREATE: "Reported an incident at the stable",
   MEDICAL_EXAM: "Recorded an examination",
   HEALTH_CLEARED: "Cleared a horse as healthy",
   INJURY_MARKED: "Marked an injury",
@@ -112,6 +118,17 @@ const ACTION_TEXT = {
   TREATMENT_END: "Ended a treatment",
   TRAINING_LOCK_ISSUED: "Issued a training lock",
   TRAINING_LOCK_RELEASED: "Released a training lock",
+  FEEDING_PLAN_UPDATE: "Approved a ration",
+  DAILY_TASK_ASSIGN: "Assigned a care task",
+  DAILY_TASK_DONE: "Completed a care task",
+  DAILY_TASK_REOPEN: "Reopened a care task",
+  DAILY_TASK_DELETE: "Deleted a care task",
+  SUPPLY_CREATE: "Added a supply item",
+  SUPPLY_UPDATE: "Edited a supply item",
+  SUPPLY_COUNT: "Updated a stock count",
+  RACE_REGISTER: "Registered a horse for a race",
+  RACE_RESULT: "Recorded a race result",
+  RACE_SCRATCH: "Scratched a race entry",
 };
 
 const ROLE_TEXT = {
@@ -162,6 +179,9 @@ const TARGET_TEXT = {
   TREATMENT: "Treatment",
   TRAINING_LOCK: "Training lock",
   INCIDENT_REPORT: "Incident report",
+  DAILY_TASK: "Care task",
+  SUPPLY_STOCK: "Supply item",
+  RACE_REGISTRATION: "Race entry",
 };
 
 export function toTargetText(entity, id) {

@@ -21,7 +21,7 @@ export const ROLE_NAV = {
     { key: "overview", label: "Overview", path: "/horse-owner", exact: true },
     { key: "horses", label: "My horses", path: "/horse-owner/horses" },
     { key: "training", label: "Training", path: "/horse-owner/training" },
-    { key: "results", label: "Results & races", path: "/horse-owner", hash: "results-races" },
+    { key: "results", label: "Results & races", path: "/horse-owner/races" },
     { key: "costs", label: "Costs & prizes", path: "/horse-owner", hash: "costs-prizes" },
   ],
 
@@ -31,7 +31,8 @@ export const ROLE_NAV = {
     { key: "registrations", label: "Registrations", path: "/manager/horse-requests" },
     { key: "withdrawals", label: "Withdrawals", path: "/manager/withdrawals" },
     { key: "staff", label: "Staff", path: "/manager/staff" },
-    { key: "supplies", label: "Supplies & feed" },
+    { key: "supplies", label: "Supplies & feed", path: "/manager/supplies" },
+    { key: "races", label: "Races", path: "/manager/races" },
     { key: "permissions", label: "Permissions", path: "/manager/permissions" },
     { key: "audit", label: "Audit log", path: "/manager/audit-log" },
   ],
@@ -43,7 +44,8 @@ export const ROLE_NAV = {
     { key: "schedule", label: "Schedule", path: "/trainer/schedule" },
     { key: "live", label: "Live session", path: "/trainer/live-session" },
     { key: "review", label: "Session review", path: "/trainer/session-review" },
-    { key: "races", label: "Races" },
+    { key: "care", label: "Stable care", path: "/trainer/stable-care" },
+    { key: "races", label: "Races", path: "/trainer/races" },
   ],
 
   VETERINARIAN: [
@@ -53,14 +55,15 @@ export const ROLE_NAV = {
     { key: "recovery", label: "Recovery", path: "/veterinarian/recovery" },
     { key: "preventive", label: "Preventive care", path: "/veterinarian/preventive-care" },
     { key: "prescriptions", label: "Prescriptions", path: "/veterinarian/prescriptions" },
+    { key: "rations", label: "Rations", path: "/veterinarian/feeding" },
   ],
 
   GROOM: [
     { key: "today", label: "Today", path: "/groom", exact: true },
-    { key: "stable", label: "Stable map", path: "/groom/horses" },
-    { key: "feeding", label: "Feeding" },
-    { key: "incidents", label: "Incident reports" },
-    { key: "supplies", label: "Supplies" },
+    { key: "stable", label: "Stable map", path: "/groom/stable" },
+    { key: "feeding", label: "Feeding", path: "/groom/feeding" },
+    { key: "incidents", label: "Incident reports", path: "/groom/incidents" },
+    { key: "supplies", label: "Supplies", path: "/groom/supplies" },
   ],
 };
 

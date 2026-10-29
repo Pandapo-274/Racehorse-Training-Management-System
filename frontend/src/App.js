@@ -32,6 +32,13 @@ import ForgotPasswordPage from "./features/password/ForgotPasswordPage";
 import ResetPasswordPage from "./features/password/ResetPasswordPage";
 import LiveSessionMonitorPage from "./features/trainer/LiveSessionMonitorPage";
 import SessionEvaluationPage from "./features/trainer/SessionEvaluationPage";
+import StableMapPage from "./features/care/StableMapPage";
+import FeedingPage from "./features/care/FeedingPage";
+import StableCarePage from "./features/care/StableCarePage";
+import IncidentReportPage from "./features/care/IncidentReportPage";
+import SuppliesPage from "./features/care/SuppliesPage";
+import RacesPage from "./features/race/RacesPage";
+import OwnerRacesPage from "./features/race/OwnerRacesPage";
 
 /* UC4 - mọi vai trò đều có hồ sơ của mình, nên liệt kê cả năm thay vì thêm một
    loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
@@ -86,12 +93,18 @@ export default function App() {
         <Route path="/manager/permissions" element={<RoleRoute roles={["CLUB_MANAGER"]}><PermissionsPage /></RoleRoute>} />
         {/* Nhật ký thao tác hệ thống: chỉ đọc. */}
         <Route path="/manager/audit-log" element={<RoleRoute roles={["CLUB_MANAGER"]}><AuditLogPage /></RoleRoute>} />
+        {/* Flow 4 + 5: vật tư theo kho, kết quả giải đua và doanh thu tiền thưởng. */}
+        <Route path="/manager/supplies" element={<RoleRoute roles={["CLUB_MANAGER"]}><SuppliesPage /></RoleRoute>} />
+        <Route path="/manager/races" element={<RoleRoute roles={["CLUB_MANAGER"]}><RacesPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />
         <Route path="/trainer/training-plans" element={<RoleRoute roles={["HEAD_TRAINER"]}><TrainingPlanPage /></RoleRoute>} />
         <Route path="/trainer/schedule" element={<RoleRoute roles={["HEAD_TRAINER"]}><SchedulePage /></RoleRoute>} />
         <Route path="/trainer/live-session" element={<RoleRoute roles={["HEAD_TRAINER"]}><LiveSessionMonitorPage /></RoleRoute>} />
         <Route path="/trainer/session-review" element={<RoleRoute roles={["HEAD_TRAINER"]}><SessionEvaluationPage /></RoleRoute>} />
+        {/* Flow 4: giao việc chăm sóc, duyệt khẩu phần. Flow 5: đăng ký giải, nhập kết quả. */}
+        <Route path="/trainer/stable-care" element={<RoleRoute roles={["HEAD_TRAINER"]}><StableCarePage /></RoleRoute>} />
+        <Route path="/trainer/races" element={<RoleRoute roles={["HEAD_TRAINER"]}><RacesPage /></RoleRoute>} />
         {/* Veterinarian */}
         <Route path="/veterinarian" element={<VetDashboard />} />
         {/* Groom */}
@@ -116,6 +129,8 @@ export default function App() {
         <Route path="/veterinarian/examination/:horseId/lock-issued" element={<RoleRoute roles={["VETERINARIAN"]}><VetLockIssuedPage /></RoleRoute>} />
         <Route path="/veterinarian/recovery" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
         <Route path="/veterinarian/recovery/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
+        {/* Flow 4: bác sĩ duyệt khẩu phần. */}
+        <Route path="/veterinarian/feeding" element={<RoleRoute roles={["VETERINARIAN"]}><FeedingPage /></RoleRoute>} />
 
         {/* UC17 - lịch tiêm phòng / tẩy giun / móng, và đơn thuốc đang dùng toàn đàn. */}
         <Route path="/veterinarian/preventive-care" element={<RoleRoute roles={["VETERINARIAN"]}><VetPreventiveCarePage /></RoleRoute>} />
@@ -123,9 +138,16 @@ export default function App() {
 
         <Route path="/groom/horses" element={<RoleRoute roles={["GROOM"]}><HorseListPage /></RoleRoute>} />
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />
+        {/* Flow 4 - chăm sóc chuồng trại: sơ đồ chuồng + việc trong ngày, khẩu phần, báo sự cố, vật tư. */}
+        <Route path="/groom/stable" element={<RoleRoute roles={["GROOM"]}><StableMapPage /></RoleRoute>} />
+        <Route path="/groom/feeding" element={<RoleRoute roles={["GROOM"]}><FeedingPage /></RoleRoute>} />
+        <Route path="/groom/incidents" element={<RoleRoute roles={["GROOM"]}><IncidentReportPage /></RoleRoute>} />
+        <Route path="/groom/supplies" element={<RoleRoute roles={["GROOM"]}><SuppliesPage /></RoleRoute>} />
 
         {/* Chủ ngựa xem giáo án, lịch tập, nhận xét của HLV và video chạy thử. */}
         <Route path="/horse-owner/training" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerTrainingPage /></RoleRoute>} />
+        {/* Flow 5: lịch đua và kết quả của ngựa mình. */}
+        <Route path="/horse-owner/races" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerRacesPage /></RoleRoute>} />
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
         {/* Chủ ngựa xin học viện đăng ký ngựa. Không phải /horse-owner/horses/new:
             đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}

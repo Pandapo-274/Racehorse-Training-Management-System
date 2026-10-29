@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 27, 2026` at `12:59` by `Pandapo274`
+### Last Commited: `Oct 29, 2026` at `18:55` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 29, 2026`
+- `[18:55]` `ArichiAya` - Frontend for Flow 4 and 5: Groom stable map with daily tasks, feeding, incident reports with photo and supplies; Head Trainer stable care and races; Vet rations; Manager supplies and race results; Owner race history
 > #### `Oct 27, 2026`
 - `[12:59]` `Pandapo274` - Backend for Flow 4 and 5: rations, daily care tasks, supplies with restock alerts, stable incident reports with photo, race entries, results and yearly performance (`V18__race_result_rules.sql`)
 - `[12:58]` `Pandapo274` - Remove the old duplicate preventive reminder scheduler (its notices were rejected by `CK_NOTIF_target`); due-session highlight on `Schedule` now shows on every screen size

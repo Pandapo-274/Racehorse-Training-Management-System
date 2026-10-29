@@ -1,0 +1,42 @@
+/* Flow 5 - races. Built on the hz-* classes from horse.css (HorseShell). */
+
+.race-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;
+}
+.race-summary .hz-stat { padding: 14px 16px; border-radius: 14px; background: #fff; }
+.race-summary .hz-stat strong { font-size: 22px; }
+.race-summary .race-stat--prize strong { color: var(--turf-500); }
+
+.race-year {
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 18px;
+  background: #fff; font: 700 12px var(--font-body);
+}
+
+.race-edit {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end;
+}
+.race-edit select,
+.race-edit input {
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field-bg); font: 400 12px var(--font-body);
+}
+.race-edit input[type="number"] { width: 130px; }
+.race-edit input[type="text"] { width: 180px; }
+.race-edit .hz-btn { padding: 6px 14px; font-size: 11px; }
+
+.race-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
+.race-link {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font: 700 11px var(--font-body); color: var(--pink-700);
+}
+.race-link:hover { text-decoration: underline; }
+.race-link--danger { color: var(--danger); }
+
+.race-error { margin: 4px 0 0; font-size: 11px; color: var(--danger); text-align: right; }
+.race-ok {
+  margin: 0; padding: 11px 15px; border-radius: 10px;
+  background: #f2f9e8; color: #3d6b12; font-size: 12.5px;
+}
+.race-blocked { margin: 6px 0 0; font-size: 11px; color: var(--text-600); }
+
+.race-prize { font-weight: 700; color: var(--turf-500); white-space: nowrap; }
