@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 30, 2026` at `11:03` by `Pandapo274`
+### Last Commited: `Oct 30, 2026` at `11:05` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 30, 2026`
+- `[11:05]` `tqt195` - Frontend for the access and withdrawal fixes: `Sign out` now calls `/api/auth/logout` so the server revokes the token (it used to stay valid for up to 8 hours); withdrawal screens tell the owner and the `Club Manager` that approval also cancels upcoming stable tasks and race entries (backend in `7a211fd` by `PandaPo274`)
 - `[10:25]` `Pandapo274` - Fix staff access check and withdrawal side effects
 - `[10:25]` `tqt195` - `Permissions` page no longer shows API endpoints to the `Club Manager` (function names and role access only); the matrix is still read from `@RequireRole` on the backend
 - `[10:15]` `tqt195` - Add operating costs and live Club overview for `Club Manager`: new `Costs` page (`/api/expenses`) to record, filter and delete feeding, veterinary, training and other costs per horse, which feed the owner cost report; `Club overview` now reads real data from `/api/manager/dashboard` (horses, active plans, training locks, operating cost this quarter, prize money this season, weekly workload, herd health, open items) instead of hard-coded numbers; dashboard search opens the horse list filtered

@@ -48,7 +48,29 @@ function saveSession(token, user) {
 }
 
 /** Đăng xuất phía client: xoá token và user. */
+/**
+ * Đăng xuất: báo backend thu hồi token (POST /api/auth/logout, ghi LOGOUT vào
+ * audit log) rồi xoá phiên trên trình duyệt. Trước đây chỉ xoá localStorage,
+ * nên token cũ vẫn gọi được API tới khi hết hạn (8 tiếng).
+ *
+ * Không chờ backend trả lời: nút Sign out phải phản hồi ngay, và mạng lỗi thì
+ * phiên trên trình duyệt vẫn bị xoá. keepalive giữ request sống khi trang
+ * chuyển sang /login.
+ */
 export function logout() {
+  const token = getToken();
+  if (token) {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      keepalive: true,
+    }).catch(() => {});
+  }
+  clearSession();
+}
+
+/** Chỉ xoá phiên trên trình duyệt, không gọi backend. Dùng khi token đã hỏng (401). */
+function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   // Để lần sau Google không tự chọn lại tài khoản cũ. Chưa từng mở nút Google
@@ -132,7 +154,8 @@ export async function authFetch(url, options = {}) {
 export function handleAuthError(err, navigate) {
   if (!(err instanceof ApiError)) return false;
   if (err.status === 401) {
-    logout();
+    // Token đã hỏng hoặc bị thu hồi: không cần báo backend nữa.
+    clearSession();
     navigate("/login", { replace: true });
     return true;
   }

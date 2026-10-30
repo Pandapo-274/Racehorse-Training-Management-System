@@ -166,7 +166,8 @@ export default function HorseWithdrawalPanel({ horse, user }) {
         <Row label="Reason">{pending.reason}</Row>
         <Row label="If approved">
           {plural(pending.scheduledSessions, "scheduled session")} cancelled ·{" "}
-          {plural(pending.openPlans, "training plan")} ended · stall released
+          {plural(pending.openPlans, "training plan")} ended · upcoming tasks and race entries
+          cancelled · stall released
         </Row>
         {isOwner && (
           <div className="hz-form-footer">
@@ -187,7 +188,8 @@ export default function HorseWithdrawalPanel({ horse, user }) {
       <form onSubmit={submit} noValidate>
         <p className="hz-muted hz-note">
           Ask the club to release this horse. If the club manager approves, its scheduled
-          sessions are cancelled, its training plans end and its stall is released.
+          sessions, stable tasks and upcoming race entries are cancelled, its training plans
+          end and its stall is released.
         </p>
 
         {lastClosed && (

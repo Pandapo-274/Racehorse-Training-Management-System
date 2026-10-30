@@ -71,7 +71,8 @@ function PendingRow({ row, horseBase, onDone }) {
         <p className="hz-review__note">“{row.reason}”</p>
         <p>
           Approving will cancel {plural(row.scheduledSessions, "scheduled session")}, end{" "}
-          {plural(row.openPlans, "training plan")} and release the stall.
+          {plural(row.openPlans, "training plan")}, remove upcoming stable tasks, scratch upcoming
+          race entries and release the stall.
         </p>
       </div>
 
