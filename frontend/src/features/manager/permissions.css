@@ -24,17 +24,9 @@
 .pm-table tbody tr:last-child th,
 .pm-table tbody tr:last-child td { border-bottom: 0; }
 .pm-table .pm-fn { text-align: left; width: 38%; font-weight: 600; color: var(--text-900); }
-.pm-endpoint {
-  display: block; margin-top: 3px;
-  font: 500 11px ui-monospace, Consolas, monospace; color: var(--text-400);
-}
 
 .pm-cell { font-weight: 800; }
 .pm-cell--all  { background: #e7f5d8; color: #3f7a19; }
 .pm-cell--own  { background: #fff0c9; color: #8a5f00; }
 .pm-cell--none { color: var(--text-400); }
 
-.pm-table--api { min-width: 560px; }
-.pm-table--api th,
-.pm-table--api td { text-align: left; }
-.pm-table--api code { font: 500 12px ui-monospace, Consolas, monospace; }

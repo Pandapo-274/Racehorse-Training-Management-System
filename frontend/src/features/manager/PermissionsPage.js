@@ -5,12 +5,15 @@
 // the backend; the matrix below is read from those very rules, so it is always
 // what the system actually does. To change what a person can do, the manager
 // changes their role on the Staff page.
+//
+// API endpoints are deliberately not shown: the manager works with functions,
+// not with API paths. The backend still reads every row from @RequireRole.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "../horse/HorseShell";
 import { toRoleLabel } from "../profile/profileApi";
-import { getPermissions, groupByArea, toAccess, toEndpointAccess } from "./permissionsApi";
+import { getPermissions, groupByArea, toAccess } from "./permissionsApi";
 import "./permissions.css";
 
 function AccessCell({ level }) {
@@ -36,10 +39,7 @@ function AreaTable({ group, roles }) {
           <tbody>
             {group.rows.map((f) => (
               <tr key={f.endpoint}>
-                <th scope="row" className="pm-fn">
-                  {f.label}
-                  <code className="pm-endpoint">{f.endpoint}</code>
-                </th>
+                <th scope="row" className="pm-fn">{f.label}</th>
                 {roles.map((r) => <AccessCell key={r} level={f.access[r]} />)}
               </tr>
             ))}
@@ -54,7 +54,6 @@ export default function PermissionsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [showApi, setShowApi] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -76,13 +75,6 @@ export default function PermissionsPage() {
     <HorseShell
       title="Permissions"
       subtitle="What each role can do, read from the rules the system enforces"
-      actions={
-        data && (
-          <button type="button" className="hz-btn hz-btn--ghost" onClick={() => setShowApi((v) => !v)}>
-            {showApi ? "Hide API endpoints" : "Show API endpoints"}
-          </button>
-        )
-      }
     >
       {error && (
         <StateBlock kind="error" title="Could not load permissions" onRetry={() => setReloadKey((k) => k + 1)}>
@@ -110,31 +102,6 @@ export default function PermissionsPage() {
           </Card>
 
           {groups.map((g) => <AreaTable key={g.area} group={g} roles={data.roles} />)}
-
-          {showApi && (
-            <Card title="API endpoints" hint={`${data.endpoints.length} endpoints, as the backend protects them`}>
-              <div className="pm-scroll">
-                <table className="pm-table pm-table--api">
-                  <thead>
-                    <tr>
-                      <th scope="col">Method</th>
-                      <th scope="col">Path</th>
-                      <th scope="col">Who can call it</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.endpoints.map((e) => (
-                      <tr key={`${e.method} ${e.path}`}>
-                        <td><code>{e.method}</code></td>
-                        <td><code>{e.path}</code></td>
-                        <td>{toEndpointAccess(e, toRoleLabel)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
         </>
       )}
     </HorseShell>

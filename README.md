@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 30, 2026` at `10:15` by `tqt195`
+### Last Commited: `Oct 30, 2026` at `10:25` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Oct 30, 2026`
+- `[10:25]` `tqt195` - `Permissions` page no longer shows API endpoints to the `Club Manager` (function names and role access only); the matrix is still read from `@RequireRole` on the backend
 - `[10:15]` `tqt195` - Add operating costs and live Club overview for `Club Manager`: new `Costs` page (`/api/expenses`) to record, filter and delete feeding, veterinary, training and other costs per horse, which feed the owner cost report; `Club overview` now reads real data from `/api/manager/dashboard` (horses, active plans, training locks, operating cost this quarter, prize money this season, weekly workload, herd health, open items) instead of hard-coded numbers; dashboard search opens the horse list filtered
 - `[09:59]` `tqt195` - Fix tests and build warnings, record horse weight: `Veterinarian` enters the weight (kg) on the examination form, saved as the horse's current weight (30-1500 kg, not for pedigree records); replace the broken CRA sample test with `horseApi.test.js` (20 tests for rules copied from the backend); remove the BOM from 52 frontend files and fix the last ESLint warning, so `npm run build` has no warnings
 > #### `Oct 29, 2026`

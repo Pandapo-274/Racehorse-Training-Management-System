@@ -19,17 +19,6 @@ export function toAccess(level) {
   return ACCESS[level] || { label: "—", tone: "none", title: "Not allowed" };
 }
 
-/** How an API endpoint is protected. */
-const ENDPOINT_ACCESS = {
-  PUBLIC: "Public (no sign-in)",
-  SIGNED_IN: "Any signed-in user",
-};
-
-export function toEndpointAccess(row, roleLabel) {
-  if (ENDPOINT_ACCESS[row.access]) return ENDPOINT_ACCESS[row.access];
-  return row.roles.map(roleLabel).join(", ");
-}
-
 /** Keep the backend's order of areas, group functions under each. */
 export function groupByArea(functions) {
   const groups = [];
