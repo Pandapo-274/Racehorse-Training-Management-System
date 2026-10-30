@@ -2,6 +2,7 @@ package racehorse.backend.withdrawal;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -117,6 +118,61 @@ public class WithdrawalRepository {
                 .param("reviewer", reviewerId)
                 .param("note", note)
                 .param("id", withdrawalId)
+                .update();
+    }
+
+    /* ---------- Những việc của con ngựa phải dừng lại khi nó rời học viện ----------
+       Đặt ở đây chứ không trong CareRepository / RaceRepository: đây là hệ quả
+       của việc rút ngựa, chỉ WithdrawalService.approve gọi tới. */
+
+    /** Một việc chăm sóc chưa làm: ai phụ trách, ngày nào. */
+    public record PendingTask(int taskId, int assignedTo, LocalDate taskDate) {
+    }
+
+    /** Việc chăm sóc chưa làm của con ngựa, từ ngày from trở đi. */
+    public List<PendingTask> findPendingTasks(int horseId, LocalDate from) {
+        return jdbc.sql("""
+                SELECT task_id, assigned_to, task_date FROM DAILY_TASK
+                WHERE horse_id = :horseId AND is_completed = 0 AND task_date >= :from
+                ORDER BY task_date
+                """)
+                .param("horseId", horseId)
+                .param("from", from)
+                .query((rs, n) -> new PendingTask(rs.getInt("task_id"), rs.getInt("assigned_to"),
+                        rs.getObject("task_date", LocalDate.class)))
+                .list();
+    }
+
+    /**
+     * Xoá những việc đó. DAILY_TASK không có trạng thái "huỷ", và việc chưa làm
+     * cho một con ngựa đã đi thì không bao giờ làm nữa. Việc đã làm (lịch sử)
+     * và việc của những ngày trước giữ nguyên.
+     */
+    public int deletePendingTasks(int horseId, LocalDate from) {
+        return jdbc.sql("""
+                DELETE FROM DAILY_TASK
+                WHERE horse_id = :horseId AND is_completed = 0 AND task_date >= :from
+                """)
+                .param("horseId", horseId)
+                .param("from", from)
+                .update();
+    }
+
+    /**
+     * Rút khỏi các giải chưa đua (chưa có kết quả, ngày đua từ from trở đi), giống
+     * RaceService.scratch: result = SCRATCHED, xoá tiền thưởng, ghi lý do vào note.
+     */
+    public int scratchFutureRaces(int horseId, LocalDate from, String reason) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET result = 'SCRATCHED', prize_money = NULL,
+                    note = LEFT(CONCAT(N'Scratched: ', :reason,
+                                       CASE WHEN note IS NULL THEN N'' ELSE CONCAT(N' | ', note) END), 255)
+                WHERE horse_id = :horseId AND result IS NULL AND race_date >= :from
+                """)
+                .param("reason", reason)
+                .param("horseId", horseId)
+                .param("from", from)
                 .update();
     }
 

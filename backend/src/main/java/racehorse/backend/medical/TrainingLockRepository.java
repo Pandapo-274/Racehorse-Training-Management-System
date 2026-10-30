@@ -96,7 +96,7 @@ public class TrainingLockRepository {
      */
     public List<TrainingLockRow> findAllActive() {
         return jdbc.sql(SELECT_LOCK + """
-                 WHERE l.status = 'ACTIVE'
+                 WHERE l.status = 'ACTIVE' AND h.activity_status = 'ACTIVE'
                  ORDER BY CASE l.lock_level WHEN 'FULL' THEN 0 ELSE 1 END, l.issued_at
                 """)
                 .query(TrainingLockRepository::map)

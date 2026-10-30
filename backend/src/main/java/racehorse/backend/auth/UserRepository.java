@@ -32,6 +32,22 @@ public class UserRepository {
      * Cờ "phải đổi mật khẩu" (V14). AuthInterceptor gọi ở mỗi request, nên chỉ
      * đọc đúng một cột theo khoá chính.
      */
+    /** Trạng thái tài khoản mà AuthInterceptor kiểm ở mỗi request. */
+    public record AccessState(String status, String roleName, boolean mustChangePassword) {
+    }
+
+    public Optional<AccessState> findAccessState(int userId) {
+        return jdbc.sql("""
+                SELECT u.status, r.role_name, u.must_change_password
+                FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
+                WHERE u.user_id = :id
+                """)
+                .param("id", userId)
+                .query((rs, n) -> new AccessState(rs.getString("status"), rs.getString("role_name"),
+                        rs.getBoolean("must_change_password")))
+                .optional();
+    }
+
     public boolean mustChangePassword(int userId) {
         return jdbc.sql("SELECT must_change_password FROM APP_USER WHERE user_id = :id")
                 .param("id", userId)

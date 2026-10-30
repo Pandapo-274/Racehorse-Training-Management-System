@@ -1,10 +1,14 @@
 package racehorse.backend.withdrawal;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -153,6 +157,14 @@ public class WithdrawalService {
         int cancelled = sessions.cancelScheduledByHorse(horseId);
         int ended = plans.completeOpenPlansByHorse(horseId);
 
+        /* Việc chăm sóc chưa làm và các giải chưa đua cũng phải dừng: không thì
+           lịch của Groom vẫn hiện việc cho một con ngựa đã đi, và con ngựa vẫn
+           có tên trong danh sách thi đấu. */
+        LocalDate today = LocalDate.now();
+        List<WithdrawalRepository.PendingTask> tasks = withdrawals.findPendingTasks(horseId, today);
+        int removedTasks = withdrawals.deletePendingTasks(horseId, today);
+        int scratched = withdrawals.scratchFutureRaces(horseId, today, "horse withdrawn from the club");
+
         String releasedStall = horse.stallNo();
         if (horses.markWithdrawn(horseId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " has already left the club");
@@ -174,13 +186,22 @@ public class WithdrawalService {
         if (ended > 0) {
             users.writeAudit(me.userId(), "TRAINING_PLAN_COMPLETE_BULK", "HORSE", horseId, "SUCCESS", ip);
         }
+        if (removedTasks > 0) {
+            users.writeAudit(me.userId(), "DAILY_TASK_REMOVE_BULK", "HORSE", horseId, "SUCCESS", ip);
+        }
+        if (scratched > 0) {
+            users.writeAudit(me.userId(), "RACE_SCRATCH_BULK", "HORSE", horseId, "SUCCESS", ip);
+        }
 
-        notifyGrooms(horse.horseName(), slots);
+        notifyGrooms(horse.horseName(), slots, tasks);
+
+        String races = scratched == 0 ? ""
+                : " " + (scratched == 1 ? "1 race entry was" : scratched + " race entries were") + " scratched.";
 
         notifications.notifyUser(horse.ownerId(), new Notice(
                 "HORSE_WITHDRAWAL_APPROVED",
                 "Horse withdrawal approved",
-                horse.horseName() + " has been withdrawn from the club."
+                horse.horseName() + " has been withdrawn from the club." + races
                         + (note == null ? "" : " " + note),
                 Notice.HORSE, horseId));
 
@@ -189,7 +210,7 @@ public class WithdrawalService {
                 "Horse withdrawn from the club",
                 horse.horseName() + " has left the club. "
                         + plural(ended, "training plan") + " ended, "
-                        + plural(cancelled, "scheduled session") + " cancelled.",
+                        + plural(cancelled, "scheduled session") + " cancelled." + races,
                 Notice.HORSE, horseId));
 
         return getOrThrow(withdrawalId);
@@ -227,25 +248,43 @@ public class WithdrawalService {
      * ------------------------------------------------------------------ */
 
     /**
-     * Một thông báo cho mỗi Groom, gộp mọi buổi bị huỷ của họ. Không trỏ tới
-     * buổi tập nào: buổi đã huỷ của ngựa đã rút không còn hiện trên lịch Groom.
+     * Một thông báo cho mỗi Groom, gộp mọi buổi tập và việc chăm sóc bị huỷ của
+     * họ. Không trỏ tới buổi tập nào: việc của ngựa đã rút không còn hiện trên
+     * lịch Groom.
      */
-    private void notifyGrooms(String horseName, List<TrainingSessionRepository.ScheduledSlot> slots) {
-        Map<Integer, List<TrainingSessionRepository.ScheduledSlot>> byGroom = new LinkedHashMap<>();
+    private void notifyGrooms(String horseName, List<TrainingSessionRepository.ScheduledSlot> slots,
+                              List<WithdrawalRepository.PendingTask> tasks) {
+        Map<Integer, List<TrainingSessionRepository.ScheduledSlot>> sessionsByGroom = new LinkedHashMap<>();
         for (TrainingSessionRepository.ScheduledSlot s : slots) {
-            byGroom.computeIfAbsent(s.assignedTo(), k -> new java.util.ArrayList<>()).add(s);
+            sessionsByGroom.computeIfAbsent(s.assignedTo(), k -> new ArrayList<>()).add(s);
         }
-        byGroom.forEach((groomId, list) -> {
-            String first = list.get(0).sessionDate().format(WHEN);
-            String message = list.size() == 1
-                    ? horseName + " left the club. Your session on " + first + " was cancelled."
-                    : horseName + " left the club. Your " + list.size()
-                            + " upcoming sessions (from " + first + ") were cancelled.";
+        Map<Integer, Integer> tasksByGroom = new LinkedHashMap<>();
+        for (WithdrawalRepository.PendingTask t : tasks) {
+            tasksByGroom.merge(t.assignedTo(), 1, Integer::sum);
+        }
+
+        Set<Integer> grooms = new LinkedHashSet<>(sessionsByGroom.keySet());
+        grooms.addAll(tasksByGroom.keySet());
+        for (int groomId : grooms) {
+            List<TrainingSessionRepository.ScheduledSlot> list = sessionsByGroom.getOrDefault(groomId, List.of());
+            int taskCount = tasksByGroom.getOrDefault(groomId, 0);
+
+            List<String> parts = new ArrayList<>();
+            if (list.size() == 1) {
+                parts.add("your session on " + list.get(0).sessionDate().format(WHEN));
+            } else if (list.size() > 1) {
+                parts.add("your " + list.size() + " upcoming sessions (from "
+                        + list.get(0).sessionDate().format(WHEN) + ")");
+            }
+            if (taskCount > 0) {
+                parts.add(plural(taskCount, "stable task"));
+            }
             notifications.notifyUser(groomId, new Notice(
-                    "TRAINING_SESSION_CANCELLED",
-                    "Training session cancelled",
-                    message, null, null));
-        });
+                    list.isEmpty() ? "DAILY_TASK_CANCELLED" : "TRAINING_SESSION_CANCELLED",
+                    list.isEmpty() ? "Stable tasks cancelled" : "Training session cancelled",
+                    horseName + " left the club. Cancelled: " + String.join(" and ", parts) + ".",
+                    null, null));
+        }
     }
 
     private WithdrawalRow getOrThrow(int withdrawalId) {

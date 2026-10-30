@@ -102,6 +102,7 @@ public class TreatmentRepository {
     public List<TreatmentRow> findActive() {
         return jdbc.sql(SELECT_TREATMENT + """
                  WHERE h.record_type = 'ACADEMY'
+                   AND h.activity_status = 'ACTIVE'
                    AND t.start_date <= CAST(GETDATE() AS DATE)
                    AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
                  ORDER BY h.horse_name, t.start_date DESC, t.treatment_id DESC

@@ -47,6 +47,20 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || blacklist.isIssuedBeforeCutoff(user.userId(), user.issuedAt())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Token has been revoked, please log in again");
         }
+        /* Kiểm tài khoản ở MỖI request, không chỉ dựa vào TokenBlacklist: danh
+           sách đó nằm trong bộ nhớ nên mất khi backend khởi động lại, và mốc thu
+           hồi tính theo giây nên token cấp cùng giây với lúc bị khoá vẫn lọt. Nếu
+           không, nhân viên bị khoá hoặc bị đổi vai trò vẫn dùng token cũ được tới
+           8 tiếng. Câu query này thay câu đọc must_change_password cũ, nên mỗi
+           request vẫn chỉ hỏi database một lần như trước. */
+        UserRepository.AccessState account = users.findAccessState(user.userId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account no longer exists"));
+        if (!"ACTIVE".equals(account.status())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "This account is suspended");
+        }
+        if (!account.roleName().equals(user.role())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Your role has changed, please log in again");
+        }
         req.setAttribute(USER_ATTR, user);
 
         /* V14: tài khoản đang dùng mật khẩu tạm do Club Manager đặt chỉ được đổi
@@ -54,7 +68,7 @@ public class AuthInterceptor implements HandlerInterceptor {
            Manager biết mật khẩu tạm, nên chỉ chặn trên giao diện thì người khác
            cầm mật khẩu đó vẫn gọi thẳng API được. 428 = phải làm một việc trước. */
         if (!PASSWORD_CHANGE_ALLOWED.contains(req.getRequestURI())
-                && users.mustChangePassword(user.userId())) {
+                && account.mustChangePassword()) {
             throw new ApiException(HttpStatus.PRECONDITION_REQUIRED,
                     "Please change your temporary password before continuing");
         }

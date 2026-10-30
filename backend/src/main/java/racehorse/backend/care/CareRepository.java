@@ -94,7 +94,9 @@ public class CareRepository {
     }
 
     public List<CareModels.Task> findTasks(LocalDate date, Integer assignedTo, Integer horseId) {
-        StringBuilder sql = new StringBuilder(SELECT_TASK).append(" WHERE t.task_date = :date");
+        // Ngựa đã rút (V15) không còn trong chuồng nên không còn việc chăm sóc.
+        StringBuilder sql = new StringBuilder(SELECT_TASK)
+                .append(" WHERE t.task_date = :date AND h.activity_status = 'ACTIVE'");
         Map<String, Object> params = new HashMap<>();
         params.put("date", date);
         if (assignedTo != null) {
