@@ -1,4 +1,4 @@
-﻿// src/features/auth/RegisterForm.js  (UC1)
+// src/features/auth/RegisterForm.js  (UC1)
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import TextField from "../../components/ui/TextField";

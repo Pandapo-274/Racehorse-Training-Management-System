@@ -1,4 +1,4 @@
-﻿// src/features/vet/vetApi.js
+// src/features/vet/vetApi.js
 // Flow 3 phía bác sĩ thú y: UC14 (khám), UC15 (ghim chấn thương), UC16 (khoá tập),
 // UC18 (xác nhận hồi phục), UC17 (lịch chăm sóc phòng ngừa) và đơn thuốc.
 //

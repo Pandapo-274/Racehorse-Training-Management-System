@@ -1,8 +1,11 @@
 package racehorse.backend.medical;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -54,5 +57,12 @@ public record MedicalExamRequest(
         @Future(message = "The next due date must be in the future")
         LocalDate nextDueDate,
 
-        String notes
+        String notes,
+
+        /** Cân nặng đo lúc khám (kg). Để trống nếu lần khám không cân. Có giá
+            trị thì ghi đè HORSE.weight: đây là đường duy nhất cập nhật cân
+            nặng, vì chủ ngựa không được tự khai (xem HorseUpdateRequest). */
+        @DecimalMin(value = "30", message = "Weight must be between 30 and 1500 kg")
+        @DecimalMax(value = "1500", message = "Weight must be between 30 and 1500 kg")
+        BigDecimal weight
 ) {}

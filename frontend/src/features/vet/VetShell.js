@@ -1,4 +1,4 @@
-﻿// src/features/vet/VetShell.js
+// src/features/vet/VetShell.js
 // Khung chung cho mọi màn của bác sĩ thú y: sidebar, header, vùng nội dung.
 // Cùng khung với Trainer và Manager (xem vet.css); các màn chỉ việc truyền
 // `active`, `title`, `subtitle` rồi đặt nội dung vào children.

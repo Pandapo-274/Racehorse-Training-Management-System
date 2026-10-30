@@ -1,4 +1,4 @@
-﻿// src/features/horse/HorseDetailPage.js
+// src/features/horse/HorseDetailPage.js
 
 // Hồ sơ một con ngựa, ba thẻ: Overview và Pedigree thuộc UC7, Vitals thuộc UC8.
 //

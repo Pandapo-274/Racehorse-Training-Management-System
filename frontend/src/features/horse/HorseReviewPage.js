@@ -1,4 +1,4 @@
-﻿// src/features/horse/HorseReviewPage.js
+// src/features/horse/HorseReviewPage.js
 // Club Manager (và Head Trainer) duyệt yêu cầu đăng ký ngựa do chủ ngựa gửi.
 //
 // Duyệt = cấp mã đăng ký + chuồng, rồi backend tạo hồ sơ ngựa. Hai thứ này sau

@@ -1,4 +1,4 @@
-﻿// src/features/vet/VetRecoveryPage.js
+// src/features/vet/VetRecoveryPage.js
 // Màn 19 - Recovery (UC18).
 //
 // Mọi thứ dựng từ bốn endpoint đọc: ngựa, dấu chấn thương, hồ sơ khám, lệnh

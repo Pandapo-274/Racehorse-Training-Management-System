@@ -1,4 +1,4 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./landing.css";
 import { formatStat, useClubStats } from "./clubStatsApi";
 

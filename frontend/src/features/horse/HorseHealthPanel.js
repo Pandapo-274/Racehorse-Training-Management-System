@@ -1,4 +1,4 @@
-﻿// src/features/horse/HorseHealthPanel.js
+// src/features/horse/HorseHealthPanel.js
 // Chi tiết tình trạng sức khoẻ trên hồ sơ ngựa - CHỈ ĐỌC, mọi role đều thấy.
 //
 // Quy tắc nghiệp vụ: ngoài bác sĩ thú y, không role nào được đổi trạng thái

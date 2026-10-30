@@ -1,4 +1,4 @@
-﻿// src/features/profile/ProfilePage.js
+// src/features/profile/ProfilePage.js
 // UC4 - Profile. Màn này mở được với mọi vai trò, vì ai cũng có hồ sơ của mình.
 //
 // Backend chỉ nhận userId từ token, không bao giờ nhận từ client, nên không có

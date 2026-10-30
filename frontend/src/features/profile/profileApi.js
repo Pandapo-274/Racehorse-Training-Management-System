@@ -1,4 +1,4 @@
-﻿// src/features/profile/profileApi.js
+// src/features/profile/profileApi.js
 // UC4 - Profile.
 //
 // Ba endpoint, nhưng chỉ hai cái đi qua authFetch được.

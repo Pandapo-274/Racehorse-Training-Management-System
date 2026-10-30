@@ -1,4 +1,4 @@
-﻿// src/features/password/ChangePasswordPage.js
+// src/features/password/ChangePasswordPage.js
 // UC5 - đổi mật khẩu khi đang đăng nhập.
 //
 // Điểm quyết định toàn bộ cách màn này cư xử: đổi xong, backend huỷ MỌI phiên

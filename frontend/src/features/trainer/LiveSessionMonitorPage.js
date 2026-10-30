@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -194,7 +194,7 @@ export default function LiveSessionMonitorPage() {
     };
     const timer = setInterval(poll, POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [showHistory]);
+  }, [showHistory, navigate]);
 
   const handleResolve = async (alert, actionTaken) => {
     setBusyAlertId(alert.alertId);

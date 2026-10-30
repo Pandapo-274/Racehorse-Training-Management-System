@@ -1,4 +1,4 @@
-﻿
+
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
@@ -22,6 +22,10 @@ import {
   examTimestamp,
   describeError,
 } from "./vetApi";
+
+/* Khoảng cân nặng hợp lệ (kg), khớp MedicalExamRequest.weight ở backend. */
+const WEIGHT_MIN = 30;
+const WEIGHT_MAX = 1500;
 
 /* ---------- mô hình ngựa 2D (toạ độ theo % của khung vuông) ---------- */
 
@@ -219,6 +223,8 @@ function ExaminationForm({ horseId, reportId }) {
   const [restDays, setRestDays] = useState("");
   const [otherStatus, setOtherStatus] = useState("");
   const [notes, setNotes] = useState("");
+  // Cân nặng đo lúc khám (kg). Để trống = lần khám này không cân.
+  const [weight, setWeight] = useState("");
 
   const [marker, setMarker] = useState(null);
   const [side, setSide] = useState("Left");
@@ -307,6 +313,14 @@ function ExaminationForm({ horseId, reportId }) {
       problems.push("The diagnosis must be at most 255 characters.");
     }
 
+    // Cùng khoảng với @DecimalMin/@DecimalMax của MedicalExamRequest.weight.
+    if (weight !== "") {
+      const kg = Number(weight);
+      if (!Number.isFinite(kg) || kg < WEIGHT_MIN || kg > WEIGHT_MAX) {
+        problems.push(`Weight must be a number between ${WEIGHT_MIN} and ${WEIGHT_MAX} kg.`);
+      }
+    }
+
     if (injuryConfirmed) {
       if (!marker) {
         problems.push("Tap the model to mark the injury site.");
@@ -369,6 +383,7 @@ function ExaminationForm({ horseId, reportId }) {
               ? Number(restDays)
               : null,
           notes: notes.trim() || null,
+          weight: weight === "" ? null : Number(weight),
         });
       }
 
@@ -651,6 +666,20 @@ function ExaminationForm({ horseId, reportId }) {
                   </select>
                 </Field>
               )}
+
+              <Field label="Weight (kg)">
+                <input
+                  className="vx-input"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value.trim())}
+                  placeholder={
+                    horse?.weight
+                      ? `Last recorded: ${Number(horse.weight).toFixed(1)} kg`
+                      : "Not weighed yet, e.g. 480"
+                  }
+                />
+              </Field>
 
               <Field label="Treatment plan / prescription" full>
                 <textarea

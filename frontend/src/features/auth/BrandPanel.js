@@ -1,4 +1,4 @@
-﻿// src/features/auth/BrandPanel.js
+// src/features/auth/BrandPanel.js
 import { formatStat, useClubStats } from "../landingpage/clubStatsApi";
 
 export default function BrandPanel() {

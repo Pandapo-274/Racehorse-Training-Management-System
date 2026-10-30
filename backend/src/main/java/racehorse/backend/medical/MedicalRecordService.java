@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.notification.Notice;
@@ -66,6 +67,11 @@ public class MedicalRecordService {
 
         if (raw.healthStatus() != null) {
             records.updateHorseStatus(horse.horseId(), raw.healthStatus());
+        }
+
+        // Cân lúc khám thì cập nhật luôn cân nặng hiện tại của con ngựa.
+        if (raw.weight() != null) {
+            horses.updateWeight(horse.horseId(), raw.weight());
         }
 
         users.writeAudit(vet.userId(), "MEDICAL_EXAM", "MEDICAL_RECORD", recordId, "SUCCESS", ip);
@@ -144,6 +150,11 @@ public class MedicalRecordService {
         if (r.expectedRestDays() != null && !r.injuryConfirmed()) {
             errors.put("expectedRestDays",
                     "Rest days apply to a confirmed injury only");
+        }
+
+        /* Hồ sơ PEDIGREE không có cân nặng (cùng luật với HorseService). */
+        if (r.weight() != null && HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType()))) {
+            errors.put("weight", "A pedigree record has no weight");
         }
 
         /* Ba loại chăm sóc định kỳ sinh ra để nhắc lần sau, nên thiếu ngày hẹn

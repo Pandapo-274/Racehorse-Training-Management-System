@@ -1,4 +1,4 @@
-﻿// src/features/password/PasswordField.js
+// src/features/password/PasswordField.js
 // Ô nhập mật khẩu dùng chung cho cả ba màn của UC5.
 //
 // Có nút hiện/ẩn vì mật khẩu mới phải vừa có chữ vừa có số và dài ít nhất 8 ký

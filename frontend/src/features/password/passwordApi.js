@@ -1,4 +1,4 @@
-﻿// src/features/password/passwordApi.js
+// src/features/password/passwordApi.js
 // UC5 - Password: đổi mật khẩu, quên mật khẩu, đặt lại mật khẩu.
 //
 // Ba endpoint nằm chung dưới /api/auth, nhưng khác nhau ở chỗ cần token hay

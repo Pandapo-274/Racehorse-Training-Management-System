@@ -1,4 +1,4 @@
-﻿// src/features/horse/HorseShell.js
+// src/features/horse/HorseShell.js
 // Khung chung cho ba màn của UC7/UC8: thanh bên, thanh tiêu đề, vùng nội dung.
 //
 // Vì sao không dùng lại .trainer-sidebar trong trainer.css: file đó dài 660

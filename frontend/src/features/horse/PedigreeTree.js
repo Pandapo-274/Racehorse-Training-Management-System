@@ -1,4 +1,4 @@
-﻿// src/features/horse/PedigreeTree.js
+// src/features/horse/PedigreeTree.js
 // UC7 - cây phả hệ.
 //
 // Vẽ theo lối bảng phả hệ truyền thống: con ngựa đứng cột trái, mỗi đời tổ

@@ -1,4 +1,4 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./access-denied.css";
 
 export default function AccessDeniedPage() {

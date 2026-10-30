@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 29, 2026` at `18:55` by `ArichiAya`
+### Last Commited: `Oct 30, 2026` at `09:59` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Oct 30, 2026`
+- `[09:59]` `tqt195` - Fix tests and build warnings, record horse weight: `Veterinarian` enters the weight (kg) on the examination form, saved as the horse's current weight (30-1500 kg, not for pedigree records); replace the broken CRA sample test with `horseApi.test.js` (20 tests for rules copied from the backend); remove the BOM from 52 frontend files and fix the last ESLint warning, so `npm run build` has no warnings
 > #### `Oct 29, 2026`
 - `[18:55]` `ArichiAya` - Frontend for Flow 4 and 5: Groom stable map with daily tasks, feeding, incident reports with photo and supplies; Head Trainer stable care and races; Vet rations; Manager supplies and race results; Owner race history
 > #### `Oct 27, 2026`

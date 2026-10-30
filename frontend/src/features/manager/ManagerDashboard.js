@@ -1,4 +1,4 @@
-﻿import "./manager.css";
+import "./manager.css";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../auth/authService";

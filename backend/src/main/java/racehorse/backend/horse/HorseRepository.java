@@ -142,6 +142,17 @@ public class HorseRepository {
                 .param("color", r.color())
                 .update();
     }
+    /**
+     * Cân nặng hiện tại, do bác sĩ thú y cân lúc khám (MedicalRecordService.log).
+     * Tách khỏi updateBasics vì chủ ngựa không được tự khai cân nặng.
+     */
+    public int updateWeight(int horseId, BigDecimal weight) {
+        return jdbc.sql("UPDATE HORSE SET weight = :weight, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+                .param("weight", weight)
+                .param("id", horseId)
+                .update();
+    }
+
     /** Đổi ảnh (url = null là gỡ ảnh). Tách khỏi updateBasics vì ảnh tải lên riêng, không đi cùng biểu mẫu. */
     public int updatePhoto(int horseId, String url) {
         return jdbc.sql("UPDATE HORSE SET photo_url = :url, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
