@@ -6,7 +6,7 @@
 // đỡ một vòng mạng mỗi lần gõ phím. Khi đàn lớn tới mức phải phân trang thì
 // backend sẽ phải nhận tham số lọc, và chỗ cần sửa là hàm `visible` bên dưới.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
@@ -25,7 +25,9 @@ export default function HorseListPage() {
   const [horses, setHorses] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  // ?q= cho phép trang khác mở sẵn danh sách đã lọc (vd. ô tìm kiếm trên trang tổng quan của Manager).
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [stage, setStage] = useState("ALL");
   const [status, setStatus] = useState("ALL");
   const [activity, setActivity] = useState("ALL");

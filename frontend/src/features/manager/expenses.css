@@ -1,0 +1,17 @@
+/* Trang Costs của Club Manager. Phần còn lại dùng lớp .hz- của horse.css. */
+
+/* Tổng theo hạng mục nằm đầu thẻ, nên bỏ đường kẻ trên của .hz-stat-row. */
+.exp-totals {
+  margin-bottom: 16px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.exp-total strong { color: var(--text-900); }
+
+/* Số tiền căn phải, chữ số cùng độ rộng để cột thẳng hàng. */
+.exp-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

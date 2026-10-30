@@ -107,5 +107,9 @@ final class PermissionCatalog {
             new Entry(RACES, "View race performance and prize totals", "GET /api/races/summary", NONE),
 
             // ---------- Báo cáo ----------
+            new Entry(REPORTS, "View the club overview (workload, costs, prizes)", "GET /api/manager/dashboard", NONE),
+            new Entry(REPORTS, "View operating costs", "GET /api/expenses", NONE),
+            new Entry(REPORTS, "Record operating costs", "POST /api/expenses", NONE),
+            new Entry(REPORTS, "Delete a wrongly recorded cost", "DELETE /api/expenses/{id}", NONE),
             new Entry(REPORTS, "View the owner dashboard (costs, prizes)", "GET /api/owner/dashboard", OWNER));
 }

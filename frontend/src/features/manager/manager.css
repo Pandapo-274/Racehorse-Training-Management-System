@@ -329,9 +329,10 @@
 
 /* ---------- stat cards ---------- */
 
+/* Năm thẻ: tự xuống dòng theo bề rộng thay vì cố định 4 cột. */
 .manager-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 20px;
 }
 
@@ -358,6 +359,7 @@
 .manager-stat-card.gold::before  { background: #ffc53d; }
 .manager-stat-card.red::before   { background: #e63148; }
 .manager-stat-card.green::before { background: #66b42e; }
+.manager-stat-card.blue::before  { background: #4c8dff; }
 
 .manager-stat-value {
   font-family: var(--font-heading);
@@ -370,6 +372,7 @@
 .manager-stat-card.gold .manager-stat-value  { color: #dba100; }
 .manager-stat-card.red .manager-stat-value   { color: #d82b42; }
 .manager-stat-card.green .manager-stat-value { color: #4e9c2d; }
+.manager-stat-card.blue .manager-stat-value  { color: #2f6fe0; }
 
 .manager-stat-label {
   margin-top: 12px;
@@ -655,6 +658,55 @@
 .item-status.pending  { background: #fff0c9; color: #9c6d00; }
 .item-status.approved { background: #e7f5d8; color: #4f8f22; }
 .item-status.done     { background: #e7f5d8; color: #4f8f22; }
+.item-status.alert    { background: #fde8ec; color: #c42b4a; }
+
+/* Dòng có trang xử lý thì bấm được (vd. yêu cầu đăng ký -> trang duyệt). */
+.items-table tbody tr.clickable { cursor: pointer; }
+.items-table tbody tr.clickable:hover td,
+.items-table tbody tr.clickable:focus-visible td { background: #fff7fb; }
+
+.items-empty {
+  margin: 18px 0 0;
+  color: var(--m-muted);
+  font-size: 14px;
+}
+
+.open-items-hint,
+.workload-empty {
+  margin: 4px 0 0;
+  color: var(--m-muted);
+  font-size: 12.5px;
+}
+
+/* Trạng thái tải / lỗi của cả trang tổng quan. */
+.manager-loading {
+  margin: 0;
+  color: var(--m-muted);
+  font-size: 14px;
+}
+
+.manager-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: #fde8ec;
+  color: #a3233a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.manager-error button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+  color: #a3233a;
+  font-weight: 700;
+  cursor: pointer;
+}
 
 /* =========================
    RESPONSIVE
@@ -662,7 +714,6 @@
 
 @media (max-width: 1100px) {
   .manager-sidebar { width: 220px; }
-  .manager-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .manager-middle { grid-template-columns: 1fr; }
 }
 

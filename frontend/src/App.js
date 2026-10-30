@@ -5,6 +5,7 @@ import ManagerDashboard from "./features/manager/ManagerDashboard";
 import StaffPage from "./features/manager/StaffPage";
 import PermissionsPage from "./features/manager/PermissionsPage";
 import AuditLogPage from "./features/manager/AuditLogPage";
+import ExpensesPage from "./features/manager/ExpensesPage";
 import TrainerDashboard from "./features/trainer/TrainerDashboard";
 import TrainingPlanPage from "./features/trainer/TrainingPlanPage";
 import SchedulePage from "./features/trainer/SchedulePage";
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="/manager/audit-log" element={<RoleRoute roles={["CLUB_MANAGER"]}><AuditLogPage /></RoleRoute>} />
         {/* Flow 4 + 5: vật tư theo kho, kết quả giải đua và doanh thu tiền thưởng. */}
         <Route path="/manager/supplies" element={<RoleRoute roles={["CLUB_MANAGER"]}><SuppliesPage /></RoleRoute>} />
+        <Route path="/manager/expenses" element={<RoleRoute roles={["CLUB_MANAGER"]}><ExpensesPage /></RoleRoute>} />
         <Route path="/manager/races" element={<RoleRoute roles={["CLUB_MANAGER"]}><RacesPage /></RoleRoute>} />
         {/* Head Trainer */}
         <Route path="/trainer" element={<TrainerDashboard />} />

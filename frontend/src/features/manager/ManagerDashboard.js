@@ -1,64 +1,30 @@
+// src/features/manager/ManagerDashboard.js
+// Trang "Club overview" của Club Manager.
+//
+// Đề bài: báo cáo tổng quan về hiệu suất huấn luyện, chi phí vận hành chuồng
+// trại và doanh thu giải đấu. Mọi số liệu lấy từ GET /api/manager/dashboard;
+// trước đây trang này chỉ có số viết cứng.
 import "./manager.css";
-import NavItems from "../navigation/NavItems";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { logout } from "../auth/authService";
+import NavItems from "../navigation/NavItems";
+import { handleAuthError, logout } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
+import { timeAgo } from "../notification/notificationApi";
+import { toStatus } from "../horse/horseApi";
+import {
+  formatCompactMoney, getManagerDashboard, isoWeek, openItemLink, openItemTone,
+} from "./managerDashboardApi";
 
-// TODO(fetch): workloadData -> API tải trọng đàn theo tuần (WorkloadChart)
-const workloadData = [
-  { week: "W27", value: 62 },
-  { week: "W28", value: 75 },
-  { week: "W29", value: 68 },
-  { week: "W30", value: 88 },
-  { week: "W31", value: 81 },
-  { week: "W32", value: 95 },
-  { week: "W33", value: 101 },
-];
-
-// TODO(fetch): openItems -> API danh sách việc đang chờ xử lý (OpenItems)
-const openItems = [
-  {
-    item: "New record awaiting owner assignment",
-    role: "Club Manager",
-    horse: "Symboli Rudolf",
-    when: "09:12 today",
-    status: "Pending",
-    statusType: "pending",
-  },
-  {
-    item: "Emergency training lock requested",
-    role: "Veterinarian",
-    horse: "Air Groove",
-    when: "08:40 today",
-    status: "Approved",
-    statusType: "approved",
-  },
-  {
-    item: "Feed and medicine restock request",
-    role: "Stable",
-    horse: "—",
-    when: "Yesterday",
-    status: "Awaiting approval",
-    statusType: "pending",
-  },
-  {
-    item: "Phase 3 plan awaiting approval",
-    role: "Head Trainer",
-    horse: "Gold Ship",
-    when: "Yesterday",
-    status: "Awaiting approval",
-    statusType: "pending",
-  },
-  {
-    item: "View access granted to new owner",
-    role: "Club Manager",
-    horse: "Kitasan Black",
-    when: "11 Sep 2026",
-    status: "Done",
-    statusType: "done",
-  },
-];
+/* Màu từng trạng thái sức khoẻ: trùng .legend-dot trong manager.css, vì vòng
+   tròn vẽ bằng conic-gradient nên phải có mã màu ở đây. */
+const HEALTH_STYLE = {
+  ELIGIBLE:   { cls: "race-fit",   color: "#8cc63f" },
+  MONITOR:    { cls: "monitor",    color: "#ffc53d" },
+  INJURED:    { cls: "injured",    color: "#ff5f6d" },
+  QUARANTINE: { cls: "quarantine", color: "#f55fa9" },
+};
 
 function HorseshoeIcon() {
   return (
@@ -133,8 +99,8 @@ function StatCard({ value, label, type }) {
   );
 }
 
-function WorkloadChart() {
-  const max = Math.max(...workloadData.map((item) => item.value));
+function WorkloadChart({ points }) {
+  const max = Math.max(0, ...points.map((p) => Number(p.km) || 0));
 
   return (
     <div className="manager-card workload-card">
@@ -142,84 +108,93 @@ function WorkloadChart() {
         <span className="manager-diamond" aria-hidden="true" />
         <div>
           <h2>Herd workload</h2>
-          <p>Total distance (km) per week</p>
+          <p>Total distance (km) per week, last {points.length} weeks</p>
         </div>
       </div>
 
       <div className="workload-chart">
-        {workloadData.map((item, index) => {
-          const height = (item.value / max) * 100;
+        {points.map((point, index) => {
+          const km = Number(point.km) || 0;
+          const height = max > 0 ? (km / max) * 100 : 0;
 
           return (
-            <div className="workload-column" key={item.week}>
+            <div className="workload-column" key={point.weekStart}>
               <div className="workload-bar-wrapper">
                 <div
-                  className={`workload-bar ${
-                    index === workloadData.length - 1 ? "highlight" : ""
-                  }`}
+                  className={`workload-bar ${index === points.length - 1 ? "highlight" : ""}`}
                   style={{ height: `${height}%` }}
-                  title={`${item.value} km`}
+                  title={`${km.toFixed(1)} km · ${point.sessions} sessions`}
                 />
               </div>
 
-              <span>{item.week}</span>
+              <span>{point.label}</span>
             </div>
           );
         })}
       </div>
+
+      {max === 0 && (
+        <p className="workload-empty">No completed training sessions in these weeks.</p>
+      )}
     </div>
   );
 }
 
-function HealthCard() {
+function HealthCard({ health }) {
+  const total = health.reduce((sum, h) => sum + h.count, 0);
+  const healthy = health.find((h) => h.status === "ELIGIBLE")?.count || 0;
+  const percent = total > 0 ? Math.round((healthy / total) * 100) : 0;
+
+  // Mỗi trạng thái một cung, độ dài theo số ngựa.
+  let angle = 0;
+  const segments = health
+    .filter((h) => h.count > 0)
+    .map((h) => {
+      const from = angle;
+      angle += (h.count / total) * 360;
+      return `${HEALTH_STYLE[h.status]?.color || "#d9dce8"} ${from}deg ${angle}deg`;
+    });
+
   return (
     <div className="manager-card health-card">
       <div className="manager-card-title">
         <span className="manager-diamond" aria-hidden="true" />
         <div>
           <h2>Herd health status</h2>
+          <p>{total} club horses at the club</p>
         </div>
       </div>
 
       <div className="health-content">
-        <div className="health-donut">
+        <div
+          className="health-donut"
+          style={segments.length ? { background: `conic-gradient(${segments.join(", ")})` } : undefined}
+          role="img"
+          aria-label={`${percent}% of ${total} horses are healthy`}
+        >
           <div className="health-donut-inner">
-            <strong>71%</strong>
+            <strong>{percent}%</strong>
             <span>Healthy</span>
           </div>
         </div>
 
         <div className="health-legend">
-          <div>
-            <span className="legend-dot race-fit" />
-            <strong>Healthy</strong>
-            <b>34</b>
-          </div>
-
-          <div>
-            <span className="legend-dot monitor" />
-            <strong>Monitor</strong>
-            <b>9</b>
-          </div>
-
-          <div>
-            <span className="legend-dot injured" />
-            <strong>Injured</strong>
-            <b>4</b>
-          </div>
-
-          <div>
-            <span className="legend-dot quarantine" />
-            <strong>Quarantine</strong>
-            <b>1</b>
-          </div>
+          {health.map((h) => (
+            <div key={h.status}>
+              <span className={`legend-dot ${HEALTH_STYLE[h.status]?.cls || ""}`} />
+              <strong>{toStatus(h.status).label}</strong>
+              <b>{h.count}</b>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-function OpenItems() {
+function OpenItems({ items, total }) {
+  const navigate = useNavigate();
+
   return (
     <div className="manager-card open-items-card">
       <div className="open-items-header">
@@ -227,44 +202,106 @@ function OpenItems() {
           <span className="manager-diamond" aria-hidden="true" />
           <div>
             <h2>Open items</h2>
+            <p className="open-items-hint">
+              {total > items.length
+                ? `Showing ${items.length} of ${total} waiting items`
+                : `${total} waiting ${total === 1 ? "item" : "items"}`}
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="items-table-wrapper">
-        <table className="items-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Role</th>
-              <th>Horses</th>
-              <th>When</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {openItems.map((item, index) => (
-              <tr key={index}>
-                <td className="item-name">{item.item}</td>
-                <td>{item.role}</td>
-                <td>{item.horse}</td>
-                <td>{item.when}</td>
-                <td>
-                  <span className={`item-status ${item.statusType}`}>
-                    {item.status}
-                  </span>
-                </td>
+      {items.length === 0 ? (
+        <p className="items-empty">Nothing is waiting. All requests, stock and alerts are handled.</p>
+      ) : (
+        <div className="items-table-wrapper">
+          <table className="items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Role</th>
+                <th>Horse</th>
+                <th>When</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+              {items.map((item, index) => {
+                const link = openItemLink(item.kind);
+                const open = () => link && navigate(link);
+
+                return (
+                  <tr
+                    key={`${item.kind}-${index}`}
+                    className={link ? "clickable" : undefined}
+                    tabIndex={link ? 0 : undefined}
+                    role={link ? "link" : undefined}
+                    onClick={open}
+                    onKeyDown={(e) => {
+                      if (link && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        open();
+                      }
+                    }}
+                  >
+                    <td className="item-name">{item.item}</td>
+                    <td>{item.role}</td>
+                    <td>{item.horseName || "—"}</td>
+                    <td>{timeAgo(item.createdAt) || "—"}</td>
+                    <td>
+                      <span className={`item-status ${openItemTone(item.kind)}`}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function ManagerDashboard() {
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [search, setSearch] = useState("");
+
+  const load = useCallback(
+    (signal) => {
+      setError("");
+      getManagerDashboard({ signal })
+        .then(setData)
+        .catch((err) => {
+          if (err.name === "AbortError") return;
+          if (handleAuthError(err, navigate)) return;
+          setError(err.message);
+        });
+    },
+    [navigate]
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(ctrl.signal);
+    return () => ctrl.abort();
+  }, [load, reloadKey]);
+
+  // Ô tìm kiếm mở danh sách ngựa với từ khoá đã gõ (HorseListPage đọc ?q=).
+  const runSearch = (e) => {
+    if (e.key !== "Enter") return;
+    const q = search.trim();
+    navigate(q ? `/manager/horses?q=${encodeURIComponent(q)}` : "/manager/horses");
+  };
+
+  const summary = data?.summary;
+  const now = new Date();
+
   return (
     <div className="manager-page">
       <ManagerSidebar />
@@ -277,14 +314,18 @@ export default function ManagerDashboard() {
               <h1>Club overview</h1>
             </div>
 
-            <p>2026 season · Week 38</p>
+            <p>{now.getFullYear()} season · Week {isoWeek(now)}</p>
           </div>
 
           <div className="manager-header-actions">
             <input
-              type="text"
-              placeholder="Search horses, records..."
+              type="search"
+              placeholder="Search horses…"
+              aria-label="Search horses"
               className="manager-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={runSearch}
             />
 
             <NotificationBell className="manager-notification" />
@@ -294,23 +335,41 @@ export default function ManagerDashboard() {
         </header>
 
         <section className="manager-content">
-          <div className="manager-stats">
-            <StatCard value="48" label="Horses" type="pink" />
-            <StatCard value="12" label="Active plans" type="gold" />
-            <StatCard value="4" label="Under training lock" type="red" />
-            <StatCard
-              value="¥184M"
-              label="Quarterly operating cost"
-              type="green"
-            />
-          </div>
+          {error && (
+            <div className="manager-error" role="alert">
+              <span>Could not load the club overview: {error}</span>
+              <button type="button" onClick={() => setReloadKey((k) => k + 1)}>Retry</button>
+            </div>
+          )}
 
-          <div className="manager-middle">
-            <WorkloadChart />
-            <HealthCard />
-          </div>
+          {!data && !error && <p className="manager-loading">Loading the club overview…</p>}
 
-          <OpenItems />
+          {data && (
+            <>
+              <div className="manager-stats">
+                <StatCard value={summary.horses} label="Horses at the club" type="pink" />
+                <StatCard value={summary.activePlans} label="Active training plans" type="gold" />
+                <StatCard value={summary.lockedHorses} label="Under training lock" type="red" />
+                <StatCard
+                  value={formatCompactMoney(summary.quarterCost)}
+                  label={`Operating cost · ${summary.quarterLabel}`}
+                  type="green"
+                />
+                <StatCard
+                  value={formatCompactMoney(summary.seasonPrize)}
+                  label={`Prize money · ${summary.season} season`}
+                  type="blue"
+                />
+              </div>
+
+              <div className="manager-middle">
+                <WorkloadChart points={data.workload || []} />
+                <HealthCard health={data.health || []} />
+              </div>
+
+              <OpenItems items={data.openItems || []} total={data.openItemCount || 0} />
+            </>
+          )}
         </section>
       </main>
     </div>
