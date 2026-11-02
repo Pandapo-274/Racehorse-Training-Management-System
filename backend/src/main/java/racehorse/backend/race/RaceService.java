@@ -94,7 +94,8 @@ public class RaceService {
                     Map.of("raceDate", "Register at most one year ahead"));
         }
         String name = r.raceName().trim().replaceAll("\\s+", " ");
-        if (races.exists(h.horseId(), name, r.raceDate())) {
+        var existing = races.findEntry(h.horseId(), name, r.raceDate());
+        if (existing.isPresent() && !existing.get().scratched()) {
             throw new ApiException(HttpStatus.CONFLICT,
                     h.horseName() + " is already registered for " + name + " on " + r.raceDate().format(DAY));
         }
@@ -103,8 +104,19 @@ public class RaceService {
                     h.horseName() + " already runs in " + other + " on " + r.raceDate().format(DAY));
         });
 
-        int id = races.insert(h.horseId(), name, r.raceDate(), user.userId(), blankToNull(r.note()));
-        users.writeAudit(user.userId(), "RACE_REGISTER", "RACE_REGISTRATION", id, "SUCCESS", ip);
+        int id;
+        if (existing.isPresent()) {
+            /* The horse was scratched from this very race earlier. Re-entering
+               it reuses that row - see RaceRepository.reinstate for why. */
+            id = existing.get().id();
+            if (races.reinstate(id, user.userId(), blankToNull(r.note())) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
+            }
+            users.writeAudit(user.userId(), "RACE_REINSTATE", "RACE_REGISTRATION", id, "SUCCESS", ip);
+        } else {
+            id = races.insert(h.horseId(), name, r.raceDate(), user.userId(), blankToNull(r.note()));
+            users.writeAudit(user.userId(), "RACE_REGISTER", "RACE_REGISTRATION", id, "SUCCESS", ip);
+        }
         notifications.notifyUser(h.ownerId(), new Notice(
                 "RACE_REGISTERED", "Race entry",
                 h.horseName() + " is entered in " + name + " on " + r.raceDate().format(DAY) + ".",
@@ -168,7 +180,8 @@ public class RaceService {
         Map<Integer, int[]> counts = new LinkedHashMap<>();       // entries, wins, places
         Map<Integer, BigDecimal> prizes = new LinkedHashMap<>();
         Map<Integer, RaceModels.Entry> first = new LinkedHashMap<>();
-        int finished = 0, wins = 0, places = 0, unplaced = 0, scratched = 0, upcoming = 0;
+        int finished = 0, wins = 0, places = 0, unplaced = 0, scratched = 0, upcoming = 0,
+            awaitingResult = 0;
         BigDecimal total = BigDecimal.ZERO;
 
         for (RaceModels.Entry e : all) {
@@ -176,6 +189,8 @@ public class RaceService {
             switch (e.state()) {
                 case "SCRATCHED" -> scratched++;
                 case "FINISHED" -> finished++;
+                // A past race with no result yet is not "upcoming" - see RaceModels.Summary.
+                case "AWAITING_RESULT" -> awaitingResult++;
                 default -> upcoming++;
             }
             if ("WON".equals(e.result())) wins++;
@@ -203,7 +218,7 @@ public class RaceService {
             return byPrize != 0 ? byPrize : Integer.compare(b.wins(), a.wins());
         });
         return new RaceModels.Summary(year, all.size() - scratched, finished, wins, places, unplaced,
-                scratched, upcoming, total, perHorse);
+                scratched, upcoming, awaitingResult, total, perHorse);
     }
 
     /* ---------------- helper ---------------- */

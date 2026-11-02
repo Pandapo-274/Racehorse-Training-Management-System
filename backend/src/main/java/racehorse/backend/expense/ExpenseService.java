@@ -102,12 +102,35 @@ public class ExpenseService {
                         "The cost was saved but could not be read back"));
     }
 
-    /** Xoá một khoản ghi nhầm. Audit giữ lại dấu vết ai xoá. */
+    /**
+     * Void a cost recorded by mistake. A reason is required.
+     *
+     * This used to be a hard DELETE, and the audit entry held only the id - once
+     * the row was gone nobody could tell how much it was or which horse it was
+     * charged to. Now the row stays (V19) with who voided it and why, so the
+     * audit id still leads to the full record.
+     *
+     * There is deliberately no "edit" route. A ledger entry is not overwritten:
+     * it is voided and entered again, so both the wrong figure and the
+     * correction stay visible.
+     */
     @Transactional
-    public void delete(int expenseId, AuthenticatedUser me, String ip) {
-        if (expenses.delete(expenseId) == 0) {
+    public void cancel(int expenseId, String reason, AuthenticatedUser me, String ip) {
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required to void a cost",
+                    Map.of("reason", "Say why this cost is being voided"));
+        }
+        if (why.length() > 255) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reason is too long",
+                    Map.of("reason", "At most 255 characters"));
+        }
+        if (expenses.findById(expenseId).isEmpty()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Cost #" + expenseId + " does not exist");
         }
-        users.writeAudit(me.userId(), "EXPENSE_DELETE", "EXPENSE_LOG", expenseId, "SUCCESS", ip);
+        if (expenses.cancel(expenseId, me.userId(), why) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Cost #" + expenseId + " has already been voided");
+        }
+        users.writeAudit(me.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip);
     }
 }

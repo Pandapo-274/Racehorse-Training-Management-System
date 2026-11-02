@@ -36,8 +36,12 @@ export function createExpense({ horseId, category, amount, expenseDate, note }) 
   });
 }
 
-export function deleteExpense(id) {
-  return authFetch(`${API}/${id}`, { method: "DELETE" });
+/**
+ * Voids a cost. The backend keeps the row (V19) with who voided it and why,
+ * so the reason is required - it is the only explanation the ledger will have.
+ */
+export function deleteExpense(id, reason) {
+  return authFetch(`${API}/${id}?reason=${encodeURIComponent(reason)}`, { method: "DELETE" });
 }
 
 /* ------------------------------------------------------------------ *

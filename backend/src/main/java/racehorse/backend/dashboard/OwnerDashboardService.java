@@ -276,6 +276,7 @@ public class OwnerDashboardService {
                 JOIN HORSE h ON h.horse_id = e.horse_id
                 WHERE h.owner_id = ? AND h.record_type = 'ACADEMY'
                   AND e.expense_date BETWEEN ? AND ?
+                  AND e.cancelled_at IS NULL
                 GROUP BY e.horse_id, e.category
 
                 UNION ALL

@@ -53,7 +53,8 @@ public class ExpenseRepository {
     }
 
     private static Filter filter(Integer horseId, String category, LocalDate from, LocalDate to) {
-        StringBuilder where = new StringBuilder(" WHERE 1 = 1");
+        // Voided entries (V19) are kept for the record but never listed or summed.
+        StringBuilder where = new StringBuilder(" WHERE e.cancelled_at IS NULL");
         Map<String, Object> params = new HashMap<>();
         if (horseId != null) {
             where.append(" AND e.horse_id = :horseId");
@@ -128,10 +129,23 @@ public class ExpenseRepository {
                 .single();
     }
 
-    /** @return 1 nếu đã xoá, 0 nếu không có khoản chi này. */
-    public int delete(int expenseId) {
-        return jdbc.sql("DELETE FROM EXPENSE_LOG WHERE expense_id = :id")
+    /**
+     * Void an expense: the row stays, with who voided it, when and why.
+     *
+     * `AND cancelled_at IS NULL` is in the UPDATE so an entry cannot be voided
+     * twice, and a second void does not overwrite the first reason.
+     *
+     * @return 1 if voided, 0 if the expense does not exist or is already void.
+     */
+    public int cancel(int expenseId, int cancelledBy, String reason) {
+        return jdbc.sql("""
+                UPDATE EXPENSE_LOG
+                SET cancelled_at = SYSUTCDATETIME(), cancelled_by = :by, cancel_reason = :reason
+                WHERE expense_id = :id AND cancelled_at IS NULL
+                """)
                 .param("id", expenseId)
+                .param("by", cancelledBy)
+                .param("reason", reason)
                 .update();
     }
 }

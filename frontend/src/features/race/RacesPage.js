@@ -279,7 +279,10 @@ export default function RacesPage() {
       {entries && summary && (
         <>
           <div className="race-summary">
-            <div className="hz-stat"><span>Entries</span><strong>{summary.entries}</strong><small>{summary.upcoming} not run yet</small></div>
+            <div className="hz-stat"><span>Entries</span><strong>{summary.entries}</strong><small>
+                {summary.upcoming} upcoming
+                {summary.awaitingResult > 0 && ` · ${summary.awaitingResult} awaiting result`}
+              </small></div>
             <div className="hz-stat"><span>Wins</span><strong>{summary.wins}</strong><small>of {summary.finished} finished</small></div>
             <div className="hz-stat"><span>Placed</span><strong>{summary.places}</strong></div>
             <div className="hz-stat"><span>Scratched</span><strong>{summary.scratched}</strong></div>

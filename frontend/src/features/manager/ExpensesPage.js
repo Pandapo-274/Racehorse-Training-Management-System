@@ -136,12 +136,15 @@ export default function ExpensesPage() {
 
   const remove = async (row) => {
     const what = `${formatMoney(row.amount)} (${toCostLabel(row.category)}) for ${row.horseName} on ${formatDate(row.expenseDate)}`;
-    if (!window.confirm(`Delete ${what}? Use this only for a cost recorded by mistake.`)) return;
+    // A void needs a reason: the row is kept, and the reason is all that will
+    // explain later why this cost no longer counts. Cancel or blank = no void.
+    const reason = window.prompt(`Void ${what}?\n\nWhy is this cost being voided?`);
+    if (reason === null || !reason.trim()) return;
     setDeletingId(row.expenseId);
     setNotice("");
     try {
-      await deleteExpense(row.expenseId);
-      setNotice(`Deleted ${what}.`);
+      await deleteExpense(row.expenseId, reason.trim());
+      setNotice(`Voided ${what}.`);
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (!handleAuthError(err, navigate)) setLoadError(err.message);
@@ -281,7 +284,7 @@ export default function ExpensesPage() {
                         <td className="hz-row-action">
                           <button type="button" className="hz-btn hz-btn--ghost"
                                   disabled={deletingId === row.expenseId} onClick={() => remove(row)}>
-                            {deletingId === row.expenseId ? "Deleting…" : "Delete"}
+                            {deletingId === row.expenseId ? "Voiding…" : "Void"}
                           </button>
                         </td>
                       </tr>

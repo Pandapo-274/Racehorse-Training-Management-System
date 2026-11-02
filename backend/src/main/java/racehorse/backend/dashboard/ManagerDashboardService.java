@@ -60,7 +60,8 @@ public class ManagerDashboardService {
                     (SELECT COUNT(*) FROM TRAINING_LOCK l JOIN HORSE h ON h.horse_id = l.horse_id
                       WHERE l.status = 'ACTIVE' AND h.activity_status = 'ACTIVE')               AS locked_horses,
                     (SELECT ISNULL(SUM(amount), 0) FROM EXPENSE_LOG
-                      WHERE expense_date >= ? AND expense_date < ?)                             AS quarter_cost,
+                      WHERE expense_date >= ? AND expense_date < ?
+                        AND cancelled_at IS NULL)                                               AS quarter_cost,
                     (SELECT ISNULL(SUM(prize_money), 0) FROM RACE_REGISTRATION
                       WHERE race_date >= ? AND race_date < ?)                                   AS season_prize
                 """;

@@ -59,13 +59,20 @@ public class ExpenseController {
                 .body(service.create(request, user, http.getRemoteAddr()));
     }
 
+    /**
+     * Voids the cost rather than erasing it - see ExpenseService.cancel.
+     * Kept as DELETE so the route the frontend already calls stays the same;
+     * the reason travels as a query parameter because DELETE bodies are not
+     * reliably passed through by browsers and proxies.
+     */
     @DeleteMapping("/{id}")
     @RequireRole({"CLUB_MANAGER"})
     public ResponseEntity<Void> delete(
             @PathVariable int id,
+            @RequestParam(required = false) String reason,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        service.delete(id, user, http.getRemoteAddr());
+        service.cancel(id, reason, user, http.getRemoteAddr());
         return ResponseEntity.noContent().build();
     }
 }

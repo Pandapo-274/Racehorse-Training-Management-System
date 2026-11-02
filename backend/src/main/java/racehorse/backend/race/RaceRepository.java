@@ -74,12 +74,46 @@ public class RaceRepository {
                 .query(RaceRepository::map).optional();
     }
 
-    public boolean exists(int horseId, String raceName, LocalDate date) {
+    /** The existing entry for (horse, race, date), if any, with its result. */
+    public record ExistingEntry(int id, String result) {
+        public boolean scratched() { return "SCRATCHED".equals(result); }
+    }
+
+    /**
+     * The one row UQ_REG_entry allows for (horse, race name, date).
+     *
+     * This replaces a plain exists() that also counted SCRATCHED rows: after a
+     * horse was withdrawn by mistake, entering it again in the same race was
+     * refused as a duplicate. Ignoring SCRATCHED rows in the check alone would
+     * not fix that - UQ_REG_entry is an ordinary UNIQUE constraint, so the
+     * INSERT would then fail on the duplicate key and turn a clean 409 into a
+     * 500. The service reinstates the scratched row instead (see reinstate).
+     */
+    public Optional<ExistingEntry> findEntry(int horseId, String raceName, LocalDate date) {
         return jdbc.sql("""
-                SELECT COUNT(*) FROM RACE_REGISTRATION
+                SELECT registration_id, result FROM RACE_REGISTRATION
                 WHERE horse_id = :h AND race_name = :n AND race_date = :d
                 """).param("h", horseId).param("n", raceName).param("d", date)
-                .query(Integer.class).single() > 0;
+                .query((rs, n) -> new ExistingEntry(rs.getInt("registration_id"), rs.getString("result")))
+                .optional();
+    }
+
+    /**
+     * Bring a SCRATCHED entry back to an open entry.
+     *
+     * Reusing the row rather than relaxing UQ_REG_entry into a filtered index
+     * means no migration. A (horse, race, date) entry is one thing whose state
+     * changes; the scratch and the reinstatement both stay in the audit log.
+     *
+     * `AND result = 'SCRATCHED'` is in the UPDATE itself, so two people
+     * re-entering the same horse at once cannot both succeed.
+     */
+    public int reinstate(int id, int by, String note) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET result = NULL, prize_money = NULL, registered_by = :by, note = :note
+                WHERE registration_id = :id AND result = 'SCRATCHED'
+                """).param("id", id).param("by", by).param("note", note).update();
     }
 
     /** Ngựa đã có giải khác (chưa rút) trong cùng ngày: một con không chạy hai giải một ngày. */

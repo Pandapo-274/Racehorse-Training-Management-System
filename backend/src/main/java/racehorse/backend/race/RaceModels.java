@@ -63,8 +63,20 @@ public final class RaceModels {
                                int entries, int wins, int places, BigDecimal prizeMoney) {
     }
 
-    /** Thành tích cả câu lạc bộ trong một năm; doanh thu giải đua = tổng tiền thưởng. */
+    /** Club-wide race record for one year. See Summary on what prize money means. */
+    /**
+     * awaitingResult is counted apart from upcoming: a race whose date has
+     * passed but has no result yet is NOT "upcoming". The switch in
+     * RaceService.summary used to handle only SCRATCHED and FINISHED, so
+     * AWAITING_RESULT fell into default and was counted as upcoming - the stats
+     * said a race was ahead when it had been run the week before.
+     *
+     * prizeMoney is the TOTAL PRIZE MONEY OF THE OWNERS, not club revenue. Prize
+     * money belongs to the horse's owner; nothing in the system models a
+     * training fee or commission the club would earn.
+     */
     public record Summary(int year, int entries, int finished, int wins, int places, int unplaced,
-                          int scratched, int upcoming, BigDecimal prizeMoney, List<HorseSummary> horses) {
+                          int scratched, int upcoming, int awaitingResult,
+                          BigDecimal prizeMoney, List<HorseSummary> horses) {
     }
 }
