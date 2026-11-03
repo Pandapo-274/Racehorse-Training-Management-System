@@ -47,6 +47,43 @@ public class HorseService {
     }
 
     /**
+     * Club Manager sửa mã đăng ký và số chuồng (vd. nhập nhầm lúc duyệt, hoặc
+     * đổi chuồng). Đây là hai định danh do câu lạc bộ cấp nên chủ ngựa không sửa
+     * được; trước đây cũng không ai sửa được.
+     */
+    @Transactional
+    public HorseResponse updateIdentity(int horseId, HorseIdentityRequest raw, AuthenticatedUser user, String ip) {
+        HorseResponse current = getOrThrow(horseId);
+        String code = raw.registrationCode().trim().toUpperCase(java.util.Locale.ROOT);
+        String stall = blankToNull(raw.stallNo());
+
+        Map<String, String> errors = new HashMap<>();
+        if (horseRepository.existsByRegistrationCode(code, horseId)) {
+            errors.put("registrationCode", "Mã đăng ký đã tồn tại");
+        }
+        boolean pedigree = HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(current.recordType()));
+        if (stall != null && (pedigree || current.isWithdrawn())) {
+            errors.put("stallNo", pedigree ? "A pedigree record has no stall" : "A withdrawn horse has no stall");
+        } else if (stall == null && !pedigree && !current.isWithdrawn()) {
+            errors.put("stallNo", "A club horse needs a stall");
+        } else if (stall != null && horseRepository.existsByStallNo(stall, horseId)) {
+            errors.put("stallNo", "Chuồng này đã có ngựa khác");
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", errors);
+        }
+        try {
+            horseRepository.updateIdentity(horseId, code, stall);
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException(HttpStatus.CONFLICT, "Mã đăng ký hoặc chuồng vừa bị người khác dùng");
+        }
+        userRepository.writeAudit(user.userId(), "HORSE_IDENTITY_UPDATE", "HORSE", horseId, "SUCCESS", ip,
+                "code: " + current.registrationCode() + " -> " + code
+                        + "; stall: " + current.stallNo() + " -> " + stall);
+        return getOrThrow(horseId);
+    }
+
+    /**
      * Chủ ngựa sửa thông tin cơ bản của NGỰA CỦA MÌNH.
      *
      * Quyền sở hữu kiểm ở đây (không chỉ ở controller) vì controller chỉ biết
@@ -66,8 +103,28 @@ public class HorseService {
                 raw.dateOfBirth(), blankToNull(raw.color()), raw.sireId(), raw.damId());
 
         Map<String, String> errors = new HashMap<>();
-        checkParent(request.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, horseId, errors);
-        checkParent(request.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, horseId, errors);
+        checkParent(request.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, horseId, request.dateOfBirth(), errors);
+        checkParent(request.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, horseId, request.dateOfBirth(), errors);
+
+        /* Lý lịch (giới tính, ngày sinh, cha mẹ) khoá lại khi con ngựa đã là
+           cha/mẹ của ngựa khác hoặc đã có buổi tập: đổi lúc đó làm phả hệ của
+           ngựa con mâu thuẫn (vd. ngựa cha thành MARE), hoặc làm sai hồ sơ đã
+           dùng để xếp giáo án. Tên, giống, màu lông vẫn sửa được. */
+        boolean pedigreeChanged = !java.util.Objects.equals(current.horseGender(), request.horseGender())
+                || !java.util.Objects.equals(current.dateOfBirth(), request.dateOfBirth())
+                || !java.util.Objects.equals(current.sireId(), request.sireId())
+                || !java.util.Objects.equals(current.damId(), request.damId());
+        if (pedigreeChanged) {
+            boolean hasOffspring = horseRepository.findAll().stream().anyMatch(h ->
+                    java.util.Objects.equals(h.sireId(), horseId) || java.util.Objects.equals(h.damId(), horseId));
+            boolean hasTrained = vitalsRepository.findLatestSession(horseId).isPresent();
+            if (hasOffspring || hasTrained) {
+                errors.put("horseGender", "Sex, date of birth and parents are locked because "
+                        + current.horseName() + (hasOffspring ? " is already a parent of another horse"
+                                                              : " already has training sessions")
+                        + ". Ask the club to correct them");
+            }
+        }
         if (request.sireId() != null && request.sireId().equals(request.damId())) {
             errors.put("damId", "Cha và mẹ không được là cùng một con");
         }
@@ -80,7 +137,8 @@ public class HorseService {
         }
 
         horseRepository.updateBasics(horseId, request);
-        userRepository.writeAudit(user.userId(), "HORSE_UPDATE", "HORSE", horseId, "SUCCESS", ip);
+        userRepository.writeAudit(user.userId(), "HORSE_UPDATE", "HORSE", horseId, "SUCCESS", ip,
+                changes(current, request));
         return getOrThrow(horseId);
     }
 
@@ -133,6 +191,24 @@ public class HorseService {
 
     // ---------- helper ----------
 
+    /** Giá trị cũ và mới của những trường đã đổi, ghi vào AUDIT_LOG.detail (V20). */
+    private static String changes(HorseResponse before, HorseUpdateRequest after) {
+        StringBuilder sb = new StringBuilder();
+        java.util.function.BiConsumer<String, Object[]> diff = (name, v) -> {
+            if (!java.util.Objects.equals(v[0], v[1])) {
+                sb.append(sb.length() == 0 ? "" : "; ").append(name).append(": ").append(v[0]).append(" -> ").append(v[1]);
+            }
+        };
+        diff.accept("name", new Object[] { before.horseName(), after.horseName() });
+        diff.accept("breed", new Object[] { before.breed(), after.breed() });
+        diff.accept("sex", new Object[] { before.horseGender(), after.horseGender() });
+        diff.accept("dob", new Object[] { before.dateOfBirth(), after.dateOfBirth() });
+        diff.accept("colour", new Object[] { before.color(), after.color() });
+        diff.accept("sire", new Object[] { before.sireId(), after.sireId() });
+        diff.accept("dam", new Object[] { before.damId(), after.damId() });
+        return sb.length() == 0 ? null : (sb.length() > 500 ? sb.substring(0, 500) : sb.toString());
+    }
+
     HorseResponse getOrThrow(int horseId) {
         return horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy ngựa #" + horseId));
@@ -183,8 +259,8 @@ public class HorseService {
         if (!horseRepository.isHorseOwner(r.ownerId())) {
             errors.put("ownerId", "Chủ ngựa phải là tài khoản có role HORSE_OWNER");
         }
-        checkParent(r.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, excludeId, errors);
-        checkParent(r.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, excludeId, errors);
+        checkParent(r.sireId(), "sireId", "Ngựa cha", SIRE_GENDERS, excludeId, r.dateOfBirth(), errors);
+        checkParent(r.damId(), "damId", "Ngựa mẹ", DAM_GENDERS, excludeId, r.dateOfBirth(), errors);
         if (r.sireId() != null && r.sireId().equals(r.damId())) {
             errors.put("damId", "Cha và mẹ không được là cùng một con");
         }
@@ -195,7 +271,8 @@ public class HorseService {
     }
 
     private void checkParent(Integer parentId, String field, String label,
-                             Set<String> allowedGenders, int selfId, Map<String, String> errors) {
+                             Set<String> allowedGenders, int selfId, java.time.LocalDate childDob,
+                             Map<String, String> errors) {
         if (parentId == null) return;
         if (parentId == selfId) {
             errors.put(field, label + " không được là chính con ngựa này");
@@ -204,6 +281,13 @@ public class HorseService {
         horseRepository.findById(parentId).ifPresentOrElse(parent -> {
             if (parent.horseGender() != null && !allowedGenders.contains(parent.horseGender())) {
                 errors.put(field, label + " có giới tính không phù hợp");
+            }
+            /* Cha mẹ phải lớn hơn con ít nhất FOAL_BELOW năm: ngựa dưới tuổi đó
+               chưa sinh sản được. */
+            if (parent.dateOfBirth() != null && childDob != null
+                    && parent.dateOfBirth().plusYears(HorsePolicy.FOAL_BELOW).isAfter(childDob)) {
+                errors.put(field, label + " phải sinh trước con ngựa này ít nhất "
+                        + HorsePolicy.FOAL_BELOW + " năm");
             }
             /* Chặn vòng lặp phả hệ. Phép kiểm parentId == selfId ở trên chỉ bắt
                được vòng dài một bước (tự làm cha mình); vòng dài hai bước -

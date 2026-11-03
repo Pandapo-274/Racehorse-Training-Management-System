@@ -24,6 +24,13 @@ public final class HorsePolicy {
     public static final String ACADEMY = "ACADEMY";
     public static final String PEDIGREE = "PEDIGREE";
 
+    /**
+     * Tình trạng sức khoẻ cho phép tập. Một chỗ duy nhất: giáo án
+     * (TrainingPlanService) và buổi tập (TrainingSessionService) cùng dùng, để
+     * không bao giờ lệch nhau.
+     */
+    public static final java.util.Set<String> TRAINABLE_STATUSES = java.util.Set.of("ELIGIBLE", "MONITOR");
+
     /** Dưới tuổi này là ngựa con (Foal). */
     public static final int FOAL_BELOW = 2;
     /** Từ FOAL_BELOW đến tuổi này là tuổi đua (Racing). Trên đó là Retired. */

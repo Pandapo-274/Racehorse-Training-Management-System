@@ -101,6 +101,12 @@ public class TreatmentService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Treatment #" + treatmentId + " does not exist"));
 
+        /* Đơn chưa tới ngày bắt đầu thì "kết thúc hôm nay" sẽ cho ngày kết thúc
+           trước ngày bắt đầu, vi phạm CK_TRT_dates (trước đây là lỗi 500). */
+        if (current.startDate().isAfter(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT, "This treatment only starts on "
+                    + current.startDate() + ", so it cannot end today. Change the prescription instead");
+        }
         if (treatments.endToday(treatmentId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This treatment already ended on " + current.endDate());

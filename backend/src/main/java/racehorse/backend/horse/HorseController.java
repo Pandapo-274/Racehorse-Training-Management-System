@@ -51,6 +51,17 @@ public class HorseController {
         return horseService.updateByOwner(id, request, user, http.getRemoteAddr());
     }
 
+    /** Club Manager sửa mã đăng ký và số chuồng. */
+    @PutMapping("/{id}/identity")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseResponse updateIdentity(
+            @PathVariable int id,
+            @Valid @RequestBody HorseIdentityRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return horseService.updateIdentity(id, request, user, http.getRemoteAddr());
+    }
+
     /** Chủ ngựa tải ảnh cho ngựa của mình. Tên phần phải là "file", giống avatar. */
     @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequireRole({"HORSE_OWNER"})

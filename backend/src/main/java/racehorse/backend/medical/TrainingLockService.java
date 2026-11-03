@@ -189,6 +189,10 @@ public class TrainingLockService {
 
     private void validate(TrainingLockRequest r, HorseResponse horse) {
         Map<String, String> errors = new HashMap<>();
+        // Ngựa đã rút không còn ở học viện nên không có gì để khoá.
+        if (horse.isWithdrawn()) {
+            errors.put("horseId", horse.horseName() + " has left the club");
+        }
 
         /* Con ngựa đã có lệnh ACTIVE thì không ra lệnh thứ hai. Nói rõ lệnh
            đang có là của ai, vì việc người dùng cần làm tiếp là đổi mức khoá
