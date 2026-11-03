@@ -11,7 +11,7 @@ import NotificationBell from "../notification/NotificationBell";
 import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import {
   COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
-  formatShortDate, getOwnerDashboard, isPrizeRow, toCostLabel, toEvaluation, toStars,
+  formatShortDate, getOwnerDashboard, isPrizeRow, listOwnerExpenses, toCostLabel, toEvaluation, toStars,
 } from "./horseOwnerApi";
 
 function HorseshoeIcon() {
@@ -385,6 +385,14 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
     ? `${formatDate(costs.from)} – ${formatDate(costs.to)}`
     : `Up to ${formatDate(costs.to)}`;
 
+  /* Prize money belongs to the owner. It is shown below the cost total, never
+     added into it, so the table cannot be read as the club earning it. */
+  const costRows = costs.rows.filter((row) => !isPrizeRow(row.category));
+  const prizeRow = costs.rows.find((row) => isPrizeRow(row.category));
+  const costTotals = costs.horses.map((_, index) =>
+    costRows.reduce((sum, row) => sum + Number(row.amounts[index] || 0), 0)
+  );
+
   return (
     <section className="owner-card costs-card" id="costs-prizes">
       <div className="card-heading costs-heading">
@@ -422,22 +430,88 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
           </thead>
 
           <tbody>
-            {costs.rows.map((row) => {
-              const prize = isPrizeRow(row.category);
-              return (
-                <tr key={row.category}>
-                  <td className="line-item">{toCostLabel(row.category)}</td>
-                  {row.amounts.map((amount, index) => (
-                    <td key={costs.horses[index].horseId}>{formatMoney(amount, { prize })}</td>
-                  ))}
-                  <td>{formatMoney(row.total, { prize })}</td>
-                </tr>
-              );
-            })}
+            {costRows.map((row) => (
+              <tr key={row.category}>
+                <td className="line-item">{toCostLabel(row.category)}</td>
+                {row.amounts.map((amount, index) => (
+                  <td key={costs.horses[index].horseId}>{formatMoney(amount)}</td>
+                ))}
+                <td>{formatMoney(row.total)}</td>
+              </tr>
+            ))}
+            <tr className="cost-subtotal">
+              <td className="line-item">Total costs</td>
+              {costTotals.map((amount, index) => (
+                <td key={costs.horses[index].horseId}>{formatMoney(amount)}</td>
+              ))}
+              <td>{formatMoney(costTotals.reduce((a, b) => a + b, 0))}</td>
+            </tr>
+            {prizeRow && (
+              <tr className="cost-prize">
+                <td className="line-item">Prize money paid to you</td>
+                {prizeRow.amounts.map((amount, index) => (
+                  <td key={costs.horses[index].horseId}>{formatMoney(amount, { prize: true })}</td>
+                ))}
+                <td>{formatMoney(prizeRow.total, { prize: true })}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      <CostLines from={costs.from} to={costs.to} />
     </section>
+  );
+}
+
+/** #9: the lines behind the totals, loaded only when opened. */
+function CostLines({ from, to }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const ctrl = new AbortController();
+    setData(null);
+    setError("");
+    listOwnerExpenses({ from, to }, ctrl.signal)
+      .then(setData)
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (!handleAuthError(err, navigate)) setError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [open, from, to, navigate]);
+
+  return (
+    <div className="cost-lines">
+      <button type="button" className="cost-lines-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? "Hide each cost" : "Show each cost"}
+      </button>
+      {open && error && <p className="cost-lines-error">{error}</p>}
+      {open && !data && !error && <p className="cost-lines-muted">Loading…</p>}
+      {open && data && (
+        data.items.length === 0 ? <p className="cost-lines-muted">No costs in this period.</p> : (
+          <table className="cost-table cost-lines-table">
+            <thead>
+              <tr><th>Date</th><th>Horse</th><th>Item</th><th>Amount</th></tr>
+            </thead>
+            <tbody>
+              {data.items.map((e) => (
+                <tr key={e.expenseId}>
+                  <td>{formatDate(e.expenseDate)}</td>
+                  <td>{e.horseName}</td>
+                  <td>{toCostLabel(e.category)}{e.note ? ` · ${e.note}` : ""}</td>
+                  <td>{formatMoney(e.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      )}
+      {open && data?.truncated && <p className="cost-lines-muted">Showing the latest {data.items.length} of {data.count}.</p>}
+    </div>
   );
 }
 

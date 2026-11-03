@@ -40,7 +40,7 @@ public class AuditLogRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT TOP (:limit)
                        a.log_id, a.created_at, a.user_id, u.username, u.full_name, r.role_name,
-                       a.action, a.target_entity, a.target_id, a.result, a.ip_address
+                       a.action, a.target_entity, a.target_id, a.result, a.ip_address, a.detail
                 FROM AUDIT_LOG a
                 LEFT JOIN APP_USER u ON u.user_id = a.user_id
                 LEFT JOIN ROLE r     ON r.role_id = u.role_id
@@ -92,7 +92,8 @@ public class AuditLogRepository {
                         rs.getString("target_entity"),
                         rs.getObject("target_id", Integer.class),
                         rs.getString("result"),
-                        rs.getString("ip_address")))
+                        rs.getString("ip_address"),
+                        rs.getString("detail")))
                 .list();
     }
 

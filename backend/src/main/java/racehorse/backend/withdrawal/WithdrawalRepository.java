@@ -160,14 +160,13 @@ public class WithdrawalRepository {
 
     /**
      * Rút khỏi các giải chưa đua (chưa có kết quả, ngày đua từ from trở đi), giống
-     * RaceService.scratch: result = SCRATCHED, xoá tiền thưởng, ghi lý do vào note.
+     * RaceService.scratch: result = SCRATCHED, xoá tiền thưởng. Since V23 the
+     * reason goes to its own column and the note is left as it was.
      */
     public int scratchFutureRaces(int horseId, LocalDate from, String reason) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION
-                SET result = 'SCRATCHED', prize_money = NULL,
-                    note = LEFT(CONCAT(N'Scratched: ', :reason,
-                                       CASE WHEN note IS NULL THEN N'' ELSE CONCAT(N' | ', note) END), 255)
+                SET result = 'SCRATCHED', prize_money = NULL, scratch_reason = LEFT(:reason, 500)
                 WHERE horse_id = :horseId AND result IS NULL AND race_date >= :from
                 """)
                 .param("reason", reason)

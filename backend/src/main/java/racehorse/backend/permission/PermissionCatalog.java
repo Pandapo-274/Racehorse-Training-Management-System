@@ -98,9 +98,17 @@ final class PermissionCatalog {
             new Entry(CARE, "View supplies", "GET /api/supplies", NONE),
             new Entry(CARE, "Add or edit supply items", "POST /api/supplies", NONE),
             new Entry(CARE, "Update stock counts", "PUT /api/supplies/{id}/count", NONE),
+            new Entry(CARE, "Receive deliveries into the store", "POST /api/supplies/{id}/receive", NONE),
+            new Entry(CARE, "Record stock thrown away", "POST /api/supplies/{id}/waste", NONE),
+            new Entry(CARE, "View a supply's stock history", "GET /api/supplies/{id}/movements", NONE),
+            new Entry(CARE, "Hand a care task to another groom", "PUT /api/daily-tasks/{id}/assignee", NONE),
+            new Entry(CARE, "View missed care tasks", "GET /api/daily-tasks/missed", NONE),
 
             // ---------- Giải đua (Flow 5) ----------
             new Entry(RACES, "View race entries and results", "GET /api/races", OWNER),
+            new Entry(RACES, "View races", "GET /api/races/events", NONE),
+            new Entry(RACES, "Create races", "POST /api/races/events", NONE),
+            new Entry(RACES, "Cancel a race", "PUT /api/races/events/{id}/cancel", NONE),
             new Entry(RACES, "Register horses for races", "POST /api/races", NONE),
             new Entry(RACES, "Record race results", "PUT /api/races/{id}/result", NONE),
             new Entry(RACES, "Scratch a race entry", "PUT /api/races/{id}/scratch", NONE),
@@ -110,6 +118,7 @@ final class PermissionCatalog {
             new Entry(REPORTS, "View the club overview (workload, costs, prizes)", "GET /api/manager/dashboard", NONE),
             new Entry(REPORTS, "View operating costs", "GET /api/expenses", NONE),
             new Entry(REPORTS, "Record operating costs", "POST /api/expenses", NONE),
-            new Entry(REPORTS, "Delete a wrongly recorded cost", "DELETE /api/expenses/{id}", NONE),
+            new Entry(REPORTS, "Void a wrongly recorded cost", "DELETE /api/expenses/{id}", NONE),
+            new Entry(REPORTS, "View each cost of own horses", "GET /api/owner/expenses", OWNER),
             new Entry(REPORTS, "View the owner dashboard (costs, prizes)", "GET /api/owner/dashboard", OWNER));
 }

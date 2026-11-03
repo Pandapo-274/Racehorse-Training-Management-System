@@ -21,6 +21,7 @@ import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
+import racehorse.backend.race.RaceRiskNotifier;
 import racehorse.backend.upload.ImageFiles;
 
 /**
@@ -42,15 +43,17 @@ public class IncidentFilingService {
     private final HorseRepository horses;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final RaceRiskNotifier raceRisk;
     private final Path photoDir;
 
     public IncidentFilingService(IncidentRepository incidents, HorseRepository horses, UserRepository users,
-                                 NotificationService notifications,
+                                 NotificationService notifications, RaceRiskNotifier raceRisk,
                                  @Value("${app.upload.dir:uploads}") String uploadDir) {
         this.incidents = incidents;
         this.horses = horses;
         this.users = users;
         this.notifications = notifications;
+        this.raceRisk = raceRisk;
         this.photoDir = Path.of(uploadDir).toAbsolutePath().normalize().resolve("incidents");
     }
 
@@ -98,6 +101,9 @@ public class IncidentFilingService {
                 Text.clip(horse.horseName() + " was reported at the stable: " + s
                         + ". Training is paused until a veterinarian examines it.", 500),
                 Notice.HORSE, horseId));
+        // An open report blocks racing too (RaceService.problemOf).
+        raceRisk.warn(horseId, horse.horseName(), horse.ownerId(), user,
+                "an incident report is waiting for a veterinarian");
 
         return incidents.findById(reportId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,

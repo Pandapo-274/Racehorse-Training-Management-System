@@ -70,4 +70,29 @@ public class SupplyController {
                         HttpServletRequest http) {
         return service.count(id, req.currentQty(), user, http.getRemoteAddr());
     }
+
+    /** A delivery arrived: adds to the quantity and writes a RECEIVE line (V21). */
+    @PostMapping("/{id}/receive")
+    @RequireRole({"CLUB_MANAGER"})
+    public SupplyModels.Supply receive(@PathVariable int id, @Valid @RequestBody SupplyModels.ReceiveRequest req,
+                                       @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                       HttpServletRequest http) {
+        return service.receive(id, req, user, http.getRemoteAddr());
+    }
+
+    /** Thrown away (spoiled, expired, broken): takes from the quantity and writes a WASTE line. */
+    @PostMapping("/{id}/waste")
+    @RequireRole({"CLUB_MANAGER", "VETERINARIAN"})
+    public SupplyModels.Supply waste(@PathVariable int id, @Valid @RequestBody SupplyModels.WasteRequest req,
+                                     @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                     HttpServletRequest http) {
+        return service.waste(id, req, user, http.getRemoteAddr());
+    }
+
+    /** The last 100 movements of one item, newest first. */
+    @GetMapping("/{id}/movements")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN"})
+    public List<SupplyModels.Movement> movements(@PathVariable int id) {
+        return service.movements(id);
+    }
 }

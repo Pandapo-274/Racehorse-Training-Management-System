@@ -3,6 +3,9 @@
 //   Daily tasks: assign feeding / cleaning / bathing / ice bath to a Groom for a
 //                horse and a day, see what is done, delete what is not needed.
 //   Rations:     approve what each horse eats (FeedingBoard).
+//   Missed:      tasks of earlier days that were never ticked (#14).
+// A task can be handed to another groom while it is open (#15). Assigning
+// more than the daily limit to one groom shows a warning but is not blocked.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
@@ -10,7 +13,8 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import FeedingBoard from "./FeedingBoard";
 import {
-  TASK_TEXT, TASK_TYPES, assignTasks, deleteTask, formatClock, listGrooms, listTasks, todayIso,
+  TASK_STATE, TASK_TEXT, TASK_TYPES, assignTasks, deleteTask, formatClock, listGrooms, listMissedTasks,
+  listTasks, reassignTask, todayIso,
 } from "./careApi";
 import "./care.css";
 
@@ -52,7 +56,8 @@ function AssignForm({ date, horses, grooms, onAssigned }) {
       });
       const parts = [];
       if (res.created.length) parts.push(`${res.created.length} task${res.created.length > 1 ? "s" : ""} assigned`);
-      if (res.skipped.length) parts.push(`already planned: ${res.skipped.map((t) => TASK_TEXT[t]).join(", ")}`);
+      if (res.skipped.length) parts.push(`already planned: ${res.skipped.map((t) => TASK_TEXT[t]).join(", ")} (use Hand over to change the groom)`);
+      if (res.warnings?.length) parts.push(`warning: ${res.warnings.join("; ")}`);
       setInfo(parts.join("; ") + ".");
       setForm((f) => ({ ...f, taskTypes: [], note: "" }));
       onAssigned(res.created);
@@ -156,6 +161,29 @@ function DailyTasks() {
   }, [navigate, date, reloadKey]);
 
   const done = useMemo(() => (tasks || []).filter((t) => t.completed).length, [tasks]);
+  const [handing, setHanding] = useState(null); // taskId being handed over
+  const [handTo, setHandTo] = useState("");
+  const [actionInfo, setActionInfo] = useState("");
+
+  const handOver = async (t) => {
+    if (!handTo) return;
+    setBusyId(t.taskId);
+    setActionError("");
+    setActionInfo("");
+    try {
+      const res = await reassignTask(t.taskId, Number(handTo));
+      const after = res.created[0];
+      setTasks((old) => old.map((x) => (x.taskId === t.taskId ? after : x)));
+      setActionInfo(`${TASK_TEXT[t.taskType]} for ${t.horseName} handed to ${after.assignedToName}.`
+        + (res.warnings?.length ? ` Warning: ${res.warnings.join("; ")}.` : ""));
+      setHanding(null);
+      setHandTo("");
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const remove = async (t) => {
     if (!window.confirm(`Delete "${TASK_TEXT[t.taskType]}" for ${t.horseName}?`)) return;
@@ -197,6 +225,7 @@ function DailyTasks() {
         )}
         {!error && !tasks && <p className="hz-empty">Loading…</p>}
         {actionError && <p className="hz-form-error" role="alert">{actionError}</p>}
+        {actionInfo && <p className="care-ok" role="status">{actionInfo}</p>}
         {tasks && (
           <div className="hz-table-wrap">
             <table className="hz-table">
@@ -219,13 +248,36 @@ function DailyTasks() {
                       {TASK_TEXT[t.taskType] || t.taskType}
                       {t.note && <p className="hz-note hz-muted">{t.note}</p>}
                     </td>
-                    <td>{t.assignedToName}</td>
+                    <td>
+                      {handing === t.taskId ? (
+                        <div className="care-inline">
+                          <select value={handTo} aria-label={`New groom for ${t.horseName}`} onChange={(e) => setHandTo(e.target.value)}>
+                            <option value="">Choose…</option>
+                            {grooms.filter((g) => g.userId !== t.assignedTo).map((g) => (
+                              <option key={g.userId} value={g.userId}>{g.fullName}</option>
+                            ))}
+                          </select>
+                          <button type="button" className="hz-btn" disabled={!handTo || busyId === t.taskId} onClick={() => handOver(t)}>OK</button>
+                          <button type="button" className="care-link-btn" onClick={() => { setHanding(null); setHandTo(""); }}>Cancel</button>
+                        </div>
+                      ) : t.assignedToName}
+                    </td>
                     <td>
                       {t.completed
-                        ? <StatusChip tone="good" label={`Done ${formatClock(t.completedAt)}`} />
-                        : <StatusChip tone={date < today ? "serious" : "neutral"} label={date < today ? "Not done" : "To do"} />}
+                        ? <StatusChip tone={t.state === "DONE_LATE" ? "warning" : "good"}
+                            label={`${t.state === "DONE_LATE" ? "Done late" : "Done"} ${formatClock(t.completedAt)}`} />
+                        : <StatusChip tone={TASK_STATE[t.state]?.tone || "neutral"} label={t.state === "MISSED" ? "Missed" : "To do"} />}
+                      {t.completed && t.completedByName && t.completedBy !== t.assignedTo && (
+                        <p className="hz-note hz-muted">ticked by {t.completedByName}</p>
+                      )}
                     </td>
                     <td className="hz-row-action">
+                      {!t.completed && date >= today && handing !== t.taskId && (
+                        <button type="button" className="care-link-btn"
+                          disabled={busyId === t.taskId} onClick={() => { setHanding(t.taskId); setHandTo(""); }}>
+                          Hand over
+                        </button>
+                      )}
                       {!t.completed && (
                         <button type="button" className="care-link-btn care-link-btn--danger"
                           disabled={busyId === t.taskId} onClick={() => remove(t)}>
@@ -245,6 +297,58 @@ function DailyTasks() {
   );
 }
 
+function MissedTasks() {
+  const navigate = useNavigate();
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listMissedTasks({}, ctrl.signal)
+      .then(setRows)
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (!handleAuthError(err, navigate)) setError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [navigate]);
+
+  const byGroom = useMemo(() => {
+    const m = new Map();
+    (rows || []).forEach((t) => m.set(t.assignedToName, (m.get(t.assignedToName) || 0) + 1));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [rows]);
+
+  return (
+    <Card title="Missed tasks" hint="Tasks of the last 7 days that were never ticked. A task can still be ticked the day after; after that it stays missed.">
+      {error && <p className="hz-form-error" role="alert">{error}</p>}
+      {!rows && !error && <p className="hz-empty">Loading…</p>}
+      {rows && rows.length === 0 && <p className="hz-empty">Nothing missed in the last 7 days.</p>}
+      {rows && rows.length > 0 && (
+        <>
+          <p className="hz-note">{byGroom.map(([name, n]) => `${name}: ${n}`).join(" · ")}</p>
+          <div className="hz-table-wrap">
+            <table className="hz-table">
+              <thead><tr><th>Day</th><th>Stall</th><th>Horse</th><th>Task</th><th>Groom</th></tr></thead>
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.taskId}>
+                    <td className="hz-mono">{t.taskDate}</td>
+                    <td className="hz-mono">{t.stallNo || "—"}</td>
+                    <td className="hz-name">{t.horseName}</td>
+                    <td>{TASK_TEXT[t.taskType] || t.taskType}</td>
+                    <td>{t.assignedToName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 export default function StableCarePage() {
   const [tab, setTab] = useState("tasks");
   return (
@@ -258,8 +362,14 @@ export default function StableCarePage() {
           onClick={() => setTab("rations")}>
           Rations
         </button>
+        <button type="button" role="tab" aria-selected={tab === "missed"} className={tab === "missed" ? "active" : ""}
+          onClick={() => setTab("missed")}>
+          Missed
+        </button>
       </div>
-      {tab === "tasks" ? <DailyTasks /> : <FeedingBoard editable />}
+      {tab === "tasks" && <DailyTasks />}
+      {tab === "rations" && <FeedingBoard editable />}
+      {tab === "missed" && <MissedTasks />}
     </HorseShell>
   );
 }

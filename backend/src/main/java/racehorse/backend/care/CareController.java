@@ -95,6 +95,25 @@ public class CareController {
         return service.undo(id, user, http.getRemoteAddr());
     }
 
+    /** #15: hand an open task to another groom. */
+    @PutMapping("/daily-tasks/{id}/assignee")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
+    public CareModels.AssignResult reassign(@PathVariable int id,
+                                            @Valid @RequestBody CareModels.ReassignRequest req,
+                                            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                            HttpServletRequest http) {
+        return service.reassign(id, req.assignedTo(), user, http.getRemoteAddr());
+    }
+
+    /** #14: tasks of a period that were never ticked. Defaults to the last 7 days. */
+    @GetMapping("/daily-tasks/missed")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
+    public List<CareModels.Task> missed(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return service.missed(from, to);
+    }
+
     @DeleteMapping("/daily-tasks/{id}")
     @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
     public Map<String, String> delete(@PathVariable int id,

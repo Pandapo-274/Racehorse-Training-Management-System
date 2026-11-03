@@ -2,7 +2,7 @@
 // Trang "Club overview" của Club Manager.
 //
 // Đề bài: báo cáo tổng quan về hiệu suất huấn luyện, chi phí vận hành chuồng
-// trại và doanh thu giải đấu. Mọi số liệu lấy từ GET /api/manager/dashboard;
+// trại và tiền thưởng giải đua của chủ ngựa (không phải doanh thu câu lạc bộ). Mọi số liệu lấy từ GET /api/manager/dashboard;
 // trước đây trang này chỉ có số viết cứng.
 import "./manager.css";
 import { useCallback, useEffect, useState } from "react";
@@ -357,7 +357,7 @@ export default function ManagerDashboard() {
                 />
                 <StatCard
                   value={formatCompactMoney(summary.seasonPrize)}
-                  label={`Prize money · ${summary.season} season`}
+                  label={`Owners' prize money · ${summary.season} season`}
                   type="blue"
                 />
               </div>

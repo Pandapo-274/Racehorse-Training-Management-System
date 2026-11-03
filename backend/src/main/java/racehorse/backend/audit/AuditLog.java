@@ -27,7 +27,9 @@ public final class AuditLog {
             String targetEntity,
             Integer targetId,
             String result,
-            String ipAddress) {
+            String ipAddress,
+            /* What changed, e.g. "WON, 100000000 -> PLACED, 40000000". Null for rows before V20. */
+            String detail) {
     }
 
     /** Ba con số an toàn trong 24 giờ qua, hiện ở đầu trang. */

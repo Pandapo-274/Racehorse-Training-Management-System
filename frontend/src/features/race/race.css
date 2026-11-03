@@ -40,3 +40,6 @@
 .race-blocked { margin: 6px 0 0; font-size: 11px; color: var(--text-600); }
 
 .race-prize { font-weight: 700; color: var(--turf-500); white-space: nowrap; }
+.race-warn { margin: 6px 0 0; padding-left: 18px; color: #b54708; font-size: 12px; }
+.race-edit .race-pos { width: 64px; }
+.race-edit .race-time { width: 96px; }

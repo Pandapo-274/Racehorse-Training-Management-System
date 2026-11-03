@@ -13,6 +13,7 @@ import racehorse.backend.auth.UserRecord;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
+import racehorse.backend.race.RaceRiskNotifier;
 
 @Service
 public class IncidentService {
@@ -22,11 +23,14 @@ public class IncidentService {
     private final IncidentRepository incidents;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final RaceRiskNotifier raceRisk;
 
-    public IncidentService(IncidentRepository incidents, UserRepository users, NotificationService notifications) {
+    public IncidentService(IncidentRepository incidents, UserRepository users, NotificationService notifications,
+                           RaceRiskNotifier raceRisk) {
         this.incidents = incidents;
         this.users = users;
         this.notifications = notifications;
+        this.raceRisk = raceRisk;
     }
 
     /**
@@ -76,6 +80,10 @@ public class IncidentService {
                     Text.clip("Your session with " + s.horseName() + " was stopped: " + symptoms + ".", 500),
                     Notice.TRAINING_SESSION, sessionId));
         }
+
+        // The open report now blocks racing too (RaceService.problemOf).
+        raceRisk.warn(s.horseId(), s.horseName(), s.ownerId(), user,
+                "was stopped during training and is waiting for a veterinarian");
 
         IncidentReportResponse report = incidents.findById(reportId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,

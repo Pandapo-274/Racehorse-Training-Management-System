@@ -79,7 +79,7 @@
 /* ---------- ration editor ---------- */
 
 .care-ration-row {
-  display: grid; grid-template-columns: 120px 1.4fr 90px 90px 1.4fr 32px; gap: 8px; align-items: end;
+  display: grid; grid-template-columns: 120px 1.8fr 110px 1.4fr 32px; gap: 8px; align-items: end;
 }
 @media (max-width: 900px) { .care-ration-row { grid-template-columns: 1fr 1fr; } }
 .care-ration-row .hz-field label { font-size: 10px; }
@@ -132,3 +132,8 @@
 }
 .care-inline { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .care-inline .hz-btn { padding: 6px 14px; font-size: 11px; }
+.care-muted { color: var(--text-400, #9ba2b8); font-size: 11px; font-style: italic; }
+.care-unlinked { color: #b54708; font-weight: 700; }
+.care-neg { color: var(--danger, #c0392b); font-weight: 700; }
+.care-pos { color: #3f7a19; font-weight: 700; }
+.care-warn { color: #b54708; font-weight: 700; }

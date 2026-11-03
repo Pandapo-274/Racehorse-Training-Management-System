@@ -16,6 +16,7 @@ import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
+import racehorse.backend.race.RaceRiskNotifier;
 
 @Service
 public class MedicalRecordService {
@@ -26,13 +27,16 @@ public class MedicalRecordService {
     private final HorseRepository horses;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final RaceRiskNotifier raceRisk;
 
     public MedicalRecordService(MedicalRecordRepository records, HorseRepository horses,
-                                UserRepository users, NotificationService notifications) {
+                                UserRepository users, NotificationService notifications,
+                                RaceRiskNotifier raceRisk) {
         this.records = records;
         this.horses = horses;
         this.users = users;
         this.notifications = notifications;
+        this.raceRisk = raceRisk;
     }
 
     /**
@@ -85,6 +89,12 @@ public class MedicalRecordService {
                     "Health status changed",
                     horse.horseName() + ": " + horse.status() + " to " + raw.healthStatus() + ".",
                     Notice.HORSE, horse.horseId()));
+            /* Only ELIGIBLE horses may race (RaceService.problemOf). An exam
+               that moves the horse off ELIGIBLE puts its race entries at risk. */
+            if (!"ELIGIBLE".equals(raw.healthStatus())) {
+                raceRisk.warn(horse.horseId(), horse.horseName(), horse.ownerId(), vet,
+                        "its health status has just changed to " + raw.healthStatus());
+            }
         }
 
         return records.findById(recordId)

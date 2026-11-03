@@ -94,6 +94,18 @@ public class PreventiveCareService {
                 .toList();
     }
 
+    /**
+     * One care type of one horse, without the owner check of forHorse - for
+     * other services (race eligibility, #3). Empty if the type is unknown.
+     */
+    public java.util.Optional<PreventiveCareItem> statusOf(int horseId, String careType) {
+        LocalDate today = LocalDate.now();
+        return care.findByHorse(horseId).stream()
+                .filter(r -> careType.equals(r.careType()))
+                .map(r -> classify(r, today, DEFAULT_DUE_WITHIN_DAYS))
+                .findFirst();
+    }
+
     /* ------------------------------------------------------------------ */
 
     /**

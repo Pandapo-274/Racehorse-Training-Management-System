@@ -39,3 +39,4 @@
 .al-ip { font: 500 12px ui-monospace, Consolas, monospace; color: var(--text-600); }
 .al-muted { color: var(--text-400); font-style: italic; }
 .al-more { display: flex; justify-content: center; margin-top: 12px; }
+.al-detail { max-width: 340px; color: var(--text-600) !important; word-break: break-word; }

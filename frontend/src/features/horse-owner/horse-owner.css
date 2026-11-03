@@ -1749,3 +1749,17 @@ a.horse-photo:focus-visible {
   font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
+
+/* Owner cost table: costs, their subtotal, then prize money kept apart (review #4). */
+.cost-table tr.cost-subtotal td {
+  border-top: 1px solid var(--owner-border);
+  font-weight: 900;
+}
+
+/* #9: each cost line behind the totals. */
+.cost-lines { margin: 10px 22px 16px; }
+.cost-lines-toggle { border: 0; background: none; padding: 0; color: var(--owner-pink); font-size: 10px; font-weight: 800; cursor: pointer; }
+.cost-lines-muted { color: #9ba2b8; font-size: 9px; margin: 6px 0 0; }
+.cost-lines-error { color: #c0392b; font-size: 9px; margin: 6px 0 0; }
+.cost-lines-table { margin-top: 8px; table-layout: auto; }
+.cost-lines-table tbody tr:last-child td:not(.line-item) { color: var(--owner-text); font-weight: 600; }

@@ -4,7 +4,9 @@
 //   Rations      GET /api/feeding, PUT /api/feeding/horse/{id}   (Head Trainer / Vet approve)
 //   Daily tasks  GET/POST /api/daily-tasks, PUT .../complete|undo, DELETE  (Groom ticks off own tasks)
 //   Incidents    POST /api/incident-reports (multipart, optional photo), GET for "my reports"
-//   Supplies     GET/POST/PUT /api/supplies, PUT /api/supplies/{id}/count
+//   Supplies     GET/POST/PUT /api/supplies, PUT /api/supplies/{id}/count,
+//                POST .../receive | .../waste, GET .../movements  (stock ledger, V21)
+//   Missed tasks GET /api/daily-tasks/missed, reassign PUT /api/daily-tasks/{id}/assignee
 //
 // The backend decides who sees what (a Groom only gets their own tasks and
 // reports); these helpers just wrap the calls.
@@ -53,6 +55,30 @@ export function completeTask(id) {
 export function undoTask(id) {
   return authFetch(`/api/daily-tasks/${id}/undo`, { method: "PUT" });
 }
+
+/** Hand an open task to another groom. Returns { created: [task], warnings }. */
+export function reassignTask(id, assignedTo) {
+  return authFetch(`/api/daily-tasks/${id}/assignee`, {
+    method: "PUT",
+    body: JSON.stringify({ assignedTo }),
+  });
+}
+
+/** Tasks never ticked between two days (defaults: last 7 days). */
+export function listMissedTasks({ from, to } = {}, signal) {
+  const p = new URLSearchParams();
+  if (from) p.set("from", from);
+  if (to) p.set("to", to);
+  const q = p.toString();
+  return authFetch(`/api/daily-tasks/missed${q ? `?${q}` : ""}`, { signal });
+}
+
+export const TASK_STATE = {
+  OPEN: { label: "Open", tone: "neutral" },
+  DONE: { label: "Done", tone: "good" },
+  DONE_LATE: { label: "Done late", tone: "warning" },
+  MISSED: { label: "Missed", tone: "critical" },
+};
 
 export function deleteTask(id) {
   return authFetch(`/api/daily-tasks/${id}`, { method: "DELETE" });
@@ -155,6 +181,34 @@ export function countSupply(id, currentQty) {
     body: JSON.stringify({ currentQty }),
   });
 }
+
+/** A delivery into the store. */
+export function receiveSupply(id, qty, note) {
+  return authFetch(`/api/supplies/${id}/receive`, {
+    method: "POST",
+    body: JSON.stringify({ qty, note: note || null }),
+  });
+}
+
+/** Stock thrown away; a reason is required. */
+export function wasteSupply(id, qty, reason) {
+  return authFetch(`/api/supplies/${id}/waste`, {
+    method: "POST",
+    body: JSON.stringify({ qty, reason }),
+  });
+}
+
+export function listMovements(id, signal) {
+  return authFetch(`/api/supplies/${id}/movements`, { signal });
+}
+
+export const MOVEMENT_TEXT = {
+  RECEIVE: "Received",
+  CONSUME: "Used",
+  REVERSAL: "Given back",
+  ADJUST: "Count",
+  WASTE: "Thrown away",
+};
 
 export const CATEGORY_TEXT = {
   FEED: "Feed",

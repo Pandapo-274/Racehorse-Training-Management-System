@@ -115,9 +115,20 @@ public class UserRepository {
 
     public void writeAudit(Integer userId, String action, String targetEntity,
                            Integer targetId, String result, String ip) {
+        writeAudit(userId, action, targetEntity, targetId, result, ip, null);
+    }
+
+    /**
+     * Same as above, plus a short description of what changed (V20), e.g.
+     * "WON, 100000000 -> PLACED, 40000000". Clipped to the column's 500 chars.
+     */
+    public void writeAudit(Integer userId, String action, String targetEntity,
+                           Integer targetId, String result, String ip, String detail) {
+        String d = detail == null || detail.isBlank() ? null
+                : (detail.length() <= 500 ? detail : detail.substring(0, 497) + "...");
         jdbc.sql("""
-                INSERT INTO AUDIT_LOG (user_id, action, target_entity, target_id, result, ip_address)
-                VALUES (:userId, :action, :entity, :targetId, :result, :ip)
+                INSERT INTO AUDIT_LOG (user_id, action, target_entity, target_id, result, ip_address, detail)
+                VALUES (:userId, :action, :entity, :targetId, :result, :ip, :detail)
                 """)
                 .param("userId", userId)
                 .param("action", action)
@@ -125,6 +136,7 @@ public class UserRepository {
                 .param("targetId", targetId)
                 .param("result", result)
                 .param("ip", ip)
+                .param("detail", d)
                 .update();
     }
 }

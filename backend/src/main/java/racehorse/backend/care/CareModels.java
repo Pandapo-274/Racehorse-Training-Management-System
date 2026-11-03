@@ -22,11 +22,17 @@ public final class CareModels {
     private CareModels() {
     }
 
-    /** Một dòng khẩu phần: một loại thức ăn trong một bữa. */
+    /**
+     * Một dòng khẩu phần: một loại thức ăn trong một bữa.
+     * supplyId (V21): the stock item it is taken from; null = a line written
+     * before V21 that could not be linked - it is not taken from the store until
+     * the Head Trainer picks the item again. feedType and unit are copies of the
+     * stock item's name and unit, kept so older screens still read them.
+     */
     public record FeedingItem(
             int feedingId, int horseId, String horseName, String stallNo,
             String mealTime, String feedType, BigDecimal quantity, String unit,
-            Integer approvedBy, String approvedByName, String note) {
+            Integer approvedBy, String approvedByName, String note, Integer supplyId) {
     }
 
     /** Thay toàn bộ khẩu phần của một con ngựa (Head Trainer hoặc Vet duyệt). */
@@ -36,28 +42,48 @@ public final class CareModels {
             @Valid List<@NotNull RationItem> items) {
     }
 
+    /**
+     * One line of a new ration. supplyId is required (checked in the service so
+     * the error names the line); feedType and unit are taken from the stock item
+     * and whatever the client sends for them is ignored.
+     */
     public record RationItem(
             @NotBlank(message = "Meal is required")
             @Pattern(regexp = "MORNING|NOON|EVENING", message = "Meal must be MORNING, NOON or EVENING")
             String mealTime,
-            @NotBlank(message = "Feed is required")
+            Integer supplyId,
             @Size(max = 50, message = "Feed name must be at most 50 characters")
             String feedType,
             @NotNull(message = "Quantity is required")
             @DecimalMin(value = "0.01", message = "Quantity must be greater than 0")
             BigDecimal quantity,
-            @NotBlank(message = "Unit is required")
             @Size(max = 20, message = "Unit must be at most 20 characters")
             String unit,
             @Size(max = 255, message = "Note must be at most 255 characters")
             String note) {
+
+        /** The same line with name and unit copied from the stock item. */
+        public RationItem withStock(int id, String name, String stockUnit) {
+            String n = name.length() <= 50 ? name : name.substring(0, 50); // FEEDING_SCHEDULE.feed_type is 50
+            return new RationItem(mealTime, id, n, quantity, stockUnit, note);
+        }
     }
 
-    /** Một việc chăm sóc trong ngày. */
+    /**
+     * Một việc chăm sóc trong ngày.
+     * completedBy (V25): who ticked it - a Head Trainer may tick for a groom.
+     * state: OPEN, DONE, DONE_LATE (ticked after its day), MISSED (its day has
+     * passed and it is still open). Derived on read, like RaceRepository.stateOf.
+     */
     public record Task(
             int taskId, int horseId, String horseName, String stallNo,
             String taskType, int assignedTo, String assignedToName,
-            LocalDate taskDate, boolean completed, Instant completedAt, String note) {
+            LocalDate taskDate, boolean completed, Instant completedAt, String note,
+            Integer completedBy, String completedByName, String state) {
+    }
+
+    /** Hand an open task to another groom (#15). */
+    public record ReassignRequest(@NotNull(message = "Groom is required") Integer assignedTo) {
     }
 
     /** Giao nhiều loại việc cho một Groom, cho một con ngựa, trong một ngày. */
@@ -71,7 +97,10 @@ public final class CareModels {
             @Size(max = 255, message = "Note must be at most 255 characters") String note) {
     }
 
-    /** created: việc vừa tạo; skipped: loại việc đã có sẵn trong ngày đó nên bỏ qua. */
-    public record AssignResult(List<Task> created, List<String> skipped) {
+    /**
+     * created: việc vừa tạo; skipped: loại việc đã có sẵn trong ngày đó nên bỏ qua.
+     * warnings: does not block - e.g. the groom already has many tasks that day.
+     */
+    public record AssignResult(List<Task> created, List<String> skipped, List<String> warnings) {
     }
 }

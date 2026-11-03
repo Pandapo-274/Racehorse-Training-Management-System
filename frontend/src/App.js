@@ -94,7 +94,7 @@ export default function App() {
         <Route path="/manager/permissions" element={<RoleRoute roles={["CLUB_MANAGER"]}><PermissionsPage /></RoleRoute>} />
         {/* Nhật ký thao tác hệ thống: chỉ đọc. */}
         <Route path="/manager/audit-log" element={<RoleRoute roles={["CLUB_MANAGER"]}><AuditLogPage /></RoleRoute>} />
-        {/* Flow 4 + 5: vật tư theo kho, kết quả giải đua và doanh thu tiền thưởng. */}
+        {/* Flow 4 + 5: vật tư theo kho, kết quả giải đua và tiền thưởng của chủ ngựa. */}
         <Route path="/manager/supplies" element={<RoleRoute roles={["CLUB_MANAGER"]}><SuppliesPage /></RoleRoute>} />
         <Route path="/manager/expenses" element={<RoleRoute roles={["CLUB_MANAGER"]}><ExpensesPage /></RoleRoute>} />
         <Route path="/manager/races" element={<RoleRoute roles={["CLUB_MANAGER"]}><RacesPage /></RoleRoute>} />
@@ -133,6 +133,8 @@ export default function App() {
         <Route path="/veterinarian/recovery/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
         {/* Flow 4: bác sĩ duyệt khẩu phần. */}
         <Route path="/veterinarian/feeding" element={<RoleRoute roles={["VETERINARIAN"]}><FeedingPage /></RoleRoute>} />
+        {/* Vet counts medicine (Groom may not, #11) and records expired stock thrown away. */}
+        <Route path="/veterinarian/supplies" element={<RoleRoute roles={["VETERINARIAN"]}><SuppliesPage /></RoleRoute>} />
 
         {/* UC17 - lịch tiêm phòng / tẩy giun / móng, và đơn thuốc đang dùng toàn đàn. */}
         <Route path="/veterinarian/preventive-care" element={<RoleRoute roles={["VETERINARIAN"]}><VetPreventiveCarePage /></RoleRoute>} />

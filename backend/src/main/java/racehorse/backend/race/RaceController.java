@@ -31,6 +31,9 @@ import racehorse.backend.auth.RequireRole;
  *  POST /api/races                  đăng ký (Head Trainer)
  *  PUT  /api/races/{id}/result      nhập kết quả (Head Trainer, Club Manager)
  *  PUT  /api/races/{id}/scratch     rút khỏi giải trước ngày đua (Head Trainer)
+ *  GET  /api/races/events?upcoming= races (V22)
+ *  POST /api/races/events           create a race (Head Trainer, Club Manager)
+ *  PUT  /api/races/events/{id}/cancel  cancel a race, scratching its entries (Club Manager)
  */
 @RestController
 @RequestMapping("/api/races")
@@ -58,8 +61,30 @@ public class RaceController {
 
     @GetMapping("/candidates")
     @RequireRole({"HEAD_TRAINER"})
-    public List<RaceModels.Candidate> candidates() {
-        return service.candidates();
+    public List<RaceModels.Candidate> candidates(@RequestParam(required = false) Integer raceId) {
+        return service.candidates(raceId);
+    }
+
+    @GetMapping("/events")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER", "HORSE_OWNER"})
+    public List<RaceModels.RaceEvent> events(@RequestParam(defaultValue = "false") boolean upcoming) {
+        return service.races(upcoming);
+    }
+
+    @PostMapping("/events")
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    public ResponseEntity<RaceModels.RaceEvent> createEvent(@Valid @RequestBody RaceModels.RaceEventRequest req,
+                                                            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                                            HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createRace(req, user, http.getRemoteAddr()));
+    }
+
+    @PutMapping("/events/{id}/cancel")
+    @RequireRole({"CLUB_MANAGER"})
+    public RaceModels.RaceEvent cancelEvent(@PathVariable int id, @Valid @RequestBody RaceModels.CancelRaceRequest req,
+                                            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                            HttpServletRequest http) {
+        return service.cancelRace(id, req.reason(), user, http.getRemoteAddr());
     }
 
     @GetMapping("/summary")

@@ -111,7 +111,7 @@ export default function OwnerRacesPage() {
                         <td>{e.horseName}</td>
                         <td><StatusChip tone={chip.tone} label={chip.label} /></td>
                         <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
-                        <td className="hz-muted">{e.note || "—"}</td>
+                        <td className="hz-muted">{e.scratchReason ? `Scratched: ${e.scratchReason}` : e.note || "—"}</td>
                       </tr>
                     );
                   })}

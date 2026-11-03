@@ -37,3 +37,4 @@ Thumbs.db
 *.mdf
 *.ldf
 node_modules
+backend/.env.example

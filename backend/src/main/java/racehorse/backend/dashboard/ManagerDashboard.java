@@ -9,7 +9,7 @@ import java.util.List;
  * Dữ liệu trang "Club overview" của Club Manager (GET /api/manager/dashboard).
  *
  * Đề bài: báo cáo tổng quan về hiệu suất huấn luyện, chi phí vận hành chuồng
- * trại và doanh thu giải đấu. Trước đây trang này chỉ có số liệu viết cứng.
+ * trại và tiền thưởng giải đua của chủ ngựa. Trước đây trang này chỉ có số liệu viết cứng.
  */
 public final class ManagerDashboard {
 
@@ -18,8 +18,8 @@ public final class ManagerDashboard {
 
     /**
      * horses: ngựa của club còn ở học viện (ACADEMY, ACTIVE).
-     * quarterCost: tổng EXPENSE_LOG trong quý hiện tại. seasonPrize: tổng tiền
-     * thưởng các cuộc đua trong năm hiện tại.
+     * quarterCost: tổng EXPENSE_LOG trong quý hiện tại. seasonPrize: tổng tiền thưởng của CHỦ NGỰA (không phải doanh thu
+     * câu lạc bộ) trong các cuộc đua năm hiện tại.
      */
     public record Summary(int horses, int activePlans, int lockedHorses,
                           BigDecimal quarterCost, String quarterLabel,

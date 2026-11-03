@@ -39,6 +39,28 @@ public class ExpenseService {
     }
 
     public ExpenseList list(Integer horseId, String rawCategory, LocalDate from, LocalDate to, Integer limit) {
+        return list(horseId, rawCategory, from, to, limit, null);
+    }
+
+    /**
+     * #9: the owner sees each cost line of their own horses, not only the
+     * totals on the dashboard. A horse of another owner is 403, not an empty
+     * list, so a wrong id is not mistaken for "no costs".
+     */
+    public ExpenseList listForOwner(Integer horseId, String rawCategory, LocalDate from, LocalDate to,
+                                    Integer limit, AuthenticatedUser owner) {
+        if (horseId != null) {
+            HorseResponse h = horses.findById(horseId)
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + horseId + " not found"));
+            if (h.ownerId() != owner.userId()) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This horse is not yours");
+            }
+        }
+        return list(horseId, rawCategory, from, to, limit, owner.userId());
+    }
+
+    private ExpenseList list(Integer horseId, String rawCategory, LocalDate from, LocalDate to, Integer limit,
+                             Integer ownerId) {
         String category = (rawCategory == null || rawCategory.isBlank())
                 ? null : rawCategory.trim().toUpperCase(Locale.ROOT);
         Map<String, String> errors = new LinkedHashMap<>();
@@ -53,10 +75,10 @@ public class ExpenseService {
         }
 
         int n = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
-        List<Expense> items = expenses.find(horseId, category, from, to, n);
+        List<Expense> items = expenses.find(horseId, category, from, to, n, ownerId);
 
         // Đủ bốn hạng mục, theo thứ tự cố định, kể cả hạng mục bằng 0.
-        Map<String, BigDecimal> found = expenses.totals(horseId, category, from, to);
+        Map<String, BigDecimal> found = expenses.totals(horseId, category, from, to, ownerId);
         Map<String, BigDecimal> totals = new LinkedHashMap<>();
         BigDecimal total = BigDecimal.ZERO;
         for (String c : ExpenseModels.CATEGORIES) {
@@ -65,7 +87,7 @@ public class ExpenseService {
             total = total.add(amount);
         }
 
-        int count = expenses.count(horseId, category, from, to);
+        int count = expenses.count(horseId, category, from, to, ownerId);
         return new ExpenseList(items, totals, total, count, count > items.size());
     }
 
@@ -87,6 +109,13 @@ public class ExpenseService {
             errors.put("expenseDate", horse.horseName() + " left the club on "
                     + horse.withdrawnAt().toLocalDate() + ", so it has no costs after that day");
         }
+        /* The schema has no "arrived at the club" date (HORSE.created_at is when
+           the record was typed in, and backdated costs are legitimate), so the
+           earliest hard limit is the day the horse was born. */
+        if (horse.dateOfBirth() != null && raw.expenseDate().isBefore(horse.dateOfBirth())) {
+            errors.put("expenseDate", horse.horseName() + " was born on " + horse.dateOfBirth()
+                    + ", so it has no costs before that day");
+        }
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "The cost could not be saved", errors);
         }
@@ -96,10 +125,11 @@ public class ExpenseService {
                 raw.expenseDate(), note);
 
         int id = expenses.insert(clean, me.userId());
-        users.writeAudit(me.userId(), "EXPENSE_CREATE", "EXPENSE_LOG", id, "SUCCESS", ip);
-        return expenses.findById(id)
+        Expense saved = expenses.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "The cost was saved but could not be read back"));
+        users.writeAudit(me.userId(), "EXPENSE_CREATE", "EXPENSE_LOG", id, "SUCCESS", ip, describe(saved));
+        return saved;
     }
 
     /**
@@ -125,12 +155,21 @@ public class ExpenseService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Reason is too long",
                     Map.of("reason", "At most 255 characters"));
         }
-        if (expenses.findById(expenseId).isEmpty()) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Cost #" + expenseId + " does not exist");
-        }
+        Expense target = expenses.findById(expenseId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Cost #" + expenseId + " does not exist"));
         if (expenses.cancel(expenseId, me.userId(), why) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Cost #" + expenseId + " has already been voided");
         }
-        users.writeAudit(me.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip);
+        /* The audit line alone now says what was voided (review #9): the
+           Audit log page shows it without opening the database. */
+        users.writeAudit(me.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
+                describe(target) + ". Reason: " + why);
+    }
+
+    /** "TM-0481 Symboli Rudolf, FEEDING, 2500000 on 2026-11-02" */
+    private static String describe(Expense e) {
+        return (e.registrationCode() == null ? "" : e.registrationCode() + " ") + e.horseName()
+                + ", " + e.category() + ", " + e.amount().stripTrailingZeros().toPlainString()
+                + " on " + e.expenseDate();
     }
 }

@@ -78,7 +78,10 @@ function LogTable({ items }) {
                 {toActionText(r.action)}
                 <code className="al-code">{r.action}</code>
               </td>
-              <td>{toTargetText(r.targetEntity, r.targetId)}</td>
+              <td>
+                {toTargetText(r.targetEntity, r.targetId)}
+                {r.detail && <small className="al-detail">{r.detail}</small>}
+              </td>
               <td>
                 <StatusChip
                   tone={r.result === "DENIED" ? "critical" : "good"}

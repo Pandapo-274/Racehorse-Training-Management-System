@@ -7,22 +7,36 @@ import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import { Card, StateBlock } from "../horse/HorseShell";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
-import { MEALS, MEAL_TEXT, byHorse, formatQty, listFeeding, saveRation } from "./careApi";
+import { MEALS, MEAL_TEXT, byHorse, formatQty, listFeeding, listSupplies, saveRation } from "./careApi";
 import "./care.css";
 
-const EMPTY_ITEM = { mealTime: "MORNING", feedType: "", quantity: "", unit: "kg", note: "" };
+// Every line is taken from a FEED item in the store (V21); its unit is the stock unit.
+const EMPTY_ITEM = { mealTime: "MORNING", supplyId: null, feedType: "", quantity: "", unit: "", note: "" };
 
 function mealText(items, meal) {
   const rows = (items || []).filter((i) => i.mealTime === meal);
   if (!rows.length) return <span className="hz-muted">—</span>;
-  return rows.map((r) => `${r.feedType} ${formatQty(r.quantity)} ${r.unit}`).join(", ");
+  return rows.map((r, k) => (
+    <span key={k}>
+      {k > 0 && ", "}
+      {`${r.feedType} ${formatQty(r.quantity)} ${r.unit}`}
+      {r.supplyId == null && <small className="care-unlinked" title="Not taken from the store until a Head Trainer or Vet picks the stock item"> · link to stock</small>}
+    </span>
+  ));
 }
 
-function RationEditor({ horse, items, onSaved, onCancel }) {
+function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
   const navigate = useNavigate();
   const [rows, setRows] = useState(() =>
     items?.length
-      ? items.map((i) => ({ mealTime: i.mealTime, feedType: i.feedType, quantity: String(formatQty(i.quantity)), unit: i.unit, note: i.note || "" }))
+      ? items.map((i) => ({
+          mealTime: i.mealTime,
+          supplyId: i.supplyId ?? null,
+          feedType: i.feedType,
+          quantity: String(formatQty(i.quantity)),
+          unit: i.supplyId ? i.unit : "",
+          note: i.note || "",
+        }))
       : [{ ...EMPTY_ITEM }]
   );
   const [errors, setErrors] = useState({});
@@ -32,15 +46,21 @@ function RationEditor({ horse, items, onSaved, onCancel }) {
   const set = (idx, key, value) =>
     setRows((old) => old.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
 
+  const pickFeed = (idx, value) => {
+    const s = feeds.find((x) => String(x.supplyId) === value);
+    setRows((old) => old.map((r, i) => (i === idx
+      ? { ...r, supplyId: s ? s.supplyId : null, feedType: s ? s.supplyName : r.feedType, unit: s ? s.unit : "" }
+      : r)));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     setErrors({});
     const local = {};
     rows.forEach((r, i) => {
-      if (!r.feedType.trim()) local[`items[${i}].feedType`] = "Feed is required";
+      if (!r.supplyId) local[`items[${i}].supplyId`] = "Choose a feed from the stock list";
       if (!(Number(r.quantity) > 0)) local[`items[${i}].quantity`] = "Must be more than 0";
-      if (!r.unit.trim()) local[`items[${i}].unit`] = "Unit is required";
     });
     if (Object.keys(local).length) {
       setErrors(local);
@@ -50,9 +70,8 @@ function RationEditor({ horse, items, onSaved, onCancel }) {
     try {
       const saved = await saveRation(horse.horseId, rows.map((r) => ({
         mealTime: r.mealTime,
-        feedType: r.feedType.trim(),
+        supplyId: r.supplyId,
         quantity: Number(r.quantity),
-        unit: r.unit.trim(),
         note: r.note.trim() || null,
       })));
       onSaved(horse.horseId, saved);
@@ -66,7 +85,7 @@ function RationEditor({ horse, items, onSaved, onCancel }) {
   };
 
   return (
-    <Card title={`Ration for ${horse.horseName}`} hint={`Stall ${horse.stallNo}. Saving replaces the whole ration and records you as the approver.`}>
+    <Card title={`Ration for ${horse.horseName}`} hint={`Stall ${horse.stallNo}. Saving replaces the whole ration and records you as the approver. Each feed is taken from the store when the day's feeding task is ticked, in the store's unit.`}>
       <form onSubmit={submit} noValidate>
         {rows.map((r, i) => (
           <div className="care-ration-row" key={i}>
@@ -77,21 +96,23 @@ function RationEditor({ horse, items, onSaved, onCancel }) {
               </select>
             </div>
             <div className="hz-field">
-              <label htmlFor={`feed-${i}`}>Feed</label>
-              <input id={`feed-${i}`} value={r.feedType} maxLength={50} placeholder="Oats, hay, supplement…"
-                aria-invalid={!!errors[`items[${i}].feedType`]} onChange={(e) => set(i, "feedType", e.target.value)} />
-              {errors[`items[${i}].feedType`] && <p className="hz-field__error">{errors[`items[${i}].feedType`]}</p>}
+              <label htmlFor={`feed-${i}`}>Feed (from stock)</label>
+              <select id={`feed-${i}`} value={r.supplyId ?? ""}
+                aria-invalid={!!errors[`items[${i}].supplyId`]} onChange={(e) => pickFeed(i, e.target.value)}>
+                <option value="">{r.supplyId ? "Choose feed…" : r.feedType ? `${r.feedType} — link to stock…` : "Choose feed…"}</option>
+                {feeds.map((s) => (
+                  <option key={s.supplyId} value={s.supplyId}>
+                    {s.supplyName}{s.area ? ` · ${s.area}` : ""} ({s.unit})
+                  </option>
+                ))}
+              </select>
+              {errors[`items[${i}].supplyId`] && <p className="hz-field__error">{errors[`items[${i}].supplyId`]}</p>}
             </div>
             <div className="hz-field">
-              <label htmlFor={`qty-${i}`}>Quantity</label>
+              <label htmlFor={`qty-${i}`}>Quantity{r.unit ? ` (${r.unit})` : ""}</label>
               <input id={`qty-${i}`} type="number" min="0.01" step="0.01" value={r.quantity}
                 aria-invalid={!!errors[`items[${i}].quantity`]} onChange={(e) => set(i, "quantity", e.target.value)} />
               {errors[`items[${i}].quantity`] && <p className="hz-field__error">{errors[`items[${i}].quantity`]}</p>}
-            </div>
-            <div className="hz-field">
-              <label htmlFor={`unit-${i}`}>Unit</label>
-              <input id={`unit-${i}`} value={r.unit} maxLength={20}
-                aria-invalid={!!errors[`items[${i}].unit`]} onChange={(e) => set(i, "unit", e.target.value)} />
             </div>
             <div className="hz-field">
               <label htmlFor={`note-${i}`}>Note</label>
@@ -127,6 +148,18 @@ export default function FeedingBoard({ editable = false }) {
   const [editing, setEditing] = useState(null);
   const [saved, setSaved] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [feeds, setFeeds] = useState([]);
+
+  useEffect(() => {
+    if (!editable) return undefined;
+    const ctrl = new AbortController();
+    listSupplies({ category: "FEED" }, ctrl.signal)
+      .then(setFeeds)
+      .catch((err) => {
+        if (err.name !== "AbortError") setFeeds([]);
+      });
+    return () => ctrl.abort();
+  }, [editable, reloadKey]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -175,6 +208,7 @@ export default function FeedingBoard({ editable = false }) {
           key={editing.horseId}
           horse={editing}
           items={rationBy.get(editing.horseId)}
+          feeds={feeds}
           onSaved={onSaved}
           onCancel={() => setEditing(null)}
         />

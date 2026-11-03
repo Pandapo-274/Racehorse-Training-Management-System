@@ -17,8 +17,7 @@ import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.incident.SessionStopper;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
-import racehorse.backend.race.RaceModels;
-import racehorse.backend.race.RaceRepository;
+import racehorse.backend.race.RaceRiskNotifier;
 
 /**
  * UC16 - Issue Emergency Training Block (Training Lock Management).
@@ -50,19 +49,19 @@ public class TrainingLockService {
     private final UserRepository users;
     private final NotificationService notifications;
     private final SessionStopper sessionStopper;
-    private final RaceRepository races;
+    private final RaceRiskNotifier raceRisk;
 
     public TrainingLockService(TrainingLockRepository locks, InjuryRepository injuries,
                                HorseRepository horses, UserRepository users,
                                NotificationService notifications, SessionStopper sessionStopper,
-                               RaceRepository races) {
+                               RaceRiskNotifier raceRisk) {
         this.locks = locks;
         this.injuries = injuries;
         this.horses = horses;
         this.users = users;
         this.notifications = notifications;
         this.sessionStopper = sessionStopper;
-        this.races = races;
+        this.raceRisk = raceRisk;
     }
 
     @Transactional
@@ -109,34 +108,11 @@ public class TrainingLockService {
                 horse.horseName() + " is locked (" + issued.lockLevel() + "): " + issued.reason(),
                 Notice.HORSE, horse.horseId()));
 
-        warnAboutUpcomingRaces(horse.horseId(), horse.horseName(), horse.ownerId(), issuer);
+        /* A lock blocks sessions; without this, an UPCOMING race entry stayed
+           untouched and nobody was told (review #2). */
+        raceRisk.warn(horse.horseId(), horse.horseName(), horse.ownerId(), issuer,
+                "has just been locked from training (" + issued.lockLevel() + ")");
         return issued;
-    }
-
-    /**
-     * A lock blocks training sessions, but nothing used to connect it to race
-     * entries: a horse locked on Monday stayed UPCOMING for Saturday's race and
-     * nobody was told. Sessions were blocked and races were not - Flow 3 and
-     * Flow 5 contradicted each other.
-     *
-     * This does NOT scratch the entry. Whether a horse under a HEAVY_WORK_ONLY
-     * lock can still race, or whether a FULL lock will be lifted in time, is a
-     * judgement for the head trainer and the vet. The system's job is to make
-     * sure they know, with the race name and date in front of them.
-     */
-    private void warnAboutUpcomingRaces(int horseId, String horseName, int ownerId,
-                                        AuthenticatedUser issuer) {
-        List<RaceModels.Entry> upcoming = races.find(null, horseId, null).stream()
-                .filter(e -> "UPCOMING".equals(e.state()))
-                .toList();
-        for (RaceModels.Entry e : upcoming) {
-            notifications.notifyHorseWatchers(ownerId, issuer, new Notice(
-                    "RACE_AT_RISK",
-                    "Race entry at risk",
-                    horseName + " is entered in " + e.raceName() + " on " + e.raceDate()
-                            + " but has just been locked from training. Decide whether to scratch it.",
-                    Notice.HORSE, horseId));
-        }
     }
 
     /**

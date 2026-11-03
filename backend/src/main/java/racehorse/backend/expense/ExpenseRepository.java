@@ -52,10 +52,15 @@ public class ExpenseRepository {
     private record Filter(String where, Map<String, Object> params) {
     }
 
-    private static Filter filter(Integer horseId, String category, LocalDate from, LocalDate to) {
+    private static Filter filter(Integer horseId, String category, LocalDate from, LocalDate to, Integer ownerId) {
         // Voided entries (V19) are kept for the record but never listed or summed.
         StringBuilder where = new StringBuilder(" WHERE e.cancelled_at IS NULL");
         Map<String, Object> params = new HashMap<>();
+        if (ownerId != null) {
+            // Owner view (#9): only their own club horses, as on the owner dashboard.
+            where.append(" AND h.owner_id = :ownerId AND h.record_type = 'ACADEMY'");
+            params.put("ownerId", ownerId);
+        }
         if (horseId != null) {
             where.append(" AND e.horse_id = :horseId");
             params.put("horseId", horseId);
@@ -76,8 +81,9 @@ public class ExpenseRepository {
     }
 
     /** Mới nhất trước, tối đa limit dòng. */
-    public List<Expense> find(Integer horseId, String category, LocalDate from, LocalDate to, int limit) {
-        Filter f = filter(horseId, category, from, to);
+    public List<Expense> find(Integer horseId, String category, LocalDate from, LocalDate to, int limit,
+                              Integer ownerId) {
+        Filter f = filter(horseId, category, from, to, ownerId);
         return jdbc.sql("SELECT TOP (:limit)" + COLUMNS + FROM + f.where()
                         + " ORDER BY e.expense_date DESC, e.expense_id DESC")
                 .params(f.params())
@@ -87,8 +93,9 @@ public class ExpenseRepository {
     }
 
     /** Tổng tiền theo hạng mục trên mọi dòng khớp bộ lọc. */
-    public Map<String, BigDecimal> totals(Integer horseId, String category, LocalDate from, LocalDate to) {
-        Filter f = filter(horseId, category, from, to);
+    public Map<String, BigDecimal> totals(Integer horseId, String category, LocalDate from, LocalDate to,
+                                          Integer ownerId) {
+        Filter f = filter(horseId, category, from, to, ownerId);
         Map<String, BigDecimal> out = new LinkedHashMap<>();
         jdbc.sql("SELECT e.category, SUM(e.amount) AS amount " + FROM + f.where() + " GROUP BY e.category")
                 .params(f.params())
@@ -98,8 +105,8 @@ public class ExpenseRepository {
         return out;
     }
 
-    public int count(Integer horseId, String category, LocalDate from, LocalDate to) {
-        Filter f = filter(horseId, category, from, to);
+    public int count(Integer horseId, String category, LocalDate from, LocalDate to, Integer ownerId) {
+        Filter f = filter(horseId, category, from, to, ownerId);
         return jdbc.sql("SELECT COUNT(*) " + FROM + f.where())
                 .params(f.params())
                 .query(Integer.class)

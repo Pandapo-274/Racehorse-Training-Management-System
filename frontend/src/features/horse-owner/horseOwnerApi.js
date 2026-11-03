@@ -41,8 +41,18 @@ const COST_LABELS = {
   MEDICAL: "Veterinary",
   TRAINING: "Training",
   OTHER: "Other",
-  PRIZE_MONEY: "Race prize money",
+  PRIZE_MONEY: "Prize money paid to you",
 };
+
+/** #9: each cost line of the owner's own horses (voided lines excluded). */
+export function listOwnerExpenses({ horseId, from, to, limit = 100 } = {}, signal) {
+  const p = new URLSearchParams();
+  if (horseId) p.set("horseId", horseId);
+  if (from) p.set("from", from);
+  if (to) p.set("to", to);
+  p.set("limit", limit);
+  return authFetch(`/api/owner/expenses?${p.toString()}`, { signal });
+}
 
 export function toCostLabel(category) {
   return COST_LABELS[category] || category;
