@@ -3,6 +3,7 @@
 //
 // The backend sends times as UTC instants ("...Z"), so new Date() reads them in
 // the viewer's own time zone without extra work.
+import { parseServerTime } from "../horse/horseApi";
 import { authFetch } from "../auth/authService";
 
 /**
@@ -196,7 +197,7 @@ export function toTargetText(entity, id) {
 
 /** "27 Oct 2026, 10:48:29" in the viewer's time zone. */
 export function formatFullTime(iso) {
-  const d = iso ? new Date(iso) : null;
+  const d = parseServerTime(iso);
   if (!d || Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

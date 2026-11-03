@@ -1,5 +1,5 @@
 0p# Racehorse-Training-Management-System
-### Last Commited: `Nov 3rd, 2026` at `11:18` by `Pandapo274`
+### Last Commited: `Nov 3rd, 2026` at `11:21` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Nov 3rd, 2026`
+- `[11:21]` `tqt195` - Frontend for the `Flow 1-3` fixes: system times (registered, lock issued, audit log, alerts...) no longer show 7 hours early (`parseServerTime` / `formatDateTime` in `horseApi.js`); `Club Manager` edits registration code and stall in the new `Club records` card on the horse page; lock level renamed `No heavy work` (light work up to 1,200 m); `Recovery` page explains when notes are required (backend in `f9ff9c9` by `Pandapo274`)
 - `[11:18]` `Pandapo274` - Fix `Flow 1-3` business rules (scheduling, locks, recovery,pedigree
 - `[09:35]` `tusandthatsall` - Fix `Flow 4` and `Flow 5`
 > #### `Oct 30, 2026`

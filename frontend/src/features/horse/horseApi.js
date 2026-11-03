@@ -41,6 +41,14 @@ export function getVitals(id, signal) {
 /* Không còn createHorse: ngựa chỉ vào hệ thống qua yêu cầu đăng ký (horseRequestApi),
    Club Manager duyệt rồi backend mới tạo hồ sơ. */
 
+/** Chỉ CLUB_MANAGER: sửa mã đăng ký và số chuồng (PUT /api/horses/{id}/identity). */
+export function updateHorseIdentity(id, { registrationCode, stallNo }) {
+  return authFetch(`${API}/${id}/identity`, {
+    method: "PUT",
+    body: JSON.stringify({ registrationCode: registrationCode.trim(), stallNo: stallNo?.trim() || null }),
+  });
+}
+
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
 }
@@ -330,9 +338,26 @@ export function formatDate(iso) {
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function formatDateTime(iso) {
+/**
+ * Giờ hệ thống (created_at, issued_at, reviewed_at...) được backend ghi bằng
+ * SYSUTCDATETIME() và trả về dạng "2026-10-30T03:04:00", không kèm múi giờ.
+ * new Date() đọc chuỗi đó như giờ máy, nên ở Việt Nam bị sớm 7 tiếng. Hàm này
+ * thêm "Z" khi chuỗi chưa có múi giờ; chuỗi đã có (Instant) thì giữ nguyên.
+ */
+export function parseServerTime(iso) {
+  if (!iso) return null;
+  const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
+  const d = new Date(hasZone ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Mặc định coi giờ là giờ hệ thống (UTC). Giờ do người dùng nhập - giờ buổi
+ * tập (sessionDate), giờ khám (examDate) - là giờ địa phương: truyền { local: true }.
+ */
+export function formatDateTime(iso, { local = false } = {}) {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = local ? new Date(iso) : parseServerTime(iso) || new Date(NaN);
   return Number.isNaN(d.getTime())
     ? "—"
     : d.toLocaleString("en-GB", {

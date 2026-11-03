@@ -184,7 +184,7 @@ export default function VitalsPanel({ vitals }) {
       {/* 4. Buổi tập gần nhất */}
       <Card
         title="Latest training session"
-        hint={latestSession ? formatDateTime(latestSession.sessionDate) : "No session recorded"}
+        hint={latestSession ? formatDateTime(latestSession.sessionDate, { local: true }) : "No session recorded"}
         actions={
           latestSession?.evaluation ? (
             <StatusChip

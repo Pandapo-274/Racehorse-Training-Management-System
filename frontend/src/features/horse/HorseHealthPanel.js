@@ -87,7 +87,7 @@ export default function HorseHealthPanel({ horse, user }) {
             <div>
               <dt>Examined</dt>
               <dd>
-                {formatDateTime(latest.examDate)} · {latest.vetName}
+                {formatDateTime(latest.examDate, { local: true })} · {latest.vetName}
               </dd>
             </div>
             {latest.expectedRestDays ? (

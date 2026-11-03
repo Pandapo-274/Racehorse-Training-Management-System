@@ -359,10 +359,11 @@ function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
         </label>
 
         <label className="vx-field vx-field--full">
-          <span>Notes (optional)</span>
+          <span>Notes (required if clearing before the expected rest ends)</span>
           <textarea
             className="vx-input vx-textarea"
             rows={2}
+            placeholder="Why the horse can return earlier than planned"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />

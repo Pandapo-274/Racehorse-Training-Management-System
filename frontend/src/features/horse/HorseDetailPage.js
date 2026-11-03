@@ -21,7 +21,7 @@ import HorseWithdrawalPanel from "./HorseWithdrawalPanel";
 
 import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
-  canViewPedigree, canViewVitals, isWithdrawn, toActivity,
+  canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
 } from "./horseApi";
 
@@ -39,6 +39,66 @@ function Row({ label, children }) {
       <span>{label}</span>
       <div>{children}</div>
     </div>
+  );
+}
+
+/** Club Manager sửa mã đăng ký và số chuồng (định danh do câu lạc bộ cấp). */
+function IdentityForm({ horse, onSaved }) {
+  const navigate = useNavigate();
+  const [code, setCode] = useState(horse.registrationCode || "");
+  const [stall, setStall] = useState(horse.stallNo || "");
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  // Hồ sơ pedigree và ngựa đã rút không có chuồng.
+  const stallAllowed = !isPedigreeOnly(horse) && !isWithdrawn(horse);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setMessage("");
+    try {
+      const updated = await updateHorseIdentity(horse.horseId, {
+        registrationCode: code,
+        stallNo: stallAllowed ? stall : null,
+      });
+      onSaved(updated);
+      setMessage("Saved.");
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) setErrors(err.fieldErrors);
+      else setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Club records" hint="Only the club manager can change these">
+      <form onSubmit={save} noValidate>
+        <div className="hz-form-grid">
+          <div className="hz-field">
+            <label htmlFor="identity-code">Registration code</label>
+            <input id="identity-code" className="hz-mono" maxLength={30} value={code}
+                   onChange={(e) => setCode(e.target.value)} />
+            {errors.registrationCode && <p className="hz-field__error">{errors.registrationCode}</p>}
+          </div>
+          {stallAllowed && (
+            <div className="hz-field">
+              <label htmlFor="identity-stall">Stall</label>
+              <input id="identity-stall" className="hz-mono" maxLength={20} value={stall}
+                     onChange={(e) => setStall(e.target.value)} />
+              {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
+            </div>
+          )}
+        </div>
+        {message && <p className="hz-muted hz-note" role="status">{message}</p>}
+        <div className="hz-form-footer">
+          <button type="submit" className="hz-btn" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -303,6 +363,8 @@ export default function HorseDetailPage() {
               {formatDateTime(horse.updatedAt)}
             </Row>
           </Card>
+
+          {user?.role === "CLUB_MANAGER" && <IdentityForm horse={horse} onSaved={setHorse} />}
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
 
