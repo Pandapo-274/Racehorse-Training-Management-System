@@ -70,7 +70,7 @@ function UpcomingCard({ sessions }) {
         <ul className="ot-upcoming">
           {sessions.slice(0, 6).map((s) => (
             <li key={s.sessionId}>
-              <strong>{formatDateTime(s.sessionDate)}</strong>
+              <strong>{formatDateTime(s.sessionDate, { local: true })}</strong>
               <span>{s.phaseName} · {formatMetres(s.plannedDistance)}{s.trialRun ? " · Trial run" : ""}</span>
             </li>
           ))}
@@ -87,7 +87,7 @@ function LogEntry({ s }) {
     <li className="ot-entry">
       <div className="ot-entry__head">
         <div>
-          <strong>{formatDateTime(s.sessionDate)}</strong>
+          <strong>{formatDateTime(s.sessionDate, { local: true })}</strong>
           <span className="ot-entry__phase">{s.phaseName}</span>
         </div>
         <div className="ot-entry__chips">

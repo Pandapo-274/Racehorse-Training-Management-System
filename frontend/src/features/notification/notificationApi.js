@@ -6,7 +6,7 @@
 // Việc đổi ra đường dẫn nằm ở notificationTarget() bên dưới.
 
 import { authFetch } from "../auth/authService";
-import { getHorseBasePath } from "../horse/horseApi";
+import { getHorseBasePath, parseServerTime } from "../horse/horseApi";
 
 const API = "/api/notifications";
 
@@ -81,10 +81,7 @@ export function notificationTarget(n, user) {
  * Nam mọi thông báo sẽ trông như cũ hơn 7 tiếng. Thêm "Z" để đọc đúng là UTC.
  */
 function parseUtc(iso) {
-  if (!iso) return null;
-  const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
-  const d = new Date(hasZone ? iso : `${iso}Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseServerTime(iso);
 }
 
 /** "Just now", "5 min ago", "3 h ago", "2 d ago", rồi tới ngày cụ thể. */

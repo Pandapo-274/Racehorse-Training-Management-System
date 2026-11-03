@@ -173,7 +173,9 @@ export function statusLabel(status) {
 
 export const LOCK_LEVELS = [
   { value: "FULL", label: "Full lock", hint: "No training at all" },
-  { value: "HEAVY_WORK_ONLY", label: "Heavy work only", hint: "Light work still allowed" },
+  /* Khớp app.lock.light-work-max-distance (mặc định 1200 m) ở backend:
+     buổi tập có cự ly dự kiến tới mức đó vẫn được xếp và bắt đầu. */
+  { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
 ];
 
 export function lockLevelLabel(level) {

@@ -1,3 +1,4 @@
+import { parseServerTime } from "../horse/horseApi";
 import { useCallback, useEffect, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
@@ -67,7 +68,7 @@ function LiveSessionSidebar({ onSignOut }) {
 
 function formatTime(value) {
   if (!value) return "—";
-  const date = new Date(value);
+  const date = parseServerTime(value) || new Date(NaN); // triggeredAt là giờ UTC
   return Number.isNaN(date.getTime())
     ? String(value)
     : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
