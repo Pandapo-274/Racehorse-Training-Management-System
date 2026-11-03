@@ -13,5 +13,6 @@ import java.util.List;
 public record RecoveryConfirmationResponse(
         MedicalRecordRow record,
         List<Integer> injuriesClosed,
-        List<Integer> locksReleased
+        List<Integer> locksReleased,
+        List<Integer> reportsClosed
 ) {}

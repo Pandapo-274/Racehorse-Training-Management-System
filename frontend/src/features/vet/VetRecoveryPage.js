@@ -9,9 +9,14 @@
 //
 // Backend chỉ có hai trạng thái chấn thương ghi được từ UI (TREATING khi ghim,
 // RECOVERED khi xác nhận), nên thanh tiến độ chỉ tiến thật được ở hai đầu.
+//
+// Báo cáo sự cố còn mở cũng phải được trả lời. Một con ngựa có thể có hai báo
+// cáo (vd. một lần dừng buổi tập mà hoá ra bình thường, một lần chấn thương
+// thật); nếu chỉ khám kèm một cái thì cái kia vẫn mở và vẫn chặn tập sau khi
+// "hồi phục". Hộp thoại liệt kê chúng để bác sĩ tích, giống chấn thương.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import { formatDateTime } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
@@ -21,6 +26,9 @@ import {
   listInjuries,
   listMedicalRecords,
   listLocksForHorse,
+  listOpenReportsForHorse,
+  toUrgency,
+  formatReportTime,
   confirmRecovery,
   statusLabel,
   nowForApi,
@@ -85,8 +93,10 @@ function RecoveryView({ horseId }) {
       listInjuries(horseId, ctrl.signal),
       listMedicalRecords(horseId, ctrl.signal),
       listLocksForHorse(horseId, ctrl.signal),
+      listOpenReportsForHorse(horseId, ctrl.signal),
     ])
-      .then(([horse, injuries, records, locks]) => setData({ horse, injuries, records, locks }))
+      .then(([horse, injuries, records, locks, reports]) =>
+        setData({ horse, injuries, records, locks, reports: reports || [] }))
       .catch((err) => {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
@@ -97,7 +107,7 @@ function RecoveryView({ horseId }) {
 
   const view = useMemo(() => {
     if (!data) return null;
-    const { horse, injuries, records, locks } = data;
+    const { horse, injuries, records, locks, reports } = data;
 
     const exams = records.filter((r) => r.recordType === "EXAM"); // mới nhất lên trước
     const base = exams.find((r) => r.injuryConfirmed) || null;
@@ -119,6 +129,7 @@ function RecoveryView({ horseId }) {
       exams: [...exams].reverse(), // cũ nhất lên trước, như thiết kế
       activeLock,
       openInjuries,
+      openReports: reports,
       stage: stageOf(horse, injuries),
       reminders,
       subtitle:
@@ -146,7 +157,7 @@ function RecoveryView({ horseId }) {
     );
   }
 
-  const { horse, exams, activeLock, openInjuries, stage, reminders } = view;
+  const { horse, exams, activeLock, openInjuries, openReports, stage, reminders } = view;
   const canClear = horse.status !== "ELIGIBLE" || !!activeLock;
   const today = todayInputValue();
 
@@ -156,10 +167,36 @@ function RecoveryView({ horseId }) {
         <div className="vx-banner vx-banner--ok" role="status">
           <strong>{horse.horseName} is now {statusLabel(horse.status)}.</strong>
           <p>
-            Closed {result.injuriesClosed.length} injur{result.injuriesClosed.length === 1 ? "y" : "ies"} and
+            Closed {result.injuriesClosed.length} injur{result.injuriesClosed.length === 1 ? "y" : "ies"},
+            answered {(result.reportsClosed || []).length} incident report
+            {(result.reportsClosed || []).length === 1 ? "" : "s"} and
             released {result.locksReleased.length} training lock
             {result.locksReleased.length === 1 ? "" : "s"}.
           </p>
+        </div>
+      )}
+
+      {/* Ngựa đã Healthy mà còn báo cáo mở thì vẫn bị chặn tập (IncidentGuard):
+          dữ liệu cũ từ trước bản sửa, hoặc một báo cáo mới gửi sau khi clear. */}
+      {openReports.length > 0 && horse.status === "ELIGIBLE" && (
+        <div className="vx-banner vx-banner--warn" role="status">
+          <strong>
+            {horse.horseName} is healthy but still has {openReports.length} incident report
+            {openReports.length === 1 ? "" : "s"} waiting, so training stays paused.
+          </strong>
+          <span>
+            Examine each one to close it. If nothing is wrong, set "Injury confirmed" to No.
+          </span>
+          <ul>
+            {openReports.map((r) => (
+              <li key={r.reportId}>
+                #{r.reportId} {r.symptoms} ({toUrgency(r.urgency).label}, {formatReportTime(r.reportedAt)}){" "}
+                <Link className="vx-link" to={`/veterinarian/examination/${horse.horseId}?reportId=${r.reportId}`}>
+                  Examine
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -253,6 +290,7 @@ function RecoveryView({ horseId }) {
         <ConfirmDialog
           horse={horse}
           openInjuries={openInjuries}
+          openReports={openReports}
           hasLock={!!activeLock}
           onClose={() => setDialog(false)}
           onDone={handleDone}
@@ -264,9 +302,10 @@ function RecoveryView({ horseId }) {
 
 /* ---------- hộp thoại xác nhận ---------- */
 
-function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
+function ConfirmDialog({ horse, openInjuries, openReports, hasLock, onClose, onDone }) {
   const navigate = useNavigate();
   const [picked, setPicked] = useState(() => new Set());
+  const [answered, setAnswered] = useState(() => new Set());
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -280,11 +319,20 @@ function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
       return next;
     });
 
+  const toggleReport = (id) =>
+    setAnswered((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const submit = async () => {
     setError(null);
 
-    // Backend từ chối nếu còn chấn thương nào chưa nằm trong danh sách; báo sớm.
+    // Backend từ chối nếu còn chấn thương / báo cáo nào chưa được tích; báo sớm.
     const missing = openInjuries.filter((i) => !picked.has(i.injuryId));
+    const unanswered = openReports.filter((r) => !answered.has(r.reportId));
     if (!diagnosis.trim()) {
       setError({ message: "Enter the conclusion for this recovery." });
       return;
@@ -296,12 +344,20 @@ function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
       });
       return;
     }
+    if (unanswered.length > 0) {
+      setError({
+        message: "Every open incident report must be answered before the horse can be cleared.",
+        details: unanswered.map((r) => `Still waiting: #${r.reportId} ${r.symptoms}`),
+      });
+      return;
+    }
 
     setBusy(true);
     try {
       const res = await confirmRecovery({
         horseId: horse.horseId,
         recoveredInjuryIds: [...picked],
+        answeredReportIds: [...answered],
         examDate: nowForApi(),
         diagnosis: diagnosis.trim(),
         notes: notes.trim() || null,
@@ -322,6 +378,7 @@ function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
         </h2>
         <p className="vx-lead">
           This closes the checked injuries
+          {openReports.length > 0 ? ", answers the checked incident reports" : ""}
           {hasLock ? ", releases the lock" : ""} and sets {horse.horseName} back to Race-fit.
         </p>
 
@@ -346,6 +403,29 @@ function ConfirmDialog({ horse, openInjuries, hasLock, onClose, onDone }) {
             ))
           )}
         </fieldset>
+
+        {/* Chỉ hiện khi có: phần lớn ca hồi phục không còn báo cáo nào mở. */}
+        {openReports.length > 0 && (
+          <fieldset className="vx-injuries">
+            <legend>Incident reports answered by this exam</legend>
+            {openReports.map((r) => (
+              <label key={r.reportId}>
+                <input
+                  type="checkbox"
+                  checked={answered.has(r.reportId)}
+                  onChange={() => toggleReport(r.reportId)}
+                />
+                <span>
+                  #{r.reportId} {r.symptoms}{" "}
+                  <small>
+                    {toUrgency(r.urgency).label.toLowerCase()} · {formatReportTime(r.reportedAt)} · by{" "}
+                    {r.reporterName}
+                  </small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         <label className="vx-field vx-field--full">
           <span>Conclusion</span>

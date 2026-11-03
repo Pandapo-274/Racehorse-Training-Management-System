@@ -31,6 +31,15 @@ export function listIncidentReports(signal, status = "OPEN") {
   return authFetch(`/api/incident-reports?status=${status}`, { signal });
 }
 
+/**
+ * Báo cáo còn mở (PENDING, RECEIVED) của MỘT con ngựa. Màn Recovery cần đủ cả
+ * danh sách: còn sót báo cáo nào thì backend từ chối clear, vì ngựa đó vẫn bị
+ * chặn tập dù đã hết chấn thương.
+ */
+export function listOpenReportsForHorse(horseId, signal) {
+  return authFetch(`/api/incident-reports?status=OPEN&horseId=${horseId}`, { signal });
+}
+
 export function getIncidentReport(reportId, signal) {
   return authFetch(`/api/incident-reports/${reportId}`, { signal });
 }

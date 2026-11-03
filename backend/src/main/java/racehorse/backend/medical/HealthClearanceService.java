@@ -16,6 +16,8 @@ import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
+import racehorse.backend.incident.IncidentReportResponse;
+import racehorse.backend.incident.IncidentRepository;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
 
@@ -32,6 +34,11 @@ import racehorse.backend.notification.NotificationService;
  * để ngăn: sổ đăng ký nói con ngựa sẵn sàng tập, trong khi TRAINING_LOCK vẫn
  * còn một dòng ACTIVE cấm nó tập. Huấn luyện viên xếp lịch theo cột status sẽ
  * xếp cho một con ngựa đang bị cấm.
+ *
+ * Phép kiểm thứ ba: không còn báo cáo sự cố nào chưa khám. IncidentGuard chặn
+ * tập theo báo cáo mở chứ không theo status, nên clear mà còn sót một báo cáo
+ * thì chủ ngựa và Head Trainer nhận tin "cleared to train" trong khi xếp lịch,
+ * bấm Start, đăng ký giải đều bị từ chối.
  */
 @Service
 public class HealthClearanceService {
@@ -43,6 +50,7 @@ public class HealthClearanceService {
     private final HorseRepository horses;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final IncidentRepository incidents;
 
     public HealthClearanceService(MedicalRecordRepository records,
                                   HealthClearanceRepository clearance,
@@ -50,7 +58,8 @@ public class HealthClearanceService {
                                   TrainingLockRepository locks,
                                   HorseRepository horses,
                                   UserRepository users,
-                                  NotificationService notifications) {
+                                  NotificationService notifications,
+                                  IncidentRepository incidents) {
         this.records = records;
         this.clearance = clearance;
         this.injuries = injuries;
@@ -58,11 +67,12 @@ public class HealthClearanceService {
         this.horses = horses;
         this.users = users;
         this.notifications = notifications;
+        this.incidents = incidents;
     }
 
     /**
-     * Toàn bộ việc nằm trong MỘT giao dịch, chạm bốn bảng: INJURY,
-     * TRAINING_LOCK, MEDICAL_RECORD và HORSE. Đây là trường hợp @Transactional
+     * Toàn bộ việc nằm trong MỘT giao dịch, chạm năm bảng: INJURY,
+     * INCIDENT_REPORT, TRAINING_LOCK, MEDICAL_RECORD và HORSE. Đây là trường hợp @Transactional
      * đáng giá nhất trong cả backend: khép chấn thương mà không mở được lệnh
      * khoá, hay mở lệnh khoá mà không nâng được status, đều để lại hồ sơ nói
      * một đằng và sổ đăng ký nói một nẻo.
@@ -84,7 +94,12 @@ public class HealthClearanceService {
                 ? List.of()
                 : new ArrayList<>(new LinkedHashSet<>(raw.recoveredInjuryIds()));
 
+        List<Integer> answered = raw.answeredReportIds() == null
+                ? List.of()
+                : new ArrayList<>(new LinkedHashSet<>(raw.answeredReportIds()));
+
         validateInjuriesBelongToHorse(asked, horse.horseId());
+        validateReportsBelongToHorse(answered, horse.horseId());
 
         /* Khép những chấn thương bác sĩ khai. Dòng nào trả 0 là đã có người
            khép trước - không phải lỗi, nên không đếm vào injuriesClosed. */
@@ -92,6 +107,16 @@ public class HealthClearanceService {
         for (Integer injuryId : asked) {
             if (injuries.markRecovered(injuryId) == 1) {
                 closed.add(injuryId);
+            }
+        }
+
+        /* Đóng những báo cáo bác sĩ tích: lần khám hồi phục là một lần khám
+           đầy đủ, nên nó trả lời được các báo cáo đó. Cùng câu UPDATE với khám
+           thường (MedicalRecordService.log). 0 dòng = vừa có người khám xong. */
+        List<Integer> reportsClosed = new ArrayList<>();
+        for (Integer reportId : answered) {
+            if (records.markReportExamined(reportId) == 1) {
+                reportsClosed.add(reportId);
             }
         }
 
@@ -108,6 +133,19 @@ public class HealthClearanceService {
                     .collect(Collectors.joining("; "));
             throw fieldError("recoveredInjuryIds",
                     "This horse still has unrecovered injuries: " + list);
+        }
+
+        /* Cùng kiểu phép kiểm, cũng chạy SAU khi đóng: còn báo cáo nào chưa
+           khám thì không clear. Một báo cáo Groom vừa gửi trong lúc bác sĩ đang
+           mở hộp thoại cũng bị bắt ở đây, thay vì bị đóng mà không ai đọc. */
+        List<IncidentReportResponse> stillWaiting = incidents.findOpenByHorse(horse.horseId());
+        if (!stillWaiting.isEmpty()) {
+            String list = stillWaiting.stream()
+                    .map(r -> "#" + r.reportId() + " " + r.symptoms() + " (" + r.urgency() + ", " + r.status() + ")")
+                    .collect(Collectors.joining("; "));
+            throw fieldError("answeredReportIds",
+                    "This horse still has incident reports waiting for a veterinarian: " + list
+                            + ". Tick the ones this recovery exam answers, or examine them first");
         }
 
         /* Thời gian nghỉ bác sĩ đã dự kiến (expected_rest_days của lần xác nhận
@@ -140,7 +178,12 @@ public class HealthClearanceService {
                     "Another veterinarian has just cleared this horse");
         }
 
-        users.writeAudit(vet.userId(), "HEALTH_CLEARED", "HORSE", horse.horseId(), "SUCCESS", ip, earlyNote);
+        String reportNote = reportsClosed.isEmpty() ? null
+                : "Answered incident reports: " + reportsClosed.stream()
+                        .map(id -> "#" + id).collect(Collectors.joining(", "));
+        String auditDetail = earlyNote == null ? reportNote
+                : (reportNote == null ? earlyNote : reportNote + ". " + earlyNote);
+        users.writeAudit(vet.userId(), "HEALTH_CLEARED", "HORSE", horse.horseId(), "SUCCESS", ip, auditDetail);
 
         notifications.notifyHorseWatchers(horse.ownerId(), vet, new Notice(
                 "HEALTH_CLEARED",
@@ -152,7 +195,7 @@ public class HealthClearanceService {
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "The clearance was written but could not be read back"));
 
-        return new RecoveryConfirmationResponse(row, closed, lockIds);
+        return new RecoveryConfirmationResponse(row, closed, lockIds, reportsClosed);
     }
 
     /**
@@ -192,6 +235,32 @@ public class HealthClearanceService {
                             "Injury #" + id + " belongs to a different horse");
                 }
             }, () -> errors.put("recoveredInjuryIds", "Injury #" + id + " does not exist"));
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "The recovery could not be confirmed", errors);
+        }
+    }
+
+    /**
+     * Mỗi report_id khai phải thuộc đúng con ngựa đang xác nhận - cùng lý do
+     * với chấn thương: không kiểm thì clear con này đóng oan báo cáo của con
+     * khác, và con kia rời hàng chờ khám mà chưa ai khám nó. Báo cáo đã
+     * EXAMINED không phải lỗi (markReportExamined trả 0, không đếm).
+     */
+    private void validateReportsBelongToHorse(List<Integer> reportIds, int horseId) {
+        Map<String, String> errors = new HashMap<>();
+        for (Integer id : reportIds) {
+            if (id == null) {
+                errors.put("answeredReportIds", "Report id must not be null");
+                continue;
+            }
+            records.findReportHead(id).ifPresentOrElse(head -> {
+                if (head.horseId() != horseId) {
+                    errors.put("answeredReportIds",
+                            "Incident report #" + id + " belongs to a different horse");
+                }
+            }, () -> errors.put("answeredReportIds", "Incident report #" + id + " does not exist"));
         }
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
