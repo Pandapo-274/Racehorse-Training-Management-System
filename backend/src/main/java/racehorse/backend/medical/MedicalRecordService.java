@@ -28,10 +28,12 @@ public class MedicalRecordService {
     private final UserRepository users;
     private final NotificationService notifications;
     private final RaceRiskNotifier raceRisk;
+    private final InjuryRepository injuries;
 
     public MedicalRecordService(MedicalRecordRepository records, HorseRepository horses,
                                 UserRepository users, NotificationService notifications,
-                                RaceRiskNotifier raceRisk) {
+                                RaceRiskNotifier raceRisk, InjuryRepository injuries) {
+        this.injuries = injuries;
         this.records = records;
         this.horses = horses;
         this.users = users;
@@ -154,6 +156,24 @@ public class MedicalRecordService {
         if (r.injuryConfirmed() && !"INJURED".equals(r.healthStatus())) {
             errors.put("healthStatus",
                     "A confirmed injury must set the health status to INJURED");
+        }
+
+        /* Ngựa đang INJURED mà còn chấn thương chưa lành thì không được hạ xuống
+           MONITOR: MONITOR được phép tập, nên đây là đường lách bước xác nhận hồi
+           phục (UC18), nơi bắt buộc mọi chấn thương đã lành. QUARANTINE vẫn cho,
+           vì cách ly cũng không được tập. */
+        if ("INJURED".equals(horse.status()) && "MONITOR".equals(r.healthStatus())
+                && !injuries.findOpenInjuries(horse.horseId()).isEmpty()) {
+            errors.put("healthStatus", horse.horseName() + " still has injuries under treatment. "
+                    + "Confirm the recovery when they heal instead of moving it to MONITOR");
+        }
+
+        /* Ngựa đã rút khỏi học viện và hồ sơ PEDIGREE không còn được khám ở đây
+           (giao diện đã ẩn, chặn thêm ở API). */
+        if (horse.isWithdrawn()) {
+            errors.put("horseId", horse.horseName() + " has left the club");
+        } else if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType()))) {
+            errors.put("horseId", "A pedigree-only record is not examined");
         }
 
         /* Số ngày nghỉ chỉ có nghĩa khi đã xác nhận chấn thương. */

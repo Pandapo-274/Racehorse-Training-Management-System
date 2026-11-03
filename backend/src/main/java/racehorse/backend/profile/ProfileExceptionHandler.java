@@ -1,6 +1,8 @@
 package racehorse.backend.profile;
 
 import java.util.Map;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -9,6 +11,9 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import racehorse.backend.auth.ApiError;
 
 /** Bắt lỗi "file quá lớn" do Spring ném ra TRƯỚC khi vào controller, để trả đúng khuôn ApiError. */
+/* Ưu tiên trước GlobalExceptionHandler: handler tổng (Exception) ở đó sẽ bắt mất
+   lỗi file quá lớn nếu được xét trước. */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class ProfileExceptionHandler {
 

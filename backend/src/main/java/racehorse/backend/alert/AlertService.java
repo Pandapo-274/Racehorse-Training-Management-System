@@ -3,6 +3,7 @@ package racehorse.backend.alert;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,24 +17,34 @@ import racehorse.backend.notification.NotificationService;
 public class AlertService {
 
     private static final String HEART_RATE = "HEART_RATE";
+    private static final String VELOCITY = "VELOCITY";
     /** Cùng một ca tập, cùng loại cảnh báo: trong 60s chỉ báo lại khi MỨC ĐỘ TĂNG, tránh cảm biến gửi mỗi giây là ngập alert. */
     private static final int DEDUPE_SECONDS = 60;
 
     private final AlertRepository alerts;
     private final UserRepository users;
     private final NotificationService notifications;
+    /**
+     * Ngưỡng vận tốc (m/s). Schema không có ngưỡng vận tốc theo giai đoạn nên dùng
+     * một ngưỡng chung, mặc định 18 m/s (khoảng 65 km/h): vượt mức này trong buổi
+     * tập là ngựa đang chạy gần tốc độ đua, nguy cơ chấn thương cao.
+     */
+    private final BigDecimal velocityMax;
 
     public AlertService(AlertRepository alerts, UserRepository users,
-                        NotificationService notifications) {
+                        NotificationService notifications,
+                        @Value("${app.alert.velocity-max:18.0}") BigDecimal velocityMax) {
         this.alerts = alerts;
         this.users = users;
         this.notifications = notifications;
+        this.velocityMax = velocityMax;
     }
 
     /**
      * Nhận một lần đo, so với ngưỡng nhịp tim của giai đoạn giáo án (PLAN_PHASE.heart_rate_ceiling).
      * Vượt ngưỡng thì tạo THRESHOLD_ALERT để Head Trainer thấy.
-     * Chưa có ngưỡng vận tốc trong schema nên vận tốc hiện chỉ được ghi nhận đỉnh, chưa sinh cảnh báo.
+     * Vận tốc so với ngưỡng chung velocityMax; vượt thì sinh cảnh báo VELOCITY theo cùng luật
+     * mức độ và chống trùng. Một lần đo vượt cả hai thì kết quả trả về là cảnh báo nhịp tim.
      */
     @Transactional
     public VitalsResult recordVitals(AuthenticatedUser me, int sessionId, VitalsRequest req) {
@@ -55,28 +66,41 @@ public class AlertService {
         }
 
         Integer ceiling = ctx.heartRateCeiling();
-        if (ceiling == null || hr <= ceiling) {
-            return new VitalsResult(hr, ceiling, false, null, null);
+        VitalsResult heart = (ceiling == null || hr <= ceiling)
+                ? new VitalsResult(hr, ceiling, false, null, null)
+                : raise(me, sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
+                        "High heart-rate alert", hr + " bpm, ceiling is " + ceiling + " bpm");
+        if (req.velocity() != null && req.velocity().compareTo(velocityMax) > 0) {
+            VitalsResult speed = raise(me, sessionId, hr, ceiling, VELOCITY, velocityMax, req.velocity(),
+                    "High speed alert", req.velocity().toPlainString() + " m/s, limit is "
+                            + velocityMax.toPlainString() + " m/s");
+            if (!heart.alertRaised()) {
+                return speed;
+            }
         }
+        return heart;
+    }
 
-        String severity = severityFor(hr, ceiling);
-        Optional<String> open = alerts.latestOpenSeverity(sessionId, HEART_RATE, DEDUPE_SECONDS);
+    /**
+     * Tạo một cảnh báo vượt ngưỡng (nhịp tim hoặc vận tốc), cùng một luật cho cả hai:
+     * mức độ theo % vượt, trong DEDUPE_SECONDS chỉ báo lại khi mức độ tăng.
+     */
+    private VitalsResult raise(AuthenticatedUser me, int sessionId, int hr, Integer ceiling, String metric,
+                               BigDecimal limit, BigDecimal actual, String title, String detail) {
+        String severity = severityFor(actual.doubleValue(), limit.doubleValue());
+        Optional<String> open = alerts.latestOpenSeverity(sessionId, metric, DEDUPE_SECONDS);
         if (open.isPresent() && rank(open.get()) >= rank(severity)) {
             return new VitalsResult(hr, ceiling, false, severity, null);
         }
-        int alertId = alerts.insertAlert(sessionId, HEART_RATE,
-                BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr), severity);
+        int alertId = alerts.insertAlert(sessionId, metric, limit, actual, severity);
 
         /* Chỉ mức HIGH mới lên chuông. LOW / MEDIUM đã hiện trên màn Live
            Session của Head Trainer; đưa cả chúng vào chuông thì một buổi tập
            nặng sinh hàng chục thông báo và cái quan trọng bị chìm. Bác sĩ
            cũng nhận, vì vượt ngưỡng 10% là lúc có thể cần khám ngay. */
         if ("HIGH".equals(severity)) {
-            Notice notice = new Notice(
-                    "THRESHOLD_ALERT_HIGH",
-                    "High heart-rate alert",
-                    "Session #" + sessionId + ": " + hr + " bpm, ceiling is " + ceiling + " bpm.",
-                    Notice.THRESHOLD_ALERT, alertId);
+            Notice notice = new Notice("THRESHOLD_ALERT_HIGH", title,
+                    "Session #" + sessionId + ": " + detail + ".", Notice.THRESHOLD_ALERT, alertId);
             notifications.notifyRole("HEAD_TRAINER", me, notice);
             notifications.notifyRole("VETERINARIAN", me, notice);
         }
@@ -97,17 +121,35 @@ public class AlertService {
         }
         if ("STOP_SESSION".equals(req.actionTaken())) {
             alerts.stopSession(alert.sessionId());
+            // Groom đang dắt ngựa phải biết ngay, không thì vẫn tiếp tục cho chạy.
+            alerts.findSessionContext(alert.sessionId()).ifPresent(ctx -> notifications.notifyUser(
+                    ctx.assignedTo(), new Notice("TRAINING_SESSION_STOPPED", "Training session stopped",
+                            alert.horseName() + ": the head trainer stopped the session after a "
+                                    + metricLabel(alert.metricType()) + " alert. Stop work with this horse now.",
+                            Notice.TRAINING_SESSION, alert.sessionId())));
+        }
+        if ("VET_CALLED".equals(req.actionTaken())) {
+            // Trước đây chỉ ghi lại lựa chọn, không bác sĩ nào biết mình được gọi.
+            notifications.notifyRole("VETERINARIAN", me, new Notice("ALERT_VET_CALLED",
+                    "Veterinarian needed at training",
+                    alert.horseName() + ": " + metricLabel(alert.metricType()) + " alert in session #"
+                            + alert.sessionId() + ". The head trainer is asking for a veterinarian.",
+                    Notice.THRESHOLD_ALERT, alertId));
         }
         users.writeAudit(me.userId(), "RESOLVE_ALERT:" + req.actionTaken(), "THRESHOLD_ALERT", alertId, "SUCCESS", ip);
         return alerts.findById(alertId).orElseThrow();
     }
 
     /** Vượt >=10% ngưỡng: HIGH; >=5%: MEDIUM; còn lại: LOW. */
-    private static String severityFor(int value, int ceiling) {
+    private static String severityFor(double value, double ceiling) {
         double over = (double) (value - ceiling) / ceiling;
         if (over >= 0.10) return "HIGH";
         if (over >= 0.05) return "MEDIUM";
         return "LOW";
+    }
+
+    private static String metricLabel(String metric) {
+        return VELOCITY.equals(metric) ? "speed" : "heart-rate";
     }
 
     private static int rank(String severity) {

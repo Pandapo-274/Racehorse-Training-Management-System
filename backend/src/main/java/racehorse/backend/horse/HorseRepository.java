@@ -142,6 +142,18 @@ public class HorseRepository {
                 .param("color", r.color())
                 .update();
     }
+    /** Mã đăng ký và số chuồng, chỉ Club Manager đổi (HorseService.updateIdentity). */
+    public int updateIdentity(int horseId, String registrationCode, String stallNo) {
+        return jdbc.sql("""
+                UPDATE HORSE SET registration_code = :code, stall_no = :stall, updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id
+                """)
+                .param("code", registrationCode)
+                .param("stall", stallNo)
+                .param("id", horseId)
+                .update();
+    }
+
     /**
      * Cân nặng hiện tại, do bác sĩ thú y cân lúc khám (MedicalRecordService.log).
      * Tách khỏi updateBasics vì chủ ngựa không được tự khai cân nặng.

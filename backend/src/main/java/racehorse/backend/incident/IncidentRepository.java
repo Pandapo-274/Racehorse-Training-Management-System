@@ -146,6 +146,12 @@ public class IncidentRepository {
                 params.put("s" + i, statuses.get(i));
             }
             sql.append(")");
+            /* Hàng chờ (PENDING / RECEIVED) bỏ ngựa đã rút: không ai khám nữa, để
+               lại thì báo cáo nằm mãi trong hàng chờ của bác sĩ. Xem lịch sử
+               (EXAMINED, ALL) vẫn thấy đủ. */
+            if (!statuses.contains("EXAMINED")) {
+                sql.append(" AND h.activity_status = 'ACTIVE'");
+            }
         }
         if (horseId != null) {
             sql.append(" AND r.horse_id = :horseId");

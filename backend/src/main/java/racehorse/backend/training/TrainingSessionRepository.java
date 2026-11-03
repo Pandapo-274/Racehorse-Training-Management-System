@@ -188,6 +188,20 @@ public class TrainingSessionRepository {
                 .list();
     }
 
+    /**
+     * Buổi SCHEDULED của những ngày đã qua không bao giờ bắt đầu được nữa
+     * (start() chỉ cho trong đúng ngày), nên chuyển CANCELLED để lịch Groom
+     * không treo mãi. MissedTaskJob gọi mỗi đêm.
+     */
+    public int cancelOverdue(LocalDate today) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'CANCELLED'
+                WHERE status = 'SCHEDULED' AND session_date < :today
+                """)
+                .param("today", today)
+                .update();
+    }
+
     public boolean hasRunningSession(int horseId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM TRAINING_SESSION

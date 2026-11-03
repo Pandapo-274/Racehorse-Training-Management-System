@@ -110,6 +110,23 @@ public class HealthClearanceService {
                     "This horse still has unrecovered injuries: " + list);
         }
 
+        /* Thời gian nghỉ bác sĩ đã dự kiến (expected_rest_days của lần xác nhận
+           chấn thương gần nhất). Xác nhận sớm hơn vẫn được, vì bác sĩ có thể có lý
+           do chuyên môn, nhưng phải ghi lý do vào notes, và lý do vào audit. */
+        String earlyNote = null;
+        java.time.LocalDate restUntil = records.findByHorse(horse.horseId()).stream()
+                .filter(r -> r.injuryConfirmed() && r.expectedRestDays() != null)
+                .findFirst()
+                .map(r -> r.examDate().toLocalDate().plusDays(r.expectedRestDays()))
+                .orElse(null);
+        if (restUntil != null && raw.examDate().toLocalDate().isBefore(restUntil)) {
+            if (raw.notes() == null || raw.notes().isBlank()) {
+                throw fieldError("notes", horse.horseName() + " was expected to rest until " + restUntil
+                        + ". To clear it earlier, explain why in the notes");
+            }
+            earlyNote = "Cleared before the expected rest ended (" + restUntil + "): " + raw.notes().trim();
+        }
+
         List<Integer> lockIds = locks.findActiveLockIds(horse.horseId());
         locks.releaseActiveLocks(horse.horseId(), vet.userId());
 
@@ -123,7 +140,7 @@ public class HealthClearanceService {
                     "Another veterinarian has just cleared this horse");
         }
 
-        users.writeAudit(vet.userId(), "HEALTH_CLEARED", "HORSE", horse.horseId(), "SUCCESS", ip);
+        users.writeAudit(vet.userId(), "HEALTH_CLEARED", "HORSE", horse.horseId(), "SUCCESS", ip, earlyNote);
 
         notifications.notifyHorseWatchers(horse.ownerId(), vet, new Notice(
                 "HEALTH_CLEARED",

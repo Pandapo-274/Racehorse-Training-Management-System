@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,9 +28,6 @@ public class TrainingPlanService {
             "ACTIVE", Set.of("PAUSED", "COMPLETED"),
             "PAUSED", Set.of("ACTIVE", "COMPLETED"),
             "COMPLETED", Set.of());
-
-    /** Trạng thái ngựa cho phép bắt đầu tập. */
-    private static final Set<String> TRAINABLE = Set.of("ELIGIBLE", "MONITOR");
 
     private final TrainingPlanRepository planRepository;
     private final HorseRepository horseRepository;
@@ -72,9 +70,15 @@ public class TrainingPlanService {
            lúc ghi có người khác đổi, câu UPDATE không trúng dòng nào và cả
            giao dịch bị huỷ, thay vì hai yêu cầu cùng thắng và kết quả tuỳ thứ
            tự ghi. */
-        if (planRepository.updateStatus(planId, plan.status(), newStatus) == 0) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "Someone else has just changed this plan's status");
+        try {
+            if (planRepository.updateStatus(planId, plan.status(), newStatus) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Someone else has just changed this plan's status");
+            }
+        } catch (DuplicateKeyException e) {
+            /* UX_PLAN_active (V26): hai người cùng kích hoạt hai giáo án của một
+               ngựa đúng cùng lúc, cả hai đều qua phép kiểm existsActivePlan. */
+            throw new ApiException(HttpStatus.CONFLICT, "This horse already has an active training plan");
         }
 
         /* COMPLETED là điểm cuối (xem TRANSITIONS), nên những buổi tập còn
@@ -130,6 +134,31 @@ public class TrainingPlanService {
         return planRepository.findSummaries(horseId, status, ownerId);
     }
 
+    /**
+     * Kết thúc mọi giáo án ACTIVE đã qua ngày kết thúc (MissedTaskJob gọi mỗi đêm).
+     * @return số giáo án đã kết thúc.
+     */
+    @Transactional
+    public int completeExpiredPlans() {
+        return completeExpired(planRepository.findSummaries(null, "ACTIVE", null));
+    }
+
+    /** Dùng lại updateStatus (có điều kiện) và cancelRemainingSessions sẵn có. */
+    private int completeExpired(List<TrainingPlanResponse.Summary> activePlans) {
+        int done = 0;
+        LocalDate today = LocalDate.now();
+        for (TrainingPlanResponse.Summary p : activePlans) {
+            if (p.endDate() != null && p.endDate().isBefore(today)
+                    && planRepository.updateStatus(p.planId(), "ACTIVE", "COMPLETED") == 1) {
+                planRepository.cancelRemainingSessions(p.planId());
+                userRepository.writeAudit(null, "TRAINING_PLAN_AUTO_COMPLETED", "TRAINING_PLAN",
+                        p.planId(), "SUCCESS", null);
+                done++;
+            }
+        }
+        return done;
+    }
+
     // ---------- helper ----------
 
     private TrainingPlanResponse getOrThrow(int planId) {
@@ -152,13 +181,26 @@ public class TrainingPlanService {
         if (withdrawn != null) {
             throw new ApiException(HttpStatus.CONFLICT, withdrawn);
         }
-        if (!TRAINABLE.contains(horse.status())) {
+        if (!HorsePolicy.TRAINABLE_STATUSES.contains(horse.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Horse status is " + horse.status() + ", cannot start training yet");
         }
-        if (vitalsRepository.findActiveLock(plan.horseId()).isPresent()) {
-            throw new ApiException(HttpStatus.CONFLICT, "Horse is under an active training lock");
+        /* Giáo án đã qua ngày kết thúc thì không xếp được buổi nào nữa
+           (buổi tập phải nằm trong giai đoạn và không ở quá khứ). */
+        if (plan.endDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This plan ended on " + plan.endDate() + ". Create a new plan instead");
         }
+        /* Chỉ khoá FULL chặn kích hoạt. HEAVY_WORK_ONLY vẫn cho tập nhẹ, nên
+           giáo án vẫn chạy được; từng buổi tập tự kiểm cự ly (TrainingSessionService). */
+        vitalsRepository.findActiveLock(plan.horseId()).ifPresent(lock -> {
+            if (!"HEAVY_WORK_ONLY".equals(lock.lockLevel())) {
+                throw new ApiException(HttpStatus.CONFLICT, "Horse is under a full training lock");
+            }
+        });
+        /* Giáo án ACTIVE cũ đã qua ngày kết thúc không còn chặn giáo án mới:
+           kết thúc nó trước (huỷ luôn buổi còn treo), rồi mới kiểm. */
+        completeExpired(planRepository.findSummaries(plan.horseId(), "ACTIVE", null));
         if (planRepository.existsActivePlan(plan.horseId(), plan.planId())) {
             throw new ApiException(HttpStatus.CONFLICT, "This horse already has an active training plan");
         }

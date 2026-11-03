@@ -3,6 +3,7 @@ package racehorse.backend.medical;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
@@ -31,6 +32,7 @@ public record RecoveryConfirmationRequest(
 
         /** Kết luận khép hồ sơ, ví dụ "Gân trước phải đã lành, vận động bình
             thường". Ghi vào MEDICAL_RECORD.diagnosis của bản ghi xác nhận. */
+        @NotBlank(message = "Write the conclusion of the recovery exam")
         @Size(max = 255, message = "Diagnosis must be at most 255 characters")
         String diagnosis,
 
