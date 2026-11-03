@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Oct 30, 2026` at `11:05` by `tqt195`
+### Last Commited: `Nov 3rd, 2026` at `09:35` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 3rd, 2026`
+- `[09:35]` `tusandtahtsa;;` - Fix `Flow 4` and `Flow 5`
 > #### `Oct 30, 2026`
 - `[11:05]` `tqt195` - Frontend for the access and withdrawal fixes: `Sign out` now calls `/api/auth/logout` so the server revokes the token (it used to stay valid for up to 8 hours); withdrawal screens tell the owner and the `Club Manager` that approval also cancels upcoming stable tasks and race entries (backend in `7a211fd` by `PandaPo274`)
 - `[10:25]` `Pandapo274` - Fix staff access check and withdrawal side effects
