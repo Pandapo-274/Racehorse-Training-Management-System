@@ -186,6 +186,19 @@ public class IncidentRepository {
                 .optional();
     }
 
+    /**
+     * MỌI báo cáo chưa khám xong của một con ngựa, cũ nhất trước. Xác nhận hồi
+     * phục (HealthClearanceService) cần cả danh sách, không chỉ một dòng như
+     * findOpenReport: còn sót báo cáo nào thì IncidentGuard vẫn chặn tập.
+     */
+    public List<IncidentReportResponse> findOpenByHorse(int horseId) {
+        return jdbc.sql(SELECT_REPORT + " WHERE r.horse_id = :h AND r.status <> 'EXAMINED'"
+                        + " ORDER BY r.reported_at, r.report_id")
+                .param("h", horseId)
+                .query(IncidentRepository::map)
+                .list();
+    }
+
     public List<RunningSession> findRunningSessions(int horseId) {
         return jdbc.sql("SELECT session_id, assigned_to FROM TRAINING_SESSION WHERE horse_id = :h AND status = 'RUNNING'")
                 .param("h", horseId)

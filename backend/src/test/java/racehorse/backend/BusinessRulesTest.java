@@ -35,10 +35,18 @@ import racehorse.backend.horse.HorseUpdateRequest;
 import racehorse.backend.horse.HorseVitalsRepository;
 import racehorse.backend.horse.HorseVitalsResponse;
 import racehorse.backend.incident.IncidentGuard;
+import racehorse.backend.incident.IncidentReportResponse;
+import racehorse.backend.incident.IncidentRepository;
+import racehorse.backend.medical.HealthClearanceRepository;
+import racehorse.backend.medical.HealthClearanceService;
 import racehorse.backend.medical.InjuryRepository;
 import racehorse.backend.medical.MedicalExamRequest;
 import racehorse.backend.medical.MedicalRecordRepository;
+import racehorse.backend.medical.MedicalRecordRow;
 import racehorse.backend.medical.MedicalRecordService;
+import racehorse.backend.medical.RecoveryConfirmationRequest;
+import racehorse.backend.medical.RecoveryConfirmationResponse;
+import racehorse.backend.medical.TrainingLockRepository;
 import racehorse.backend.medical.TreatmentRepository;
 import racehorse.backend.medical.TreatmentRow;
 import racehorse.backend.medical.TreatmentService;
@@ -262,6 +270,85 @@ class BusinessRulesTest {
         ApiException ex = expect(ApiException.class, 400, () -> service.log(new MedicalExamRequest(
                 100, null, "EXAM", LocalDateTime.now(), "Better", "MONITOR", false, null, null, null, null), VET, "ip"));
         assertTrue(ex.getFieldErrors().containsKey("healthStatus"), ex.getFieldErrors().toString());
+    }
+
+    /* Ngựa 100 có hai báo cáo: #7 là chấn thương thật (đã khám kèm reportId nên
+       đã đóng), #8 là lần Groom dừng buổi tập mà hoá ra bình thường, chưa ai
+       khám kèm. Chấn thương #1 đã lành. */
+
+    private static IncidentReportResponse openReport(int reportId, int horseId) {
+        return new IncidentReportResponse(reportId, horseId, "Horse " + horseId, "A-" + horseId, "INJURED", 7,
+                30, 5, "Groom 5", "Stopped early, looked lame", null, null, "MEDIUM", Instant.now(),
+                "PENDING", null, null, null);
+    }
+
+    private record Clearance(HealthClearanceService service, MedicalRecordRepository records,
+                             HealthClearanceRepository clearance, IncidentRepository incidents) {
+    }
+
+    private static Clearance injuredHorseWithHealedInjury() {
+        MedicalRecordRepository records = mock(MedicalRecordRepository.class);
+        HealthClearanceRepository clearance = mock(HealthClearanceRepository.class);
+        InjuryRepository injuries = mock(InjuryRepository.class);
+        TrainingLockRepository locks = mock(TrainingLockRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        IncidentRepository incidents = mock(IncidentRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "INJURED", TODAY.minusYears(4), "COLT")));
+        when(injuries.findHorseOfInjury(1)).thenReturn(Optional.of(100));
+        when(injuries.markRecovered(1)).thenReturn(1);
+        when(injuries.findOpenInjuries(100)).thenReturn(List.of());
+        when(records.findByHorse(100)).thenReturn(List.of());
+        when(locks.findActiveLockIds(100)).thenReturn(List.of(3));
+        when(records.insertClearance(any(), eq(VET.userId()))).thenReturn(50);
+        when(records.findById(50)).thenReturn(Optional.of(new MedicalRecordRow(50, 100, "Horse 100", VET.userId(),
+                "Vet", null, "EXAM", LocalDateTime.now(), "Healed", "ELIGIBLE", false, null, null, null)));
+        when(clearance.clearHorse(100)).thenReturn(1);
+        HealthClearanceService service = new HealthClearanceService(records, clearance, injuries, locks, horses,
+                mock(UserRepository.class), mock(NotificationService.class), incidents);
+        return new Clearance(service, records, clearance, incidents);
+    }
+
+    private static RecoveryConfirmationRequest recovery(List<Integer> answeredReportIds) {
+        return new RecoveryConfirmationRequest(100, List.of(1), answeredReportIds, LocalDateTime.now(),
+                "Healed", null);
+    }
+
+    @Test
+    void recoveryIsRefusedWhileAnotherIncidentReportIsStillOpen() {
+        Clearance c = injuredHorseWithHealedInjury();
+        when(c.incidents().findOpenByHorse(100)).thenReturn(List.of(openReport(8, 100)));
+
+        ApiException ex = expect(ApiException.class, 400, () -> c.service().confirm(recovery(null), VET, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("answeredReportIds"), ex.getFieldErrors().toString());
+        assertTrue(ex.getMessage().contains("#8"), ex.getMessage());
+        // Không được báo "cleared to train" khi IncidentGuard vẫn chặn tập.
+        verify(c.clearance(), never()).clearHorse(anyInt());
+    }
+
+    @Test
+    void recoveryClosesTheIncidentReportsItAnswers() {
+        Clearance c = injuredHorseWithHealedInjury();
+        when(c.records().findReportHead(8)).thenReturn(Optional.of(new MedicalRecordRepository.ReportHead(100, "PENDING")));
+        when(c.records().markReportExamined(8)).thenReturn(1);
+        when(c.incidents().findOpenByHorse(100)).thenReturn(List.of()); // #8 vừa đóng trong cùng giao dịch
+
+        RecoveryConfirmationResponse res = c.service().confirm(recovery(List.of(8)), VET, "ip");
+
+        assertEquals(List.of(8), res.reportsClosed());
+        assertEquals(List.of(1), res.injuriesClosed());
+        verify(c.records()).markReportExamined(8);
+        verify(c.clearance()).clearHorse(100);
+    }
+
+    @Test
+    void recoveryCannotCloseAnotherHorsesIncidentReport() {
+        Clearance c = injuredHorseWithHealedInjury();
+        when(c.records().findReportHead(9)).thenReturn(Optional.of(new MedicalRecordRepository.ReportHead(200, "PENDING")));
+
+        ApiException ex = expect(ApiException.class, 400, () -> c.service().confirm(recovery(List.of(9)), VET, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("answeredReportIds"), ex.getFieldErrors().toString());
+        verify(c.records(), never()).markReportExamined(anyInt());
+        verify(c.clearance(), never()).clearHorse(anyInt());
     }
 
     @Test

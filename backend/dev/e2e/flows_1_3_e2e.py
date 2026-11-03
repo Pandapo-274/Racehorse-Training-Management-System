@@ -339,9 +339,23 @@ expect("recovery is refused while the injury is open", *call("POST", "/api/recov
     "horseId": HORSE, "recoveredInjuryIds": [], "examDate": NOW.isoformat(), "diagnosis": "Too early"}), 400)
 expect("recovery before the 14 rest days without a reason is refused", *call("POST", "/api/recovery-confirmations",
        T["vet"], {"horseId": HORSE, "recoveredInjuryIds": [INJURY], "examDate": NOW.isoformat(), "diagnosis": "Healed"}), 400)
-expect("recovery with a reason is accepted", *call("POST", "/api/recovery-confirmations", T["vet"], {
-    "horseId": HORSE, "recoveredInjuryIds": [INJURY], "examDate": NOW.isoformat(), "diagnosis": "Healed",
-    "notes": "Ultrasound clear, healed faster than expected"}), [200, 201])
+# Two reports on one horse: REPORT (real injury, examined above) and a second stable report that turns
+# out to be nothing. Recovery used to clear the horse and leave the second report open, so the horse was
+# "healthy" but the trainer could not schedule it and the groom could not start it.
+raw, ct = multipart({"horseId": HORSE, "symptoms": "Slight heat in the leg", "urgency": "LOW"}, "photo", "x.png", PNG)
+st, extra = call("POST", "/api/incident-reports", T["groom"], raw=raw, ctype=ct)
+check("(setup) groom files a second report on the injured horse", st in (200, 201), f"HTTP {st}")
+EXTRA = extra.get("reportId") if isinstance(extra, dict) else None
+expect("recovery is refused while the second report is still open", *call("POST", "/api/recovery-confirmations",
+       T["vet"], {"horseId": HORSE, "recoveredInjuryIds": [INJURY], "examDate": NOW.isoformat(),
+                  "diagnosis": "Healed", "notes": "Ultrasound clear, healed faster than expected"}), 400)
+st, rc = call("POST", "/api/recovery-confirmations", T["vet"], {
+    "horseId": HORSE, "recoveredInjuryIds": [INJURY], "answeredReportIds": [EXTRA], "examDate": NOW.isoformat(),
+    "diagnosis": "Healed", "notes": "Ultrasound clear, healed faster than expected"})
+expect("recovery with a reason, answering the second report, is accepted", st, rc, [200, 201])
+check("...and the second report is closed", isinstance(rc, dict) and rc.get("reportsClosed") == [EXTRA], str(rc)[:160])
+check("vet's queue no longer lists the horse",
+      not any(r["horseId"] == HORSE for r in call("GET", "/api/incident-reports", T["vet"])[1]))
 h = call("GET", f"/api/horses/{HORSE}", T["vet"])[1]
 check("horse is ELIGIBLE again", h["status"] == "ELIGIBLE", h["status"])
 check("lock was released", all(l["status"] != "ACTIVE" for l in call("GET", f"/api/training-locks?horseId={HORSE}", T["vet"])[1]))

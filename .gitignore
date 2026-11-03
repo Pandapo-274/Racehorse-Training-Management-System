@@ -38,3 +38,6 @@ Thumbs.db
 *.ldf
 node_modules
 backend/.env.example
+
+### CLAUDE.md
+CLAUDE.md
