@@ -64,7 +64,11 @@ export function notificationTarget(n, user) {
       return null;
     case "THRESHOLD_ALERT":
       if (role === "HEAD_TRAINER") return "/trainer/live-session";
-      if (role === "VETERINARIAN") return "/veterinarian";
+      if (role === "VETERINARIAN") return "/veterinarian/vet-calls";
+      return null;
+    case "VET_CALL":
+      if (role === "VETERINARIAN") return `/veterinarian/vet-calls/${n.targetId}`;
+      if (role === "HEAD_TRAINER") return "/trainer/live-session#vet-calls";
       return null;
     default:
       return null;

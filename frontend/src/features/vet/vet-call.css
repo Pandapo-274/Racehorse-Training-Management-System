@@ -1,0 +1,83 @@
+/* Vet calls (V27): hàng chờ và form trả lời của bác sĩ */
+
+.vcall-gap { margin-top: 22px; }
+.vcall-gap-sm { margin-top: 16px; }
+
+.vcall-list { display: flex; flex-direction: column; gap: 10px; }
+
+.vcall-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #f3d9e6;
+  border-left: 4px solid #67b32e;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vcall-row:hover { background: #fff7fb; }
+.vcall-row:focus-visible { outline: 2px solid var(--v-pink); outline-offset: 2px; }
+.vcall-row--pending { border-left-color: #e63148; }
+.vcall-row-main { min-width: 0; }
+.vcall-row-main strong { color: var(--text-900); font-size: 15px; }
+.vcall-row-main strong small { color: #8a90a8; font-size: 12px; font-weight: 600; }
+.vcall-row-main p { margin: 4px 0; color: #4f5876; font-size: 13px; }
+.vcall-row-main > small { color: #8a90a8; font-size: 12px; }
+.vcall-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; }
+.vcall-open { color: var(--v-pink); font-size: 13px; font-weight: 800; }
+
+.vcall-pill { padding: 5px 12px; border-radius: 12px; font-size: 12px; font-style: normal; font-weight: 800; white-space: nowrap; }
+.vcall-pill--high { background: #ffe1e5; color: #b3223a; }
+.vcall-pill--medium { background: #fff0c9; color: #9c6d00; }
+.vcall-pill--low { background: #e3f0ff; color: #2468a8; }
+
+.vcall-back {
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--v-pink);
+  font: 700 13px var(--font-body);
+  cursor: pointer;
+}
+
+.vcall-facts { display: grid; gap: 12px; margin: 0; }
+.vcall-facts div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+.vcall-facts dt { color: #8a90a8; font-size: 12px; font-weight: 700; }
+.vcall-facts dd { margin: 0; color: var(--text-900); font-size: 14px; }
+
+.vcall-decisions { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.vcall-decisions legend { margin-bottom: 8px; color: #5e6682; font-size: 12px; font-weight: 700; }
+.vcall-decision {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid #f3d9e6;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+.vcall-decision input { margin-top: 3px; accent-color: #f55fa9; }
+.vcall-decision span { display: flex; flex-direction: column; gap: 3px; }
+.vcall-decision strong { color: var(--text-900); font-size: 14px; }
+.vcall-decision small { color: #69728f; font-size: 12.5px; line-height: 1.45; }
+.vcall-decision:has(input:checked) { border-color: #f55fa9; background: #fff3f9; }
+.vcall-decision--emergency_stop:has(input:checked) { border-color: #e63148; background: #ffecef; }
+
+.vcall-answer { display: flex; flex-direction: column; gap: 6px; }
+.vcall-answer strong { color: var(--text-900); font-size: 16px; }
+.vcall-answer p { margin: 0; color: #4f5876; font-size: 14px; line-height: 1.5; }
+.vcall-answer small { color: #8a90a8; font-size: 12px; }
+
+@media (max-width: 640px) {
+  .vcall-row { flex-direction: column; align-items: stretch; }
+  .vcall-row-side { flex-direction: row; align-items: center; justify-content: space-between; }
+  .vcall-facts div { grid-template-columns: 1fr; gap: 2px; }
+}

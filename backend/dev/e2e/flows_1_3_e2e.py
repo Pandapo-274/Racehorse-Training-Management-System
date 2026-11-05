@@ -259,9 +259,39 @@ st, v = call("POST", f"/api/sessions/{S1}/vitals", T["groom"], {"heartRate": 150
 check("speed over 18 m/s raises an alert", st in (200, 201) and v.get("alertRaised"), str(v)[:120])
 st, v = call("POST", f"/api/sessions/{S1}/vitals", T["groom"], {"heartRate": 205})
 check("heart rate 205 over a 180 ceiling raises a HIGH alert", v.get("alertRaised") and v.get("severity") == "HIGH")
-expect("trainer resolves with VET_CALLED", *call("PUT", f"/api/alerts/{v['alertId']}/resolve", T["trainer"],
-                                                 {"actionTaken": "VET_CALLED"}), 200)
-check("...and the vet is notified", notified(T["vet"], "ALERT_VET_CALLED", NAME))
+ALERT = v["alertId"]
+expect("calling the vet without the form is refused", *call("PUT", f"/api/alerts/{ALERT}/resolve", T["trainer"],
+                                                         {"actionTaken": "VET_CALLED"}), 400)
+expect("a vet call needs a reason", *call("POST", f"/api/alerts/{ALERT}/vet-call", T["trainer"],
+                                         {"reason": " ", "urgency": "HIGH"}), 400)
+expect("a groom cannot call the vet from an alert", *call("POST", f"/api/alerts/{ALERT}/vet-call", T["groom"],
+                                                         {"reason": "x", "urgency": "HIGH"}), 403)
+st, vc = call("POST", f"/api/alerts/{ALERT}/vet-call", T["trainer"], {
+    "reason": "Heart rate 205 and not dropping", "observations": "Heavy sweating", "urgency": "HIGH",
+    "stopSession": False})
+expect("trainer calls the vet with a reason", st, vc, 200)
+CALL = vc["callId"]
+check("the call is waiting and the session keeps running",
+      vc.get("status") == "PENDING" and vc.get("sessionStatus") == "RUNNING" and not vc.get("sessionStopped"))
+check("...the alert is handled as VET_CALLED", any(a["alertId"] == ALERT and a.get("actionTaken") == "VET_CALLED"
+      for a in call("GET", "/api/alerts?openOnly=false&limit=100", T["trainer"])[1]))
+check("...and every vet is notified with a link to the call", notified(T["vet"], "VET_CALL_REQUESTED", NAME))
+expect("the same alert cannot be called twice", *call("POST", f"/api/alerts/{ALERT}/vet-call", T["trainer"],
+                                                     {"reason": "again", "urgency": "LOW"}), 409)
+check("the vet sees it in the waiting queue", any(c["callId"] == CALL for c in
+      call("GET", "/api/vet-calls?status=PENDING", T["vet"])[1]))
+expect("a head trainer cannot answer a call", *call("PUT", f"/api/vet-calls/{CALL}/answer", T["trainer"],
+       {"decision": "CONTINUE_LIGHT", "instructions": "x"}), 403)
+expect("treating at the stable needs a medication", *call("PUT", f"/api/vet-calls/{CALL}/answer", T["vet"],
+       {"decision": "TREAT_ON_SITE", "instructions": "Cool down"}), 400)
+st, ans = call("PUT", f"/api/vet-calls/{CALL}/answer", T["vet"], {
+    "decision": "CONTINUE_LIGHT", "instructions": "Walk only for 10 minutes, recheck heart rate"})
+expect("vet answers: continue at light intensity", st, ans, 200)
+check("...the session is still running", ans.get("status") == "ANSWERED" and ans.get("sessionStatus") == "RUNNING")
+check("...the trainer gets the advice", notified(T["trainer"], "VET_CALL_ANSWERED", NAME))
+check("...and so does the groom", notified(T["groom"], "VET_CALL_ANSWERED", NAME))
+expect("a call is answered only once", *call("PUT", f"/api/vet-calls/{CALL}/answer", T["vet"],
+       {"decision": "EMERGENCY_STOP", "instructions": "x"}), 409)
 expect("trainer evaluates the session", *call("PUT", f"/api/sessions/{S1}/evaluation", T["trainer"], {
     "actualDistance": 1600, "durationMinutes": 30, "avgHeartRate": 160, "peakHeartRate": 205,
     "recoveryHeartRate": 95, "peakVelocity": 19.5, "evaluation": "GOOD", "remarks": "e2e", "status": "COMPLETED"}), 200)
@@ -368,6 +398,26 @@ expect("a 2000 m session is refused under the light-work lock",
 st, light = schedule(PHASE, at(TODAY + timedelta(days=3), "07:00:00"), dist=800)
 expect("an 800 m session is allowed under the light-work lock", st, light, 201)
 expect("light-work lock (no injury) can be released", *call("POST", f"/api/training-locks/{hv['lockId']}/release", T["vet"]), 200)
+
+# ------------------------------------------------------------------ vet call: emergency stop
+flow = "Vet call - emergency stop"
+print("== " + flow)
+st, so = schedule(OTHER_PHASE, at(TODAY, "17:30:00"))
+SO = so.get("sessionId") if isinstance(so, dict) else None
+call("PUT", f"/api/training-sessions/{SO}/start", T["groom"])
+st, v = call("POST", f"/api/sessions/{SO}/vitals", T["groom"], {"heartRate": 212})
+st, vc = call("POST", f"/api/alerts/{v.get('alertId')}/vet-call", T["trainer"], {
+    "reason": "Stumbled, heart rate 212", "observations": "Lameness", "urgency": "HIGH"})
+expect("(setup) trainer calls the vet for the other horse", st, vc, 200)
+st, ans = call("PUT", f"/api/vet-calls/{vc.get('callId')}/answer", T["vet"], {
+    "decision": "EMERGENCY_STOP", "instructions": "Stop now, walk her to the clinic", "medication": None})
+expect("vet answers: emergency stop", st, ans, 200)
+check("...the running session is stopped", ans.get("sessionStatus") == "STOPPED_EARLY", ans.get("sessionStatus"))
+check("...an examination case is opened and taken by the vet", ans.get("reportId") is not None and any(
+      r["reportId"] == ans.get("reportId") and r["status"] == "RECEIVED"
+      for r in call("GET", "/api/incident-reports", T["vet"])[1]))
+expect("...training is blocked until the exam", *schedule(OTHER_PHASE, at(TODAY + timedelta(days=2), "09:00:00")), 409)
+check("...the owner is told", notified(T["owner"], "VET_EMERGENCY_STOP", "E2E Other"))
 
 # ================================================================== FLOW 1 end - withdrawal
 flow = "Withdrawal"

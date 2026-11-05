@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 5, 2026`
+- `[22:22]` `tqt195` - Add `Call vet` from alerts: on `Live session` the `Head Trainer` fills a form (reason, signs, urgency, stop the session now or not), sent once per alert (`POST /api/alerts/{id}/vet-call`, `V27__vet_call.sql`); the `Veterinarian` answers once on the new `Vet calls` page (`/veterinarian/vet-calls`): continue light work, treat on site (stops the session, medication required) or emergency stop (stops the session and opens an incident report the vet takes, so the horse is blocked from training); the trainer and `Groom` are notified; banner on `Herd health`; e2e script now covers vet calls (about 130 steps)
 > #### `Nov 3, 2026`
 - `[12:14]` `ArichiAya` - Fix `Flow 3` recovery with two incident reports: `Recovery` now closes the open reports too, so a healthy horse is no longer blocked from training
 - `[11:21]` `tqt195` - Frontend for the `Flow 1-3` fixes: system times (registered, lock issued, audit log, alerts...) no longer show 7 hours early (`parseServerTime` / `formatDateTime` in `horseApi.js`); `Club Manager` edits registration code and stall in the new `Club records` card on the horse page; lock level renamed `No heavy work` (light work up to 1,200 m); `Recovery` page explains when notes are required (backend in `f9ff9c9` by `Pandapo274`)

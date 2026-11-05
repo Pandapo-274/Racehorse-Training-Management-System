@@ -51,3 +51,28 @@
 }
 @media (max-width: 1100px) { .live-session-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .live-session-columns { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .live-session-summary { grid-template-columns: 1fr 1fr; } .live-panel { padding: 14px; } .live-alert-row { grid-template-columns: 1fr; } .live-alert-actions { grid-column: 1; } .live-alert-heading { align-items: flex-start; flex-direction: column; gap: 3px; } }
+
+/* Vet calls (V27): form gọi bác sĩ và câu trả lời của bác sĩ */
+.schedule-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #eadbe4; border-radius: 9px; outline: none; background: #fffafd; color: #27304e; font-family: var(--font-body); font-size: 12px; resize: vertical; }
+.schedule-form textarea:focus { border-color: #f55fa9; box-shadow: 0 0 0 3px rgba(245, 95, 169, 0.12); }
+.vet-call-field { display: flex; flex-direction: column; gap: 7px; }
+.vet-call-field-label { color: #303954; font-size: 12px; font-weight: 700; }
+.vet-call-signs { display: flex; flex-wrap: wrap; gap: 6px; }
+.vet-call-signs button { padding: 5px 9px; border: 1px solid #eadde5; border-radius: 999px; background: #fff; color: #4f5876; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.vet-call-signs button:hover { background: #fff0f7; border-color: #efb6d2; }
+.schedule-form label.vet-call-check { flex-direction: row; align-items: flex-start; gap: 9px; font-weight: 600; line-height: 1.4; }
+.schedule-form label.vet-call-check input { width: 16px; min-height: 16px; height: 16px; margin-top: 1px; flex: 0 0 auto; }
+.vet-call-panel { margin-top: 18px; }
+.vet-call-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 11px; }
+.vet-call-card { padding: 13px; border: 1px solid #edf0f7; border-left: 3px solid #e4a22a; border-radius: 10px; background: #fff; }
+.vet-call-card.decision-continue_light { border-left-color: #20a56b; }
+.vet-call-card.decision-treat_on_site { border-left-color: #3a8ad8; }
+.vet-call-card.decision-emergency_stop { border-left-color: #d52e4e; }
+.vet-call-reason { margin: 6px 0 9px; color: #4f5876; font-size: 11px; }
+.vet-call-waiting { padding: 9px 10px; border-radius: 8px; background: #fff7e6; color: #9a6500; font-size: 11px; font-weight: 700; }
+.vet-call-answer { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 8px; background: #f8f9fc; }
+.vet-call-answer strong { color: #16203f; font-size: 12px; }
+.vet-call-answer p { margin: 0; color: #4f5876; font-size: 11px; }
+.vet-call-answer small { color: #858ca8; font-size: 10px; }
+.decision-emergency_stop .vet-call-answer { background: #ffebef; }
+.decision-emergency_stop .vet-call-answer strong { color: #c22543; }

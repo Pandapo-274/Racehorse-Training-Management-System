@@ -114,6 +114,12 @@ public class AlertService {
     /** Head Trainer ghi lại đã xử lý thế nào. STOP_SESSION thì ca tập bị dừng luôn. */
     @Transactional
     public AlertResponse resolve(AuthenticatedUser me, int alertId, ResolveAlertRequest req, String ip) {
+        /* Gọi bác sĩ phải kèm lý do để bác sĩ trả lời được: đi qua
+           POST /api/alerts/{id}/vet-call (VetCallService), không qua đây. */
+        if ("VET_CALLED".equals(req.actionTaken())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Use the vet call form (POST /api/alerts/" + alertId + "/vet-call) to call a veterinarian");
+        }
         AlertResponse alert = alerts.findById(alertId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Alert not found"));
         if (!alerts.resolve(alertId, req.actionTaken(), me.userId())) {
@@ -127,14 +133,6 @@ public class AlertService {
                             alert.horseName() + ": the head trainer stopped the session after a "
                                     + metricLabel(alert.metricType()) + " alert. Stop work with this horse now.",
                             Notice.TRAINING_SESSION, alert.sessionId())));
-        }
-        if ("VET_CALLED".equals(req.actionTaken())) {
-            // Trước đây chỉ ghi lại lựa chọn, không bác sĩ nào biết mình được gọi.
-            notifications.notifyRole("VETERINARIAN", me, new Notice("ALERT_VET_CALLED",
-                    "Veterinarian needed at training",
-                    alert.horseName() + ": " + metricLabel(alert.metricType()) + " alert in session #"
-                            + alert.sessionId() + ". The head trainer is asking for a veterinarian.",
-                    Notice.THRESHOLD_ALERT, alertId));
         }
         users.writeAudit(me.userId(), "RESOLVE_ALERT:" + req.actionTaken(), "THRESHOLD_ALERT", alertId, "SUCCESS", ip);
         return alerts.findById(alertId).orElseThrow();

@@ -1,6 +1,6 @@
 # Kiểm thử end-to-end: 3 flow bắt buộc
 
-`flows_1_3_e2e.py` chạy trọn Flow 1 (hồ sơ ngựa), Flow 2 (giáo án, buổi tập, cảnh báo), Flow 3 (y tế, chấn thương), phần rút ngựa và tài khoản, qua HTTP API như người dùng thật. Script có khoảng 110 bước, gồm cả luồng đúng lẫn các ca ngoại lệ hệ thống phải chặn (trùng lịch, khoá tập, hồi phục sớm, phả hệ sai...).
+`flows_1_3_e2e.py` chạy trọn Flow 1 (hồ sơ ngựa), Flow 2 (giáo án, buổi tập, cảnh báo), Flow 3 (y tế, chấn thương), gọi bác sĩ từ cảnh báo (V27), phần rút ngựa và tài khoản, qua HTTP API như người dùng thật. Script có khoảng 130 bước, gồm cả luồng đúng lẫn các ca ngoại lệ hệ thống phải chặn (trùng lịch, khoá tập, hồi phục sớm, phả hệ sai...).
 
 Script **ghi dữ liệu thật** và dời ngày bằng SQL, nên chỉ chạy trên một database thử nghiệm riêng. Script tự từ chối nếu tên database không chứa `e2e` hoặc `test`.
 
