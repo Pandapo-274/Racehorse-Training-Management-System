@@ -6,6 +6,7 @@ import {
   listHorses, toBoardStatus, listIncidentReports, receiveIncidentReport, toUrgency, formatReportTime,
 } from "./vetApi";
 import { isPedigreeOnly, isWithdrawn } from "../horse/horseApi";
+import { listVetCalls } from "../vetcall/vetCallApi";
 
 // Màn 16 - Herd health board. Cùng khung với Trainer và Manager (xem VetShell).
 //
@@ -242,6 +243,7 @@ export default function VetDashboard() {
   const [reports, setReports] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [actionError, setActionError] = useState("");
+  const [waitingCalls, setWaitingCalls] = useState([]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -265,6 +267,17 @@ export default function VetDashboard() {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
         setActionError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [navigate, reload]);
+
+  // HLV đang chờ bác sĩ trả lời (V27). Lỗi ở đây chỉ làm mất banner, không chặn trang.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listVetCalls({ status: "PENDING", limit: 20, signal: ctrl.signal })
+      .then((rows) => setWaitingCalls(rows || []))
+      .catch((err) => {
+        if (err.name !== "AbortError") handleAuthError(err, navigate);
       });
     return () => ctrl.abort();
   }, [navigate, reload]);
@@ -381,6 +394,26 @@ export default function VetDashboard() {
               />
             ))}
           </div>
+
+          {waitingCalls.length > 0 && (
+            <button
+              type="button"
+              className="vet-alert vet-alert--call"
+              onClick={() => navigate(
+                waitingCalls.length === 1
+                  ? `/veterinarian/vet-calls/${waitingCalls[0].callId}`
+                  : "/veterinarian/vet-calls"
+              )}
+            >
+              <strong>Vet needed at training:</strong>
+              <span>
+                {waitingCalls.length === 1
+                  ? `${waitingCalls[0].horseName}: ${waitingCalls[0].reason}`
+                  : `${waitingCalls.length} head trainer calls are waiting for your advice.`}{" "}
+                Answer →
+              </span>
+            </button>
+          )}
 
           {newest && (
             <div ref={alertRef} className="vet-alert" role="alert">

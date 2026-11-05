@@ -1,11 +1,19 @@
 import { parseServerTime } from "../horse/horseApi";
 import { useCallback, useEffect, useRef, useState } from "react";
-import NavItems from "../navigation/NavItems";
+import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError, logout } from "../auth/authService";
 import { fetchAlerts, fetchRunningSessions, resolveAlert } from "./liveSessionApi";
 import { toAlertMessage, toSeverity } from "./dashboardApi";
+import {
+  createVetCall,
+  listVetCalls,
+  decisionLabel,
+  urgencyLabel,
+  URGENCIES,
+  SIGN_SUGGESTIONS,
+} from "../vetcall/vetCallApi";
 import "./trainer.css";
 import "./schedule.css";
 import "./live-session.css";
@@ -74,7 +82,7 @@ function formatTime(value) {
     : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function AlertRow({ alert, busy, onResolve }) {
+function AlertRow({ alert, busy, onResolve, onCallVet }) {
   const severity = toSeverity(alert.severity);
   return (
     <article className={`live-alert-row severity-${severity.cls}`}>
@@ -109,10 +117,169 @@ function AlertRow({ alert, busy, onResolve }) {
           >
             Stop session
           </button>
-          <button type="button" disabled={busy} onClick={() => onResolve(alert, "VET_CALLED")}>
+          <button type="button" disabled={busy} onClick={() => onCallVet(alert)}>
             Call vet
           </button>
         </div>
+      )}
+    </article>
+  );
+}
+
+/**
+ * Form gọi bác sĩ: lý do (điền sẵn từ cảnh báo), dấu hiệu quan sát, mức khẩn cấp,
+ * có dừng buổi tập ngay không. Cảnh báo HIGH mặc định dừng buổi tập.
+ */
+function VetCallDialog({ alert, onClose, onSent, navigate }) {
+  const [form, setForm] = useState(() => ({
+    reason: `${toAlertMessage(alert)}.`,
+    observations: "",
+    urgency: ["HIGH", "MEDIUM", "LOW"].includes(alert.severity) ? alert.severity : "HIGH",
+    stopSession: alert.severity === "HIGH",
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const addSign = (sign) =>
+    setForm((old) => {
+      const parts = old.observations.split(",").map((x) => x.trim()).filter(Boolean);
+      if (parts.includes(sign)) return old;
+      return { ...old, observations: [...parts, sign].join(", ") };
+    });
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const call = await createVetCall(alert.alertId, {
+        reason: form.reason.trim(),
+        observations: form.observations.trim() || null,
+        urgency: form.urgency,
+        stopSession: form.stopSession,
+      });
+      onSent(call);
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setError({ message: err.message, details: Object.values(err.fieldErrors || {}) });
+      }
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="schedule-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+    >
+      <section className="schedule-modal" role="dialog" aria-modal="true" aria-labelledby="vet-call-title">
+        <div className="schedule-modal-heading">
+          <div>
+            <span className="schedule-eyebrow">FITNESS SAFETY</span>
+            <h2 id="vet-call-title">Call the vet</h2>
+            <p>
+              {alert.horseName || `Horse #${alert.horseId}`} · Session #{alert.sessionId} ·{" "}
+              {toAlertMessage(alert)}
+            </p>
+          </div>
+          <button type="button" className="schedule-close-button" onClick={onClose} disabled={saving}
+            aria-label="Close dialog">
+            ×
+          </button>
+        </div>
+
+        <form className="schedule-form" onSubmit={submit}>
+          {error && (
+            <div className="schedule-alert error" role="alert">
+              <strong>{error.message}</strong>
+              {error.details.filter((d) => d !== error.message).map((d) => <div key={d}>{d}</div>)}
+            </div>
+          )}
+          <label>
+            Why are you calling?
+            <textarea
+              required
+              maxLength={500}
+              rows={2}
+              value={form.reason}
+              onChange={(e) => setForm((old) => ({ ...old, reason: e.target.value }))}
+            />
+          </label>
+          <div className="vet-call-field">
+            <span className="vet-call-field-label">What do you see?</span>
+            <span className="schedule-field-hint">Tap a sign to add it, or type your own.</span>
+            <div className="vet-call-signs">
+              {SIGN_SUGGESTIONS.map((sign) => (
+                <button type="button" key={sign} onClick={() => addSign(sign)}>
+                  + {sign}
+                </button>
+              ))}
+            </div>
+            <textarea
+              aria-label="What do you see?"
+              maxLength={1000}
+              rows={2}
+              placeholder="e.g. Heavy sweating, short stride on the left fore"
+              value={form.observations}
+              onChange={(e) => setForm((old) => ({ ...old, observations: e.target.value }))}
+            />
+          </div>
+          <label>
+            Urgency
+            <select value={form.urgency} onChange={(e) => setForm((old) => ({ ...old, urgency: e.target.value }))}>
+              {URGENCIES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+            </select>
+          </label>
+          <label className="vet-call-check">
+            <input
+              type="checkbox"
+              checked={form.stopSession}
+              onChange={(e) => setForm((old) => ({ ...old, stopSession: e.target.checked }))}
+            />
+            <span>Stop the session now and keep the horse still until the vet answers</span>
+          </label>
+          <div className="schedule-form-actions">
+            <button type="button" className="schedule-button secondary" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button type="submit" className="schedule-button primary" disabled={saving || !form.reason.trim()}>
+              {saving ? "Calling…" : "Call vet"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+/** Một lần gọi bác sĩ trên màn HLV: đang chờ, hoặc bác sĩ đã dặn gì. */
+function VetCallCard({ call }) {
+  const answered = call.status === "ANSWERED";
+  return (
+    <article className={`vet-call-card ${answered ? `decision-${call.decision.toLowerCase()}` : "pending"}`}>
+      <div className="live-alert-heading">
+        <strong>{call.horseName}</strong>
+        <span>Session #{call.sessionId} · called {formatTime(call.calledAt)}</span>
+      </div>
+      <p className="vet-call-reason">
+        <b>{urgencyLabel(call.urgency)}</b> · {call.reason}
+        {call.observations ? ` · Seen: ${call.observations}` : ""}
+        {call.sessionStopped ? " · Session stopped" : ""}
+      </p>
+      {answered ? (
+        <div className="vet-call-answer">
+          <strong>{decisionLabel(call.decision)}</strong>
+          <p>{call.instructions}</p>
+          {call.medication && <p><b>Give now:</b> {call.medication}</p>}
+          <small>
+            {call.answeredByName} · {formatTime(call.answeredAt)}
+            {call.reportId ? ` · Examination case #${call.reportId} opened` : ""}
+          </small>
+        </div>
+      ) : (
+        <div className="vet-call-waiting">Waiting for a veterinarian to answer…</div>
       )}
     </article>
   );
@@ -128,6 +295,8 @@ export default function LiveSessionMonitorPage() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [busyAlertId, setBusyAlertId] = useState(null);
+  const [vetCalls, setVetCalls] = useState([]);
+  const [callingFor, setCallingFor] = useState(null);
   const latestAlertId = useRef(0);
 
   const handleError = useCallback((err) => {
@@ -141,8 +310,10 @@ export default function LiveSessionMonitorPage() {
       const results = await Promise.all([
         fetchAlerts({ openOnly: !includeHistory, limit: includeHistory ? 100 : 50, signal }),
         fetchRunningSessions(signal),
+        listVetCalls({ limit: 10, signal }),
       ]);
       const nextAlerts = results[0] || [];
+      setVetCalls(results[2] || []);
       setAlerts(nextAlerts);
       latestAlertId.current = nextAlerts.reduce((max, item) => Math.max(max, item.alertId || 0), 0);
       setSessions(results[1] || []);
@@ -167,9 +338,10 @@ export default function LiveSessionMonitorPage() {
     const poll = async () => {
       setRefreshing(true);
       try {
-        const [newAlerts, runningSessions] = await Promise.all([
+        const [newAlerts, runningSessions, calls] = await Promise.all([
           fetchAlerts({ afterId: latestAlertId.current, openOnly: true, limit: 100 }),
           fetchRunningSessions(),
+          listVetCalls({ limit: 10 }),
         ]);
         if (cancelled) return;
         if (newAlerts?.length) {
@@ -184,6 +356,7 @@ export default function LiveSessionMonitorPage() {
           });
         }
         setSessions(runningSessions || []);
+        setVetCalls(calls || []);
         setError("");
       } catch (err) {
         if (!cancelled && err?.name !== "AbortError") {
@@ -211,6 +384,18 @@ export default function LiveSessionMonitorPage() {
       setBusyAlertId(null);
     }
   };
+
+  const handleVetCallSent = (call) => {
+    setCallingFor(null);
+    setVetCalls((current) => [call, ...current.filter((c) => c.callId !== call.callId)]);
+    setAlerts((current) => showHistory
+      ? current.map((item) => item.alertId === call.alertId
+        ? { ...item, resolved: true, actionTaken: "VET_CALLED" }
+        : item)
+      : current.filter((item) => item.alertId !== call.alertId));
+  };
+
+  useScrollToHash(!loading);
 
   const handleSignOut = () => {
     logout();
@@ -331,14 +516,44 @@ export default function LiveSessionMonitorPage() {
                       alert={alert}
                       busy={busyAlertId === alert.alertId}
                       onResolve={handleResolve}
+                      onCallVet={setCallingFor}
                     />
                   ))}
                 </div>
               )}
             </section>
           </div>
+
+          <section className="live-panel vet-call-panel" id="vet-calls">
+            <div className="live-panel-heading">
+              <div>
+                <span className="schedule-eyebrow">VETERINARY ADVICE</span>
+                <h2>Vet calls</h2>
+              </div>
+              <span className="live-count" title="Waiting for an answer">
+                {vetCalls.filter((c) => c.status === "PENDING").length}
+              </span>
+            </div>
+            {vetCalls.length === 0 ? (
+              <p className="live-empty">
+                No vet calls yet. Use Call vet on an alert to ask a veterinarian for advice.
+              </p>
+            ) : (
+              <div className="vet-call-list">
+                {vetCalls.map((call) => <VetCallCard key={call.callId} call={call} />)}
+              </div>
+            )}
+          </section>
         </section>
       </main>
+      {callingFor && (
+        <VetCallDialog
+          alert={callingFor}
+          navigate={navigate}
+          onClose={() => setCallingFor(null)}
+          onSent={handleVetCallSent}
+        />
+      )}
     </div>
   );
 }

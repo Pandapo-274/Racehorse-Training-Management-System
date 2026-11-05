@@ -51,6 +51,7 @@ export const ACTION_GROUPS = [
   { value: "TRAINING_PLAN_", label: "Training plans" },
   { value: "TRAINING_SESSION_", label: "Training sessions" },
   { value: "RESOLVE_ALERT", label: "Alerts" },
+  { value: "VET_CALL_", label: "Vet calls" },
   { value: "MEDICAL_EXAM", label: "Examinations" },
   { value: "TRAINING_LOCK_", label: "Training locks" },
   { value: "INCIDENT_", label: "Incident reports" },
@@ -107,6 +108,8 @@ const ACTION_TEXT = {
   TRAINING_SESSION_CANCEL_BULK: "Cancelled remaining sessions",
   SESSION_STOP_INCIDENT: "Stopped a session: horse unwell",
   SESSION_STOPPED_BY_LOCK: "Session stopped by a training lock",
+  SESSION_STOPPED_FOR_VET: "Stopped a session to call the vet",
+  SESSION_STOPPED_BY_VET: "Session stopped on vet advice",
   SESSION_TRIAL_RUN_UPDATE: "Updated a trial run / video",
   EVALUATE_SESSION: "Evaluated a training session",
   INCIDENT_RECEIVE: "Took an incident case",
@@ -147,6 +150,12 @@ const ALERT_ACTION_TEXT = {
   VET_CALLED: "call the vet",
 };
 
+const VET_DECISION_TEXT = {
+  CONTINUE_LIGHT: "continue light",
+  TREAT_ON_SITE: "treat at the stable",
+  EMERGENCY_STOP: "emergency stop",
+};
+
 /** Codes with a variable part: "ACCESS GET /api/x", "STAFF_ROLE_CHANGE:A->B", "RESOLVE_ALERT:STOP_SESSION". */
 export function toActionText(code) {
   if (!code) return "—";
@@ -155,6 +164,10 @@ export function toActionText(code) {
   if (code.startsWith("STAFF_ROLE_CHANGE:")) {
     const [from, to] = code.slice("STAFF_ROLE_CHANGE:".length).split("->");
     return `Changed role: ${ROLE_TEXT[from] || from} → ${ROLE_TEXT[to] || to}`;
+  }
+  if (code.startsWith("VET_CALL_ANSWER:")) {
+    const d = code.slice("VET_CALL_ANSWER:".length);
+    return `Answered a vet call: ${VET_DECISION_TEXT[d] || d}`;
   }
   if (code.startsWith("RESOLVE_ALERT:")) {
     const a = code.slice("RESOLVE_ALERT:".length);
@@ -175,6 +188,7 @@ const TARGET_TEXT = {
   TRAINING_PLAN: "Training plan",
   TRAINING_SESSION: "Session",
   THRESHOLD_ALERT: "Alert",
+  VET_CALL: "Vet call",
   MEDICAL_RECORD: "Exam record",
   INJURY: "Injury",
   TREATMENT: "Treatment",

@@ -19,4 +19,6 @@ public record Notice(String type, String title, String message,
     public static final String THRESHOLD_ALERT = "THRESHOLD_ALERT";
     /** Từ V15: yêu cầu rút ngựa, mở hàng chờ duyệt của Club Manager. */
     public static final String HORSE_WITHDRAWAL = "HORSE_WITHDRAWAL";
+    /** Từ V27: một lần HLV gọi bác sĩ từ cảnh báo buổi tập, mở đúng ca gọi đó. */
+    public static final String VET_CALL = "VET_CALL";
 }

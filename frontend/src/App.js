@@ -15,6 +15,7 @@ import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
 import VetRecoveryPage from "./features/vet/VetRecoveryPage";
 import VetPreventiveCarePage from "./features/vet/VetPreventiveCarePage";
 import VetPrescriptionPage from "./features/vet/VetPrescriptionPage";
+import VetCallsPage from "./features/vet/VetCallsPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import OwnerTrainingPage from "./features/horse-owner/OwnerTrainingPage";
@@ -139,6 +140,8 @@ export default function App() {
         {/* UC17 - lịch tiêm phòng / tẩy giun / móng, và đơn thuốc đang dùng toàn đàn. */}
         <Route path="/veterinarian/preventive-care" element={<RoleRoute roles={["VETERINARIAN"]}><VetPreventiveCarePage /></RoleRoute>} />
         <Route path="/veterinarian/prescriptions" element={<RoleRoute roles={["VETERINARIAN"]}><VetPrescriptionPage /></RoleRoute>} />
+        <Route path="/veterinarian/vet-calls" element={<RoleRoute roles={["VETERINARIAN"]}><VetCallsPage /></RoleRoute>} />
+        <Route path="/veterinarian/vet-calls/:callId" element={<RoleRoute roles={["VETERINARIAN"]}><VetCallsPage /></RoleRoute>} />
 
         <Route path="/groom/horses" element={<RoleRoute roles={["GROOM"]}><HorseListPage /></RoleRoute>} />
         <Route path="/groom/horses/:id" element={<RoleRoute roles={["GROOM"]}><HorseDetailPage /></RoleRoute>} />

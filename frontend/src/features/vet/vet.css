@@ -418,6 +418,23 @@
   font-weight: 800;
 }
 
+/* Banner HLV đang chờ bác sĩ trả lời (V27): là nút, bấm mở ca gọi. */
+.vet-alert--call {
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left-color: #f5b823;
+  background: #fff0c9;
+  color: #7d5800;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.vet-alert--call:hover { background: #ffe8ad; }
+.vet-alert--call:focus-visible { outline: 2px solid var(--v-pink); outline-offset: 2px; }
+
 /* =========================
    CARDS
 ========================= */

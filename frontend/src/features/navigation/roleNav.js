@@ -51,6 +51,7 @@ export const ROLE_NAV = {
 
   VETERINARIAN: [
     { key: "health", label: "Herd health", path: "/veterinarian", exact: true },
+    { key: "vetcalls", label: "Vet calls", path: "/veterinarian/vet-calls" },
     { key: "horses", label: "Horses", path: "/veterinarian/horses" },
     { key: "examination", label: "Examination", path: "/veterinarian/examination" },
     { key: "recovery", label: "Recovery", path: "/veterinarian/recovery" },
