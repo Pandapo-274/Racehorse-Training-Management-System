@@ -56,6 +56,18 @@ public class InjuryMarkerController {
     }
 
     /** Xoá một dấu ghim sai chỗ. Chỉ được khi dấu còn TREATING và không bị lệnh khoá trỏ vào. */
+    @org.springframework.web.bind.annotation.PutMapping("/{id}/status")
+    @RequireRole({"VETERINARIAN"})
+    public ResponseEntity<Void> updateStatus(
+            @PathVariable int id,
+            @RequestBody java.util.Map<String, String> body,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser vet,
+            HttpServletRequest http) {
+        String status = body != null ? body.get("status") : null;
+        service.updateStatus(id, status, vet, http.getRemoteAddr());
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}")
     @RequireRole({"VETERINARIAN"})
     public ResponseEntity<Void> unmark(

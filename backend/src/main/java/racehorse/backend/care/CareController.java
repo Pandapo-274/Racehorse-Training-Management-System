@@ -46,9 +46,11 @@ public class CareController {
     }
 
     @GetMapping("/feeding")
-    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM"})
-    public List<CareModels.FeedingItem> feeding(@RequestParam(required = false) Integer horseId) {
-        return service.feeding(horseId);
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"})
+    public List<CareModels.FeedingItem> feeding(
+            @RequestParam(required = false) Integer horseId,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.feeding(horseId, user);
     }
 
     @PutMapping("/feeding/horse/{horseId}")

@@ -150,6 +150,17 @@ public class TrainingLockRepository {
                 .update();
     }
 
+    public int updateLockLevel(int horseId, String lockLevel) {
+        return jdbc.sql("""
+                UPDATE TRAINING_LOCK
+                SET lock_level = :level
+                WHERE horse_id = :id AND status = 'ACTIVE'
+                """)
+                .param("level", lockLevel)
+                .param("id", horseId)
+                .update();
+    }
+
     /* ---------- UC18 dùng ---------- */
 
     public List<Integer> findActiveLockIds(int horseId) {

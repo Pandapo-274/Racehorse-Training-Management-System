@@ -18,7 +18,7 @@ public class SupplyRepository {
     private static final String SELECT = """
             SELECT s.supply_id, s.supply_name, s.category, s.unit, s.min_threshold, s.current_qty,
                    s.area, s.needs_restock, s.updated_by, u.full_name AS updater, s.updated_at,
-                   s.expiry_date
+                   s.expiry_date, s.unit_price
             FROM SUPPLY_STOCK s JOIN APP_USER u ON u.user_id = s.updated_by
             """;
 
@@ -35,7 +35,8 @@ public class SupplyRepository {
                 rs.getString("updater"),
                 rs.getObject("updated_at", LocalDateTime.class).toInstant(ZoneOffset.UTC),
                 rs.getObject("expiry_date", LocalDate.class),
-                isExpired(rs.getObject("expiry_date", LocalDate.class)));
+                isExpired(rs.getObject("expiry_date", LocalDate.class)),
+                rs.getBigDecimal("unit_price"));
     }
 
     /** Computed in Java, in the same zone as LocalDate.now() everywhere else. */
@@ -67,14 +68,15 @@ public class SupplyRepository {
     public int insert(SupplyModels.SupplyRequest r, int userId) {
         return jdbc.sql("""
                 INSERT INTO SUPPLY_STOCK (supply_name, category, unit, min_threshold, current_qty, area,
-                                          expiry_date, updated_by)
+                                          expiry_date, unit_price, updated_by)
                 OUTPUT INSERTED.supply_id
-                VALUES (:name, :cat, :unit, :min, :qty, :area, :expiry, :by)
+                VALUES (:name, :cat, :unit, :min, :qty, :area, :expiry, :price, :by)
                 """)
                 .param("name", r.supplyName().trim()).param("cat", r.category()).param("unit", r.unit().trim())
                 .param("min", r.minThreshold()).param("qty", r.currentQty())
                 .param("area", blankToNull(r.area()))
                 .param("expiry", "MEDICINE".equals(r.category()) ? r.expiryDate() : null)
+                .param("price", r.unitPrice())
                 .param("by", userId)
                 .query(Integer.class).single();
     }
@@ -83,7 +85,7 @@ public class SupplyRepository {
     public void update(int id, SupplyModels.SupplyRequest r, int userId) {
         jdbc.sql("""
                 UPDATE SUPPLY_STOCK SET supply_name = :name, category = :cat, unit = :unit,
-                       min_threshold = :min, area = :area, expiry_date = :expiry,
+                       min_threshold = :min, area = :area, expiry_date = :expiry, unit_price = :price,
                        updated_by = :by, updated_at = SYSUTCDATETIME()
                 WHERE supply_id = :id
                 """)
@@ -91,6 +93,7 @@ public class SupplyRepository {
                 .param("min", r.minThreshold())
                 .param("area", blankToNull(r.area()))
                 .param("expiry", "MEDICINE".equals(r.category()) ? r.expiryDate() : null)
+                .param("price", r.unitPrice())
                 .param("by", userId).param("id", id)
                 .update();
     }
@@ -115,6 +118,24 @@ public class SupplyRepository {
     }
 
     /** Puts qty back into the store (delivery, reopened task). Returns {before, after}. */
+    public Optional<BigDecimal[]> addWithDetails(int supplyId, BigDecimal qty, BigDecimal price, String unit, String area, int userId) {
+        return jdbc.sql("""
+                UPDATE SUPPLY_STOCK
+                SET current_qty = current_qty + :q,
+                    unit_price = COALESCE(:price, unit_price),
+                    updated_by = :by,
+                    updated_at = SYSUTCDATETIME()
+                OUTPUT DELETED.current_qty AS before_qty, INSERTED.current_qty AS after_qty
+                WHERE supply_id = :id
+                """)
+                .param("q", qty)
+                .param("price", price)
+                .param("by", userId)
+                .param("id", supplyId)
+                .query((rs, n) -> new BigDecimal[] {rs.getBigDecimal("before_qty"), rs.getBigDecimal("after_qty")})
+                .optional();
+    }
+
     public Optional<BigDecimal[]> add(int supplyId, BigDecimal qty, int userId) {
         return jdbc.sql("""
                 UPDATE SUPPLY_STOCK

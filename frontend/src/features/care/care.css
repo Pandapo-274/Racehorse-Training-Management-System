@@ -137,3 +137,95 @@
 .care-neg { color: var(--danger, #c0392b); font-weight: 700; }
 .care-pos { color: #3f7a19; font-weight: 700; }
 .care-warn { color: #b54708; font-weight: 700; }
+
+
+/* Amount display with label */
+.care-actions-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.care-amount-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.care-amount-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-400, #9ba2b8);
+  white-space: nowrap;
+}
+.care-qty-input--readonly {
+  background: #fbfbfe !important;
+  color: var(--text-900, #171d33) !important;
+  font-weight: 700 !important;
+  border: 1px solid var(--line, #e2e8f0) !important;
+  text-align: center;
+  cursor: default;
+  opacity: 1 !important;
+  box-shadow: none !important;
+  width: 74px !important;
+}
+
+/* Button group in table row */
+.care-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.care-btn-pill {
+  padding: 6px 14px !important;
+  font-size: 11.5px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.care-btn-pill--waste {
+  color: #e11d48 !important;
+  border-color: #fecdd3 !important;
+  background: #fff1f2 !important;
+}
+.care-btn-pill--waste:hover {
+  background: #ffe4e6 !important;
+  border-color: #fda4af !important;
+  color: #be123c !important;
+}
+
+/* Restock summary box */
+.care-restock-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  margin: 14px 0 8px;
+  font-size: 13.5px;
+  flex-wrap: wrap;
+}
+.care-restock-summary strong {
+  font-size: 16px;
+  color: #15803d;
+}
+
+.care-price-cell {
+  color: #15803d;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: 12px;
+}

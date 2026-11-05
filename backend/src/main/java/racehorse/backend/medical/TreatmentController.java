@@ -82,6 +82,24 @@ public class TreatmentController {
     }
 
     /** Kết thúc một mục điều trị hôm nay. Không có đường xoá - xem TreatmentService.end. */
+    @PutMapping("/{id}/consent")
+    @RequireRole({"HORSE_OWNER"})
+    public TreatmentRow consent(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.grantConsent(id, user, http.getRemoteAddr());
+    }
+
+    @PutMapping("/{id}/reject-consent")
+    @RequireRole({"HORSE_OWNER"})
+    public TreatmentRow rejectConsent(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.rejectConsent(id, user, http.getRemoteAddr());
+    }
+
     @PutMapping("/{id}/end")
     @RequireRole({"VETERINARIAN"})
     public TreatmentRow end(

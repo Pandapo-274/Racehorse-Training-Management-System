@@ -6,7 +6,7 @@
 //   Club Manager: create and cancel races, record or correct results (also after
 //                 the edit window, with a reason), see performance and owners' prize money.
 // Prize money is paid to the owners. It is not club revenue.
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
@@ -18,7 +18,7 @@ import {
 import "./race.css";
 
 /** Create a race (Head Trainer, Club Manager). Name and date cannot be changed afterwards. */
-function RaceForm({ onCreated, onCancel }) {
+function RaceForm({ races = [], onCreated, onCancel }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ raceName: "", raceDate: "", distanceM: "", venue: "", entryDeadline: "", entryFee: "", maxEntries: "" });
   const [errors, setErrors] = useState({});
@@ -28,23 +28,62 @@ function RaceForm({ onCreated, onCancel }) {
   const num = (v) => (v === "" ? null : Number(v));
 
   const submit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError("");
     const local = {};
-    if (!form.raceName.trim()) local.raceName = "Race name is required";
-    if (!form.raceDate) local.raceDate = "Choose the race day";
-    else if (form.raceDate <= todayIso()) local.raceDate = "Choose a day after today";
-    if (form.entryDeadline && form.raceDate && form.entryDeadline > form.raceDate) local.entryDeadline = "On or before the race day";
+    const trimmedName = form.raceName.trim();
+    if (!trimmedName) {
+      local.raceName = "Race name is required";
+    } else if (races.some((r) => r.raceName.trim().toLowerCase() === trimmedName.toLowerCase() && r.status !== "CANCELLED")) {
+      local.raceName = "A race with this name already exists";
+    }
+
+    if (!form.raceDate) {
+      local.raceDate = "Race day is required";
+    } else if (form.raceDate <= todayIso()) {
+      local.raceDate = "Choose a day after today";
+    }
+
+    if (!form.distanceM) {
+      local.distanceM = "Distance is required";
+    } else if (Number(form.distanceM) < 100 || Number(form.distanceM) > 10000) {
+      local.distanceM = "Distance must be between 100 and 10,000 m";
+    }
+
+    if (!form.venue.trim()) {
+      local.venue = "Venue is required";
+    }
+
+    if (!form.entryDeadline) {
+      local.entryDeadline = "Entry deadline is required";
+    } else if (form.raceDate && form.entryDeadline > form.raceDate) {
+      local.entryDeadline = "On or before the race day";
+    } else if (form.entryDeadline < todayIso()) {
+      local.entryDeadline = "Deadline cannot be in the past";
+    }
+
+    if (form.entryFee === "" || form.entryFee === null) {
+      local.entryFee = "Entry fee is required";
+    } else if (Number(form.entryFee) < 0) {
+      local.entryFee = "Entry fee cannot be negative";
+    }
+
+    if (!form.maxEntries) {
+      local.maxEntries = "Max horses is required";
+    } else if (Number(form.maxEntries) < 1 || Number(form.maxEntries) > 30) {
+      local.maxEntries = "Max horses must be between 1 and 30";
+    }
+
     setErrors(local);
     if (Object.keys(local).length) return;
     setSaving(true);
     try {
       const race = await createRaceEvent({
-        raceName: form.raceName.trim(),
+        raceName: trimmedName,
         raceDate: form.raceDate,
         distanceM: num(form.distanceM),
-        venue: form.venue.trim() || null,
-        entryDeadline: form.entryDeadline || null,
+        venue: form.venue.trim(),
+        entryDeadline: form.entryDeadline,
         entryFee: num(form.entryFee),
         maxEntries: num(form.maxEntries),
       });
@@ -67,20 +106,20 @@ function RaceForm({ onCreated, onCancel }) {
   );
 
   return (
-    <Card title="Create a race" hint="Name and date cannot be changed later; cancel the race and create a new one instead.">
-      <form onSubmit={submit} noValidate>
+    <Card title="Create a race" hint="All fields are required. Name and date cannot be changed later.">
+      <form onSubmit={submit} onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} noValidate>
         <div className="hz-form-grid">
           {field("rc-name", "Race name", <input id="rc-name" value={form.raceName} maxLength={150} placeholder="e.g. Tracen Cup 2026" onChange={set("raceName")} aria-invalid={!!errors.raceName} />, "raceName")}
           {field("rc-date", "Race day", <input id="rc-date" type="date" min={tomorrowIso()} value={form.raceDate} onChange={set("raceDate")} aria-invalid={!!errors.raceDate} />, "raceDate")}
-          {field("rc-dist", "Distance (m)", <input id="rc-dist" type="number" min="100" max="10000" step="100" value={form.distanceM} onChange={set("distanceM")} />, "distanceM")}
-          {field("rc-venue", "Venue", <input id="rc-venue" value={form.venue} maxLength={150} onChange={set("venue")} />, "venue")}
+          {field("rc-dist", "Distance (m)", <input id="rc-dist" type="number" min="100" max="10000" step="100" value={form.distanceM} onChange={set("distanceM")} aria-invalid={!!errors.distanceM} />, "distanceM")}
+          {field("rc-venue", "Venue", <input id="rc-venue" value={form.venue} maxLength={150} onChange={set("venue")} aria-invalid={!!errors.venue} />, "venue")}
           {field("rc-deadline", "Entries close", <input id="rc-deadline" type="date" min={todayIso()} max={form.raceDate || undefined} value={form.entryDeadline} onChange={set("entryDeadline")} aria-invalid={!!errors.entryDeadline} />, "entryDeadline")}
-          {field("rc-fee", "Entry fee (VND)", <input id="rc-fee" type="number" min="0" step="1000" value={form.entryFee} onChange={set("entryFee")} />, "entryFee")}
-          {field("rc-max", "Max horses", <input id="rc-max" type="number" min="1" max="30" value={form.maxEntries} onChange={set("maxEntries")} />, "maxEntries")}
+          {field("rc-fee", "Entry fee (VND)", <input id="rc-fee" type="number" min="0" step="1000" value={form.entryFee} onChange={set("entryFee")} aria-invalid={!!errors.entryFee} />, "entryFee")}
+          {field("rc-max", "Max horses", <input id="rc-max" type="number" min="1" max="30" value={form.maxEntries} onChange={set("maxEntries")} aria-invalid={!!errors.maxEntries} />, "maxEntries")}
         </div>
         {error && <p className="hz-form-error" role="alert">{error}</p>}
         <div className="hz-form-footer">
-          <button type="submit" className="hz-btn" disabled={saving}>{saving ? "Creating…" : "Create race"}</button>
+          <button type="button" className="hz-btn" disabled={saving} onClick={submit}>{saving ? "Creating…" : "Create race"}</button>
           <button type="button" className="hz-btn hz-btn--ghost" onClick={onCancel}>Cancel</button>
         </div>
       </form>
@@ -110,7 +149,6 @@ function EntryForm({ races, onRegistered }) {
     && (!r.entryDeadline || r.entryDeadline >= todayIso()));
   const race = open.find((r) => String(r.raceId) === form.raceId);
 
-  // Candidates depend on the race (rest days between races), so reload when it changes.
   useEffect(() => {
     const ctrl = new AbortController();
     listCandidates(form.raceId || null, ctrl.signal)
@@ -121,8 +159,8 @@ function EntryForm({ races, onRegistered }) {
     return () => ctrl.abort();
   }, [form.raceId, navigate]);
 
-  const eligible = candidates.filter((c) => !c.problem);
-  const blocked = candidates.filter((c) => c.problem);
+  const eligible = candidates.filter((c) => !c.problem && (!c.warnings || c.warnings.length === 0));
+  const blocked = candidates.filter((c) => c.problem || (c.warnings && c.warnings.length > 0));
   const chosen = candidates.find((c) => String(c.horseId) === form.horseId);
   const full = race && race.maxEntries && race.entries >= race.maxEntries;
 
@@ -133,7 +171,7 @@ function EntryForm({ races, onRegistered }) {
     if (!form.raceId) local.raceId = "Choose a race";
     if (!form.horseId) local.horseId = "Choose a horse";
     setErrors(local);
-    if (Object.keys(local).length) return;
+    if (Object.keys(local).length || full) return;
 
     setSaving(true);
     try {
@@ -154,72 +192,115 @@ function EntryForm({ races, onRegistered }) {
   };
 
   return (
-    <Card
-      title="Enter a horse"
-      hint="Club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination not overdue, and races at least two weeks apart."
-    >
+    <Card title="Enter a horse" hint="Club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination not overdue, and races at least two weeks apart.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
             <label htmlFor="re-race">Race</label>
-            <select id="re-race" value={form.raceId} onChange={(e) => setForm((f) => ({ ...f, raceId: e.target.value, horseId: "" }))} aria-invalid={!!errors.raceId}>
-              <option value="">{open.length ? "Choose a race…" : "No race open for entries — create one first"}</option>
+            <select id="re-race" value={form.raceId} onChange={set("raceId")} aria-invalid={!!errors.raceId}>
+              <option value="">Choose a race…</option>
               {open.map((r) => <option key={r.raceId} value={r.raceId}>{raceLabel(r)}</option>)}
             </select>
             {errors.raceId && <p className="hz-field__error">{errors.raceId}</p>}
             {race && (
-              <p className="hz-note hz-muted">
-                {race.venue || "Venue not set"}
-                {race.entryDeadline ? ` · entries close ${formatRaceDate(race.entryDeadline)}` : ""}
-                {race.entryFee ? ` · fee ${formatPrize(race.entryFee)}` : ""}
+              <p className="hz-field__hint">
+                {[
+                  race.venue,
+                  race.entryDeadline ? `entries close ${formatRaceDate(race.entryDeadline)}` : null,
+                  race.entryFee ? `fee ${formatPrize(race.entryFee)}` : null,
+                ].filter(Boolean).join(" · ")}
               </p>
             )}
-            {full && <p className="hz-field__error">This race is full.</p>}
           </div>
+
           <div className="hz-field">
             <label htmlFor="re-horse">Horse</label>
-            <select id="re-horse" value={form.horseId} onChange={set("horseId")} aria-invalid={!!errors.horseId}>
-              <option value="">Choose a horse… ({eligible.length} can race)</option>
+            <select id="re-horse" value={form.horseId} onChange={set("horseId")} aria-invalid={!!errors.horseId} disabled={!form.raceId || full}>
+              <option value="">
+                {!form.raceId ? "Choose a race first" : full ? "Race is full" : `Choose a horse… (${eligible.length} can race)`}
+              </option>
               {eligible.map((c) => (
                 <option key={c.horseId} value={c.horseId}>
-                  {c.horseName}{c.stallNo ? ` · ${c.stallNo}` : ""} · {c.age} yrs{c.warnings?.length ? " ⚠" : ""}
+                  {c.horseName} · {c.stallNo || "no stall"} · {c.age} yrs
                 </option>
               ))}
             </select>
             {errors.horseId && <p className="hz-field__error">{errors.horseId}</p>}
-            {chosen?.warnings?.length > 0 && (
-              <ul className="race-warn">{chosen.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-            )}
-            {blocked.length > 0 && (
+            {form.raceId && blocked.length > 0 && (
               <details className="race-blocked">
-                <summary>{blocked.length} horses cannot race {race ? "in this race" : "now"}</summary>
+                <summary>{blocked.length} horse{blocked.length === 1 ? "" : "s"} cannot race in this race</summary>
                 <ul>
                   {blocked.map((c) => (
-                    <li key={c.horseId}>{(c.problems && c.problems.length ? c.problems : [c.problem]).join("; ")}</li>
+                    <li key={c.horseId}>
+                      <strong>{c.horseName}</strong>: {c.problem || (c.warnings || []).join("; ")}
+                    </li>
                   ))}
                 </ul>
               </details>
             )}
           </div>
-          <div className="hz-field" style={{ gridColumn: "1 / -1" }}>
-            <label htmlFor="re-note">Note</label>
-            <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. papers submitted"
-              onChange={set("note")} />
-          </div>
         </div>
+
+        {chosen && chosen.warnings?.length > 0 && (
+          <div className="race-warn" role="note">
+            Warnings from trainer records:
+            <ul>
+              {chosen.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
+
+        <div className="hz-field" style={{ marginTop: "12px" }}>
+          <label htmlFor="re-note">Note</label>
+          <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. papers submitted" onChange={set("note")} />
+        </div>
+
         {error && <p className="hz-form-error" role="alert">{error}</p>}
-        <div className="hz-form-footer">
-          <button type="submit" className="hz-btn" disabled={saving || full}>{saving ? "Entering…" : "Enter horse"}</button>
+        {full && <p className="hz-form-error" role="alert">This race is full ({race.maxEntries} horses).</p>}
+
+        <div className="hz-form-footer" style={{ marginTop: "14px" }}>
+          <button type="submit" className="hz-btn" disabled={saving || full || !form.raceId || !form.horseId}>
+            {saving ? "Entering…" : "Enter horse"}
+          </button>
         </div>
       </form>
     </Card>
   );
 }
 
-/** Inline editor in the row: result + position + time + prize, or a scratch reason. */
-function RowActions({ entry, isTrainer, isManager, onSaved }) {
+/** Action buttons in row: open result editor or scratch editor. */
+function RowActions({ entry, isTrainer, isEditing, onOpenEdit, onCancelEdit }) {
+  const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED") && entry.approvalStatus === "APPROVED";
+  const canScratch = isTrainer && entry.state === "UPCOMING" && entry.approvalStatus === "APPROVED";
+  if (!raceDone && !canScratch) return null;
+
+  if (isEditing) {
+    return (
+      <div className="race-actions">
+        <button type="button" className="race-link" onClick={onCancelEdit}>Cancel</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="race-actions">
+      {raceDone && (
+        <button type="button" className="race-link" onClick={() => onOpenEdit("result")}>
+          {entry.result ? "Edit result" : "Record result"}
+        </button>
+      )}
+      {canScratch && (
+        <button type="button" className="race-link race-link--danger" onClick={() => onOpenEdit("scratch")}>
+          Scratch
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Expandable editor row: displays result inputs or scratch reason across full table width. */
+function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState(null); // null | "result" | "scratch"
   const [result, setResult] = useState(entry.result && entry.result !== "SCRATCHED" ? entry.result : "WON");
   const [position, setPosition] = useState(entry.finishPosition ? String(entry.finishPosition) : "");
   const [time, setTime] = useState(formatRaceTime(entry.finishTimeMs));
@@ -233,7 +314,6 @@ function RowActions({ entry, isTrainer, isManager, onSaved }) {
     setError("");
     try {
       onSaved(await fn());
-      setMode(null);
     } catch (err) {
       if (!handleAuthError(err, navigate)) setError(err.message);
     } finally {
@@ -241,7 +321,6 @@ function RowActions({ entry, isTrainer, isManager, onSaved }) {
     }
   };
 
-  // Picking a position sets the matching result: 1st = Won, 2nd-3rd = Placed, 4th+ = Unplaced.
   const pickPosition = (v) => {
     setPosition(v);
     const n = Number(v);
@@ -251,10 +330,6 @@ function RowActions({ entry, isTrainer, isManager, onSaved }) {
       if (r === "UNPLACED") setPrize("");
     }
   };
-
-  const raceDone = entry.state === "AWAITING_RESULT" || entry.state === "FINISHED";
-  const canScratch = isTrainer && entry.state === "UPCOMING";
-  if (!raceDone && !canScratch) return null;
 
   if (mode === "result") {
     const save = () => {
@@ -269,63 +344,49 @@ function RowActions({ entry, isTrainer, isManager, onSaved }) {
       }));
     };
     return (
-      <div>
-        <div className="race-edit">
-          <input type="number" min="1" max="30" placeholder="Pos." aria-label="Finishing position" className="race-pos"
-            value={position} onChange={(e) => pickPosition(e.target.value)} />
-          <select value={result} aria-label="Result" onChange={(e) => {
-            setResult(e.target.value);
-            if (e.target.value === "UNPLACED") setPrize("");
-          }}>
-            {RESULTS.map((r) => <option key={r} value={r}>{RESULT_TEXT[r].label}</option>)}
-          </select>
-          <input type="text" placeholder="Time 1:58.4" aria-label="Finishing time" className="race-time"
-            value={time} onChange={(e) => setTime(e.target.value)} />
-          <input type="number" min="0" step="1000" placeholder="Prize (VND)" aria-label="Prize money"
-            value={prize} disabled={result === "UNPLACED"} onChange={(e) => setPrize(e.target.value)} />
-          {isManager && entry.result && (
-            <input type="text" maxLength={255} placeholder="Reason (needed after the lock)" aria-label="Reason for change"
-              value={reason} onChange={(e) => setReason(e.target.value)} />
-          )}
-          <button type="button" className="hz-btn" disabled={busy} onClick={save}>Save</button>
-          <button type="button" className="race-link" onClick={() => setMode(null)}>Cancel</button>
-        </div>
-        {error && <p className="race-error">{error}</p>}
+      <div className="race-edit-box">
+        <span className="race-edit-title">{entry.result ? "Edit result:" : "Record result:"}</span>
+        <input type="number" min="1" max="30" placeholder="Pos." aria-label="Finishing position" className="race-pos"
+          value={position} onChange={(e) => pickPosition(e.target.value)} />
+        <select value={result} aria-label="Result" className="race-result-select" onChange={(e) => {
+          setResult(e.target.value);
+          if (e.target.value === "UNPLACED") setPrize("");
+        }}>
+          {RESULTS.map((r) => <option key={r} value={r}>{RESULT_TEXT[r].label}</option>)}
+        </select>
+        <input type="text" placeholder="Time 1:58.4" aria-label="Finishing time" className="race-time"
+          value={time} onChange={(e) => setTime(e.target.value)} />
+        <input type="number" min="0" step="1000" placeholder="Prize (VND)" aria-label="Prize money" className="race-prize-input"
+          value={prize} disabled={result === "UNPLACED"} onChange={(e) => setPrize(e.target.value)} />
+        {isManager && entry.result && (
+          <input type="text" maxLength={255} placeholder="Reason (needed after lock)" aria-label="Reason for change"
+            value={reason} onChange={(e) => setReason(e.target.value)} style={{ minWidth: "180px" }} />
+        )}
+        <button type="button" className="hz-btn" disabled={busy} onClick={save}>Save</button>
+        <button type="button" className="race-link" onClick={onCancel}>Cancel</button>
+        {error && <span className="race-error">{error}</span>}
       </div>
     );
   }
 
   if (mode === "scratch") {
     return (
-      <div>
-        <div className="race-edit">
-          <input type="text" maxLength={500} placeholder="Reason, e.g. sore hoof" aria-label="Reason"
-            value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button type="button" className="hz-btn" disabled={busy || !reason.trim()}
-            onClick={() => run(() => scratchEntry(entry.registrationId, reason.trim()))}>
-            Scratch
-          </button>
-          <button type="button" className="race-link" onClick={() => setMode(null)}>Cancel</button>
-        </div>
-        {error && <p className="race-error">{error}</p>}
+      <div className="race-edit-box">
+        <span className="race-edit-title">Scratch {entry.horseName} from {entry.raceName}:</span>
+        <input type="text" maxLength={500} placeholder="Reason, e.g. sore hoof" aria-label="Reason"
+          className="race-owner-note" style={{ maxWidth: "340px" }}
+          value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="button" className="hz-btn" disabled={busy || !reason.trim()}
+          onClick={() => run(() => scratchEntry(entry.registrationId, reason.trim()))}>
+          Confirm Scratch
+        </button>
+        <button type="button" className="race-link" onClick={onCancel}>Cancel</button>
+        {error && <span className="race-error">{error}</span>}
       </div>
     );
   }
 
-  return (
-    <div className="race-actions">
-      {raceDone && (
-        <button type="button" className="race-link" onClick={() => setMode("result")}>
-          {entry.result ? "Edit result" : "Record result"}
-        </button>
-      )}
-      {canScratch && (
-        <button type="button" className="race-link race-link--danger" onClick={() => setMode("scratch")}>
-          Scratch
-        </button>
-      )}
-    </div>
-  );
+  return null;
 }
 
 /** The race calendar (V22). */
@@ -349,7 +410,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
 
   return (
     <>
-      {creating && <RaceForm onCancel={() => setCreating(false)} onCreated={(r) => { setCreating(false); onCreated(r); }} />}
+      {creating && <RaceForm races={races} onCancel={() => setCreating(false)} onCreated={(r) => { setCreating(false); onCreated(r); }} />}
       <Card
         title="Race calendar"
         hint="Each race has its own distance, venue, entry deadline, fee and field size."
@@ -361,7 +422,17 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
         <div className="hz-table-wrap">
           <table className="hz-table">
             <thead>
-              <tr><th>Race day</th><th>Race</th><th>Distance</th><th>Venue</th><th>Entries close</th><th>Horses</th><th>Fee</th><th>Status</th>{isManager && <th aria-label="Actions" />}</tr>
+              <tr>
+                <th>Race day</th>
+                <th>Race</th>
+                <th>Distance</th>
+                <th>Venue</th>
+                <th>Entries close</th>
+                <th>Horses</th>
+                <th>Fee</th>
+                <th>Status</th>
+                {isManager && <th aria-label="Actions" />}
+              </tr>
             </thead>
             <tbody>
               {races.map((r) => (
@@ -411,6 +482,7 @@ export default function RacesPage() {
   const [raceEvents, setRaceEvents] = useState([]);
   const [tab, setTab] = useState("entries");
   const [filter, setFilter] = useState("ALL");
+  const [activeEdit, setActiveEdit] = useState(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -419,7 +491,7 @@ export default function RacesPage() {
     const ctrl = new AbortController();
     listYears(ctrl.signal)
       .then((ys) => setYears([...new Set([thisYear, ...ys])].sort((a, b) => b - a)))
-      .catch(() => {}); // only feeds the year picker
+      .catch(() => {});
     return () => ctrl.abort();
   }, [thisYear]);
 
@@ -451,19 +523,20 @@ export default function RacesPage() {
   };
 
   const counts = useMemo(() => {
-    const c = { ALL: 0, UPCOMING: 0, AWAITING_RESULT: 0, FINISHED: 0, SCRATCHED: 0 };
+    const c = { ALL: 0, UPCOMING: 0, PENDING_APPROVAL: 0, AWAITING_RESULT: 0, FINISHED: 0, SCRATCHED: 0, REJECTED: 0 };
     for (const e of entries || []) {
       c.ALL++;
       c[e.state] = (c[e.state] || 0) + 1;
     }
     return c;
   }, [entries]);
+
   const shown = (entries || []).filter((e) => filter === "ALL" || e.state === filter);
 
   return (
     <HorseShell
       title="Races"
-      subtitle={isTrainer ? "Enter horses, record results and follow performance" : "Results, performance and owners\u2019 prize money"}
+      subtitle={isTrainer ? "Enter horses, record results and follow performance" : "Results, performance and owners’ prize money"}
       actions={
         <select className="race-year" value={year} aria-label="Year" onChange={(e) => setYear(Number(e.target.value))}>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -540,7 +613,7 @@ export default function RacesPage() {
               title={`Entries ${year}`}
               actions={
                 <div className="hz-segment" role="group" aria-label="Filter entries">
-                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"]].map(([k, l]) => (
+                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["PENDING_APPROVAL", "Pending Owner"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"]].map(([k, l]) => (
                     <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}>
                       {l} <b>{counts[k] || 0}</b>
                     </button>
@@ -549,49 +622,74 @@ export default function RacesPage() {
               }
             >
               <div className="hz-table-wrap">
-                <table className="hz-table">
+                <table className="hz-table race-table">
                   <thead>
                     <tr>
-                      <th>Race day</th>
-                      <th>Race</th>
-                      <th>Horse</th>
-                      <th>Result</th>
-                      <th>Prize</th>
+                      <th style={{ width: "105px" }}>Race day</th>
+                      <th style={{ width: "23%" }}>Race</th>
+                      <th style={{ width: "18%" }}>Horse</th>
+                      <th style={{ width: "125px" }}>Result</th>
+                      <th style={{ width: "115px" }}>Prize</th>
                       <th>Note</th>
-                      <th aria-label="Actions" />
+                      <th style={{ width: "110px", textAlign: "right" }} aria-label="Actions" />
                     </tr>
                   </thead>
                   <tbody>
                     {shown.map((e) => {
                       const chip = toEntryChip(e);
+                      const isEditing = activeEdit?.id === e.registrationId;
                       return (
-                        <tr key={e.registrationId}>
-                          <td className="hz-muted">{formatRaceDate(e.raceDate)}</td>
-                          <td className="hz-name">
-                            {e.raceName}
-                            {(e.distanceM || e.venue) && <p className="hz-note hz-muted">{[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}</p>}
-                          </td>
-                          <td>
-                            {e.horseName}
-                            <p className="hz-note hz-muted">{e.ownerName}</p>
-                          </td>
-                          <td>
-                            <StatusChip tone={chip.tone} label={chip.label} />
-                            {(e.finishPosition || e.finishTimeMs) && (
-                              <p className="hz-note hz-muted">
-                                {[e.finishPosition ? ordinal(e.finishPosition) : null, formatRaceTime(e.finishTimeMs) || null].filter(Boolean).join(" · ")}
-                              </p>
-                            )}
-                          </td>
-                          <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
-                          <td className="hz-muted">
-                            {e.scratchReason && <p className="hz-note">Scratched: {e.scratchReason}</p>}
-                            {e.note || (e.scratchReason ? null : "—")}
-                          </td>
-                          <td className="hz-row-action">
-                            <RowActions key={`${e.registrationId}-${e.result}`} entry={e} isTrainer={isTrainer} isManager={isManager} onSaved={onSaved} />
-                          </td>
-                        </tr>
+                        <Fragment key={e.registrationId}>
+                          <tr className={isEditing ? "hz-row--active" : undefined}>
+                            <td className="hz-muted">{formatRaceDate(e.raceDate)}</td>
+                            <td className="hz-name">
+                              {e.raceName}
+                              {(e.distanceM || e.venue) && <p className="hz-note hz-muted">{[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}</p>}
+                            </td>
+                            <td>
+                              {e.horseName}
+                              <p className="hz-note hz-muted">{e.ownerName}</p>
+                            </td>
+                            <td>
+                              <StatusChip tone={chip.tone} label={chip.label} />
+                              {(e.finishPosition || e.finishTimeMs) && (
+                                <p className="hz-note hz-muted">
+                                  {[e.finishPosition ? ordinal(e.finishPosition) : null, formatRaceTime(e.finishTimeMs) || null].filter(Boolean).join(" · ")}
+                                </p>
+                              )}
+                            </td>
+                            <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
+                            <td className="hz-muted">
+                              {e.scratchReason && <p className="hz-note">Scratched: {e.scratchReason}</p>}
+                              {e.note || (e.scratchReason ? null : "—")}
+                            </td>
+                            <td className="hz-row-action">
+                              <RowActions
+                                entry={e}
+                                isTrainer={isTrainer}
+                                isEditing={isEditing}
+                                onOpenEdit={(m) => setActiveEdit({ id: e.registrationId, mode: m })}
+                                onCancelEdit={() => setActiveEdit(null)}
+                              />
+                            </td>
+                          </tr>
+                          {isEditing && (
+                            <tr key={`${e.registrationId}-edit`} className="race-edit-subrow">
+                              <td colSpan={7}>
+                                <EditRowForm
+                                  entry={e}
+                                  mode={activeEdit.mode}
+                                  isManager={isManager}
+                                  onSaved={(saved) => {
+                                    setActiveEdit(null);
+                                    onSaved(saved);
+                                  }}
+                                  onCancel={() => setActiveEdit(null)}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

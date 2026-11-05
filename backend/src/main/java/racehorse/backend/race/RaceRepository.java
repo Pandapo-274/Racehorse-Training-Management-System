@@ -27,7 +27,8 @@ public class RaceRepository {
                    o.full_name AS owner_name, r.race_name, r.race_date, r.registered_by,
                    u.full_name AS registered_by_name, r.result, r.prize_money, r.note,
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
-                   r.finish_position, r.finish_time_ms, r.scratch_reason
+                   r.finish_position, r.finish_time_ms, r.scratch_reason,
+                   r.approval_status, r.reject_reason
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
@@ -43,10 +44,19 @@ public class RaceRepository {
                 rs.getString("stall_no"), rs.getInt("owner_id"), rs.getString("owner_name"),
                 rs.getString("race_name"), date, rs.getInt("registered_by"),
                 rs.getString("registered_by_name"), result, rs.getBigDecimal("prize_money"),
-                rs.getString("note"), stateOf(result, date),
+                rs.getString("note"), stateOf(result, date, rs.getString("approval_status")),
                 rs.getInt("race_id"), rs.getObject("distance_m", Integer.class), rs.getString("venue"),
                 rs.getString("race_status"), rs.getObject("finish_position", Integer.class),
-                rs.getObject("finish_time_ms", Integer.class), rs.getString("scratch_reason"));
+                rs.getObject("finish_time_ms", Integer.class), rs.getString("scratch_reason"),
+                rs.getString("approval_status"), rs.getString("reject_reason"));
+    }
+
+    static String stateOf(String result, LocalDate raceDate, String approvalStatus) {
+        if ("REJECTED".equals(approvalStatus)) return "REJECTED";
+        if ("PENDING_OWNER".equals(approvalStatus)) return "PENDING_APPROVAL";
+        if ("SCRATCHED".equals(result)) return "SCRATCHED";
+        if (result != null) return "FINISHED";
+        return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
 
     static String stateOf(String result, LocalDate raceDate) {
@@ -115,7 +125,8 @@ public class RaceRepository {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION
                 SET result = NULL, prize_money = NULL, registered_by = :by, note = :note,
-                    scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL
+                    scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL,
+                    approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL
                 WHERE registration_id = :id AND result = 'SCRATCHED'
                 """).param("id", id).param("by", by).param("note", note).update();
     }
@@ -129,11 +140,19 @@ public class RaceRepository {
     }
 
     /** race_name and race_date are copies of the race's (V22); they never change after this. */
+    public int updateApproval(int id, String status, String reason) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET approval_status = :status, reject_reason = :reason, owner_decision_at = SYSUTCDATETIME()
+                WHERE registration_id = :id
+                """).param("id", id).param("status", status).param("reason", reason).update();
+    }
+
     public int insert(int horseId, RaceModels.RaceEvent race, int by, String note) {
         return jdbc.sql("""
-                INSERT INTO RACE_REGISTRATION (horse_id, race_id, race_name, race_date, registered_by, note)
+                INSERT INTO RACE_REGISTRATION (horse_id, race_id, race_name, race_date, registered_by, note, approval_status)
                 OUTPUT INSERTED.registration_id
-                VALUES (:h, :race, :n, :d, :by, :note)
+                VALUES (:h, :race, :n, :d, :by, :note, 'PENDING_OWNER')
                 """).param("h", horseId).param("race", race.raceId()).param("n", race.raceName())
                 .param("d", race.raceDate()).param("by", by).param("note", note)
                 .query(Integer.class).single();
@@ -209,6 +228,14 @@ public class RaceRepository {
         }
         return jdbc.sql(SELECT_RACE + " WHERE rc.race_date >= :from ORDER BY rc.race_date, rc.race_name")
                 .param("from", fromDate).query(RaceRepository::mapRace).list();
+    }
+
+    public boolean existsByName(String name) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM RACE
+                WHERE LOWER(LTRIM(RTRIM(race_name))) = LOWER(LTRIM(RTRIM(:name)))
+                  AND status <> 'CANCELLED'
+                """).param("name", name).query(Integer.class).single() > 0;
     }
 
     public int insertRace(RaceModels.RaceEventRequest r, String name, int userId) {

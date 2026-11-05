@@ -5,7 +5,7 @@
 
 import { useNavigate } from "react-router-dom";
 import NavItems from "../navigation/NavItems";
-import { logout } from "../auth/authService";
+import { useSignOutModal } from "../auth/SignOutModal";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import "./vet.css";
@@ -27,13 +27,11 @@ export function HorseshoeIcon() {
 function VetSidebar({ active }) {
   const navigate = useNavigate();
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <aside className="vet-sidebar">
+      {modalElement}
       <div className="vet-brand">
         <img src="/logo.png" alt="Tracen logo" />
         <div>
@@ -51,7 +49,7 @@ function VetSidebar({ active }) {
       </nav>
 
       <div className="vet-sidebar-bottom">
-        <button type="button" className="vet-signout" onClick={handleSignOut}>
+        <button type="button" className="vet-signout" onClick={requestSignOut}>
           Sign out
         </button>
 

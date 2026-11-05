@@ -138,6 +138,11 @@ public class TrainingSessionService {
                     "This session is planned for " + planned.format(DAY)
                             + ". It can only be started on that day; ask the head trainer to reschedule it");
         }
+        if (s.sessionDate().isAfter(LocalDateTime.now())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session is scheduled for " + s.sessionDate().format(HOUR)
+                            + ". It can only be started at or after the scheduled time");
+        }
         /* Giáo án phải còn ACTIVE. create() và reschedule() đều đã kiểm điều
            này; chỉ start() bỏ qua, nên tạm dừng một giáo án không dừng được
            những buổi đã lên lịch của nó - Groom vẫn bấm Start được và buổi tập
@@ -320,6 +325,31 @@ public TrainingSessionResponse reschedule(
     return updatedSession;
 }
 
+    /**
+     * Hủy một buổi tập chưa diễn ra (SCHEDULED) bởi Head Trainer hoặc Club Manager.
+     */
+    @Transactional
+    public TrainingSessionResponse cancel(int sessionId, AuthenticatedUser user, String ip) {
+        TrainingSessionResponse current = getOrThrow(sessionId);
+        checkCanAct(current, user);
+        if (!"SCHEDULED".equals(current.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a SCHEDULED session can be cancelled (currently " + current.status() + ")");
+        }
+        if (repository.cancel(sessionId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Session is no longer available for cancellation");
+        }
+        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_CANCEL", "TRAINING_SESSION",
+                sessionId, "SUCCESS", ip);
+        notifications.notifyUser(current.assignedTo(), new Notice(
+                "TRAINING_SESSION_CANCELLED",
+                "Training session cancelled",
+                "Session for " + current.horseName() + " on " + current.sessionDate().format(WHEN) + " was cancelled.",
+                Notice.TRAINING_SESSION, sessionId));
+        return getOrThrow(sessionId);
+    }
+
     // ---------- helper ----------
 
     private TrainingSessionResponse getOrThrow(int sessionId) {
@@ -419,13 +449,11 @@ public TrainingSessionResponse reschedule(
         if (withdrawn != null) {
             throw new ApiException(HttpStatus.CONFLICT, withdrawn);
         }
-        if (!HorsePolicy.TRAINABLE_STATUSES.contains(horse.status())) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "Horse status is " + horse.status() + ", cannot train");
-        }
-        /* FULL chặn mọi buổi tập. HEAVY_WORK_ONLY chỉ cho buổi nhẹ: cự ly dự kiến
-           không quá lightWorkMaxDistance. Trước đây hai mức bị xử lý như nhau. */
-        vitalsRepository.findActiveLock(horseId).ifPresent(lock -> {
+        /* FULL chặn mọi buổi tập. HEAVY_WORK_ONLY chỉ cho buổi nhẹ (cự ly tối đa lightWorkMaxDistance)
+           để phục hồi chức năng ở chặng Light work. */
+        var activeLock = vitalsRepository.findActiveLock(horseId);
+        if (activeLock.isPresent()) {
+            var lock = activeLock.get();
             if (!"HEAVY_WORK_ONLY".equals(lock.lockLevel())) {
                 throw new ApiException(HttpStatus.CONFLICT, "Horse is under a full training lock");
             }
@@ -433,7 +461,10 @@ public TrainingSessionResponse reschedule(
                 throw new ApiException(HttpStatus.CONFLICT, "Horse is limited to light work by a training lock: "
                         + "at most " + lightWorkMaxDistance + " m per session");
             }
-        });
+        } else if (!HorsePolicy.TRAINABLE_STATUSES.contains(horse.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Horse status is " + horse.status() + ", cannot train");
+        }
         /* Còn báo cáo sự cố chưa được bác sĩ khám (vd. ngựa vừa bị dừng giữa buổi) thì không
            xếp, không đổi lịch và không Start. Nằm trong hàm này nên cả ba đường đều được chặn. */
         incidentGuard.assertNoOpenReport(horseId);

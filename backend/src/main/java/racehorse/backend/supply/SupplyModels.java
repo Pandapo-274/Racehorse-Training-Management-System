@@ -23,7 +23,7 @@ public final class SupplyModels {
     public record Supply(int supplyId, String supplyName, String category, String unit,
                          BigDecimal minThreshold, BigDecimal currentQty, String area,
                          boolean needsRestock, int updatedBy, String updatedByName, Instant updatedAt,
-                         LocalDate expiryDate, boolean expired) {
+                         LocalDate expiryDate, boolean expired, BigDecimal unitPrice) {
     }
 
     public record SupplyRequest(
@@ -44,7 +44,9 @@ public final class SupplyModels {
             @Size(max = 100, message = "Area must be at most 100 characters")
             String area,
             /* Medicine only (V24). */
-            LocalDate expiryDate) {
+            LocalDate expiryDate,
+            /* V28: Unit price for stock items */
+            BigDecimal unitPrice) {
     }
 
     /** A delivery into the store (POST /{id}/receive). */
@@ -53,7 +55,13 @@ public final class SupplyModels {
             @DecimalMin(value = "0.01", message = "Quantity must be greater than 0")
             BigDecimal qty,
             @Size(max = 255, message = "Note must be at most 255 characters")
-            String note) {
+            String note,
+            BigDecimal unitPrice,
+            String unit,
+            String area) {
+        public ReceiveRequest(BigDecimal qty, String note) {
+            this(qty, note, null, null, null);
+        }
     }
 
     /** Stock thrown away: spoiled feed, expired medicine, broken tools (POST /{id}/waste). */

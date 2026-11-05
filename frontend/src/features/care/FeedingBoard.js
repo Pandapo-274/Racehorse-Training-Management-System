@@ -20,7 +20,7 @@ function mealText(items, meal) {
     <span key={k}>
       {k > 0 && ", "}
       {`${r.feedType} ${formatQty(r.quantity)} ${r.unit}`}
-      {r.supplyId == null && <small className="care-unlinked" title="Not taken from the store until a Head Trainer or Vet picks the stock item"> · link to stock</small>}
+      
     </span>
   ));
 }

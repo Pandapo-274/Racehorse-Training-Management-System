@@ -45,6 +45,10 @@ export function notificationTarget(n, user) {
   const role = user?.role;
   /* Thông báo nhắc lịch phòng ngừa là tin tóm tắt cho cả đàn nên không trỏ tới
      một entity nào (targetEntity null); nhận ra nó bằng loại thông báo. */
+  if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED") {
+    if (role === "HORSE_OWNER") return "/horse-owner/races";
+    if (role === "HEAD_TRAINER") return "/trainer/races";
+  }
   if (n?.type === "PREVENTIVE_CARE_DUE") {
     return role === "VETERINARIAN" ? "/veterinarian/preventive-care" : null;
   }

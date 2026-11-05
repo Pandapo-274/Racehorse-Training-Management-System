@@ -35,7 +35,14 @@ public final class RaceModels {
             String result, BigDecimal prizeMoney, String note, String state,
             /* V22 */ int raceId, Integer distanceM, String venue, String raceStatus,
             Integer finishPosition, Integer finishTimeMs,
-            /* V23 */ String scratchReason) {
+            /* V23 */ String scratchReason,
+            /* V27 */ String approvalStatus, String rejectReason) {
+    }
+
+    public record RejectRequest(
+            @NotBlank(message = "Reason is required")
+            @Size(max = 255, message = "Reason must be at most 255 characters")
+            String reason) {
     }
 
     /**
@@ -52,11 +59,15 @@ public final class RaceModels {
             @NotBlank(message = "Race name is required")
             @Size(max = 150, message = "Race name must be at most 150 characters") String raceName,
             @NotNull(message = "Race date is required") LocalDate raceDate,
+            @NotNull(message = "Distance is required")
             @Min(value = 100, message = "Distance must be at least 100 m")
             @Max(value = 10000, message = "Distance must be at most 10000 m") Integer distanceM,
+            @NotBlank(message = "Venue is required")
             @Size(max = 150, message = "Venue must be at most 150 characters") String venue,
-            LocalDate entryDeadline,
+            @NotNull(message = "Entry deadline is required") LocalDate entryDeadline,
+            @NotNull(message = "Entry fee is required")
             @DecimalMin(value = "0", message = "Entry fee cannot be negative") BigDecimal entryFee,
+            @NotNull(message = "Max horses is required")
             @Min(value = 1, message = "At least 1 horse")
             @Max(value = 30, message = "At most 30 horses") Integer maxEntries) {
     }

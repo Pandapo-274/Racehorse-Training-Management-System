@@ -35,7 +35,8 @@ public class ExpenseRepository {
 
     private static final String COLUMNS = """
              e.expense_id, e.horse_id, h.horse_name, h.registration_code, e.category, e.amount,
-                   e.expense_date, e.recorded_by, u.full_name AS recorded_by_name, e.note
+                   e.expense_date, e.recorded_by, u.full_name AS recorded_by_name, e.note,
+                   e.status, e.dispute_reason
             """;
 
     private static Expense map(ResultSet rs, int rowNum) throws SQLException {
@@ -45,7 +46,8 @@ public class ExpenseRepository {
                 rs.getString("category"), rs.getBigDecimal("amount"),
                 rs.getObject("expense_date", LocalDate.class),
                 rs.getObject("recorded_by", Integer.class), rs.getString("recorded_by_name"),
-                rs.getString("note"));
+                rs.getString("note"),
+                rs.getString("status"), rs.getString("dispute_reason"));
     }
 
     /** Điều kiện WHERE và tham số cho bốn bộ lọc tuỳ chọn. Dùng chung cho danh sách, tổng và đếm. */
@@ -144,6 +146,14 @@ public class ExpenseRepository {
      *
      * @return 1 if voided, 0 if the expense does not exist or is already void.
      */
+    public int markDisputed(int expenseId, String reason) {
+        return jdbc.sql("""
+                UPDATE EXPENSE_LOG
+                SET status = 'DISPUTED', dispute_reason = :reason, disputed_at = SYSUTCDATETIME()
+                WHERE expense_id = :id AND cancelled_at IS NULL AND status = 'BILLED'
+                """).param("id", expenseId).param("reason", reason).update();
+    }
+
     public int cancel(int expenseId, int cancelledBy, String reason) {
         return jdbc.sql("""
                 UPDATE EXPENSE_LOG

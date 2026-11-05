@@ -13,6 +13,7 @@ package racehorse.backend.notification;
 public record Notice(String type, String title, String message,
                      String targetEntity, Integer targetId) {
 
+    public static final String SUPPLY = "SUPPLY";
     public static final String HORSE = "HORSE";
     public static final String HORSE_REQUEST = "HORSE_REQUEST";
     public static final String TRAINING_SESSION = "TRAINING_SESSION";

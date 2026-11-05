@@ -88,6 +88,45 @@ public class RaceService {
         return races.find(year, horseId, ownerId);
     }
 
+    @Transactional
+    public RaceModels.Entry approveEntry(int id, AuthenticatedUser user, String ip) {
+        RaceModels.Entry e = require(id);
+        checkCanManageEntry(e, user);
+        if (!"PENDING_OWNER".equals(e.approvalStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
+        }
+        races.updateApproval(id, "APPROVED", null);
+        users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
+        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+                "RACE_APPROVED", "Race entry approved",
+                "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName() + ".",
+                Notice.HORSE, e.horseId()));
+        return require(id);
+    }
+
+    @Transactional
+    public RaceModels.Entry rejectEntry(int id, String reason, AuthenticatedUser user, String ip) {
+        RaceModels.Entry e = require(id);
+        checkCanManageEntry(e, user);
+        if (!"PENDING_OWNER".equals(e.approvalStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
+        }
+        races.updateApproval(id, "REJECTED", reason);
+        users.writeAudit(user.userId(), "RACE_OWNER_REJECT", "RACE_REGISTRATION", id, "SUCCESS", ip, reason);
+        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+                "RACE_REJECTED", "Race entry declined",
+                "Owner " + e.ownerName() + " declined " + e.horseName() + " for " + e.raceName()
+                        + (reason == null || reason.isBlank() ? "." : ": " + reason.trim()),
+                Notice.HORSE, e.horseId()));
+        return require(id);
+    }
+
+    private void checkCanManageEntry(RaceModels.Entry e, AuthenticatedUser user) {
+        if ("HORSE_OWNER".equals(user.role()) && e.ownerId() != user.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This is not your horse");
+        }
+    }
+
     public List<Integer> years() {
         return races.years();
     }
@@ -119,6 +158,10 @@ public class RaceService {
     @Transactional
     public RaceModels.RaceEvent createRace(RaceModels.RaceEventRequest r, AuthenticatedUser user, String ip) {
         String name = r.raceName().trim().replaceAll("\\s+", " ");
+        if (races.existsByName(name)) {
+            throw new ApiException(HttpStatus.CONFLICT, "A race with name '" + name + "' already exists",
+                    Map.of("raceName", "A race with this name already exists"));
+        }
         LocalDate today = LocalDate.now();
         if (!r.raceDate().isAfter(today)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Race date must be in the future",
@@ -241,11 +284,11 @@ public class RaceService {
                             + (c.warnings.isEmpty() ? "" : ". Warnings: " + String.join("; ", c.warnings)));
         }
         notifications.notifyUser(h.ownerId(), new Notice(
-                "RACE_REGISTERED", "Race entry",
-                h.horseName() + " is entered in " + race.raceName() + " on " + race.raceDate().format(DAY)
+                "RACE_REGISTERED", "Race entry proposal",
+                h.horseName() + " has been proposed to enter " + race.raceName() + " on " + race.raceDate().format(DAY)
                         + (race.entryFee() == null || race.entryFee().signum() == 0 ? ""
                                 : " (entry fee " + race.entryFee().stripTrailingZeros().toPlainString() + ")")
-                        + ".",
+                        + ". Please review and approve.",
                 Notice.HORSE, h.horseId()));
         return require(id);
     }
@@ -381,13 +424,14 @@ public class RaceService {
                 case "FINISHED" -> finished++;
                 // A past race with no result yet is not "upcoming" - see RaceModels.Summary.
                 case "AWAITING_RESULT" -> awaitingResult++;
-                default -> upcoming++;
+                case "UPCOMING" -> upcoming++;
+                default -> {}
             }
             if ("WON".equals(e.result())) wins++;
             if ("PLACED".equals(e.result())) places++;
             if ("UNPLACED".equals(e.result())) unplaced++;
             total = total.add(prize);
-            if ("SCRATCHED".equals(e.state())) continue;
+            if ("SCRATCHED".equals(e.state()) || "PENDING_APPROVAL".equals(e.state()) || "REJECTED".equals(e.state())) continue;
 
             int[] c = counts.computeIfAbsent(e.horseId(), k -> new int[3]);
             first.putIfAbsent(e.horseId(), e);

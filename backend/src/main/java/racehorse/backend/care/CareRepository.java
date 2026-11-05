@@ -28,6 +28,10 @@ public class CareRepository {
     /* ---------------- Khẩu phần ---------------- */
 
     public List<CareModels.FeedingItem> findFeeding(Integer horseId) {
+        return findFeeding(horseId, null);
+    }
+
+    public List<CareModels.FeedingItem> findFeeding(Integer horseId, Integer ownerId) {
         StringBuilder sql = new StringBuilder("""
                 SELECT f.feeding_id, f.horse_id, h.horse_name, h.stall_no, f.meal_time, f.feed_type,
                        f.quantity, f.unit, f.approved_by, u.full_name AS approver, f.note, f.supply_id
@@ -40,6 +44,10 @@ public class CareRepository {
         if (horseId != null) {
             sql.append(" AND f.horse_id = :horseId");
             params.put("horseId", horseId);
+        }
+        if (ownerId != null) {
+            sql.append(" AND h.owner_id = :ownerId");
+            params.put("ownerId", ownerId);
         }
         sql.append("""
                  ORDER BY h.stall_no, h.horse_name,

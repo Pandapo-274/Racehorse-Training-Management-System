@@ -1,8 +1,9 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import "./groom.css";
-import { handleAuthError, logout } from "../auth/authService";
+import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import {
@@ -36,13 +37,11 @@ function HorseshoeIcon() {
 function GroomSidebar() {
   const navigate = useNavigate();
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <aside className="groom-sidebar">
+      {modalElement}
       <div className="groom-brand">
         <img src="/logo.png" alt="Tracen logo" />
         <div>
@@ -60,7 +59,7 @@ function GroomSidebar() {
       </nav>
 
       <div className="groom-sidebar-bottom">
-        <button type="button" className="groom-signout" onClick={handleSignOut}>
+        <button type="button" className="groom-signout" onClick={requestSignOut}>
           Sign out
         </button>
 
@@ -171,6 +170,21 @@ function SessionPanel({ session, onChanged, navigate }) {
   const [stopOpen, setStopOpen] = useState(false);
   const [stop, setStop] = useState({ symptoms: "", description: "", urgency: "HIGH" });
   const [stopResult, setStopResult] = useState(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (session?.status !== "SCHEDULED") return undefined;
+    const interval = setInterval(() => setCurrentTime(Date.now()), 3000);
+    return () => clearInterval(interval);
+  }, [session?.status]);
+
+  const scheduledTimeMs = useMemo(() => {
+    if (!session?.sessionDate) return 0;
+    const d = new Date(session.sessionDate);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  }, [session?.sessionDate]);
+
+  const isDue = scheduledTimeMs <= currentTime;
 
   // Đổi buổi tập thì xoá trạng thái của buổi trước.
   useEffect(() => {
@@ -293,9 +307,39 @@ function SessionPanel({ session, onChanged, navigate }) {
       </dl>
 
       {session.status === "SCHEDULED" && (
-        <button type="button" className="start-session" onClick={start} disabled={busy}>
-          {busy ? "Starting…" : "Start session"}
-        </button>
+        <div>
+          <button
+            type="button"
+            className="start-session"
+            onClick={start}
+            disabled={busy || !isDue}
+            title={!isDue ? `Scheduled for ${sessionTime(session.sessionDate)} (not yet due)` : "Bắt đầu buổi tập"}
+          >
+            {busy
+              ? "Starting…"
+              : !isDue
+                ? `Starts at ${sessionTime(session.sessionDate)} (Not yet due)`
+                : "Start session"}
+          </button>
+          {!isDue && (
+            <p
+              className="session-not-due-hint"
+              style={{
+                marginTop: "10px",
+                fontSize: "12px",
+                color: "#92400e",
+                backgroundColor: "#fef3c7",
+                border: "1px solid #fde68a",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                textAlign: "center",
+                fontWeight: "500",
+              }}
+            >
+              ⏳ This session is scheduled for <strong>{sessionTime(session.sessionDate)}</strong>. It can only be started at or after the scheduled time.
+            </p>
+          )}
+        </div>
       )}
 
       {session.status === "RUNNING" && (
@@ -382,9 +426,9 @@ function SessionPanel({ session, onChanged, navigate }) {
       {lastReading && (
         <p className={`vitals-result${lastReading.alertRaised ? " alert" : ""}`} role="status">
           {lastReading.alertRaised
-            ? `Alert sent to the head trainer: ${lastReading.heartRate} bpm is over the ${lastReading.heartRateCeiling} bpm ceiling (${toSeverityLabel(lastReading.severity)}).`
+            ? `Alert sent to the head trainer: ${lastReading.message || `${lastReading.heartRate} bpm is over the ${lastReading.heartRateCeiling} bpm ceiling`} (${toSeverityLabel(lastReading.severity)} severity).`
             : lastReading.severity
-              ? `${lastReading.heartRate} bpm is still over the ceiling. The head trainer has already been alerted.`
+              ? `${lastReading.message || `${lastReading.heartRate} bpm is still over the ceiling`}. The head trainer has already been alerted.`
               : `Recorded ${lastReading.heartRate} bpm.`}
         </p>
       )}

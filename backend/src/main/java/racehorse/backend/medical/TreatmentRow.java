@@ -1,14 +1,9 @@
 package racehorse.backend.medical;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
-/**
- * Một mục điều trị, như màn hình nhìn thấy.
- *
- * Kèm horseId để controller và service kiểm được quyền sở hữu mà không phải
- * đi tra lại MEDICAL_RECORD, và kèm horseName để màn hình nói được "thuốc của
- * Biwa Hayahide" thay vì "thuốc của hồ sơ #12".
- */
 public record TreatmentRow(
         int treatmentId,
         int recordId,
@@ -20,6 +15,21 @@ public record TreatmentRow(
         String instruction,
         LocalDate startDate,
         LocalDate endDate,
-        /** true khi hôm nay còn nằm trong khoảng điều trị. */
-        boolean active
-) {}
+        boolean active,
+        /* V28: Đơn giá và vật tư */
+        Integer supplyId,
+        BigDecimal quantity,
+        BigDecimal unitPrice,
+        BigDecimal totalCost,
+        boolean requiresConsent,
+        String consentStatus,
+        Instant consentedAt
+) {
+    /** Overloaded constructor for backward compatibility. */
+    public TreatmentRow(int treatmentId, int recordId, int horseId, String horseName,
+                        String medicineName, String dosage, String frequency, String instruction,
+                        LocalDate startDate, LocalDate endDate, boolean active) {
+        this(treatmentId, recordId, horseId, horseName, medicineName, dosage, frequency, instruction,
+                startDate, endDate, active, null, null, null, null, false, "NOT_REQUIRED", null);
+    }
+}

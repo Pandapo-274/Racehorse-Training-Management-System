@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
-import { formatPrize, formatRaceDate, listRaces, toEntryChip } from "./raceApi";
+import { approveEntry, formatPrize, formatRaceDate, listRaces, rejectEntry, toEntryChip } from "./raceApi";
 import "./race.css";
 
 export default function OwnerRacesPage() {
@@ -13,6 +13,10 @@ export default function OwnerRacesPage() {
   const [entries, setEntries] = useState(null);
   const [horseId, setHorseId] = useState("");
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [processingId, setProcessingId] = useState(null);
+  const [rejectNotes, setRejectNotes] = useState({});
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -35,17 +39,49 @@ export default function OwnerRacesPage() {
   }, [entries]);
 
   const mine = (entries || []).filter((e) => !horseId || String(e.horseId) === horseId);
-  const upcoming = mine.filter((e) => e.state === "UPCOMING").sort((a, b) => a.raceDate.localeCompare(b.raceDate));
-  const history = mine.filter((e) => e.state !== "UPCOMING");
+  const pending = mine.filter((e) => e.approvalStatus === "PENDING_OWNER" || e.state === "PENDING_APPROVAL");
+  const upcoming = mine.filter((e) => e.state === "UPCOMING" && e.approvalStatus === "APPROVED").sort((a, b) => a.raceDate.localeCompare(b.raceDate));
+  const history = mine.filter((e) => e.state !== "UPCOMING" && e.state !== "PENDING_APPROVAL" && e.approvalStatus !== "PENDING_OWNER");
   const ran = mine.filter((e) => e.state === "FINISHED");
   const wins = ran.filter((e) => e.result === "WON").length;
   const places = ran.filter((e) => e.result === "PLACED").length;
   const prize = mine.reduce((s, e) => s + (Number(e.prizeMoney) || 0), 0);
 
+  const handleApprove = async (e) => {
+    try {
+      setProcessingId(e.registrationId);
+      setActionError("");
+      await approveEntry(e.registrationId);
+      setSuccessMsg(`Approved ${e.horseName} to race in ${e.raceName}.`);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setActionError(err.message || "Could not approve race entry");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (e) => {
+    const reason = rejectNotes[e.registrationId] || "";
+    try {
+      setProcessingId(e.registrationId);
+      setActionError("");
+      await rejectEntry(e.registrationId, reason);
+      setSuccessMsg(`Declined race entry for ${e.horseName} in ${e.raceName}.`);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setActionError(err.message || "Could not decline race entry");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   return (
     <HorseShell
       title="Results & races"
-      subtitle="Race entries and results for your horses"
+      subtitle="Race entries, pending proposals, and results for your horses"
       actions={horses.length > 1 && (
         <select className="race-year" value={horseId} aria-label="Horse" onChange={(e) => setHorseId(e.target.value)}>
           <option value="">All my horses</option>
@@ -62,15 +98,100 @@ export default function OwnerRacesPage() {
 
       {entries && (
         <>
+          {successMsg && (
+            <div className="hz-alert hz-alert--good" style={{ marginBottom: "16px" }}>
+              {successMsg}
+            </div>
+          )}
+          {actionError && (
+            <div className="hz-alert hz-alert--serious" style={{ marginBottom: "16px" }}>
+              {actionError}
+            </div>
+          )}
+
           <div className="race-summary">
+            {pending.length > 0 && (
+              <div className="hz-stat" style={{ borderColor: "var(--color-warning-border, #f59e0b)" }}>
+                <span>Proposals pending</span>
+                <strong style={{ color: "var(--color-warning, #d97706)" }}>{pending.length}</strong>
+              </div>
+            )}
+            <div className="hz-stat"><span>Upcoming</span><strong>{upcoming.length}</strong></div>
             <div className="hz-stat"><span>Races run</span><strong>{ran.length}</strong></div>
             <div className="hz-stat"><span>Wins</span><strong>{wins}</strong></div>
             <div className="hz-stat"><span>Placed</span><strong>{places}</strong></div>
-            <div className="hz-stat"><span>Upcoming</span><strong>{upcoming.length}</strong></div>
             <div className="hz-stat race-stat--prize"><span>Prize money</span><strong>{formatPrize(prize)}</strong><small>all time</small></div>
           </div>
 
-          <Card title="Upcoming races" hint="Entered by the Head Trainer">
+          {pending.length > 0 && (
+            <Card title="Race entry proposals" hint="Proposals submitted by the Head Trainer awaiting your decision">
+              <div className="hz-table-wrap">
+                <table className="hz-table race-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "105px" }}>Race day</th>
+                      <th style={{ width: "22%" }}>Race</th>
+                      <th style={{ width: "16%" }}>Horse</th>
+                      <th style={{ width: "20%" }}>Trainer note</th>
+                      <th>Owner note</th>
+                      <th style={{ width: "160px", textAlign: "right" }} aria-label="Actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.map((e) => (
+                      <tr key={e.registrationId}>
+                        <td className="hz-muted">{formatRaceDate(e.raceDate)}</td>
+                        <td className="hz-name">
+                          {e.raceName}
+                          {(e.distanceM || e.venue) && (
+                            <p className="hz-note hz-muted">
+                              {[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                        </td>
+                        <td><strong>{e.horseName}</strong></td>
+                        <td className="hz-muted">{e.note || "—"}</td>
+                        <td>
+                          <input
+                            type="text"
+                            className="race-owner-note"
+                            placeholder="Optional"
+                            value={rejectNotes[e.registrationId] || ""}
+                            onChange={(ev) => {
+                              const val = ev.target.value;
+                              setRejectNotes((prev) => ({ ...prev, [e.registrationId]: val }));
+                            }}
+                          />
+                        </td>
+                        <td className="hz-row-action">
+                          <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                            <button
+                              type="button"
+                              className="hz-btn hz-btn--primary hz-btn--sm"
+                              onClick={() => handleApprove(e)}
+                              disabled={processingId === e.registrationId}
+                            >
+                              {processingId === e.registrationId ? "Saving…" : "Approve"}
+                            </button>
+                            <button
+                              type="button"
+                              className="hz-btn hz-btn--outline hz-btn--danger hz-btn--sm"
+                              onClick={() => handleReject(e)}
+                              disabled={processingId === e.registrationId}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          <Card title="Upcoming races" hint="Confirmed entries approved to race">
             {upcoming.length === 0 ? (
               <p className="hz-empty">No upcoming races.</p>
             ) : (
@@ -79,9 +200,9 @@ export default function OwnerRacesPage() {
                   <li key={e.registrationId}>
                     <div>
                       <strong>{e.raceName}</strong>
-                      <p>{e.horseName} · {formatRaceDate(e.raceDate)}{e.note ? ` · ${e.note}` : ""}</p>
+                      <p>{e.horseName} · {formatRaceDate(e.raceDate)}{(e.distanceM || e.venue) ? ` · ${[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}` : ""}{e.note ? ` · ${e.note}` : ""}</p>
                     </div>
-                    <StatusChip tone="neutral" label="Upcoming" />
+                    <StatusChip tone="good" label="Upcoming" />
                   </li>
                 ))}
               </ul>
@@ -96,7 +217,7 @@ export default function OwnerRacesPage() {
                     <th>Race day</th>
                     <th>Race</th>
                     <th>Horse</th>
-                    <th>Result</th>
+                    <th>Result / Status</th>
                     <th>Prize</th>
                     <th>Note</th>
                   </tr>
@@ -111,7 +232,9 @@ export default function OwnerRacesPage() {
                         <td>{e.horseName}</td>
                         <td><StatusChip tone={chip.tone} label={chip.label} /></td>
                         <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
-                        <td className="hz-muted">{e.scratchReason ? `Scratched: ${e.scratchReason}` : e.note || "—"}</td>
+                        <td className="hz-muted">
+                          {e.rejectReason ? `Declined: ${e.rejectReason}` : e.scratchReason ? `Scratched: ${e.scratchReason}` : e.note || "—"}
+                        </td>
                       </tr>
                     );
                   })}

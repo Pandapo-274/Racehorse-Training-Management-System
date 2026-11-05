@@ -182,11 +182,23 @@ export function countSupply(id, currentQty) {
   });
 }
 
-/** A delivery into the store. */
-export function receiveSupply(id, qty, note) {
+/** A delivery into the store / restock supply. */
+export function receiveSupply(id, payload, note) {
+  let body;
+  if (typeof payload === 'object' && payload !== null) {
+    body = {
+      qty: payload.qty,
+      note: payload.note || null,
+      unitPrice: payload.unitPrice ?? null,
+      unit: payload.unit || null,
+      area: payload.area || null,
+    };
+  } else {
+    body = { qty: payload, note: note || null };
+  }
   return authFetch(`/api/supplies/${id}/receive`, {
     method: "POST",
-    body: JSON.stringify({ qty, note: note || null }),
+    body: JSON.stringify(body),
   });
 }
 

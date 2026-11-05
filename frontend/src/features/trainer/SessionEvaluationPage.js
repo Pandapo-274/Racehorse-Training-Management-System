@@ -1,8 +1,9 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
-import { handleAuthError, logout } from "../auth/authService";
+import { handleAuthError } from "../auth/authService";
 import { evaluateSession, fetchSessions, hasNotRun, updateTrialRun } from "./sessionEvaluationApi";
 import "./trainer.css";
 import "./schedule.css";
@@ -257,14 +258,12 @@ export default function SessionEvaluationPage() {
     }
   };
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <div className="trainer-page">
-      <SessionEvaluationSidebar onSignOut={handleSignOut} />
+      {modalElement}
+      <SessionEvaluationSidebar onSignOut={requestSignOut} />
       <main className="trainer-main schedule-main session-review-main">
         <header className="trainer-header">
           <div>

@@ -73,7 +73,7 @@ public class SupplyController {
 
     /** A delivery arrived: adds to the quantity and writes a RECEIVE line (V21). */
     @PostMapping("/{id}/receive")
-    @RequireRole({"CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER", "VETERINARIAN"})
     public SupplyModels.Supply receive(@PathVariable int id, @Valid @RequestBody SupplyModels.ReceiveRequest req,
                                        @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                        HttpServletRequest http) {

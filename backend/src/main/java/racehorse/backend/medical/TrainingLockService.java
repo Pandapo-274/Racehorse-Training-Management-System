@@ -50,11 +50,21 @@ public class TrainingLockService {
     private final NotificationService notifications;
     private final SessionStopper sessionStopper;
     private final RaceRiskNotifier raceRisk;
+    private final TreatmentRepository treatments;
 
     public TrainingLockService(TrainingLockRepository locks, InjuryRepository injuries,
                                HorseRepository horses, UserRepository users,
                                NotificationService notifications, SessionStopper sessionStopper,
                                RaceRiskNotifier raceRisk) {
+        this(locks, injuries, horses, users, notifications, sessionStopper, raceRisk, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public TrainingLockService(TrainingLockRepository locks, InjuryRepository injuries,
+                               HorseRepository horses, UserRepository users,
+                               NotificationService notifications, SessionStopper sessionStopper,
+                               RaceRiskNotifier raceRisk,
+                               TreatmentRepository treatments) {
         this.locks = locks;
         this.injuries = injuries;
         this.horses = horses;
@@ -62,6 +72,7 @@ public class TrainingLockService {
         this.notifications = notifications;
         this.sessionStopper = sessionStopper;
         this.raceRisk = raceRisk;
+        this.treatments = treatments;
     }
 
     @Transactional
@@ -146,6 +157,12 @@ public class TrainingLockService {
                             + ". Confirm the recovery instead of releasing the lock on its own");
         }
 
+        if (treatments != null && treatments.countActiveByHorse(lock.horseId()) > 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Cannot release training lock: This horse is still under active medical treatment. "
+                            + "End or complete all treatments before releasing the lock.");
+        }
+
         if (locks.release(lockId, user.userId()) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This lock has just been released by someone else");
@@ -167,6 +184,29 @@ public class TrainingLockService {
                                 + horse.status() + ".",
                         Notice.HORSE, horse.horseId())));
         return released;
+    }
+
+    @Transactional
+    public TrainingLockRow setLockLevel(int horseId, String lockLevel, AuthenticatedUser user, String ip) {
+        if (lockLevel == null || (!"FULL".equalsIgnoreCase(lockLevel.trim()) && !"HEAVY_WORK_ONLY".equalsIgnoreCase(lockLevel.trim()))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Lock level must be FULL or HEAVY_WORK_ONLY");
+        }
+        String cleanLevel = lockLevel.trim().toUpperCase();
+        java.util.Optional<TrainingLockRow> active = locks.findActiveByHorse(horseId);
+        if (active.isPresent()) {
+            locks.updateLockLevel(horseId, cleanLevel);
+            users.writeAudit(user.userId(), "TRAINING_LOCK_LEVEL_UPDATED", "TRAINING_LOCK", active.get().lockId(),
+                    "SUCCESS", ip, "Updated lock level to " + cleanLevel);
+            return locks.findById(active.get().lockId()).orElse(active.get());
+        } else {
+            TrainingLockRequest req = new TrainingLockRequest(
+                    horseId,
+                    null,
+                    "Recovery protocol lock: " + ("HEAVY_WORK_ONLY".equals(cleanLevel) ? "Light work restriction" : "Full training suspension"),
+                    cleanLevel
+            );
+            return issue(req, user, ip);
+        }
     }
 
     /** Màn Training Lock Management: mọi lệnh đang hiệu lực trong chuồng. */

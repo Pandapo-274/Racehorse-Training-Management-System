@@ -177,6 +177,18 @@ public class InjuryRepository {
      * cùng khép một chấn thương thì người sau nhận 0 dòng và service biết là
      * mình đến muộn.
      */
+    public int updateStatus(int injuryId, String status) {
+        return jdbc.sql("""
+                UPDATE INJURY
+                SET status = :status,
+                    recovered_at = CASE WHEN :status = 'RECOVERED' THEN SYSUTCDATETIME() ELSE NULL END
+                WHERE injury_id = :id
+                """)
+                .param("id", injuryId)
+                .param("status", status)
+                .update();
+    }
+
     public int markRecovered(int injuryId) {
         return jdbc.sql("""
                 UPDATE INJURY

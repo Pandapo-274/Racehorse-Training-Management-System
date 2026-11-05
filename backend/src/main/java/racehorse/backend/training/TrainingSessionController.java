@@ -91,4 +91,17 @@ public class TrainingSessionController {
                 http.getRemoteAddr());
     }
 
+    /**
+     * PUT /api/training-sessions/{id}/cancel
+     * Hủy một buổi tập chưa diễn ra (SCHEDULED).
+     */
+    @PutMapping("/{id}/cancel")
+    @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER" })
+    public TrainingSessionResponse cancel(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.cancel(id, user, http.getRemoteAddr());
+    }
+
 }

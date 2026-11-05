@@ -37,15 +37,19 @@ public class TreatmentRepository {
             SELECT t.treatment_id, t.record_id, m.horse_id, h.horse_name,
                    t.medicine_name, t.dosage, t.frequency, t.instruction,
                    t.start_date, t.end_date,
-                   CASE WHEN t.start_date <= CAST(GETDATE() AS DATE)
-                             AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
-                        THEN 1 ELSE 0 END AS is_active
+                   CASE WHEN (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
+                        THEN 1 ELSE 0 END AS is_active,
+                   t.supply_id, t.quantity, t.unit_price,
+                   (t.quantity * t.unit_price) AS total_cost,
+                   t.requires_consent, t.consent_status, t.consented_at
             FROM TREATMENT t
             JOIN MEDICAL_RECORD m ON m.record_id = t.record_id
             JOIN HORSE h          ON h.horse_id  = m.horse_id
             """;
 
     private static TreatmentRow map(ResultSet rs, int rowNum) throws SQLException {
+        java.sql.Timestamp ts = rs.getTimestamp("consented_at");
+        java.time.Instant consentedAt = ts != null ? ts.toInstant() : null;
         return new TreatmentRow(
                 rs.getInt("treatment_id"),
                 rs.getInt("record_id"),
@@ -57,7 +61,14 @@ public class TreatmentRepository {
                 rs.getString("instruction"),
                 rs.getObject("start_date", LocalDate.class),
                 rs.getObject("end_date", LocalDate.class),
-                rs.getBoolean("is_active"));
+                rs.getBoolean("is_active"),
+                rs.getObject("supply_id", Integer.class),
+                rs.getBigDecimal("quantity"),
+                rs.getBigDecimal("unit_price"),
+                rs.getBigDecimal("total_cost"),
+                rs.getBoolean("requires_consent"),
+                rs.getString("consent_status"),
+                consentedAt);
     }
 
     public Optional<TreatmentRow> findById(int treatmentId) {
@@ -99,11 +110,23 @@ public class TreatmentRepository {
      * Chỉ ngựa ACADEMY: hồ sơ PEDIGREE không nằm trong chuồng nên không ai cho
      * thuốc, cùng lý do với bảng sức khoẻ và bảng nhắc lịch.
      */
+    public int countActiveByHorse(int horseId) {
+        return jdbc.sql("""
+                SELECT COUNT(*)
+                FROM TREATMENT t
+                JOIN MEDICAL_RECORD m ON m.record_id = t.record_id
+                WHERE m.horse_id = :horseId
+                  AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
+                """)
+                .param("horseId", horseId)
+                .query(Integer.class)
+                .single();
+    }
+
     public List<TreatmentRow> findActive() {
         return jdbc.sql(SELECT_TREATMENT + """
                  WHERE h.record_type = 'ACADEMY'
                    AND h.activity_status = 'ACTIVE'
-                   AND t.start_date <= CAST(GETDATE() AS DATE)
                    AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
                  ORDER BY h.horse_name, t.start_date DESC, t.treatment_id DESC
                 """)
@@ -111,16 +134,23 @@ public class TreatmentRepository {
                 .list();
     }
 
-    public int insert(TreatmentRequest r) {
+    public int insert(TreatmentRequest r, Integer supplyId, String medName, java.math.BigDecimal price, String consentStatus) {
         return jdbc.sql("""
                 INSERT INTO TREATMENT
-                    (record_id, medicine_name, dosage, frequency, instruction, start_date, end_date)
+                    (record_id, supply_id, medicine_name, quantity, unit_price, requires_consent, consent_status,
+                     dosage, frequency, instruction, start_date, end_date)
                 OUTPUT INSERTED.treatment_id
                 VALUES
-                    (:recordId, :medicine, :dosage, :frequency, :instruction, :startDate, :endDate)
+                    (:recordId, :supplyId, :medicine, :qty, :price, :reqConsent, :consentStatus,
+                     :dosage, :frequency, :instruction, :startDate, :endDate)
                 """)
                 .param("recordId", r.recordId())
-                .param("medicine", blankToNull(r.medicineName()))
+                .param("supplyId", supplyId)
+                .param("medicine", blankToNull(medName))
+                .param("qty", r.quantity())
+                .param("price", price)
+                .param("reqConsent", Boolean.TRUE.equals(r.requiresConsent()) ? 1 : 0)
+                .param("consentStatus", consentStatus)
                 .param("dosage", blankToNull(r.dosage()))
                 .param("frequency", blankToNull(r.frequency()))
                 .param("instruction", blankToNull(r.instruction()))
@@ -128,6 +158,14 @@ public class TreatmentRepository {
                 .param("endDate", r.endDate())
                 .query(Integer.class)
                 .single();
+    }
+
+    public int updateConsent(int treatmentId, String status) {
+        return jdbc.sql("""
+                UPDATE TREATMENT
+                SET consent_status = :status, consented_at = SYSUTCDATETIME()
+                WHERE treatment_id = :id AND consent_status = 'WAITING_CONSENT'
+                """).param("id", treatmentId).param("status", status).update();
     }
 
     /**

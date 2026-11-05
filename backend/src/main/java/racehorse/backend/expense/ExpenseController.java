@@ -39,7 +39,7 @@ public class ExpenseController {
     }
 
     @GetMapping
-    @RequireRole({"CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER", "VETERINARIAN"})
     public ExpenseList list(
             @RequestParam(required = false) Integer horseId,
             @RequestParam(required = false) String category,

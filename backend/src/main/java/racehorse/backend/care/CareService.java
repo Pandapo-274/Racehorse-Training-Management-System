@@ -71,7 +71,12 @@ public class CareService {
     /* ---------------- Khẩu phần ---------------- */
 
     public List<CareModels.FeedingItem> feeding(Integer horseId) {
-        return care.findFeeding(horseId);
+        return care.findFeeding(horseId, null);
+    }
+
+    public List<CareModels.FeedingItem> feeding(Integer horseId, AuthenticatedUser user) {
+        Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
+        return care.findFeeding(horseId, ownerId);
     }
 
     /**

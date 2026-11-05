@@ -51,6 +51,7 @@ public class HealthClearanceService {
     private final UserRepository users;
     private final NotificationService notifications;
     private final IncidentRepository incidents;
+    private final TreatmentRepository treatments;
 
     public HealthClearanceService(MedicalRecordRepository records,
                                   HealthClearanceRepository clearance,
@@ -60,6 +61,19 @@ public class HealthClearanceService {
                                   UserRepository users,
                                   NotificationService notifications,
                                   IncidentRepository incidents) {
+        this(records, clearance, injuries, locks, horses, users, notifications, incidents, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public HealthClearanceService(MedicalRecordRepository records,
+                                  HealthClearanceRepository clearance,
+                                  InjuryRepository injuries,
+                                  TrainingLockRepository locks,
+                                  HorseRepository horses,
+                                  UserRepository users,
+                                  NotificationService notifications,
+                                  IncidentRepository incidents,
+                                  TreatmentRepository treatments) {
         this.records = records;
         this.clearance = clearance;
         this.injuries = injuries;
@@ -68,6 +82,7 @@ public class HealthClearanceService {
         this.users = users;
         this.notifications = notifications;
         this.incidents = incidents;
+        this.treatments = treatments;
     }
 
     /**
@@ -86,6 +101,13 @@ public class HealthClearanceService {
 
         if ("ELIGIBLE".equals(horse.status())) {
             throw fieldError("horseId", "This horse is already eligible to train");
+        }
+
+        /* Không cho phép mở khoá / xác nhận hồi phục khi ngựa vẫn đang trong giai đoạn điều trị thuốc */
+        if (treatments != null && treatments.countActiveByHorse(horse.horseId()) > 0) {
+            throw fieldError("horseId",
+                    "Cannot release training lock: " + horse.horseName() + " is still under active medical treatment/prescription. "
+                            + "Complete or end all treatments before releasing the lock.");
         }
 
         /* Trùng id trong danh sách là vô hại nhưng làm số đếm trả về sai, nên
