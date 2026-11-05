@@ -99,6 +99,7 @@ public class OwnerDashboardService {
                     h.horse_id, h.horse_name, h.registration_code, h.photo_url, h.breed,
                     h.date_of_birth, h.weight, h.status,
                     CASE WHEN lk.lock_id IS NULL THEN 0 ELSE 1 END AS is_locked,
+                    CASE WHEN tr.treatment_id IS NULL THEN 0 ELSE 1 END AS in_treatment,
                     ISNULL(wk.distance_m, 0) / 1000.0 AS weekly_distance_km,
                     nr.race_name, nr.race_date
                 FROM HORSE h
@@ -108,6 +109,14 @@ public class OwnerDashboardService {
                     FROM TRAINING_LOCK
                     WHERE horse_id = h.horse_id AND status = 'ACTIVE'
                 ) lk
+
+                OUTER APPLY (
+                    SELECT TOP 1 t.treatment_id
+                    FROM TREATMENT t
+                    JOIN MEDICAL_RECORD m ON m.record_id = t.record_id
+                    WHERE m.horse_id = h.horse_id
+                      AND (t.end_date IS NULL OR t.end_date >= CAST(GETDATE() AS DATE))
+                ) tr
 
                 OUTER APPLY (
                     SELECT SUM(s.actual_distance) AS distance_m
@@ -151,6 +160,7 @@ public class OwnerDashboardService {
                     rs.getBigDecimal("weight"),
                     rs.getString("status"),
                     rs.getInt("is_locked") == 1,
+                    rs.getInt("in_treatment") == 1,
                     null,
                     km == null ? BigDecimal.ZERO : km.setScale(1, RoundingMode.HALF_UP),
                     nextRace,
@@ -162,7 +172,7 @@ public class OwnerDashboardService {
             Integer fitness = trend.isEmpty() ? null : trend.get(trend.size() - 1).fitnessIndex();
             return new OwnerDashboard.HorseCard(
                     h.horseId(), h.horseName(), h.registrationCode(), h.photoUrl(), h.breed(),
-                    h.dateOfBirth(), h.weight(), h.status(), h.locked(),
+                    h.dateOfBirth(), h.weight(), h.status(), h.locked(), h.inTreatment(),
                     fitness, h.weeklyDistanceKm(), h.nextRace(),
                     loadStats(h.horseId()), trend, loadRemarks(h.horseId()));
         }).toList();

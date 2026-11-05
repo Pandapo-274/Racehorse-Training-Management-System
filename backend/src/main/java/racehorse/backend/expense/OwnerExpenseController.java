@@ -41,4 +41,14 @@ public class OwnerExpenseController {
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.listForOwner(horseId, category, from, to, limit, user);
     }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{id}/dispute")
+    @RequireRole({"HORSE_OWNER"})
+    public ExpenseModels.Expense dispute(
+            @org.springframework.web.bind.annotation.PathVariable int id,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody ExpenseModels.DisputeRequest req,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            jakarta.servlet.http.HttpServletRequest http) {
+        return service.dispute(id, req.reason(), user, http.getRemoteAddr());
+    }
 }

@@ -32,7 +32,14 @@ public final class ExpenseModels {
     /** Một khoản chi, như frontend nhìn thấy. */
     public record Expense(int expenseId, int horseId, String horseName, String registrationCode,
                           String category, BigDecimal amount, LocalDate expenseDate,
-                          Integer recordedBy, String recordedByName, String note) {
+                          Integer recordedBy, String recordedByName, String note,
+                          /* V29 */ String status, String disputeReason) {
+    }
+
+    public record DisputeRequest(
+            @NotBlank(message = "Dispute reason is required")
+            @Size(max = 255, message = "Dispute reason must be at most 255 characters")
+            String reason) {
     }
 
     /**

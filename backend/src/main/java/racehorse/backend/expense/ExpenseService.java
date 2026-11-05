@@ -166,6 +166,28 @@ public class ExpenseService {
                 describe(target) + ". Reason: " + why);
     }
 
+    @Transactional
+    public Expense dispute(int expenseId, String reason, AuthenticatedUser owner, String ip) {
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required to dispute a cost",
+                    Map.of("reason", "Say why this cost is being disputed"));
+        }
+        Expense target = expenses.findById(expenseId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Cost #" + expenseId + " does not exist"));
+        HorseResponse horse = horses.findById(target.horseId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse not found"));
+        if ("HORSE_OWNER".equals(owner.role()) && horse.ownerId() != owner.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This horse is not yours");
+        }
+        if (expenses.markDisputed(expenseId, why) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Cost cannot be disputed (already voided or not in billed state)");
+        }
+        users.writeAudit(owner.userId(), "EXPENSE_DISPUTE", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
+                describe(target) + ". Dispute reason: " + why);
+        return expenses.findById(expenseId).orElseThrow();
+    }
+
     /** "TM-0481 Symboli Rudolf, FEEDING, 2500000 on 2026-11-02" */
     private static String describe(Expense e) {
         return (e.registrationCode() == null ? "" : e.registrationCode() + " ") + e.horseName()

@@ -15,10 +15,15 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { formatDateTime } from "../horse/horseApi";
 import {
-  CATEGORY_TEXT, MOVEMENT_TEXT, countSupply, createSupply, formatQty, listMovements, listSupplies,
+  CATEGORY_TEXT, MOVEMENT_TEXT, createSupply, formatQty, listMovements, listSupplies,
   receiveSupply, todayIso, updateSupply, wasteSupply,
 } from "./careApi";
 import "./care.css";
+
+function formatSupplyPrice(price, unit) {
+  if (!price || Number(price) <= 0) return "—";
+  return `${Number(price).toLocaleString("vi-VN")}đ/1 ${unit || "đơn vị"}`;
+}
 
 const EMPTY = { supplyName: "", category: "FEED", unit: "kg", minThreshold: "", currentQty: "", area: "", expiryDate: "" };
 
@@ -120,47 +125,13 @@ function SupplyForm({ initial, areas, onSaved, onCancel }) {
   );
 }
 
-function CountCell({ item, onCounted }) {
-  const navigate = useNavigate();
-  const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const save = async () => {
-    if (value === "" || Number(value) < 0) {
-      setError("0 or more");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      onCounted(await countSupply(item.supplyId, Number(value)));
-      setValue("");
-    } catch (err) {
-      if (!handleAuthError(err, navigate)) setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div>
-      <div className="care-inline">
-        <input className="care-qty-input" type="number" min="0" step="0.01" value={value}
-          placeholder={formatQty(item.currentQty)} aria-label={`New count for ${item.supplyName}`}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
-        <button type="button" className="hz-btn" disabled={busy || value === ""} onClick={save}>Update</button>
-      </div>
-      {error && <p className="hz-field__error">{error}</p>}
-    </div>
-  );
-}
-
-/** Receive a delivery, record waste, or show the ledger of one item. */
-function StockAction({ kind, item, onDone, onCancel }) {
+/** Receive / restock a delivery, record waste, or show the ledger of one item. */
+function StockAction({ kind, item, areas = [], onDone, onCancel }) {
   const navigate = useNavigate();
   const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState(item.unit || "");
+  const [unitPrice, setUnitPrice] = useState(item.unitPrice ? String(item.unitPrice) : "");
+  const [area, setArea] = useState(item.area || "");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -198,7 +169,7 @@ function StockAction({ kind, item, onDone, onCancel }) {
                     </td>
                     <td>{formatQty(m.qtyAfter)}</td>
                     <td>{m.createdByName}</td>
-                    <td className="hz-muted">{m.reason || "—"}</td>
+                    <td className="hz-muted">{m.reason ? m.reason.replace(" @ ", " - ") : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -210,45 +181,142 @@ function StockAction({ kind, item, onDone, onCancel }) {
     );
   }
 
-  const receiving = kind === "receive";
+  const isRestock = kind === "restock" || kind === "receive";
+  const qtyNum = Number(qty) || 0;
+  const fixedPrice = Number(item.unitPrice) || 0;
+  const totalCost = qtyNum * fixedPrice;
+
   const submit = async (e) => {
     e.preventDefault();
-    if (!(Number(qty) > 0)) { setError("Quantity must be more than 0"); return; }
-    if (!receiving && !text.trim()) { setError("Say why it is thrown away"); return; }
+    if (qtyNum <= 0) {
+      setError(isRestock ? "Quantity to restock must be greater than 0" : "Quantity must be greater than 0");
+      return;
+    }
+    if (isRestock && !unit.trim()) {
+      setError("Unit is required");
+      return;
+    }
+    if (!isRestock && !text.trim()) {
+      setError("Please specify reason for disposal");
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
-      const saved = receiving
-        ? await receiveSupply(item.supplyId, Number(qty), text.trim())
-        : await wasteSupply(item.supplyId, Number(qty), text.trim());
-      onDone(saved, receiving
-        ? `${formatQty(qty)} ${item.unit} of ${saved.supplyName} received.`
-        : `${formatQty(qty)} ${item.unit} of ${saved.supplyName} recorded as thrown away.`);
+      if (isRestock) {
+        const saved = await receiveSupply(item.supplyId, {
+          qty: qtyNum,
+          unit: unit.trim(),
+          unitPrice: fixedPrice > 0 ? fixedPrice : null,
+          area: area.trim() || item.area,
+          note: text.trim() || null,
+        });
+        const costStr = totalCost > 0 ? ` (Total: ₫${totalCost.toLocaleString()})` : "";
+        onDone(saved, `Restocked +${formatQty(qtyNum)} ${unit.trim()} of ${saved.supplyName}${costStr}. Report sent to Club Manager.`);
+      } else {
+        const saved = await wasteSupply(item.supplyId, qtyNum, text.trim());
+        onDone(saved, `${formatQty(qtyNum)} ${item.unit} of ${saved.supplyName} recorded as thrown away.`);
+      }
     } catch (err) {
-      if (!handleAuthError(err, navigate)) setError(err.message);
+      if (err.status === 401) {
+        handleAuthError(err, navigate);
+        return;
+      }
+      setError(err.message || (isRestock ? "Failed to restock supply" : "Failed to record waste"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Card title={receiving ? `Receive ${item.supplyName}` : `Throw away ${item.supplyName}`}
-      hint={`In stock: ${formatQty(item.currentQty)} ${item.unit}.`}>
+    <Card
+      title={isRestock ? `Restock ${item.supplyName}` : `Throw away ${item.supplyName}`}
+      hint={isRestock
+        ? `In stock: ${formatQty(item.currentQty)} ${item.unit}. Fill in purchase quantity, unit price, and storage area.`
+        : `In stock: ${formatQty(item.currentQty)} ${item.unit}.`}
+      actions={<button type="button" className="hz-btn hz-btn--ghost" onClick={onCancel}>Cancel</button>}
+    >
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
-            <label htmlFor="sa-qty">Quantity ({item.unit})</label>
-            <input id="sa-qty" type="number" min="0.01" step="0.01" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <label htmlFor="sa-qty">{isRestock ? "Quantity to purchase / restock *" : `Quantity (${item.unit}) *`}</label>
+            <input
+              id="sa-qty"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder={isRestock ? "e.g. 50" : "Quantity"}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              autoFocus
+            />
           </div>
-          <div className="hz-field">
-            <label htmlFor="sa-text">{receiving ? "Note (supplier, invoice no.)" : "Reason"}</label>
-            <input id="sa-text" value={text} maxLength={255} onChange={(e) => setText(e.target.value)}
-              placeholder={receiving ? "Optional" : "Spoiled, expired, broken…"} />
+
+          {isRestock && (
+            <>
+              <div className="hz-field">
+                <label htmlFor="sa-unit">Unit *</label>
+                <input
+                  id="sa-unit"
+                  value={unit}
+                  maxLength={20}
+                  placeholder="e.g. tuýp, kg, viên, lọ"
+                  onChange={(e) => setUnit(e.target.value)}
+                />
+              </div>
+              <div className="hz-field">
+                <label htmlFor="sa-price">Unit price (₫ / VND)</label>
+                <input
+                  id="sa-price"
+                  type="text"
+                  readOnly
+                  disabled
+                  value={item.unitPrice ? `${Number(item.unitPrice).toLocaleString("vi-VN")} ₫ / 1 ${item.unit}` : "0 ₫"}
+                  className="care-qty-input--readonly"
+                  style={{ background: "#f8fafc", cursor: "not-allowed" }}
+                />
+              </div>
+              <div className="hz-field">
+                <label htmlFor="sa-area">Storage area</label>
+                <input
+                  id="sa-area"
+                  list="sa-areas"
+                  value={area}
+                  maxLength={100}
+                  placeholder="e.g. Kho A, Tủ thuốc"
+                  onChange={(e) => setArea(e.target.value)}
+                />
+                <datalist id="sa-areas">{areas.map((a) => <option key={a} value={a} />)}</datalist>
+              </div>
+            </>
+          )}
+
+          <div className="hz-field care-field-wide">
+            <label htmlFor="sa-text">{isRestock ? "Note / Supplier / Invoice (optional)" : "Reason *"}</label>
+            <input
+              id="sa-text"
+              value={text}
+              maxLength={255}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={isRestock ? "e.g. Supplier VetPharma, Invoice #4892" : "Spoiled, expired, broken…"}
+            />
           </div>
         </div>
+
+        {isRestock && (
+          <div className="care-restock-summary">
+            <span>Total restock expense:</span>
+            <strong>₫{totalCost.toLocaleString()}</strong>
+            <small className="hz-muted">(Report will be sent to Club Manager)</small>
+          </div>
+        )}
+
         {error && <p className="hz-form-error" role="alert">{error}</p>}
         <div className="hz-form-footer">
-          <button type="submit" className="hz-btn" disabled={busy}>{busy ? "Saving…" : receiving ? "Receive" : "Record waste"}</button>
+          <button type="submit" className="hz-btn" disabled={busy || qtyNum <= 0}>
+            {busy ? "Saving…" : isRestock ? "Update" : "Record waste"}
+          </button>
           <button type="button" className="hz-btn hz-btn--ghost" onClick={onCancel}>Cancel</button>
         </div>
       </form>
@@ -260,7 +328,7 @@ export default function SuppliesPage() {
   const navigate = useNavigate();
   const role = getUser()?.role;
   const isManager = role === "CLUB_MANAGER";
-  const canCount = ["CLUB_MANAGER", "VETERINARIAN", "GROOM"].includes(role);
+  const canRestock = ["CLUB_MANAGER", "VETERINARIAN"].includes(role);
   const canWaste = ["CLUB_MANAGER", "VETERINARIAN"].includes(role);
   const canSeeHistory = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN"].includes(role);
   const [action, setAction] = useState(null); // null | { kind, item }
@@ -342,6 +410,7 @@ export default function SuppliesPage() {
               key={`${action.kind}-${action.item.supplyId}`}
               kind={action.kind}
               item={action.item}
+              areas={areas}
               onCancel={() => setAction(null)}
               onDone={(saved, message) => { replace(saved); setAction(null); setInfo(message); }}
             />
@@ -373,11 +442,12 @@ export default function SuppliesPage() {
                   <tr>
                     <th>Item</th>
                     <th>Area</th>
-                    <th>In stock</th>
+                    <th>Price</th>
+                    <th style={{ textAlign: "center" }}>Current amount</th>
                     <th>Minimum</th>
                     <th>Status</th>
                     <th>Last change</th>
-                    {(canCount || isManager || canSeeHistory) && <th aria-label="Actions" />}
+                    {(canRestock || canWaste || canSeeHistory || isManager) && <th style={{ textAlign: "right" }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -388,7 +458,18 @@ export default function SuppliesPage() {
                         <p className="hz-note hz-muted">{CATEGORY_TEXT[i.category] || i.category}</p>
                       </td>
                       <td>{i.area}</td>
-                      <td className="hz-name">{formatQty(i.currentQty)} {i.unit}</td>
+                      <td className="care-price-cell">
+                        <strong>{formatSupplyPrice(i.unitPrice, i.unit)}</strong>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <input
+                          className="care-qty-input care-qty-input--readonly"
+                          readOnly
+                          disabled
+                          value={formatQty(i.currentQty)}
+                          aria-label={`Current amount for ${i.supplyName}`}
+                        />
+                      </td>
                       <td className="hz-muted">{formatQty(i.minThreshold)} {i.unit}</td>
                       <td>
                         {i.needsRestock
@@ -404,31 +485,46 @@ export default function SuppliesPage() {
                         {i.updatedAt ? formatDateTime(i.updatedAt) : "—"}
                         {i.updatedByName && <p className="hz-note">{i.updatedByName}</p>}
                       </td>
-                      {(canCount || isManager || canSeeHistory) && (
+                      {(canRestock || canWaste || canSeeHistory || isManager) && (
                         <td className="hz-row-action">
-                          {canCount && (role !== "GROOM" || i.category !== "MEDICINE")
-                            ? <CountCell item={i} onCounted={replace} />
-                            : canCount && <small className="care-muted">Counted by vet</small>}
-                          {isManager && (
-                            <button type="button" className="care-link-btn" onClick={() => { setInfo(""); setAction(null); setEditing(i); }}>
-                              Edit item
-                            </button>
-                          )}
-                          {isManager && (
-                            <button type="button" className="care-link-btn" onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "receive", item: i }); }}>
-                              Receive
-                            </button>
-                          )}
-                          {canWaste && Number(i.currentQty) > 0 && (
-                            <button type="button" className="care-link-btn" onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "waste", item: i }); }}>
-                              Throw away
-                            </button>
-                          )}
-                          {canSeeHistory && (
-                            <button type="button" className="care-link-btn" onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "history", item: i }); }}>
-                              History
-                            </button>
-                          )}
+                          <div className="care-btn-group" style={{ justifyContent: "flex-end" }}>
+                            {canRestock && (
+                              <button
+                                type="button"
+                                className="hz-btn care-btn-pill"
+                                onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "restock", item: i }); }}
+                              >
+                                Restock
+                              </button>
+                            )}
+                            {canWaste && Number(i.currentQty) > 0 && (
+                              <button
+                                type="button"
+                                className="hz-btn hz-btn--ghost care-btn-pill care-btn-pill--waste"
+                                onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "waste", item: i }); }}
+                              >
+                                Throw away
+                              </button>
+                            )}
+                            {canSeeHistory && (
+                              <button
+                                type="button"
+                                className="hz-btn hz-btn--ghost care-btn-pill"
+                                onClick={() => { setInfo(""); setEditing(null); setAction({ kind: "history", item: i }); }}
+                              >
+                                History
+                              </button>
+                            )}
+                            {isManager && (
+                              <button
+                                type="button"
+                                className="hz-btn hz-btn--ghost care-btn-pill"
+                                onClick={() => { setInfo(""); setAction(null); setEditing(i); }}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

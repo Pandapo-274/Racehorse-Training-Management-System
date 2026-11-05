@@ -109,6 +109,23 @@ public class RaceController {
         return service.recordResult(id, req, user, http.getRemoteAddr());
     }
 
+    @PutMapping("/{id}/approve")
+    @RequireRole({"HORSE_OWNER"})
+    public RaceModels.Entry approve(@PathVariable int id,
+                                    @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                    HttpServletRequest http) {
+        return service.approveEntry(id, user, http.getRemoteAddr());
+    }
+
+    @PutMapping("/{id}/reject")
+    @RequireRole({"HORSE_OWNER"})
+    public RaceModels.Entry reject(@PathVariable int id,
+                                   @Valid @RequestBody RaceModels.RejectRequest req,
+                                   @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                   HttpServletRequest http) {
+        return service.rejectEntry(id, req.reason(), user, http.getRemoteAddr());
+    }
+
     @PutMapping("/{id}/scratch")
     @RequireRole({"HEAD_TRAINER"})
     public RaceModels.Entry scratch(@PathVariable int id, @Valid @RequestBody RaceModels.ScratchRequest req,

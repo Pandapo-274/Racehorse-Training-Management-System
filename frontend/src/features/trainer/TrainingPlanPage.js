@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
-import { handleAuthError, logout } from "../auth/authService";
+import { handleAuthError } from "../auth/authService";
+import { useSignOutModal } from "../auth/SignOutModal";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
@@ -12,36 +13,22 @@ import {
 import "./trainer.css";
 import "./training-plan.css";
 
+let phaseIdCounter = 1;
+function generatePhaseId() {
+  return `phase-${Date.now()}-${phaseIdCounter++}`;
+}
+
 const initialPhases = [
   {
+    id: "init-phase-1",
     phaseName: "Base",
-    distance: "3200",
-    workload: "60% VO2 max",
+    distance: "",
+    workload: "",
     surface: "DIRT",
-    sessionsPerWeek: "3",
-    heartRateCeiling: "180",
-    startDate: "2026-08-31",
-    endDate: "2026-09-27",
-  },
-  {
-    phaseName: "Build",
-    distance: "2000",
-    workload: "Interval training",
-    surface: "TURF",
-    sessionsPerWeek: "4",
-    heartRateCeiling: "180",
-    startDate: "2026-09-28",
-    endDate: "2026-11-01",
-  },
-  {
-    phaseName: "Peak",
-    distance: "1600",
-    workload: "Race-day simulation",
-    surface: "SYNTHETIC",
-    sessionsPerWeek: "3",
-    heartRateCeiling: "180",
-    startDate: "2026-11-02",
-    endDate: "2026-11-22",
+    sessionsPerWeek: "",
+    heartRateCeiling: "",
+    startDate: "",
+    endDate: "",
   },
 ];
 
@@ -115,32 +102,75 @@ function statusClass(status) {
 }
 
 function emptyPhase(index, startDate, endDate) {
+  const defaultNames = ["Base", "Build", "Peak"];
   return {
-    phaseName: ["Base", "Build", "Peak"][index] || `Phase ${index + 1}`,
+    id: generatePhaseId(),
+    phaseName: defaultNames[index] || `Phase ${index + 1}`,
     distance: "",
     workload: "",
     surface: "DIRT",
-    sessionsPerWeek: "3",
-    heartRateCeiling: "180",
-    startDate,
-    endDate,
+    sessionsPerWeek: "",
+    heartRateCeiling: "",
+    startDate: startDate || "",
+    endDate: endDate || "",
   };
+}
+
+const DRAFT_KEY = "tracen_training_plan_draft";
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {}
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {}
 }
 
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
+  const savedDraft = useMemo(() => loadDraft(), []);
+
   const [horses, setHorses] = useState([]);
   const [plans, setPlans] = useState([]);
-  const [horseId, setHorseId] = useState("");
-  const [planName, setPlanName] = useState("Tracen Cup preparation");
-  const [startDate, setStartDate] = useState("2026-08-31");
-  const [endDate, setEndDate] = useState("2026-11-22");
-  const [phases, setPhases] = useState(initialPhases);
+  const [horseId, setHorseId] = useState(savedDraft?.horseId || "");
+  const [planName, setPlanName] = useState(savedDraft?.planName || "");
+  const [startDate, setStartDate] = useState(savedDraft?.startDate || "");
+  const [endDate, setEndDate] = useState(savedDraft?.endDate || "");
+  const [phases, setPhases] = useState(
+    savedDraft?.phases && savedDraft.phases.length > 0
+      ? savedDraft.phases
+      : initialPhases,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [phaseNotice, setPhaseNotice] = useState("");
   const [filter, setFilter] = useState("ALL");
+
+  useEffect(() => {
+    saveDraft({
+      horseId,
+      planName,
+      startDate,
+      endDate,
+      phases,
+    });
+  }, [horseId, planName, startDate, endDate, phases]);
 
   const load = useCallback(
     async (signal) => {
@@ -172,7 +202,7 @@ export default function TrainingPlanPage() {
             return current;
           }
 
-          return String(eligibleHorses[0]?.horseId || "");
+          return "";
         });
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -206,16 +236,29 @@ export default function TrainingPlanPage() {
         i === index ? { ...phase, [field]: value } : phase,
       ),
     );
-  const addPhase = () =>
-    setPhases((current) =>
-      current.length >= 12
-        ? current
-        : [...current, emptyPhase(current.length, startDate, endDate)],
-    );
+  const addPhase = () => {
+    if (phases.length >= 12) return;
+    const nextNum = phases.length + 1;
+    const newPhase = emptyPhase(phases.length, startDate, endDate);
+    setPhases((current) => [...current, newPhase]);
+    const msg = `Đã thêm Phase ${nextNum} thành công!`;
+    setNotice(msg);
+    setPhaseNotice(msg);
+    setTimeout(() => {
+      setPhaseNotice((prev) => (prev === msg ? "" : prev));
+    }, 4000);
+  };
   const removePhase = (index) =>
-    setPhases((current) =>
-      current.length <= 1 ? current : current.filter((_, i) => i !== index),
-    );
+    setPhases((current) => {
+      if (current.length <= 1) return current;
+      const filtered = current.filter((_, i) => i !== index);
+      return filtered.map((p, i) => {
+        if (/^Phase \d+$/i.test(p.phaseName)) {
+          return { ...p, phaseName: `Phase ${i + 1}` };
+        }
+        return p;
+      });
+    });
 
   const submit = async (event) => {
     event.preventDefault();
@@ -253,6 +296,12 @@ export default function TrainingPlanPage() {
       setNotice(
         `Training plan “${created.planName}” was saved as ${created.status}.`,
       );
+      clearDraft();
+      setPlanName("");
+      setHorseId("");
+      setStartDate("");
+      setEndDate("");
+      setPhases(initialPhases);
       await load();
     } catch (err) {
       if (!handleAuthError(err, navigate)) {
@@ -283,14 +332,12 @@ export default function TrainingPlanPage() {
     }
   };
 
-  const signOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <div className="trainer-page training-plan-page">
-      <TrainerSidebar active="Training plans" onSignOut={signOut} />
+      {modalElement}
+      <TrainerSidebar active="Training plans" onSignOut={requestSignOut} />
       <main className="trainer-main">
         <header className="trainer-header">
           <div>
@@ -414,20 +461,39 @@ export default function TrainingPlanPage() {
                         simulation.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="training-add-phase"
-                      onClick={addPhase}
-                      disabled={phases.length >= 12}
-                    >
-                      + Add phase
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      {phaseNotice && (
+                        <span
+                          className="phase-notice-badge"
+                          style={{
+                            color: "#2e7d32",
+                            backgroundColor: "#e8f5e9",
+                            border: "1px solid #c8e6c9",
+                            padding: "4px 10px",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                          }}
+                          role="status"
+                        >
+                          ✓ {phaseNotice}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="training-add-phase"
+                        onClick={addPhase}
+                        disabled={phases.length >= 12}
+                      >
+                        + Add phase
+                      </button>
+                    </div>
                   </div>
                   <div className="training-phase-list">
                     {phases.map((phase, index) => (
                       <article
                         className="training-phase"
-                        key={`${index}-${phase.phaseName}`}
+                        key={phase.id || `${index}-${phase.phaseName}`}
                       >
                         <div className="training-phase-heading">
                           <span className="training-phase-number">
@@ -435,13 +501,17 @@ export default function TrainingPlanPage() {
                           </span>
                           <div>
                             <strong>
-                              Phase {index + 1} ·{" "}
-                              {phase.phaseName || "Untitled"}
+                              Phase {index + 1}
+                              {phase.phaseName && phase.phaseName !== `Phase ${index + 1}`
+                                ? ` · ${phase.phaseName}`
+                                : ""}
                             </strong>
-                            <span>
-                              {dateLabel(phase.startDate)} –{" "}
-                              {dateLabel(phase.endDate)}
-                            </span>
+                            {phase.startDate && phase.endDate && (
+                              <span>
+                                {dateLabel(phase.startDate)} –{" "}
+                                {dateLabel(phase.endDate)}
+                              </span>
+                            )}
                           </div>
                           {phases.length > 1 && (
                             <button
@@ -464,6 +534,7 @@ export default function TrainingPlanPage() {
                               }
                               maxLength={100}
                               required
+                              placeholder="e.g. Base, Build, Peak"
                             />
                           </label>
                           <label className="training-field">
@@ -476,6 +547,7 @@ export default function TrainingPlanPage() {
                                 updatePhase(index, "distance", e.target.value)
                               }
                               required
+                              placeholder="e.g. 3200"
                             />
                           </label>
                           <label className="training-field">
@@ -517,6 +589,7 @@ export default function TrainingPlanPage() {
                                 )
                               }
                               required
+                              placeholder="e.g. 3"
                             />
                           </label>
                           <label className="training-field">
@@ -534,6 +607,7 @@ export default function TrainingPlanPage() {
                                 )
                               }
                               required
+                              placeholder="e.g. 180"
                             />
                           </label>
                           <label className="training-field">

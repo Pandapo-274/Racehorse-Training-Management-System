@@ -181,10 +181,6 @@ public class TrainingPlanService {
         if (withdrawn != null) {
             throw new ApiException(HttpStatus.CONFLICT, withdrawn);
         }
-        if (!HorsePolicy.TRAINABLE_STATUSES.contains(horse.status())) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "Horse status is " + horse.status() + ", cannot start training yet");
-        }
         /* Giáo án đã qua ngày kết thúc thì không xếp được buổi nào nữa
            (buổi tập phải nằm trong giai đoạn và không ở quá khứ). */
         if (plan.endDate().isBefore(LocalDate.now())) {
@@ -193,11 +189,15 @@ public class TrainingPlanService {
         }
         /* Chỉ khoá FULL chặn kích hoạt. HEAVY_WORK_ONLY vẫn cho tập nhẹ, nên
            giáo án vẫn chạy được; từng buổi tập tự kiểm cự ly (TrainingSessionService). */
-        vitalsRepository.findActiveLock(plan.horseId()).ifPresent(lock -> {
-            if (!"HEAVY_WORK_ONLY".equals(lock.lockLevel())) {
+        var activeLock = vitalsRepository.findActiveLock(plan.horseId());
+        if (activeLock.isPresent()) {
+            if (!"HEAVY_WORK_ONLY".equals(activeLock.get().lockLevel())) {
                 throw new ApiException(HttpStatus.CONFLICT, "Horse is under a full training lock");
             }
-        });
+        } else if (!HorsePolicy.TRAINABLE_STATUSES.contains(horse.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Horse status is " + horse.status() + ", cannot start training yet");
+        }
         /* Giáo án ACTIVE cũ đã qua ngày kết thúc không còn chặn giáo án mới:
            kết thúc nó trước (huỷ luôn buổi còn treo), rồi mới kiểm. */
         completeExpired(planRepository.findSummaries(plan.horseId(), "ACTIVE", null));

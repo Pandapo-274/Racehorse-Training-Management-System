@@ -1,7 +1,8 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useEffect, useState } from "react";
 import "./horse-owner.css";
 import { Link, useNavigate } from "react-router-dom";
-import { getUser, logout, handleAuthError } from "../auth/authService";
+import { getUser, handleAuthError } from "../auth/authService";
 import {
   formatDate, formatWeight, toAge, toEnumLabel, toInitials, toStatus,
 } from "../horse/horseApi";
@@ -13,6 +14,21 @@ import {
   COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
   formatShortDate, getOwnerDashboard, isPrizeRow, listOwnerExpenses, toCostLabel, toEvaluation, toStars,
 } from "./horseOwnerApi";
+
+function formatExpenseNote(note) {
+  if (!note) return "";
+  return note.replace(/\(Qty:\s*(\d+(?:\.\d+)?)\s*@\s*\d+\)/gi, (match, q) => {
+    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} viên)`;
+    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tuýp)`;
+    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} lọ)`;
+    if (note.includes("Probiotic")) return `(${q} gói)`;
+    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} chai)`;
+    if (note.includes("Glucosamine")) return `(${q} hộp)`;
+    if (note.includes("Hyaluronic")) return `(${q} ống)`;
+    if (note.includes("Electrolytes") || note.includes("điện giải")) return `(${q} lít)`;
+    return `(${q})`;
+  });
+}
 
 function HorseshoeIcon() {
   return (
@@ -35,13 +51,11 @@ function HorseshoeIcon() {
 function Sidebar({ user }) {
   const navigate = useNavigate();
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <aside className="owner-sidebar">
+      {modalElement}
       <div className="owner-brand">
         <img src="/logo.png" alt="Tracen logo" />
         <div>
@@ -59,7 +73,7 @@ function Sidebar({ user }) {
       </nav>
 
       <div className="owner-sidebar-bottom">
-        <button type="button" className="owner-signout" onClick={handleSignOut}>
+        <button type="button" className="owner-signout" onClick={requestSignOut}>
           Sign out
         </button>
 
@@ -178,7 +192,9 @@ function HorseOverview({ horse }) {
   const [photoBroken, setPhotoBroken] = useState(false);
   useEffect(() => setPhotoBroken(false), [horse.photoUrl]);
 
-  const status = horse.locked
+    const status = horse.inTreatment
+    ? { label: "Under treatment", tone: "warning", hint: "Currently receiving prescribed veterinary treatment" }
+    : horse.locked
     ? { label: "Training locked", tone: "critical", hint: "The vet has locked training" }
     : toStatus(horse.status);
   const stars = toStars(horse.stats);
@@ -502,7 +518,7 @@ function CostLines({ from, to }) {
                 <tr key={e.expenseId}>
                   <td>{formatDate(e.expenseDate)}</td>
                   <td>{e.horseName}</td>
-                  <td>{toCostLabel(e.category)}{e.note ? ` · ${e.note}` : ""}</td>
+                  <td>{toCostLabel(e.category)}{e.note ? ` · ${formatExpenseNote(e.note)}` : ""}</td>
                   <td>{formatMoney(e.amount)}</td>
                 </tr>
               ))}

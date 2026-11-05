@@ -1,3 +1,4 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
@@ -12,7 +13,7 @@ import {
   toDistance,
   toChartData,
 } from "./dashboardApi";
-import { getUser, logout, handleAuthError } from "../auth/authService";
+import { getUser, handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 
@@ -390,10 +391,7 @@ export default function TrainerDashboard() {
     return () => ctrl.abort();
   }, [weeks, load]);
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   const openHorse = (horseId) => {
     if (horseId) navigate(`/trainer/horses/${horseId}`);
@@ -411,7 +409,8 @@ export default function TrainerDashboard() {
 
   return (
     <div className="trainer-page">
-      <TrainerSidebar user={user} onSignOut={handleSignOut} />
+      {modalElement}
+      <TrainerSidebar user={user} onSignOut={requestSignOut} />
 
       <main className="trainer-main">
         <header className="trainer-header">

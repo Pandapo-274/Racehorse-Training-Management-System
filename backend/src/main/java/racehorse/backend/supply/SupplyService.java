@@ -150,17 +150,38 @@ public class SupplyService {
         return after;
     }
 
-    /** A delivery arrived (Manager). */
+    /** A delivery arrived (Manager or Veterinarian). */
     @Transactional
     public SupplyModels.Supply receive(int id, SupplyModels.ReceiveRequest r, AuthenticatedUser user, String ip) {
-        get(id);
-        String note = r.note() == null || r.note().isBlank() ? "Delivery" : r.note().trim();
-        BigDecimal[] range = repo.add(id, r.qty(), user.userId()).orElseThrow(() -> notFound(id));
-        repo.insertMovement(id, "RECEIVE", r.qty(), range[1], null, null, note, user.userId());
+        SupplyModels.Supply before = get(id);
+        String customNote = r.note() != null && !r.note().isBlank() ? r.note().trim() : "";
+        BigDecimal price = r.unitPrice() != null && r.unitPrice().compareTo(BigDecimal.ZERO) > 0
+                ? r.unitPrice() : (before.unitPrice() != null ? before.unitPrice() : BigDecimal.ZERO);
+        String unit = r.unit() != null && !r.unit().isBlank() ? r.unit().trim() : before.unit();
+        String area = r.area() != null && !r.area().isBlank() ? r.area().trim() : before.area();
+
+        BigDecimal[] range = repo.addWithDetails(id, r.qty(), r.unitPrice(), r.unit(), r.area(), user.userId())
+                .orElseThrow(() -> notFound(id));
+
+        String moveReason = "Restocked / Purchased (+ " + plain(r.qty()) + " " + unit + ") - " + plain(price) + " VND"
+                + (customNote.isEmpty() ? "" : " - " + customNote);
+        repo.insertMovement(id, "RECEIVE", r.qty(), range[1], null, null, moveReason, user.userId());
+
         SupplyModels.Supply after = get(id);
         users.writeAudit(user.userId(), "SUPPLY_RECEIVE", "SUPPLY_STOCK", id, "SUCCESS", ip,
                 after.supplyName() + where(after) + ": +" + plain(r.qty()) + " " + after.unit()
-                        + " (" + plain(range[0]) + " -> " + plain(range[1]) + "). " + note);
+                        + " (" + plain(range[0]) + " -> " + plain(range[1]) + "). " + moveReason);
+
+        // Notify Club Manager (do NOT notify horse owner)
+        BigDecimal totalCost = r.qty().multiply(price);
+        String costText = totalCost.compareTo(BigDecimal.ZERO) > 0 ? " Total cost: " + plain(totalCost) + " VND." : "";
+        notifications.notifyRole("CLUB_MANAGER", user, new Notice(
+                "SUPPLY_RESTOCKED",
+                "Supply restocked: " + after.supplyName(),
+                user.role() + " " + user.username() + " restocked +" + plain(r.qty()) + " " + after.unit()
+                        + " of " + after.supplyName() + " to " + (after.area() != null ? after.area() : "Storage") + "." + costText + (customNote.isEmpty() ? "" : " Note: " + customNote),
+                null, null));
+
         return after;
     }
 
@@ -175,7 +196,7 @@ public class SupplyService {
         BigDecimal[] range = repo.takeUpTo(id, r.qty(), user.userId()).orElseThrow(() -> notFound(id));
         BigDecimal taken = range[0].subtract(range[1]);
         if (taken.signum() > 0) {
-            repo.insertMovement(id, "WASTE", taken.negate(), range[1], null, null, r.reason().trim(),
+            repo.insertMovement(id, "WASTE", taken.negate(), range[1], null, null, "Waste / Discarded: " + r.reason().trim(),
                     user.userId());
         }
         SupplyModels.Supply after = get(id);

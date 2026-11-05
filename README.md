@@ -1,5 +1,5 @@
-0p# Racehorse-Training-Management-System
-### Last Commited: `Nov 3, 2026` at `12:14` by `ArichiAya`
+# Racehorse-Training-Management-System
+### Last Commited: `Nov 5, 2026` at `23:05` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -25,7 +25,7 @@ git pull [use when others pushed the files to the repo]
 git add . [use when you have new files added]
 git commit -am "[<GitHub Username>] <Date>-<Time> <Commit Message>"
 
-Example: `
+Example: 
 git add .
 git commit -am "[NekomataRin] 20260929-0948 Initial App Commit"
 ```
@@ -46,6 +46,12 @@ npm start
 
 ## Changelogs
 > #### `Nov 5, 2026`
+- `[23:05]` `Pandapo274` - Complete recovery relapse rules, vitals threshold alert distinction, training session cancellation for Head Trainer, supply pricing & inventory deduction, and race approval flow:
+  - `Vet Recovery`: Relapse only allows new active injuries incurred during light work/rating; prevent duplicate relapse spam; clean notice layout without premature line breaks.
+  - `Groom & Trainer Vitals`: Distinguish Speed alert vs Heart Rate alert messages; clarify alert severity levels (LOW, MEDIUM, HIGH) over threshold ceilings.
+  - `Training Schedule`: Head Trainer can cancel upcoming/scheduled sessions directly in `Edit schedule`.
+  - `Treatment & Medical Supplies`: Deduct supplies/medicines from club inventory upon prescription; generate expense records with owner dispute flow (`V29`, `V30`, `V32`, `V33`).
+  - `Races`: Manager race entry approval flow and test horse seeds (`V28`, `V31`).
 - `[22:22]` `tqt195` - Add `Call vet` from alerts: on `Live session` the `Head Trainer` fills a form (reason, signs, urgency, stop the session now or not), sent once per alert (`POST /api/alerts/{id}/vet-call`, `V27__vet_call.sql`); the `Veterinarian` answers once on the new `Vet calls` page (`/veterinarian/vet-calls`): continue light work, treat on site (stops the session, medication required) or emergency stop (stops the session and opens an incident report the vet takes, so the horse is blocked from training); the trainer and `Groom` are notified; banner on `Herd health`; e2e script now covers vet calls (about 130 steps)
 > #### `Nov 3, 2026`
 - `[12:14]` `ArichiAya` - Fix `Flow 3` recovery with two incident reports: `Recovery` now closes the open reports too, so a healthy horse is no longer blocked from training

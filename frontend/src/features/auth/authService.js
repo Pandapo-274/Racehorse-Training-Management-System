@@ -73,6 +73,9 @@ export function logout() {
 function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  try {
+    sessionStorage.removeItem("tracen_training_plan_draft");
+  } catch {}
   // Để lần sau Google không tự chọn lại tài khoản cũ. Chưa từng mở nút Google
   // thì hàm này không làm gì, nên gọi cho mọi kiểu đăng xuất.
   googleLogout();

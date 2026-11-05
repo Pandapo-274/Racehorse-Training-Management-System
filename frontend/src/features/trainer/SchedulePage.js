@@ -1,7 +1,8 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
-import { authFetch, handleAuthError, logout } from "../auth/authService";
+import { authFetch, handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import "./trainer.css";
 import "./schedule.css";
@@ -177,6 +178,7 @@ function SessionModal({
   saving,
   onClose,
   onSubmit,
+  onCancel,
 }) {
   const selectedPlan = plans.find(
     (plan) => String(plan.planId) === String(form.planId),
@@ -343,30 +345,49 @@ function SessionModal({
             />
           </label>
 
-          <div className="schedule-form-actions">
-            <button
-              type="button"
-              className="schedule-button secondary"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="schedule-button primary"
-              disabled={
-                saving ||
-                grooms.length === 0 ||
-                (!editingSession && phases.length === 0)
-              }
-            >
-              {saving
-                ? "Saving..."
-                : editingSession
-                  ? "Save changes"
-                  : "Create session"}
-            </button>
+          <div className="schedule-form-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {editingSession && (
+              <button
+                type="button"
+                className="schedule-button"
+                style={{
+                  background: "#fee2e2",
+                  color: "#b91c1c",
+                  borderColor: "#fca5a5",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+                onClick={onCancel}
+                disabled={saving}
+              >
+                Cancel session
+              </button>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+              <button
+                type="button"
+                className="schedule-button secondary"
+                onClick={onClose}
+                disabled={saving}
+              >
+                Close
+              </button>
+              <button
+                type="submit"
+                className="schedule-button primary"
+                disabled={
+                  saving ||
+                  grooms.length === 0 ||
+                  (!editingSession && phases.length === 0)
+                }
+              >
+                {saving
+                  ? "Saving..."
+                  : editingSession
+                    ? "Save changes"
+                    : "Create session"}
+              </button>
+            </div>
           </div>
         </form>
       </section>
@@ -471,6 +492,7 @@ export default function SchedulePage() {
     }
 
     for (const session of sessions) {
+      if (session.status === "CANCELLED") continue;
       const key = String(session.sessionDate || "").slice(0, 10);
       if (result[key]) result[key].push(session);
     }
@@ -564,18 +586,42 @@ export default function SchedulePage() {
     }
   };
 
+  const handleCancelSession = async () => {
+    if (!editingSession) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to cancel the scheduled training session for ${editingSession.horseName || "this horse"}?`
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await authFetch(`${SESSION_API}/${editingSession.sessionId}/cancel`, {
+        method: "PUT",
+      });
+      setNotice("Training session cancelled successfully.");
+      setModalOpen(false);
+      setEditingSession(null);
+      setForm(EMPTY_FORM);
+      await loadData();
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setError(getErrorMessage(err));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const today = dateKey(new Date());
   const weekEnd = addDays(weekStart, 6);
 
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
+
   return (
     <div className="trainer-page">
-      <ScheduleSidebar
-        onSignOut={() => {
-          // Cùng luồng đăng xuất với Trainer Dashboard: xoá token rồi mới chuyển trang.
-          logout();
-          navigate("/login", { replace: true });
-        }}
-      />
+      {modalElement}
+      <ScheduleSidebar onSignOut={requestSignOut} />
 
       <main className="trainer-main schedule-main">
         <header className="trainer-header">
@@ -726,6 +772,7 @@ export default function SchedulePage() {
           saving={saving}
           onClose={closeModal}
           onSubmit={handleSubmit}
+          onCancel={handleCancelSession}
         />
       )}
 

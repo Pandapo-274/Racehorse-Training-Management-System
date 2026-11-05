@@ -1,3 +1,4 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 // src/features/manager/ManagerDashboard.js
 // Trang "Club overview" của Club Manager.
 //
@@ -8,7 +9,7 @@ import "./manager.css";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import NavItems from "../navigation/NavItems";
-import { handleAuthError, logout } from "../auth/authService";
+import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import { timeAgo } from "../notification/notificationApi";
@@ -49,13 +50,11 @@ function HorseshoeIcon() {
 function ManagerSidebar() {
   const navigate = useNavigate();
   /* Không còn gọi getUser ở đây nữa: ProfileCard tự đọc người đang đăng nhập. */
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
     <aside className="manager-sidebar">
+      {modalElement}
       <div className="manager-brand">
         <img src="/logo.png" alt="Tracen logo" />
         <div>
@@ -76,7 +75,7 @@ function ManagerSidebar() {
         <button
           type="button"
           className="manager-signout"
-          onClick={handleSignOut}
+          onClick={requestSignOut}
         >
           Sign out
         </button>

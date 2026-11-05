@@ -48,6 +48,7 @@ public final class OwnerDashboard {
             BigDecimal weight,
             String status,
             boolean locked,
+            boolean inTreatment,
             Integer fitness,                // chỉ số tuần gần nhất, null nếu chưa có
             BigDecimal weeklyDistanceKm,
             NextRace nextRace,

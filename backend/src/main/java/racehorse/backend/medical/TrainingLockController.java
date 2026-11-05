@@ -56,6 +56,18 @@ public class TrainingLockController {
         return service.release(id, user, http.getRemoteAddr());
     }
 
+    @org.springframework.web.bind.annotation.PutMapping("/horse/{horseId}/level")
+    @RequireRole({"VETERINARIAN", "CLUB_MANAGER", "HEAD_TRAINER"})
+    public ResponseEntity<TrainingLockRow> setLockLevel(
+            @PathVariable int horseId,
+            @RequestBody java.util.Map<String, String> body,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        String level = body != null ? body.get("lockLevel") : null;
+        TrainingLockRow updated = service.setLockLevel(horseId, level, user, http.getRemoteAddr());
+        return ResponseEntity.ok(updated);
+    }
+
     /**
      * Màn quản lý: mọi lệnh đang hiệu lực, FULL lên trước, lệnh cũ lên trước.
      *

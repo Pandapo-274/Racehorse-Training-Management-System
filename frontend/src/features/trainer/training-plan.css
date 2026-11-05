@@ -35,7 +35,7 @@
 .training-phase { padding: 15px; border: 1px solid #f1e1e9; border-radius: 13px; background: #fffdfd; }
 .training-phase-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .training-phase-number { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; background: #ffe3f0; color: #d93b87; font: 800 13px var(--font-heading); }
-.training-phase-heading > div { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.training-phase-heading > div { display: flex; flex-direction: column; justify-content: center; gap: 3px; flex: 1; min-width: 0; }
 .training-phase-heading strong { font-size: 13px; }
 .training-phase-heading span { color: #9299ad; font-size: 11px; }
 .training-remove-phase { border: 0; background: transparent; color: #c54a78; font-size: 23px; cursor: pointer; }

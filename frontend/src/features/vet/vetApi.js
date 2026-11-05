@@ -106,6 +106,14 @@ export function releaseLock(lockId) {
   return authFetch(`/api/training-locks/${lockId}/release`, { method: "POST" });
 }
 
+/** PUT /api/training-locks/horse/{horseId}/level (VETERINARIAN, CLUB_MANAGER, HEAD_TRAINER). */
+export function updateLockLevel(horseId, lockLevel) {
+  return authFetch(`/api/training-locks/horse/${horseId}/level`, {
+    method: "PUT",
+    body: JSON.stringify({ lockLevel }),
+  });
+}
+
 /** POST /api/recovery-confirmations (chỉ VETERINARIAN): khép chấn thương + mở khoá + ELIGIBLE. */
 export function confirmRecovery(body) {
   return post("/api/recovery-confirmations", body);
@@ -280,12 +288,23 @@ export function formatShortDate(iso) {
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
-/** "13 Sep 2026". Nhận cả "2026-09-13" (DATE) lẫn chuỗi ngày giờ. */
+export function normalizeDate(d) {
+  if (!d) return null;
+  if (Array.isArray(d)) {
+    return `${d[0]}-${String(d[1]).padStart(2, "0")}-${String(d[2]).padStart(2, "0")}`;
+  }
+  return String(d).slice(0, 10);
+}
+
+/** "13 Sep 2026". Nhận cả "2026-09-13" (DATE), array [2026, 9, 13] lẫn chuỗi ngày giờ. */
 export function formatDate(iso) {
-  if (!iso) return "—";
+  if (!iso) return "-";
+  if (Array.isArray(iso)) {
+    iso = normalizeDate(iso);
+  }
   const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
   return Number.isNaN(d.getTime())
-    ? "—"
+    ? "-"
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
@@ -310,4 +329,21 @@ export function describeError(err) {
     (m) => m && m !== message
   );
   return { message, details };
+}
+/** GET /api/expenses?category=MEDICAL: Thống kê chi phí thuốc & chữa trị cho bác sĩ thú y. */
+export function listMedicalExpenses(signal) {
+  return authFetch("/api/expenses?category=MEDICAL", { signal });
+}
+
+/** GET /api/supplies?category=MEDICINE: Danh mục thuốc trong tủ thuốc phòng khám. */
+export function listMedicineSupplies(signal) {
+  return authFetch("/api/supplies?category=MEDICINE", { signal });
+}
+
+/** PUT /api/injuries/{id}/status (chỉ VETERINARIAN): đổi trạng thái chấn thương (TREATING -> PARTIAL -> RECOVERED). */
+export function updateInjuryStatus(injuryId, status) {
+  return authFetch(`/api/injuries/${injuryId}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
 }

@@ -7,7 +7,8 @@
 // nên làm theo cách đó - lớp ở đây đều mang tiền tố .hz-.
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { getUser, logout } from "../auth/authService";
+import { getUser } from "../auth/authService";
+import { useSignOutModal } from "../auth/SignOutModal";
 import { ProfileCard } from "../profile/ProfileLink";
 import NavItems from "../navigation/NavItems";
 import { canReviewRequests } from "./horseApi";
@@ -45,10 +46,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
 
   const role = ROLE_LABEL[user?.role] || "—";
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   const mayReview = canReviewRequests(user);
 
@@ -70,6 +68,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
 
   return (
     <div className="hz-page">
+      {modalElement}
       <aside className="hz-sidebar">
         <div className="hz-brand">
           <img src="/logo.png" alt="" />
@@ -93,7 +92,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
         </nav>
 
         <div className="hz-sidebar-bottom">
-          <button type="button" className="hz-signout" onClick={handleSignOut}>
+          <button type="button" className="hz-signout" onClick={requestSignOut}>
             Sign out
           </button>
 

@@ -100,6 +100,20 @@ public class InjuryMarkerService {
         users.writeAudit(vet.userId(), "INJURY_UNMARKED", "INJURY", injuryId, "SUCCESS", ip);
     }
 
+    @Transactional
+    public void updateStatus(int injuryId, String status, AuthenticatedUser vet, String ip) {
+        if (status == null || !List.of("TREATING", "PARTIAL", "RECOVERED").contains(status.trim().toUpperCase())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid injury status: " + status);
+        }
+        String cleanStatus = status.trim().toUpperCase();
+        int rows = injuries.updateStatus(injuryId, cleanStatus);
+        if (rows == 0) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Injury marker #" + injuryId + " not found");
+        }
+        users.writeAudit(vet.userId(), "INJURY_STATUS_UPDATE", "INJURY", injuryId, "SUCCESS", ip,
+                "Injury #" + injuryId + " status updated to " + cleanStatus);
+    }
+
     /* ------------------------------------------------------------------ */
 
     private void validate(InjuryMarkerRequest r, MedicalRecordRow record) {

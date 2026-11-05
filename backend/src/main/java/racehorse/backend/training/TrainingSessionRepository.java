@@ -224,6 +224,15 @@ public class TrainingSessionRepository {
                 .update();
     }
 
+    public int cancel(int sessionId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'CANCELLED'
+                WHERE session_id = :id AND status = 'SCHEDULED'
+                """)
+                .param("id", sessionId)
+                .update();
+    }
+
     /**
      * Lấy danh sách tài khoản Groom đang hoạt động.
      * Dùng cho dropdown phân công của Head Trainer.

@@ -1,15 +1,5 @@
 // src/features/vet/VetPrescriptionPage.js
-// Màn Prescriptions: đơn thuốc đang dùng trên toàn đàn.
-//
-// Danh sách mở đầu lấy từ GET /api/treatments/active. Bấm "History" ở một dòng để
-// xem toàn bộ đơn của con ngựa đó, kể cả mục đã hết hạn (bệnh sử dùng thuốc).
-//
-// Một mục điều trị luôn thuộc về MỘT lần khám (recordId), nên form kê đơn bắt chọn
-// ngựa rồi chọn lần khám. Ngựa chưa có lần khám nào thì chưa kê được: phải khám
-// trước, giống backend.
-//
-// Không có nút xoá: con ngựa đã thật sự dùng thuốc trong khoảng đó. Chỉ có "End
-// today", đặt ngày kết thúc là hôm nay và giữ nguyên dòng trong bệnh sử.
+// Màn Prescriptions: đơn thuốc và thống kê chi phí y tế trên toàn đàn.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -23,36 +13,76 @@ import {
   listHorses,
   createTreatment,
   endTreatment,
+  listMedicalExpenses,
+  listMedicineSupplies,
   careTypeLabel,
   formatDate,
+  normalizeDate,
   todayInputValue,
   describeError,
 } from "./vetApi";
 import "./vet-care.css";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+function formatExpenseNote(note) {
+  if (!note) return "";
+  return note.replace(/\(Qty:\s*(\d+(?:\.\d+)?)\s*@\s*\d+\)/gi, (match, q) => {
+    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} viên)`;
+    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tuýp)`;
+    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} lọ)`;
+    if (note.includes("Probiotic")) return `(${q} gói)`;
+    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} chai)`;
+    if (note.includes("Glucosamine")) return `(${q} hộp)`;
+    if (note.includes("Hyaluronic")) return `(${q} ống)`;
+    if (note.includes("Electrolytes") || note.includes("điện giải")) return `(${q} lít)`;
+    return `(${q})`;
+  });
+}
 
-/** "Painkiller" nếu có tên thuốc, không thì dòng hướng dẫn (mục không phải thuốc, vd. chườm lạnh). */
+const formatVND = (v) => `${Number(v || 0).toLocaleString("vi-VN")} đ`;
+
 const treatmentTitle = (t) => t.medicineName || t.instruction || "Treatment";
-
 const dose = (t) => [t.dosage, t.frequency].filter(Boolean).join(" · ") || "—";
-
 const period = (t) =>
   `${formatDate(t.startDate)} → ${t.endDate ? formatDate(t.endDate) : "until review"}`;
+
+// 17 loại thuốc phổ biến cho các bệnh lý của ngựa
+const COMMON_MEDICINES = [
+  { supplyName: "Phenylbutazone (Bute)", unit: "tuýp", unitPrice: 180000, category: "Kháng viêm & Giảm đau" },
+  { supplyName: "Flunixin Meglumine (Banamine)", unit: "lọ", unitPrice: 250000, category: "Đau bụng Colic & Hạ sốt" },
+  { supplyName: "Firocoxib (Equioxx)", unit: "viên", unitPrice: 45000, category: "Viêm khớp mãn tính" },
+  { supplyName: "Dexamethasone", unit: "lọ", unitPrice: 120000, category: "Chống dị ứng & Viêm cấp" },
+  { supplyName: "Amoxicillin Trihydrate", unit: "lọ", unitPrice: 210000, category: "Kháng sinh nhiễm trùng" },
+  { supplyName: "Gentamicin Sulfate", unit: "lọ", unitPrice: 320000, category: "Kháng sinh hô hấp & khớp" },
+  { supplyName: "Trimethoprim-Sulfadiazine (TMS)", unit: "tuýp", unitPrice: 280000, category: "Kháng sinh vết thương" },
+  { supplyName: "Penicillin G Procaine", unit: "lọ", unitPrice: 195000, category: "Kháng sinh tiêm bắp" },
+  { supplyName: "Omeprazole (GastroGard)", unit: "tuýp", unitPrice: 350000, category: "Viêm loét dạ dày" },
+  { supplyName: "Dung dịch điện giải (Electrolytes)", unit: "lít", unitPrice: 95000, category: "Bù nước & Điện giải" },
+  { supplyName: "Men vi sinh tiêu hóa (Probiotic)", unit: "gói", unitPrice: 65000, category: "Trợ lực tiêu hóa" },
+  { supplyName: "Clenbuterol (Ventipulmin)", unit: "chai", unitPrice: 420000, category: "Giãn phế quản & Trị ho" },
+  { supplyName: "Prednisolone", unit: "viên", unitPrice: 15000, category: "Chống viêm đường uống" },
+  { supplyName: "Glucosamine + Chondroitin", unit: "hộp", unitPrice: 650000, category: "Bổ trợ sụn khớp" },
+  { supplyName: "Hyaluronic Acid (Tiêm khớp)", unit: "ống", unitPrice: 550000, category: "Bôi trơn dịch khớp" },
+  { supplyName: "Thuốc mỡ sát trùng Povidone", unit: "tuýp", unitPrice: 50000, category: "Sát trùng vết thương ngoài" },
+  { supplyName: "Ivermectin (Tẩy giun sán)", unit: "tuýp", unitPrice: 160000, category: "Ký sinh trùng đường ruột" },
+];
 
 export default function VetPrescriptionPage() {
   const navigate = useNavigate();
 
+  const [tab, setTab] = useState("prescriptions");
   const [active, setActive] = useState(null);
+  const [expenses, setExpenses] = useState(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [query, setQuery] = useState("");
 
-  const [history, setHistory] = useState(null); // { horseId, horseName }
+  const [history, setHistory] = useState(null);
   const [prescribing, setPrescribing] = useState(false);
   const [ending, setEnding] = useState(null);
   const [notice, setNotice] = useState("");
 
+  // Load active treatments
   useEffect(() => {
     const ctrl = new AbortController();
     setError("");
@@ -66,6 +96,19 @@ export default function VetPrescriptionPage() {
     return () => ctrl.abort();
   }, [navigate, reload]);
 
+  // Load medical expenses when tab is expenses
+  useEffect(() => {
+    if (tab !== "expenses") return;
+    const ctrl = new AbortController();
+    listMedicalExpenses(ctrl.signal)
+      .then((data) => setExpenses(data?.items || []))
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return;
+      });
+    return () => ctrl.abort();
+  }, [tab, navigate, reload]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (active || []).filter(
@@ -77,6 +120,22 @@ export default function VetPrescriptionPage() {
     );
   }, [active, query]);
 
+  const expenseRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (expenses || []).filter(
+      (e) =>
+        !q ||
+        e.horseName.toLowerCase().includes(q) ||
+        String(e.note || "").toLowerCase().includes(q) ||
+        String(e.recordedByName || "").toLowerCase().includes(q)
+    );
+  }, [expenses, query]);
+
+  const totalExpenseAmount = useMemo(
+    () => (expenses || []).reduce((acc, e) => acc + (Number(e.amount) || 0), 0),
+    [expenses]
+  );
+
   const handleSaved = (message) => {
     setPrescribing(false);
     setEnding(null);
@@ -87,8 +146,8 @@ export default function VetPrescriptionPage() {
   return (
     <VetShell
       active="prescriptions"
-      title="Prescriptions"
-      subtitle="Treatments in use today, across the herd"
+      title="Prescriptions & Medical Care"
+      subtitle="Treatments, prescriptions and medical expenses across the herd"
       query={query}
       onQueryChange={setQuery}
     >
@@ -104,12 +163,32 @@ export default function VetPrescriptionPage() {
         </VetState>
       )}
 
+      {/* Tabs */}
+      <div className="vx-tab-segment" role="tablist">
+        <button
+          type="button"
+          className="vx-tab-btn"
+          aria-selected={tab === "prescriptions"}
+          onClick={() => setTab("prescriptions")}
+        >
+          Prescriptions ({active ? active.length : 0})
+        </button>
+        <button
+          type="button"
+          className="vx-tab-btn"
+          aria-selected={tab === "expenses"}
+          onClick={() => setTab("expenses")}
+        >
+          Medical Expenses ({expenses ? expenses.length : "..."})
+        </button>
+      </div>
+
       {!error && !active && <VetState title="Loading prescriptions…" />}
 
-      {active && (
+      {tab === "prescriptions" && active && (
         <VetCard
           title="Active prescriptions"
-          hint={`${plural(rows.length, "treatment")} in use today`}
+          hint={`${plural(rows.length, "treatment")} active or scheduled`}
           tone="green"
           actions={
             <div className="vc-actions">
@@ -185,6 +264,65 @@ export default function VetPrescriptionPage() {
         </VetCard>
       )}
 
+      {tab === "expenses" && (
+        <VetCard
+          title="Medical Expenses & Supply Billing"
+          hint={`Total ${formatVND(totalExpenseAmount)} recorded and automatically dispatched to Manager & Owners`}
+          tone="gold"
+          actions={
+            <button
+              type="button"
+              className="examine-button"
+              onClick={() => {
+                setNotice("");
+                setPrescribing(true);
+              }}
+            >
+              New prescription
+            </button>
+          }
+        >
+          {!expenses ? (
+            <VetState title="Loading medical expenses…" />
+          ) : expenseRows.length === 0 ? (
+            <div className="vet-inline-state">No medical expenses recorded yet.</div>
+          ) : (
+            <div className="vc-table-wrap">
+              <table className="vc-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Horse</th>
+                    <th>Treatment & Medicine Detail</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Recorded by</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenseRows.map((e) => (
+                    <tr key={e.expenseId}>
+                      <td className="vc-muted">{formatDate(e.expenseDate)}</td>
+                      <td><strong>{e.horseName}</strong></td>
+                      <td>{formatExpenseNote(e.note) || "Medical prescription"}</td>
+                      <td style={{ color: "#2e7d32", fontWeight: 700 }}>
+                        {formatVND(e.amount)}
+                      </td>
+                      <td>
+                        <span className="vc-pill vc-pill--green" title="Billed to horse owner & club manager">
+                          Sent to Owner & Manager
+                        </span>
+                      </td>
+                      <td className="vc-muted">{e.recordedByName || "Veterinarian"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </VetCard>
+      )}
+
       {history && (
         <HistoryCard
           key={`${history.horseId}-${reload}`}
@@ -210,6 +348,7 @@ function HistoryCard({ horse, onClose }) {
   const navigate = useNavigate();
   const [items, setItems] = useState(null);
   const [error, setError] = useState("");
+  const today = todayInputValue();
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -255,23 +394,31 @@ function HistoryCard({ horse, onClose }) {
               </tr>
             </thead>
             <tbody>
-              {items.map((t) => (
-                <tr key={t.treatmentId}>
-                  <td>
-                    <strong>{treatmentTitle(t)}</strong>
-                    {t.medicineName && t.instruction && (
-                      <span className="vc-sub vc-instruction">{t.instruction}</span>
-                    )}
-                  </td>
-                  <td>{dose(t)}</td>
-                  <td>{period(t)}</td>
-                  <td>
-                    <span className={`vc-pill vc-pill--${t.active ? "green" : "muted"}`}>
-                      {t.active ? "Active" : "Ended"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {items.map((t) => {
+                const endIso = normalizeDate(t.endDate);
+                const isEnded = Boolean(
+                  t.isActive === false ||
+                  t.active === false ||
+                  (endIso && endIso < today)
+                );
+                return (
+                  <tr key={t.treatmentId}>
+                    <td>
+                      <strong>{treatmentTitle(t)}</strong>
+                      {t.medicineName && t.instruction && (
+                        <span className="vc-sub vc-instruction">{t.instruction}</span>
+                      )}
+                    </td>
+                    <td>{dose(t)}</td>
+                    <td>{period(t)}</td>
+                    <td>
+                      <span className={`vc-pill vc-pill--${isEnded ? "muted" : "green"}`}>
+                        {isEnded ? "Ended" : "Active"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -306,21 +453,25 @@ function EndDialog({ treatment, onClose, onDone }) {
   return (
     <div className="vx-overlay" role="dialog" aria-modal="true" aria-labelledby="vc-end-title">
       <div className="vx-dialog">
-        <h2 id="vc-end-title">End treatment · {treatment.horseName}</h2>
+        <h2 id="vc-end-title">End treatment today?</h2>
         <p className="vx-lead">
-          The end date will be set to today, so {treatmentTitle(treatment)} is still listed as
-          active until the end of today. The prescription stays in the horse's history; it is
-          not deleted.
+          Set today as the end date for <strong>{treatmentTitle(treatment)}</strong> on{" "}
+          <strong>{treatment.horseName}</strong>.
         </p>
 
         <VetError error={error} />
 
+        <p className="vc-hint">
+          The treatment stays active until the end of today. The prescription stays in the horse’s history; it is
+          never deleted.
+        </p>
+
         <div className="vx-actions">
-          <button type="button" className="vx-btn vx-btn--danger" disabled={busy} onClick={submit}>
-            {busy ? "Saving…" : "End today"}
+          <button type="button" className="vx-btn vx-btn--red" disabled={busy} onClick={submit}>
+            {busy ? "Ending…" : "End treatment today"}
           </button>
           <button type="button" className="vx-btn vx-btn--ghost" disabled={busy} onClick={onClose}>
-            Cancel
+            Keep running
           </button>
         </div>
       </div>
@@ -328,26 +479,39 @@ function EndDialog({ treatment, onClose, onDone }) {
   );
 }
 
-/* ---------- hộp thoại kê đơn ---------- */
+/* ---------- hộp thoại kê đơn mới ---------- */
 
 function PrescribeDialog({ onClose, onDone }) {
   const navigate = useNavigate();
 
   const [horses, setHorses] = useState(null);
   const [horseId, setHorseId] = useState("");
-  const [records, setRecords] = useState(null); // null = chưa chọn ngựa / đang tải
+  const [records, setRecords] = useState(null);
   const [recordId, setRecordId] = useState("");
 
-  const [medicine, setMedicine] = useState("");
-  const [dosage, setDosage] = useState("");
-  const [frequency, setFrequency] = useState("");
+  // Catalog: kết hợp thuốc từ DB và 17 loại thuốc chuẩn
+  const [medCatalog, setMedCatalog] = useState(COMMON_MEDICINES);
+
+  // Form input để chọn từng thuốc
+  const [chosenMedKey, setChosenMedKey] = useState("");
+  const [customMed, setCustomMed] = useState("");
+  const [doseQty, setDoseQty] = useState("");
+  const [doseUnit, setDoseUnit] = useState("");
+  const [frequency, setFrequency] = useState("Twice daily");
   const [instruction, setInstruction] = useState("");
+
+  // Danh sách thuốc đã thêm vào đơn (Selected medicines)
+  const [selectedMeds, setSelectedMeds] = useState([]);
+
+  // Thời gian áp dụng
   const [startDate, setStartDate] = useState(todayInputValue());
   const [endDate, setEndDate] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldNotice, setFieldNotice] = useState("");
 
+  // Load horses
   useEffect(() => {
     const ctrl = new AbortController();
     listHorses(ctrl.signal)
@@ -364,7 +528,51 @@ function PrescribeDialog({ onClose, onDone }) {
     return () => ctrl.abort();
   }, [navigate]);
 
-  // Chọn ngựa thì tải các lần khám của nó để chọn lần khám cần kê đơn theo.
+  // Load medicines catalog từ backend và merge với 17 loại chuẩn
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listMedicineSupplies(ctrl.signal)
+      .then((data) => {
+        const fromDb = data || [];
+        // Map kết hợp DB và COMMON_MEDICINES
+        const merged = COMMON_MEDICINES.map((cm) => {
+          const found = fromDb.find(
+            (s) =>
+              s.supplyName.toLowerCase().includes(cm.supplyName.split(" ")[0].toLowerCase()) ||
+              cm.supplyName.toLowerCase().includes(s.supplyName.toLowerCase())
+          );
+          if (found) {
+            return {
+              ...cm,
+              supplyId: found.supplyId,
+              unit: found.unit || cm.unit,
+              unitPrice: found.unitPrice || cm.unitPrice,
+              currentQty: found.currentQty != null ? Number(found.currentQty) : 0,
+            };
+          }
+          return { ...cm, currentQty: 0 };
+        });
+
+        // Bổ sung các thuốc từ DB chưa có trong COMMON_MEDICINES
+        for (const s of fromDb) {
+          if (!merged.some((m) => m.supplyName.toLowerCase() === s.supplyName.toLowerCase())) {
+            merged.push({
+              supplyId: s.supplyId,
+              supplyName: s.supplyName,
+              unit: s.unit || "unit",
+              unitPrice: s.unitPrice || 0,
+              currentQty: s.currentQty != null ? Number(s.currentQty) : 0,
+              category: "Other",
+            });
+          }
+        }
+        setMedCatalog(merged);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+
+  // Load medical records khi chọn ngựa
   useEffect(() => {
     setRecords(null);
     setRecordId("");
@@ -373,7 +581,7 @@ function PrescribeDialog({ onClose, onDone }) {
     listMedicalRecords(horseId, ctrl.signal)
       .then((list) => {
         setRecords(list);
-        if (list.length > 0) setRecordId(String(list[0].recordId)); // mới nhất lên trước
+        if (list.length > 0) setRecordId(String(list[0].recordId));
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
@@ -385,15 +593,89 @@ function PrescribeDialog({ onClose, onDone }) {
 
   const horseName = horses?.find((h) => String(h.horseId) === horseId)?.horseName;
 
+  // Khi chọn 1 thuốc trong dropdown: tự động điền đơn vị của thuốc đó
+  const handleDropdownChange = (key) => {
+    setChosenMedKey(key);
+    setFieldNotice("");
+    if (!key) {
+      setDoseUnit("");
+      return;
+    }
+    const item = medCatalog.find((m) => m.supplyName === key);
+    if (item) {
+      if (item.unit) setDoseUnit(item.unit);
+      if (!doseQty) setDoseQty("1");
+      if (item.currentQty <= 0) {
+        setFieldNotice(`"${item.supplyName}" is currently out of stock (0 ${item.unit}). Cannot prescribe.`);
+      }
+    }
+  };
+
+  // Nút "+ Thêm vào đơn thuốc"
+  const handleAddMedicine = () => {
+    setFieldNotice("");
+    const medName = chosenMedKey || customMed.trim();
+    if (!medName) {
+      setFieldNotice("Please choose or enter a medicine before adding.");
+      return;
+    }
+    const qty = Number(doseQty) > 0 ? Number(doseQty) : 1;
+    const catalogItem = medCatalog.find((m) => m.supplyName === chosenMedKey);
+    const unit = doseUnit.trim() || catalogItem?.unit || "liều";
+    const unitPrice = catalogItem?.unitPrice || 0;
+
+    // Ràng buộc tồn kho: Thuốc phải còn hàng và đủ số lượng trong kho
+    const targetItem = catalogItem || medCatalog.find((m) =>
+      m.supplyName.toLowerCase() === medName.toLowerCase() ||
+      m.supplyName.toLowerCase().startsWith(medName.toLowerCase())
+    );
+
+    if (targetItem) {
+      if (targetItem.currentQty <= 0) {
+        setFieldNotice(`"${targetItem.supplyName}" is out of stock (0 ${targetItem.unit}). Cannot add to prescription.`);
+        return;
+      }
+      if (qty > targetItem.currentQty) {
+        setFieldNotice(`Prescribed quantity (${qty} ${targetItem.unit}) exceeds available stock (${targetItem.currentQty} ${targetItem.unit}).`);
+        return;
+      }
+    }
+
+    const newItem = {
+      supplyId: targetItem?.supplyId || null,
+      name: targetItem?.supplyName || medName,
+      unit,
+      unitPrice,
+      quantity: qty,
+      dosage: `${qty} ${unit}`,
+      frequency: frequency.trim() || "Twice daily",
+      instruction: instruction.trim() || null,
+    };
+
+    setSelectedMeds((prev) => [...prev, newItem]);
+
+    // Reset lại ô chọn để bác sĩ có thể thêm thuốc tiếp theo
+    setChosenMedKey("");
+    setCustomMed("");
+    setDoseQty("");
+    setDoseUnit("");
+    setInstruction("");
+  };
+
+  const removeMed = (index) => {
+    setSelectedMeds((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Submit toàn bộ đơn thuốc đã chọn
   const submit = async () => {
     setError(null);
 
-    // Báo sớm đúng những điều backend sẽ từ chối.
     const problems = [];
     if (!horseId) problems.push("Choose a horse.");
     else if (!recordId) problems.push("Choose the examination this prescription belongs to.");
-    if (!medicine.trim() && !instruction.trim()) {
-      problems.push("Give a medicine name or an instruction, otherwise nobody can tell what this is.");
+
+    if (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim()) {
+      problems.push("Add at least 1 medicine to the prescription.");
     }
     if (!startDate) problems.push("Enter the start date.");
     if (startDate && endDate && endDate < startDate) {
@@ -404,22 +686,68 @@ function PrescribeDialog({ onClose, onDone }) {
       return;
     }
 
+    // Nếu có thuốc đang nhập dở chưa bấm Thêm mà bấm Save luôn, tự động thêm vào
+    let finalMeds = [...selectedMeds];
+    const pendingName = chosenMedKey || customMed.trim();
+    if (finalMeds.length === 0 && pendingName) {
+      const catalogItem = medCatalog.find((m) => m.supplyName === chosenMedKey);
+      const qty = Number(doseQty) > 0 ? Number(doseQty) : 1;
+      const unit = doseUnit.trim() || catalogItem?.unit || "liều";
+      finalMeds.push({
+        supplyId: catalogItem?.supplyId || null,
+        name: pendingName,
+        unit,
+        unitPrice: catalogItem?.unitPrice || 0,
+        quantity: qty,
+        dosage: `${qty} ${unit}`,
+        frequency: frequency.trim() || "Twice daily",
+        instruction: instruction.trim() || null,
+      });
+    }
+
+    // Ràng buộc tồn kho: Kiểm tra tất cả thuốc trước khi gửi yêu cầu lên server
+    for (const item of finalMeds) {
+      const targetItem = medCatalog.find((m) =>
+        (item.supplyId && m.supplyId === item.supplyId) ||
+        m.supplyName.toLowerCase() === item.name.toLowerCase() ||
+        m.supplyName.toLowerCase().startsWith(item.name.toLowerCase())
+      );
+      if (targetItem) {
+        if (targetItem.currentQty <= 0) {
+          setError({
+            message: `"${targetItem.supplyName}" is out of stock (0 ${targetItem.unit}). Please restock or select another medicine.`,
+          });
+          return;
+        }
+        if (item.quantity > targetItem.currentQty) {
+          setError({
+            message: `Prescribed quantity of "${targetItem.supplyName}" (${item.quantity} ${targetItem.unit}) exceeds available stock (${targetItem.currentQty} ${targetItem.unit}).`,
+          });
+          return;
+        }
+      }
+    }
+
     setBusy(true);
     try {
-      await createTreatment({
-        recordId: Number(recordId),
-        medicineName: medicine.trim() || null,
-        dosage: dosage.trim() || null,
-        frequency: frequency.trim() || null,
-        instruction: instruction.trim() || null,
-        startDate,
-        endDate: endDate || null,
-      });
-      onDone(
-        startDate > todayInputValue()
-          ? `Prescription saved for ${horseName}. It will show as active from ${formatDate(startDate)}.`
-          : `Prescription saved for ${horseName}.`
-      );
+      // Tạo từng mục điều trị theo đơn thuốc
+      for (const item of finalMeds) {
+        await createTreatment({
+          recordId: Number(recordId),
+          supplyId: item.supplyId,
+          medicineName: item.name,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          instruction: item.instruction,
+          startDate,
+          endDate: endDate || null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        });
+      }
+
+      const summaryStr = finalMeds.map((m) => m.name).join(", ");
+      onDone(`Prescription (${summaryStr}) has been saved successfully for ${horseName}. Owner and Manager have been notified.`);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(describeError(err));
@@ -437,6 +765,7 @@ function PrescribeDialog({ onClose, onDone }) {
 
         <VetError error={error} />
 
+        {/* 1. Chọn Ngựa & Ca khám */}
         <div className="vc-form-grid">
           <label className="vx-field vx-field--full">
             <span>Horse</span>
@@ -491,29 +820,76 @@ function PrescribeDialog({ onClose, onDone }) {
           </div>
         )}
 
-        <div className="vc-form-grid">
+        {/* 2. CHỌN THUỐC, LIỀU LƯỢNG, FREQUENCY, INSTRUCTION */}
+        <div className="vc-form-grid" style={{ marginTop: "14px" }}>
+          {/* Dropdown 17 loại thuốc */}
           <label className="vx-field vx-field--full">
-            <span>Medicine</span>
-            <input
-              className="vx-input"
-              value={medicine}
-              maxLength={150}
-              onChange={(e) => setMedicine(e.target.value)}
-              placeholder="e.g. Phenylbutazone (or leave empty for a non-drug treatment)"
-            />
+            <span>Medicine (choose from catalog)</span>
+            <select
+              className="vx-input vc-select"
+              value={chosenMedKey}
+              onChange={(e) => handleDropdownChange(e.target.value)}
+            >
+              <option value="">Choose medicine ({medCatalog.length} medicines available)…</option>
+              {medCatalog.map((m) => {
+                const isOutOfStock = m.currentQty <= 0;
+                return (
+                  <option
+                    key={m.supplyName}
+                    value={m.supplyName}
+                    disabled={isOutOfStock}
+                    style={isOutOfStock ? { color: "#9ca3af" } : {}}
+                  >
+                    {m.supplyName} · {isOutOfStock ? `[Out of stock - 0 ${m.unit}]` : `${m.currentQty} ${m.unit} in stock`}
+                  </option>
+                );
+              })}
+            </select>
           </label>
 
+          {/* Ô nhập tùy chọn nếu không dùng thuốc trong danh mục */}
+          {!chosenMedKey && (
+            <label className="vx-field vx-field--full" style={{ marginTop: "8px" }}>
+              <span>Or custom treatment / non-drug care</span>
+              <input
+                className="vx-input"
+                value={customMed}
+                maxLength={150}
+                onChange={(e) => setCustomMed(e.target.value)}
+                placeholder="e.g. Cold compress, Epsom salt soak (or choose medicine above)"
+              />
+            </label>
+          )}
+
+          {/* Dosage & Đơn vị theo loại thuốc */}
           <label className="vx-field">
-            <span>Dosage</span>
-            <input
-              className="vx-input"
-              value={dosage}
-              maxLength={50}
-              onChange={(e) => setDosage(e.target.value)}
-              placeholder="e.g. 2 g"
-            />
+            <span>Dosage {doseUnit ? `(${doseUnit})` : ""}</span>
+            <div className="vx-dosage-row">
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                className="vx-input"
+                value={doseQty}
+                onChange={(e) => setDoseQty(e.target.value)}
+                placeholder={doseUnit ? `Quantity (${doseUnit})` : "e.g. 2"}
+              />
+              {doseUnit ? (
+                <span className="vx-dosage-badge">{doseUnit}</span>
+              ) : (
+                <input
+                  type="text"
+                  className="vx-input"
+                  style={{ maxWidth: "80px" }}
+                  value={doseUnit}
+                  onChange={(e) => setDoseUnit(e.target.value)}
+                  placeholder="unit"
+                />
+              )}
+            </div>
           </label>
 
+          {/* Frequency */}
           <label className="vx-field">
             <span>Frequency</span>
             <input
@@ -521,10 +897,11 @@ function PrescribeDialog({ onClose, onDone }) {
               value={frequency}
               maxLength={50}
               onChange={(e) => setFrequency(e.target.value)}
-              placeholder="e.g. Twice daily"
+              placeholder="e.g. Twice daily, Once daily with morning feed"
             />
           </label>
 
+          {/* Instruction */}
           <label className="vx-field vx-field--full">
             <span>Instruction (optional)</span>
             <textarea
@@ -532,10 +909,72 @@ function PrescribeDialog({ onClose, onDone }) {
               rows={2}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder="e.g. Give with feed. Cold hose 20 minutes after work."
+              placeholder="e.g. Mix with morning and evening feed. Administer after light work."
             />
           </label>
+        </div>
 
+        {/* Nút "+ Thêm vào đơn thuốc" */}
+        <div className="vx-add-med-row">
+          <button
+            type="button"
+            className="vx-add-med-btn"
+            disabled={
+              (!chosenMedKey && !customMed.trim()) ||
+              (chosenMedKey && (medCatalog.find((m) => m.supplyName === chosenMedKey)?.currentQty ?? 1) <= 0)
+            }
+            onClick={handleAddMedicine}
+          >
+            + Add medicine to prescription
+          </button>
+        </div>
+
+        {fieldNotice && (
+          <div style={{
+            background: "#fff1f2",
+            border: "1px solid #fecdd3",
+            color: "#e11d48",
+            borderRadius: "8px",
+            padding: "8px 12px",
+            fontSize: "13px",
+            margin: "6px 0 12px",
+            fontWeight: 600
+          }}>
+            ⚠️ {fieldNotice}
+          </div>
+        )}
+
+        {/* 3. SELECTED MEDICINES LIST (NẰM DƯỚI PHẦN INSTRUCTION THEO YÊU CẦU) */}
+        {selectedMeds.length > 0 && (
+          <div className="vx-selected-meds-box">
+            <span className="vx-selected-meds-title">
+              Selected medicines ({selectedMeds.length}):
+            </span>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {selectedMeds.map((med, idx) => (
+                <li key={idx} className="vx-selected-med-item-rich">
+                  <div className="vx-selected-med-details">
+                    • <strong>{med.name}</strong> — {med.quantity} {med.unit} · {med.frequency}
+                    {med.instruction && (
+                      <div className="vx-selected-med-sub">Instruction: {med.instruction}</div>
+                    )}
+
+                  </div>
+                  <button
+                    type="button"
+                    className="vx-med-delete-btn"
+                    onClick={() => removeMed(idx)}
+                  >
+                    ✕ Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* 4. Start date & End date */}
+        <div className="vc-form-grid" style={{ marginTop: "10px" }}>
           <label className="vx-field">
             <span>Start date</span>
             <input
@@ -558,16 +997,21 @@ function PrescribeDialog({ onClose, onDone }) {
           </label>
         </div>
 
-        <p className="vc-hint">Leave the end date empty if the treatment runs until the next review.</p>
+        <p className="vc-hint">
+          {endDate
+            ? `Treatment runs from ${formatDate(startDate)} to ${formatDate(endDate)}.`
+            : "Leave the end date empty if the treatment runs until the next review."}
+        </p>
 
-        <div className="vx-actions">
+        {/* Actions */}
+        <div className="vx-actions" style={{ marginTop: "20px" }}>
           <button
             type="button"
             className="vx-btn vx-btn--green"
-            disabled={busy || !recordId}
+            disabled={busy || !recordId || (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim())}
             onClick={submit}
           >
-            {busy ? "Saving…" : "Save prescription"}
+            {busy ? "Saving…" : `Save prescription (${selectedMeds.length || (chosenMedKey || customMed ? 1 : 0)} medicines)`}
           </button>
           <button type="button" className="vx-btn vx-btn--ghost" disabled={busy} onClick={onClose}>
             Cancel

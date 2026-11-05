@@ -1,0 +1,106 @@
+.signout-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: signoutFadeIn 0.2s ease-out;
+}
+
+.signout-modal-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+  width: 90%;
+  max-width: 380px;
+  padding: 30px 26px 24px;
+  text-align: center;
+  animation: signoutSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #fae1ed;
+  box-sizing: border-box;
+}
+
+.signout-modal-icon {
+  width: 56px;
+  height: 56px;
+  background: #fff0f6;
+  color: #d93b87;
+  font-size: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  border: 1px solid #ffd6e7;
+}
+
+.signout-modal-title {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.signout-modal-message {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.signout-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.signout-modal-btn {
+  flex: 1;
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.signout-modal-btn--cancel {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.signout-modal-btn--cancel:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.signout-modal-btn--confirm {
+  background: linear-gradient(135deg, #e43e8c, #d93b87);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(217, 59, 135, 0.3);
+}
+
+.signout-modal-btn--confirm:hover {
+  background: linear-gradient(135deg, #d3307b, #c22974);
+  box-shadow: 0 6px 16px rgba(217, 59, 135, 0.4);
+}
+
+@keyframes signoutFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes signoutSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

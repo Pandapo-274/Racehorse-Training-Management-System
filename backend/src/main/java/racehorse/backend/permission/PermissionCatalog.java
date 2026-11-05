@@ -83,6 +83,8 @@ final class PermissionCatalog {
             new Entry(HEALTH, "Take an incident case", "PUT /api/incident-reports/{id}/receive", NONE),
             new Entry(HEALTH, "Record examinations", "POST /api/medical-records", NONE),
             new Entry(HEALTH, "Prescribe treatment", "POST /api/treatments", NONE),
+            new Entry(HEALTH, "Consent to major treatment", "PUT /api/treatments/{id}/consent", OWNER),
+            new Entry(HEALTH, "Reject major treatment", "PUT /api/treatments/{id}/reject-consent", OWNER),
             new Entry(HEALTH, "Mark injuries", "POST /api/injuries", NONE),
             new Entry(HEALTH, "Issue a training lock", "POST /api/training-locks", NONE),
             new Entry(HEALTH, "Release a training lock", "POST /api/training-locks/{id}/release", NONE),
@@ -90,7 +92,7 @@ final class PermissionCatalog {
             new Entry(HEALTH, "View the preventive care schedule", "GET /api/preventive-care", NONE),
 
             // ---------- Chăm sóc chuồng trại, dinh dưỡng, vật tư (Flow 4) ----------
-            new Entry(CARE, "View approved rations", "GET /api/feeding", NONE),
+            new Entry(CARE, "View approved rations", "GET /api/feeding", OWNER),
             new Entry(CARE, "Approve a horse's ration", "PUT /api/feeding/horse/{horseId}", NONE),
             new Entry(CARE, "View daily care tasks", "GET /api/daily-tasks", GROOM),
             new Entry(CARE, "Assign daily care tasks", "POST /api/daily-tasks", NONE),
@@ -111,6 +113,8 @@ final class PermissionCatalog {
             new Entry(RACES, "Cancel a race", "PUT /api/races/events/{id}/cancel", NONE),
             new Entry(RACES, "Register horses for races", "POST /api/races", NONE),
             new Entry(RACES, "Record race results", "PUT /api/races/{id}/result", NONE),
+            new Entry(RACES, "Approve a race entry", "PUT /api/races/{id}/approve", OWNER),
+            new Entry(RACES, "Reject a race entry", "PUT /api/races/{id}/reject", OWNER),
             new Entry(RACES, "Scratch a race entry", "PUT /api/races/{id}/scratch", NONE),
             new Entry(RACES, "View race performance and prize totals", "GET /api/races/summary", NONE),
 
@@ -120,5 +124,6 @@ final class PermissionCatalog {
             new Entry(REPORTS, "Record operating costs", "POST /api/expenses", NONE),
             new Entry(REPORTS, "Void a wrongly recorded cost", "DELETE /api/expenses/{id}", NONE),
             new Entry(REPORTS, "View each cost of own horses", "GET /api/owner/expenses", OWNER),
+            new Entry(REPORTS, "Dispute a recorded cost", "PUT /api/owner/expenses/{id}/dispute", OWNER),
             new Entry(REPORTS, "View the owner dashboard (costs, prizes)", "GET /api/owner/dashboard", OWNER));
 }

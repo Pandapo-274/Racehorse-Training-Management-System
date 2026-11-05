@@ -87,6 +87,19 @@ export function ordinal(n) {
   return `${n}${s}`;
 }
 
+export function approveEntry(id) {
+  return authFetch(`/api/races/${id}/approve`, {
+    method: "PUT",
+  });
+}
+
+export function rejectEntry(id, reason) {
+  return authFetch(`/api/races/${id}/reject`, {
+    method: "PUT",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function scratchEntry(id, reason) {
   return authFetch(`/api/races/${id}/scratch`, {
     method: "PUT",
@@ -105,17 +118,26 @@ export const RESULT_TEXT = {
   PLACED: { label: "Placed", tone: "good" },
   UNPLACED: { label: "Unplaced", tone: "neutral" },
   SCRATCHED: { label: "Scratched", tone: "serious" },
+  REJECTED: { label: "Declined", tone: "serious" },
 };
 
 export const STATE_TEXT = {
   UPCOMING: { label: "Upcoming", tone: "neutral" },
+  PENDING_APPROVAL: { label: "Pending Owner", tone: "warning" },
   AWAITING_RESULT: { label: "Result needed", tone: "warning" },
   FINISHED: { label: "Finished", tone: "good" },
   SCRATCHED: { label: "Scratched", tone: "serious" },
+  REJECTED: { label: "Declined", tone: "serious" },
 };
 
 /** The chip for a row: the result once there is one, otherwise the state. */
 export function toEntryChip(entry) {
+  if (entry.approvalStatus === "PENDING_OWNER" || entry.state === "PENDING_APPROVAL") {
+    return { label: "Pending Owner", tone: "warning" };
+  }
+  if (entry.approvalStatus === "REJECTED" || entry.state === "REJECTED") {
+    return { label: "Declined", tone: "serious" };
+  }
   if (entry.result && RESULT_TEXT[entry.result]) return RESULT_TEXT[entry.result];
   return STATE_TEXT[entry.state] || { label: entry.state || "—", tone: "neutral" };
 }

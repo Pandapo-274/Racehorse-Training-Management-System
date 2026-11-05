@@ -89,8 +89,11 @@ public class AlertService {
                                BigDecimal limit, BigDecimal actual, String title, String detail) {
         String severity = severityFor(actual.doubleValue(), limit.doubleValue());
         Optional<String> open = alerts.latestOpenSeverity(sessionId, metric, DEDUPE_SECONDS);
+        String msg = "VELOCITY".equals(metric)
+                ? (actual.toPlainString() + " m/s is over the " + limit.toPlainString() + " m/s limit")
+                : (actual.intValue() + " bpm is over the " + limit.intValue() + " bpm ceiling");
         if (open.isPresent() && rank(open.get()) >= rank(severity)) {
-            return new VitalsResult(hr, ceiling, false, severity, null);
+            return new VitalsResult(hr, ceiling, false, severity, null, metric, msg);
         }
         int alertId = alerts.insertAlert(sessionId, metric, limit, actual, severity);
 
@@ -104,7 +107,7 @@ public class AlertService {
             notifications.notifyRole("HEAD_TRAINER", me, notice);
             notifications.notifyRole("VETERINARIAN", me, notice);
         }
-        return new VitalsResult(hr, ceiling, true, severity, alertId);
+        return new VitalsResult(hr, ceiling, true, severity, alertId, metric, msg);
     }
 
     public List<AlertResponse> list(Integer afterId, boolean openOnly, int limit) {

@@ -1,9 +1,10 @@
+import { useSignOutModal } from "../auth/SignOutModal";
 import { parseServerTime } from "../horse/horseApi";
 import { useCallback, useEffect, useRef, useState } from "react";
 import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
-import { handleAuthError, logout } from "../auth/authService";
+import { handleAuthError } from "../auth/authService";
 import { fetchAlerts, fetchRunningSessions, resolveAlert } from "./liveSessionApi";
 import { toAlertMessage, toSeverity } from "./dashboardApi";
 import {
@@ -397,17 +398,15 @@ export default function LiveSessionMonitorPage() {
 
   useScrollToHash(!loading);
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
+  const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   const openAlerts = alerts.filter((alert) => !alert.resolved);
   const highAlerts = openAlerts.filter((alert) => alert.severity === "HIGH").length;
 
   return (
     <div className="trainer-page">
-      <LiveSessionSidebar onSignOut={handleSignOut} />
+      {modalElement}
+      <LiveSessionSidebar onSignOut={requestSignOut} />
       <main className="trainer-main schedule-main">
         <header className="trainer-header">
           <div>
