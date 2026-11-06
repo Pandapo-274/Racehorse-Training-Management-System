@@ -231,11 +231,15 @@
 .vet-header {
   position: relative;
   z-index: 20;
-  height: 84px;
+  /* min-height thay vì height: tiêu đề dài hoặc màn hẹp thì header cao thêm,
+     cụm tìm kiếm xuống dòng, thay vì chữ tràn ra ngoài header. */
+  min-height: 84px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px 0 36px;
+  gap: 10px 16px;
+  padding: 12px 32px 12px 36px;
   background: #fff;
   border-bottom: 3px solid var(--v-pink);
 }
@@ -252,6 +256,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .vet-header > div:first-child > p {
@@ -455,14 +460,17 @@
 
 .vet-card-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
 }
 .vet-card-title > .vet-diamond {
   margin-top: 8px;
 }
+/* Giữ cho tiêu đề ít nhất 200px; thiếu chỗ thì nút lọc / hành động bên phải
+   xuống dòng dưới, không ép tiêu đề thành mỗi chữ một dòng. */
 .vet-card-title > div:first-of-type {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
 }
 
@@ -537,7 +545,9 @@
 
 .stable-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Tự chia số cột theo bề rộng (tối đa vẫn khoảng 5 cột ở màn rộng); chia cứng
+     5 cột thì ở 768px tên ngựa chỉ còn 3 chữ. */
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 14px 12px;
   margin-top: 24px;
 }
@@ -803,6 +813,7 @@
 
 @media (max-width: 1100px) {
   .vet-sidebar { width: 220px; }
+  .vet-search { width: 180px; }
   .vet-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vet-middle { grid-template-columns: 1fr; }
   .health-content { flex-direction: row; justify-content: space-around; }

@@ -232,11 +232,14 @@
 .trainer-header {
   position: relative;
   z-index: 20;
-  height: 84px;
+  /* min-height: màn hẹp thì header cao thêm thay vì chữ tràn ra ngoài. */
+  min-height: 84px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px 0 36px;
+  gap: 10px 16px;
+  padding: 12px 32px 12px 36px;
   background: #fff;
   border-bottom: 3px solid var(--t-pink);
 }
@@ -253,6 +256,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .trainer-header > div:first-child > p {
@@ -341,11 +345,14 @@
 
 .trainer-card-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
 }
+/* Giữ cho tiêu đề ít nhất 200px; thiếu chỗ thì nút lọc bên phải xuống dòng
+   thay vì ép tiêu đề thành mỗi chữ một dòng. */
 .trainer-card-title > div:first-of-type {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
 }
 
@@ -508,6 +515,8 @@
 
 .trainer-table {
   width: 100%;
+  /* Hẹp hơn mức này thì cuộn ngang trong wrapper, không ép cột (cột Status bị cắt). */
+  min-width: 680px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -532,12 +541,13 @@
   border-bottom: 0;
 }
 
-.trainer-table th:nth-child(1), .trainer-table td:nth-child(1) { width: 24%; }
-.trainer-table th:nth-child(2), .trainer-table td:nth-child(2) { width: 22%; }
-.trainer-table th:nth-child(3), .trainer-table td:nth-child(3) { width: 15%; }
-.trainer-table th:nth-child(4), .trainer-table td:nth-child(4) { width: 18%; }
-.trainer-table th:nth-child(5), .trainer-table td:nth-child(5) { width: 7%; }
-.trainer-table th:nth-child(6), .trainer-table td:nth-child(6) { width: 14%; }
+/* Cột Status đủ cho chip dài nhất ("Ready to plan"), trước đây 14% bị cắt chữ. */
+.trainer-table th:nth-child(1), .trainer-table td:nth-child(1) { width: 21%; }
+.trainer-table th:nth-child(2), .trainer-table td:nth-child(2) { width: 21%; }
+.trainer-table th:nth-child(3), .trainer-table td:nth-child(3) { width: 14%; }
+.trainer-table th:nth-child(4), .trainer-table td:nth-child(4) { width: 16%; }
+.trainer-table th:nth-child(5), .trainer-table td:nth-child(5) { width: 8%; }
+.trainer-table th:nth-child(6), .trainer-table td:nth-child(6) { width: 20%; }
 
 .horse-name {
   font-family: var(--font-heading);
@@ -580,6 +590,7 @@
 /* ============ RESPONSIVE ============ */
 
 @media (max-width: 1100px) {
+  .trainer-search { width: 180px; }
   .trainer-sidebar { width: 220px; }
   .trainer-top { grid-template-columns: 1fr; }
 }
@@ -598,5 +609,4 @@
   .trainer-header h1 { font-size: 20px; }
   .trainer-search { width: 140px; }
   .trainer-content { padding: 20px 16px 32px; }
-  .trainer-table { min-width: 760px; }
 }

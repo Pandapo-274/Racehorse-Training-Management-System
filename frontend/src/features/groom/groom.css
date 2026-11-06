@@ -231,11 +231,14 @@
 .groom-header {
   position: relative;
   z-index: 20;
-  height: 84px;
+  /* min-height: màn hẹp thì header cao thêm thay vì chữ tràn ra ngoài. */
+  min-height: 84px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px 0 36px;
+  gap: 10px 16px;
+  padding: 12px 32px 12px 36px;
   background: #fff;
   border-bottom: 3px solid var(--g-pink);
 }
@@ -252,6 +255,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .groom-header > div:first-child > p {
@@ -431,6 +435,7 @@
 
 .groom-card-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
 }
@@ -438,7 +443,7 @@
   margin-top: 8px;
 }
 .groom-card-title > div:first-of-type {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
 }
 
@@ -674,6 +679,7 @@
 ========================= */
 
 @media (max-width: 1100px) {
+  .groom-search { width: 180px; }
   .groom-sidebar { width: 220px; }
   .groom-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .groom-grid { grid-template-columns: 1fr; }

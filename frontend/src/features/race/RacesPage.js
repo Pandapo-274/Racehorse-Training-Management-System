@@ -627,8 +627,8 @@ export default function RacesPage() {
                   <thead>
                     <tr>
                       <th style={{ width: "105px" }}>Race day</th>
-                      <th style={{ width: "23%" }}>Race</th>
-                      <th style={{ width: "18%" }}>Horse</th>
+                      <th style={{ width: "17%" }}>Race</th>
+                      <th style={{ width: "15%" }}>Horse</th>
                       <th style={{ width: "125px" }}>Result</th>
                       <th style={{ width: "115px" }}>Prize</th>
                       <th>Note</th>

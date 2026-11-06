@@ -437,7 +437,7 @@ export default function SuppliesPage() {
             }
           >
             <div className="hz-table-wrap">
-              <table className="hz-table">
+              <table className="hz-table care-stock-table">
                 <thead>
                   <tr>
                     <th>Item</th>

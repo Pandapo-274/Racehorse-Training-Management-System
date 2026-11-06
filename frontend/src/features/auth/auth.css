@@ -241,16 +241,29 @@
   transform: translateY(0);
 }
 @media (max-width: 1000px) {
+  /* minmax(0, 1fr) + min-width: 0: track 1fr không co nhỏ hơn nội dung, nên
+     trên điện thoại thẻ đăng nhập bị đẩy rộng hơn màn hình và cắt mép phải
+     (.auth có overflow: hidden nên cũng không cuộn ngang được). */
   .auth {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .brand,
   .auth__band {
     display: none;
   }
   .auth__right {
+    min-width: 0;
     align-items: center;
     padding: 24px;
+  }
+}
+
+@media (max-width: 520px) {
+  .auth__right {
+    padding: 20px 14px;
+  }
+  .login-card {
+    padding: 44px 22px 28px;
   }
 }
 
