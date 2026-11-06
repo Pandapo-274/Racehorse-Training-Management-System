@@ -18,28 +18,46 @@ import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseVitalsRepository;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class TrainingPlanService {
 
-    /** Các bước chuyển trạng thái được phép. COMPLETED là điểm cuối. */
+    /**
+     * Các bước Head Trainer được làm. COMPLETED là điểm cuối.
+     *
+     * Từ V34 giáo án phải qua chủ ngựa trước khi chạy:
+     *   DRAFT -> PENDING_APPROVAL (Head Trainer gửi) -> APPROVED (chủ ngựa duyệt) -> ACTIVE.
+     * PENDING_APPROVAL không có bước nào cho Head Trainer: chỉ chủ ngựa chuyển nó
+     * đi (ownerReview), duyệt thì sang APPROVED, từ chối thì về DRAFT kèm lý do.
+     * Tạm dừng rồi chạy lại (PAUSED -> ACTIVE) không cần duyệt lại: vẫn là giáo án đã duyệt.
+     */
     private static final Map<String, Set<String>> TRANSITIONS = Map.of(
-            "DRAFT", Set.of("ACTIVE"),
+            "DRAFT", Set.of("PENDING_APPROVAL"),
+            "PENDING_APPROVAL", Set.of(),
+            "APPROVED", Set.of("ACTIVE"),
             "ACTIVE", Set.of("PAUSED", "COMPLETED"),
             "PAUSED", Set.of("ACTIVE", "COMPLETED"),
             "COMPLETED", Set.of());
+
+    /** Chưa từng chạy, nên chưa có buổi tập nào: xoá được mà không mất lịch sử. */
+    private static final Set<String> DELETABLE = Set.of("DRAFT", "PENDING_APPROVAL", "APPROVED");
 
     private final TrainingPlanRepository planRepository;
     private final HorseRepository horseRepository;
     private final HorseVitalsRepository vitalsRepository;
     private final UserRepository userRepository;
+    private final NotificationService notifications;
 
     public TrainingPlanService(TrainingPlanRepository planRepository, HorseRepository horseRepository,
-                               HorseVitalsRepository vitalsRepository, UserRepository userRepository) {
+                               HorseVitalsRepository vitalsRepository, UserRepository userRepository,
+                               NotificationService notifications) {
         this.planRepository = planRepository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
+        this.notifications = notifications;
     }
 
     /** Một transaction: nếu chèn giai đoạn thứ 3 lỗi thì giáo án và 2 giai đoạn trước cũng bị hủy. */
@@ -65,6 +83,10 @@ public class TrainingPlanService {
         }
         if ("ACTIVE".equals(newStatus)) {
             checkCanActivate(plan);
+        }
+        if ("PENDING_APPROVAL".equals(newStatus) && plan.endDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This plan ended on " + plan.endDate() + ". Create a new plan instead");
         }
         /* Truyền plan.status() làm trạng thái mong đợi: nếu giữa lúc đọc và
            lúc ghi có người khác đổi, câu UPDATE không trúng dòng nào và cả
@@ -105,7 +127,56 @@ public class TrainingPlanService {
             userRepository.writeAudit(user.userId(), "TRAINING_SESSION_CANCEL_BULK",
                     "TRAINING_PLAN", planId, "SUCCESS", ip);
         }
+        if ("PENDING_APPROVAL".equals(newStatus)) {
+            horseRepository.findById(plan.horseId()).ifPresent(horse -> notifications.notifyUser(horse.ownerId(),
+                    new Notice("TRAINING_PLAN_APPROVAL_REQUESTED", "Training plan needs your approval",
+                            plan.horseName() + ": \"" + plan.planName() + "\" (" + plan.startDate() + " to "
+                                    + plan.endDate() + "). Review it on the Training page.",
+                            Notice.TRAINING_PLAN, planId)));
+        }
         return getOrThrow(planId);
+    }
+
+    /**
+     * Chủ ngựa duyệt hoặc từ chối giáo án đang chờ (PENDING_APPROVAL).
+     *
+     * Chủ ngựa trả tiền nuôi và thuê HLV, nên giáo án không chạy khi họ chưa
+     * đồng ý: hướng ngựa đi cự ly ngắn mà HLV lên giáo án sức bền thì chủ chặn
+     * được ngay ở đây, trước khi có buổi tập nào. Từ chối phải nói lý do để
+     * Head Trainer biết sửa gì; giáo án về DRAFT, Head Trainer xoá rồi lập lại
+     * hoặc gửi lại.
+     */
+    @Transactional
+    public TrainingPlanResponse ownerReview(int planId, boolean approve, String note,
+                                            AuthenticatedUser owner, String ip) {
+        TrainingPlanResponse plan = get(planId, owner);
+        if (!"PENDING_APPROVAL".equals(plan.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This plan is not waiting for your approval (currently " + plan.status() + ")");
+        }
+        String trimmed = note == null || note.isBlank() ? null : note.trim();
+        if (!approve && trimmed == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data",
+                    Map.of("note", "Tell the head trainer why you are rejecting this plan"));
+        }
+        String next = approve ? "APPROVED" : "DRAFT";
+        if (planRepository.recordOwnerReview(planId, next, trimmed) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
+        }
+        userRepository.writeAudit(owner.userId(), approve ? "TRAINING_PLAN_OWNER_APPROVE" : "TRAINING_PLAN_OWNER_REJECT",
+                "TRAINING_PLAN", planId, "SUCCESS", ip);
+        notifications.notifyUser(plan.createdBy(), approve
+                ? new Notice("TRAINING_PLAN_APPROVED", "Training plan approved",
+                        plan.horseName() + ": the owner approved \"" + plan.planName() + "\". You can activate it now.",
+                        Notice.TRAINING_PLAN, planId)
+                : new Notice("TRAINING_PLAN_REJECTED", "Training plan rejected",
+                        clip(plan.horseName() + ": the owner rejected \"" + plan.planName() + "\". " + trimmed, 500),
+                        Notice.TRAINING_PLAN, planId));
+        return getOrThrow(planId);
+    }
+
+    private static String clip(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max - 3) + "...";
     }
 
     /**
@@ -135,21 +206,45 @@ public class TrainingPlanService {
     }
 
     /**
-     * Kết thúc mọi giáo án ACTIVE đã qua ngày kết thúc (MissedTaskJob gọi mỗi đêm).
+     * Xoá một giáo án chưa từng chạy (DRAFT, chờ duyệt, đã duyệt): chọn nhầm
+     * ngựa, gõ sai ngày, hay chủ ngựa từ chối.
+     *
+     * Chưa ACTIVE thì chưa xếp được buổi tập nào, nên xoá không mất lịch sử.
+     * Không có đường này thì giáo án sai nằm trong danh sách mãi - qua ngày kết
+     * thúc thì cũng không kích hoạt được nữa.
+     */
+    @Transactional
+    public void deleteDraft(int planId, AuthenticatedUser user, String ip) {
+        TrainingPlanResponse plan = getOrThrow(planId);
+        if (!DELETABLE.contains(plan.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a plan that has never been activated can be deleted (this one is " + plan.status() + ")");
+        }
+        if (planRepository.deleteDraft(planId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
+        }
+        userRepository.writeAudit(user.userId(), "TRAINING_PLAN_DELETE", "TRAINING_PLAN", planId, "SUCCESS", ip);
+    }
+
+    /**
+     * Kết thúc mọi giáo án ACTIVE hoặc PAUSED đã qua ngày kết thúc (MissedTaskJob
+     * gọi mỗi đêm). PAUSED cũng tính: qua ngày kết thúc thì không kích hoạt lại
+     * được nữa (checkCanActivate chặn), nên để PAUSED là treo mãi.
      * @return số giáo án đã kết thúc.
      */
     @Transactional
     public int completeExpiredPlans() {
-        return completeExpired(planRepository.findSummaries(null, "ACTIVE", null));
+        return completeExpired(planRepository.findSummaries(null, "ACTIVE", null))
+                + completeExpired(planRepository.findSummaries(null, "PAUSED", null));
     }
 
     /** Dùng lại updateStatus (có điều kiện) và cancelRemainingSessions sẵn có. */
-    private int completeExpired(List<TrainingPlanResponse.Summary> activePlans) {
+    private int completeExpired(List<TrainingPlanResponse.Summary> plans) {
         int done = 0;
         LocalDate today = LocalDate.now();
-        for (TrainingPlanResponse.Summary p : activePlans) {
+        for (TrainingPlanResponse.Summary p : plans) {
             if (p.endDate() != null && p.endDate().isBefore(today)
-                    && planRepository.updateStatus(p.planId(), "ACTIVE", "COMPLETED") == 1) {
+                    && planRepository.updateStatus(p.planId(), p.status(), "COMPLETED") == 1) {
                 planRepository.cancelRemainingSessions(p.planId());
                 userRepository.writeAudit(null, "TRAINING_PLAN_AUTO_COMPLETED", "TRAINING_PLAN",
                         p.planId(), "SUCCESS", null);

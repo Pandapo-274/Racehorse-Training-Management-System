@@ -90,11 +90,24 @@ public class SessionService {
             throw fieldError("recoveryHeartRate", "Recovery heart rate cannot be higher than peak heart rate");
         }
 
-        // Ca đã bị dừng sớm (vd. do cảnh báo UC11) thì giữ nguyên trạng thái đó, trừ khi trainer chủ động đổi.
+        /* Buổi đã bị dừng sớm (Groom báo ngựa bất thường, cảnh báo vượt ngưỡng,
+           lệnh khoá tập) thì giữ STOPPED_EARLY. Cho đổi sang COMPLETED là xoá
+           dấu vết một lần dừng vì an toàn và làm sai thống kê buổi phải dừng.
+           Chiều ngược lại vẫn được: buổi Groom bấm Finish (hoặc job đêm đóng)
+           mà thực ra đã dừng giữa chừng thì Head Trainer sửa thành STOPPED_EARLY. */
+        if ("STOPPED_EARLY".equals(current.status()) && "COMPLETED".equals(req.status())) {
+            throw fieldError("status", "This session was stopped early; it cannot be marked as completed");
+        }
         String finalStatus = req.status() != null ? req.status()
                 : ("STOPPED_EARLY".equals(current.status()) ? "STOPPED_EARLY" : "COMPLETED");
 
-        sessions.saveEvaluation(sessionId, req, finalStatus, me.userId());
+        /* Ghi có điều kiện trạng thái vừa đọc: Groom bấm Stop trong lúc Head
+           Trainer đang điền form thì câu UPDATE không trúng dòng nào, thay vì
+           ghi đè STOPPED_EARLY thành COMPLETED. */
+        if (sessions.saveEvaluation(sessionId, req, current.status(), finalStatus, me.userId()) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session changed while you were evaluating it. Reload and try again");
+        }
         users.writeAudit(me.userId(), "EVALUATE_SESSION", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
         return getOrThrow(sessionId);
     }

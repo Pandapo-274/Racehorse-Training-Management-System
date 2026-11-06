@@ -18,6 +18,11 @@ export function createTrainingPlan(payload) {
   return authFetch(API, { method: "POST", body: JSON.stringify(payload) });
 }
 
+/** Chỉ giáo án DRAFT; backend trả 409 cho trạng thái khác. */
+export function deleteTrainingPlan(id) {
+  return authFetch(`${API}/${id}`, { method: "DELETE" });
+}
+
 export function changeTrainingPlanStatus(id, status) {
   return authFetch(`${API}/${id}/status`, {
     method: "PUT",

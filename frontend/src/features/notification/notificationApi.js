@@ -74,6 +74,11 @@ export function notificationTarget(n, user) {
       if (role === "VETERINARIAN") return `/veterinarian/vet-calls/${n.targetId}`;
       if (role === "HEAD_TRAINER") return "/trainer/live-session#vet-calls";
       return null;
+    case "TRAINING_PLAN":
+      // Giáo án chờ chủ duyệt (V34): chủ ngựa duyệt ở trang Training, Head Trainer xem kết quả ở trang giáo án.
+      if (role === "HORSE_OWNER") return "/horse-owner/training";
+      if (role === "HEAD_TRAINER") return "/trainer/training-plans";
+      return null;
     default:
       return null;
   }

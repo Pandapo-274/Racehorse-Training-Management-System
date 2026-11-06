@@ -170,6 +170,34 @@ public class TrainingSessionRepository {
                 .update();
     }
 
+    /** RUNNING -> COMPLETED. 0 dòng = vừa có người dừng hoặc kết thúc buổi này. */
+    public int markFinished(int sessionId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'COMPLETED'
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("id", sessionId)
+                .update();
+    }
+
+    /**
+     * Đóng những buổi còn RUNNING từ ngày trước (MissedTaskJob gọi mỗi đêm).
+     *
+     * Buổi tập chỉ Start được trong đúng ngày của nó, nên qua nửa đêm mà vẫn
+     * RUNNING nghĩa là không ai bấm Finish. Để nguyên thì con ngựa bị kẹt:
+     * hasRunningSession chặn mọi buổi Start sau, và Groom không khoá được tài
+     * khoản. Đóng thành COMPLETED, chưa đánh giá: Head Trainer vẫn chấm điểm
+     * được, và đổi sang STOPPED_EARLY nếu thực ra buổi đã dừng giữa chừng.
+     */
+    public int closeStaleRunning(LocalDate today) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION SET status = 'COMPLETED'
+                WHERE status = 'RUNNING' AND session_date < :today
+                """)
+                .param("today", today)
+                .update();
+    }
+
     /** Buổi tập còn SCHEDULED của một con ngựa: ai phụ trách, lúc nào. */
     public record ScheduledSlot(int sessionId, int assignedTo, LocalDateTime sessionDate) {
     }

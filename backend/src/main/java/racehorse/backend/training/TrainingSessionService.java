@@ -36,11 +36,12 @@ public class TrainingSessionService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
 
     /**
-     * Hai buổi tập của cùng một ngựa, hoặc của cùng một Groom, phải cách nhau ít
-     * nhất chừng này phút. Bảng không có cột thời lượng buổi tập nên dùng một
-     * khoảng đệm cố định: một buổi tập kèm khởi động và hạ nhiệt mất khoảng 1,5 giờ.
+     * Khoảng đệm mặc định giữa hai buổi của cùng một ngựa (khi giai đoạn không
+     * đặt min_gap_minutes) và giữa hai buổi của cùng một Groom với hai ngựa khác
+     * nhau. Bảng không có cột thời lượng buổi tập: một buổi kèm khởi động và hạ
+     * nhiệt mất khoảng 1,5 giờ.
      */
-    private static final long MIN_GAP_MINUTES = 90;
+    private static final long DEFAULT_GAP_MINUTES = 90;
 
     /** Buổi còn chiếm chỗ trên lịch. */
     private static final Set<String> OPEN = Set.of("SCHEDULED", "RUNNING");
@@ -93,7 +94,9 @@ public class TrainingSessionService {
             errors.put("assignedTo", "Assignee must be an active Groom");
         }
         LocalDate day = r.sessionDate().toLocalDate();
-        if (day.isBefore(LocalDate.now())) {
+        /* So cả giờ, không chỉ ngày: chỉ so ngày thì lúc 15:00 vẫn xếp được buổi
+           06:00 cùng hôm, và vì giờ đó đã qua nên Groom Start được ngay. */
+        if (r.sessionDate().isBefore(LocalDateTime.now())) {
             errors.put("sessionDate", "Cannot schedule a session in the past");
         } else if ((ctx.startDate() != null && day.isBefore(ctx.startDate()))
                 || (ctx.endDate() != null && day.isAfter(ctx.endDate()))) {
@@ -169,6 +172,38 @@ public class TrainingSessionService {
                 ip);
         return getOrThrow(sessionId);
     }
+
+    /**
+     * RUNNING -> COMPLETED khi buổi tập kết thúc bình thường. Groom (buổi của
+     * mình) hoặc Head Trainer bấm. Chưa có đánh giá: Head Trainer chấm sau ở
+     * Session review (UC12).
+     *
+     * Trước đây chỉ có đánh giá hoặc Stop mới đóng được buổi tập, nên Head
+     * Trainer quên chấm là buổi nằm RUNNING mãi và con ngựa không Start được
+     * buổi nào nữa (hasRunningSession).
+     */
+    @Transactional
+    public TrainingSessionResponse finish(int sessionId, AuthenticatedUser user, String ip) {
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if (!"RUNNING".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a RUNNING session can be finished (currently " + s.status() + ")");
+        }
+        if (repository.markFinished(sessionId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just been stopped or finished by someone else");
+        }
+        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_FINISH", "TRAINING_SESSION", sessionId,
+                "SUCCESS", ip);
+        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+                "TRAINING_SESSION_FINISHED",
+                "Training session finished",
+                s.horseName() + " finished the session of " + s.sessionDate().format(WHEN)
+                        + ". Ready for evaluation.",
+                Notice.TRAINING_SESSION, sessionId));
+        return getOrThrow(sessionId);
+    }
     
     public TrainingSessionResponse get(int sessionId, AuthenticatedUser user) {
         TrainingSessionResponse s = getOrThrow(sessionId);
@@ -241,10 +276,14 @@ public TrainingSessionResponse reschedule(
                 "Assignee must be an active Groom");
     }
 
-    // 7. Ngày mới không được ở trong quá khứ.
+    // 7. Giờ mới không được ở trong quá khứ (so cả giờ, không chỉ ngày).
+    // Giữ nguyên giờ cũ thì bỏ qua: buổi hôm nay đã quá giờ mà chưa Start
+    // vẫn phải đổi được Groom, không bắt Head Trainer dời giờ theo.
     LocalDate day = request.sessionDate().toLocalDate();
+    boolean timeChanged = !request.sessionDate().equals(current.sessionDate());
 
-    if (day.isBefore(LocalDate.now())) {
+    if (day.isBefore(LocalDate.now())
+            || (timeChanged && request.sessionDate().isBefore(LocalDateTime.now()))) {
         errors.put(
                 "sessionDate",
                 "Cannot schedule a session in the past");
@@ -381,35 +420,45 @@ public TrainingSessionResponse reschedule(
     }
 
     /**
-     * Lịch có còn chỗ cho buổi này không: không trùng giờ (trong MIN_GAP_MINUTES)
-     * với buổi đang mở của cùng ngựa hoặc cùng Groom, và không vượt số buổi mỗi
-     * tuần mà giai đoạn quy định. excludeId = buổi đang dời lịch (0 khi tạo mới).
+     * Lịch có còn chỗ cho buổi này không: ngựa được nghỉ đủ khoảng của giai đoạn
+     * (min_gap_minutes, mặc định DEFAULT_GAP_MINUTES), Groom không dắt hai ngựa
+     * khác nhau cùng lúc, và không vượt số buổi mỗi tuần mà giai đoạn quy định.
+     * excludeId = buổi đang dời lịch (0 khi tạo mới).
      *
      * Dùng lại findAll() và findPhases() có sẵn thay vì thêm câu SQL mới: số buổi
      * của một ngựa hay một Groom chỉ vài chục, lọc trong Java là đủ.
      */
     private void checkSlot(TrainingSessionRepository.PhaseContext ctx, int groomId,
                            LocalDateTime when, int excludeId) {
+        TrainingPlanResponse.Phase phase = planRepository.findPhases(ctx.planId()).stream()
+                .filter(p -> p.phaseId() == ctx.phaseId())
+                .findFirst().orElse(null);
+        /* Khoảng nghỉ theo giai đoạn, không cố định 90 phút: giai đoạn đi bộ
+           khởi động rồi nước rút cần hai buổi sát nhau, giai đoạn tập nặng cần
+           nghỉ lâu hơn. Head Trainer đặt khi lập giáo án. */
+        long horseGap = phase != null && phase.minGapMinutes() != null
+                ? phase.minGapMinutes() : DEFAULT_GAP_MINUTES;
+
         List<TrainingSessionResponse> horseSessions = repository.findAll(ctx.horseId(), null, null, null, false);
         for (TrainingSessionResponse s : horseSessions) {
-            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when)) {
+            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when, horseGap)) {
                 throw new ApiException(HttpStatus.CONFLICT, s.horseName() + " already has a session at "
-                        + s.sessionDate().format(WHEN) + ". Sessions must be at least "
-                        + MIN_GAP_MINUTES + " minutes apart");
+                        + s.sessionDate().format(WHEN) + ". This phase needs at least "
+                        + horseGap + " minutes of rest between sessions");
             }
         }
+        /* Cùng ngựa thì vòng trên đã xét theo khoảng nghỉ của giai đoạn; ở đây
+           chỉ chặn một Groom dắt hai ngựa KHÁC NHAU cùng lúc. Không bỏ cùng ngựa
+           ra thì khoảng nghỉ ngắn của giai đoạn vô nghĩa khi cùng một Groom dắt. */
         for (TrainingSessionResponse s : repository.findAll(null, null, groomId, null, false)) {
-            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when)) {
+            if (s.sessionId() != excludeId && s.horseId() != ctx.horseId() && OPEN.contains(s.status())
+                    && tooClose(s.sessionDate(), when, DEFAULT_GAP_MINUTES)) {
                 throw new ApiException(HttpStatus.CONFLICT, s.assignedToName() + " is already handling "
                         + s.horseName() + " at " + s.sessionDate().format(HOUR) + " that day");
             }
         }
 
-        Integer perWeek = planRepository.findPhases(ctx.planId()).stream()
-                .filter(p -> p.phaseId() == ctx.phaseId())
-                .map(TrainingPlanResponse.Phase::sessionsPerWeek)
-                .filter(n -> n != null)
-                .findFirst().orElse(null);
+        Integer perWeek = phase == null ? null : phase.sessionsPerWeek();
         if (perWeek != null) {
             LocalDate monday = when.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
             long inWeek = horseSessions.stream()
@@ -426,8 +475,8 @@ public TrainingSessionResponse reschedule(
         }
     }
 
-    private static boolean tooClose(LocalDateTime a, LocalDateTime b) {
-        return Math.abs(Duration.between(a, b).toMinutes()) < MIN_GAP_MINUTES;
+    private static boolean tooClose(LocalDateTime a, LocalDateTime b, long gapMinutes) {
+        return Math.abs(Duration.between(a, b).toMinutes()) < gapMinutes;
     }
 
     /**
