@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 5, 2026` at `23:05` by `Pandapo274`
+### Last Commited: `Nov 6, 2026` at `10:24` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 6, 2026`
+- `[10:24]` `ArichiAya` - Resolved `vet.css` and `VetDashboard.js` render issues
 > #### `Nov 5, 2026`
 - `[23:05]` `Pandapo274` - Complete recovery relapse rules, vitals threshold alert distinction, training session cancellation for Head Trainer, supply pricing & inventory deduction, and race approval flow:
   - `Vet Recovery`: Relapse only allows new active injuries incurred during light work/rating; prevent duplicate relapse spam; clean notice layout without premature line breaks.
