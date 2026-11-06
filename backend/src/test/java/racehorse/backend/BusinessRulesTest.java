@@ -500,6 +500,39 @@ class BusinessRulesTest {
         verify(incidents).stopFromAlert(eq(TRAINER), eq(1), any(), eq("HIGH"), eq("ip"));
     }
 
+    private static AlertResponse highHeartRateAlert() {
+        return new AlertResponse(9, 1, 100, "Horse 100", "HEART_RATE", new BigDecimal("180"),
+                new BigDecimal("205"), "HIGH", Instant.now(), null, null, null, false);
+    }
+
+    @Test
+    void reduceIntensityReachesTheGroomOnTheTrack() {
+        AlertRepository alerts = mock(AlertRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(alerts.findById(9)).thenReturn(Optional.of(highHeartRateAlert()));
+        when(alerts.resolve(9, "REDUCE_INTENSITY", 2)).thenReturn(true);
+        when(alerts.findSessionContext(1)).thenReturn(Optional.of(new SessionContext(1, 5, "RUNNING", 180)));
+
+        alertService(alerts, notifications, mock(IncidentService.class))
+                .resolve(TRAINER, 9, new ResolveAlertRequest("REDUCE_INTENSITY"), "ip");
+
+        verify(notifications).notifyUser(eq(5), argThat(n -> "TRAINING_INTENSITY_REDUCED".equals(n.type())));
+    }
+
+    @Test
+    void continueDoesNotDisturbTheGroom() {
+        AlertRepository alerts = mock(AlertRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(alerts.findById(9)).thenReturn(Optional.of(highHeartRateAlert()));
+        when(alerts.resolve(9, "CONTINUE", 2)).thenReturn(true);
+        when(alerts.findSessionContext(1)).thenReturn(Optional.of(new SessionContext(1, 5, "RUNNING", 180)));
+
+        alertService(alerts, notifications, mock(IncidentService.class))
+                .resolve(TRAINER, 9, new ResolveAlertRequest("CONTINUE"), "ip");
+
+        verify(notifications, never()).notifyUser(anyInt(), any());
+    }
+
     @Test
     void heartRateTenPercentOverCeilingIsHighAndReachesTheVet() {
         AlertRepository alerts = mock(AlertRepository.class);

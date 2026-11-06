@@ -138,6 +138,19 @@ public class AlertService {
                     + alertDetail(alert);
             incidentService.stopFromAlert(me, alert.sessionId(), what, alert.severity(), ip);
         }
+        /* Giảm cường độ là một chỉ thị cho người đang dắt ngựa ngoài sân. Chỉ ghi
+           action_taken thì Groom không hề biết và ngựa vẫn chạy như cũ, nên báo thẳng
+           cho Groom của buổi đó - khi buổi còn đang chạy. CONTINUE không đổi gì với
+           Groom nên không báo. */
+        if ("REDUCE_INTENSITY".equals(req.actionTaken())) {
+            alerts.findSessionContext(alert.sessionId())
+                    .filter(ctx -> "RUNNING".equals(ctx.status()))
+                    .ifPresent(ctx -> notifications.notifyUser(ctx.assignedTo(), new Notice(
+                            "TRAINING_INTENSITY_REDUCED", "Reduce intensity now",
+                            alert.horseName() + ": the head trainer asks you to reduce intensity after a "
+                                    + metricLabel(alert.metricType()) + " alert (" + alertDetail(alert) + ").",
+                            Notice.TRAINING_SESSION, alert.sessionId())));
+        }
         users.writeAudit(me.userId(), "RESOLVE_ALERT:" + req.actionTaken(), "THRESHOLD_ALERT", alertId, "SUCCESS", ip);
         return alerts.findById(alertId).orElseThrow();
     }
