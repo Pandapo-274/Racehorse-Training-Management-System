@@ -15,6 +15,11 @@ export function fetchRunningSessions(signal) {
   return authFetch(`${SESSIONS_API}?status=RUNNING`, { signal });
 }
 
+/** RUNNING -> COMPLETED: buổi kết thúc bình thường, chấm điểm sau ở Session review. */
+export function finishSession(sessionId) {
+  return authFetch(`${SESSIONS_API}/${sessionId}/finish`, { method: "PUT" });
+}
+
 export function resolveAlert(alertId, actionTaken) {
   return authFetch(`${ALERTS_API}/${alertId}/resolve`, {
     method: "PUT",

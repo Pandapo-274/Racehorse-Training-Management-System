@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.incident.IncidentService;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
 
@@ -24,6 +25,7 @@ public class AlertService {
     private final AlertRepository alerts;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final IncidentService incidentService;
     /**
      * Ngưỡng vận tốc (m/s). Schema không có ngưỡng vận tốc theo giai đoạn nên dùng
      * một ngưỡng chung, mặc định 18 m/s (khoảng 65 km/h): vượt mức này trong buổi
@@ -32,11 +34,12 @@ public class AlertService {
     private final BigDecimal velocityMax;
 
     public AlertService(AlertRepository alerts, UserRepository users,
-                        NotificationService notifications,
+                        NotificationService notifications, IncidentService incidentService,
                         @Value("${app.alert.velocity-max:18.0}") BigDecimal velocityMax) {
         this.alerts = alerts;
         this.users = users;
         this.notifications = notifications;
+        this.incidentService = incidentService;
         this.velocityMax = velocityMax;
     }
 
@@ -129,13 +132,11 @@ public class AlertService {
             throw new ApiException(HttpStatus.CONFLICT, "Alert has already been resolved");
         }
         if ("STOP_SESSION".equals(req.actionTaken())) {
-            alerts.stopSession(alert.sessionId());
-            // Groom đang dắt ngựa phải biết ngay, không thì vẫn tiếp tục cho chạy.
-            alerts.findSessionContext(alert.sessionId()).ifPresent(ctx -> notifications.notifyUser(
-                    ctx.assignedTo(), new Notice("TRAINING_SESSION_STOPPED", "Training session stopped",
-                            alert.horseName() + ": the head trainer stopped the session after a "
-                                    + metricLabel(alert.metricType()) + " alert. Stop work with this horse now.",
-                            Notice.TRAINING_SESSION, alert.sessionId())));
+            /* Dừng như Groom bấm Stop: mở báo cáo sự cố để bác sĩ khám, và báo
+               Groom, chủ ngựa, bác sĩ. IncidentService lo cả phần thông báo. */
+            String what = "Stopped by the head trainer after a " + metricLabel(alert.metricType()) + " alert: "
+                    + alertDetail(alert);
+            incidentService.stopFromAlert(me, alert.sessionId(), what, alert.severity(), ip);
         }
         users.writeAudit(me.userId(), "RESOLVE_ALERT:" + req.actionTaken(), "THRESHOLD_ALERT", alertId, "SUCCESS", ip);
         return alerts.findById(alertId).orElseThrow();
@@ -151,6 +152,14 @@ public class AlertService {
 
     private static String metricLabel(String metric) {
         return VELOCITY.equals(metric) ? "speed" : "heart-rate";
+    }
+
+    /** "232 bpm (ceiling 200 bpm)" hoặc "19.5 m/s (limit 18.0 m/s)". */
+    private static String alertDetail(AlertResponse a) {
+        if (a.actualValue() == null || a.thresholdValue() == null) return "value over the limit";
+        return VELOCITY.equals(a.metricType())
+                ? a.actualValue().toPlainString() + " m/s (limit " + a.thresholdValue().toPlainString() + " m/s)"
+                : a.actualValue().intValue() + " bpm (ceiling " + a.thresholdValue().intValue() + " bpm)";
     }
 
     private static int rank(String severity) {

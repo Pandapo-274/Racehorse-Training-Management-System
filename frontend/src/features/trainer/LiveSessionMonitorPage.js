@@ -5,7 +5,7 @@ import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError } from "../auth/authService";
-import { fetchAlerts, fetchRunningSessions, resolveAlert } from "./liveSessionApi";
+import { fetchAlerts, fetchRunningSessions, finishSession, resolveAlert } from "./liveSessionApi";
 import { toAlertMessage, toSeverity } from "./dashboardApi";
 import {
   createVetCall,
@@ -296,6 +296,7 @@ export default function LiveSessionMonitorPage() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [busyAlertId, setBusyAlertId] = useState(null);
+  const [finishingId, setFinishingId] = useState(null);
   const [vetCalls, setVetCalls] = useState([]);
   const [callingFor, setCallingFor] = useState(null);
   const latestAlertId = useRef(0);
@@ -383,6 +384,20 @@ export default function LiveSessionMonitorPage() {
       if (!handleAuthError(err, navigate)) setActionError(err.message || "Unable to resolve this alert.");
     } finally {
       setBusyAlertId(null);
+    }
+  };
+
+  const handleFinish = async (session) => {
+    if (!window.confirm(`Finish the session with ${session.horseName || `horse #${session.horseId}`}?`)) return;
+    setFinishingId(session.sessionId);
+    setActionError("");
+    try {
+      await finishSession(session.sessionId);
+      setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId));
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setActionError(err.message || "Unable to finish this session.");
+    } finally {
+      setFinishingId(null);
     }
   };
 
@@ -480,6 +495,15 @@ export default function LiveSessionMonitorPage() {
                         <div><span>Alerts raised</span><strong>{session.alertCount ?? 0}</strong></div>
                       </div>
                       <small>Assigned Groom: {session.assignedToName || "Unassigned"}</small>
+                      <div className="live-alert-actions">
+                        <button
+                          type="button"
+                          disabled={finishingId === session.sessionId}
+                          onClick={() => handleFinish(session)}
+                        >
+                          {finishingId === session.sessionId ? "Finishing…" : "Finish session"}
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>

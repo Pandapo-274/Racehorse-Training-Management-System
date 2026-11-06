@@ -60,10 +60,47 @@ public class IncidentService {
         if (incidents.markStopped(sessionId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This session has just been stopped or finished by someone else");
         }
-        int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, req.urgency());
+        int reportId = openStopReport(user, s, symptoms, description, req.urgency(), ip);
+
+        IncidentReportResponse report = incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "The report was created but could not be read back"));
+        return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
+    }
+
+    /**
+     * Head Trainer chọn STOP_SESSION khi xử lý một cảnh báo vượt ngưỡng (AlertService.resolve).
+     *
+     * Đi đúng đường của Groom bấm Stop: mở báo cáo sự cố cho bác sĩ, và tới khi khám xong
+     * IncidentGuard chặn con ngựa tập tiếp. Trước đây đường này chỉ đổi STOPPED_EARLY, nên một
+     * con ngựa vừa bị dừng vì nhịp tim vượt ngưỡng lại được xếp và Start buổi khác ngay.
+     *
+     * Không ném lỗi khi buổi không còn RUNNING (Groom vừa Finish hoặc vừa Stop): cảnh báo vẫn
+     * được ghi là đã xử lý, chỉ là không còn gì để dừng.
+     *
+     * @return id báo cáo sự cố, hoặc null nếu buổi đã không còn chạy.
+     */
+    @Transactional
+    public Integer stopFromAlert(AuthenticatedUser trainer, int sessionId, String symptoms, String urgency,
+                                 String ip) {
+        IncidentRepository.SessionForStop s = incidents.findSessionForStop(sessionId).orElse(null);
+        if (s == null || !"RUNNING".equals(s.status()) || incidents.markStopped(sessionId) == 0) {
+            return null;
+        }
+        return openStopReport(trainer, s, Text.clip(symptoms, 255), null, urgency, ip);
+    }
+
+    /**
+     * Phần chung của hai đường dừng buổi: buổi đã được markStopped, giờ mở báo cáo và báo người liên quan.
+     * @return id báo cáo vừa mở.
+     */
+    private int openStopReport(AuthenticatedUser user, IncidentRepository.SessionForStop s, String symptoms,
+                               String description, String urgency, String ip) {
+        int sessionId = s.sessionId();
+        int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, urgency);
         users.writeAudit(user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
 
-        String shortWhat = s.horseName() + ": " + symptoms + " (" + req.urgency() + ").";
+        String shortWhat = s.horseName() + ": " + symptoms + " (" + urgency + ").";
         // Bác sĩ thú y: cần đi khám. Người ra tay không cần chuông cho chính mình (notifyRole đã loại trừ).
         notifications.notifyRole("VETERINARIAN", user, new Notice(
                 "INCIDENT_REPORTED", "Horse needs examination", Text.clip(shortWhat, 500),
@@ -77,18 +114,15 @@ public class IncidentService {
         if (s.assignedTo() != user.userId()) {
             notifications.notifyUser(s.assignedTo(), new Notice(
                     "TRAINING_SESSION_STOPPED", "Training session stopped",
-                    Text.clip("Your session with " + s.horseName() + " was stopped: " + symptoms + ".", 500),
+                    Text.clip("Your session with " + s.horseName() + " was stopped: " + symptoms
+                            + ". Stop work with this horse now.", 500),
                     Notice.TRAINING_SESSION, sessionId));
         }
 
         // The open report now blocks racing too (RaceService.problemOf).
         raceRisk.warn(s.horseId(), s.horseName(), s.ownerId(), user,
                 "was stopped during training and is waiting for a veterinarian");
-
-        IncidentReportResponse report = incidents.findById(reportId)
-                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "The report was created but could not be read back"));
-        return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
+        return reportId;
     }
 
     /**

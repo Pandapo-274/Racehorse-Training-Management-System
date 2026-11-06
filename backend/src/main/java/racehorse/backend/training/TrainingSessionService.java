@@ -93,7 +93,9 @@ public class TrainingSessionService {
             errors.put("assignedTo", "Assignee must be an active Groom");
         }
         LocalDate day = r.sessionDate().toLocalDate();
-        if (day.isBefore(LocalDate.now())) {
+        /* So cả giờ, không chỉ ngày: chỉ so ngày thì lúc 15:00 vẫn xếp được buổi
+           06:00 cùng hôm, và vì giờ đó đã qua nên Groom Start được ngay. */
+        if (r.sessionDate().isBefore(LocalDateTime.now())) {
             errors.put("sessionDate", "Cannot schedule a session in the past");
         } else if ((ctx.startDate() != null && day.isBefore(ctx.startDate()))
                 || (ctx.endDate() != null && day.isAfter(ctx.endDate()))) {
@@ -169,6 +171,38 @@ public class TrainingSessionService {
                 ip);
         return getOrThrow(sessionId);
     }
+
+    /**
+     * RUNNING -> COMPLETED khi buổi tập kết thúc bình thường. Groom (buổi của
+     * mình) hoặc Head Trainer bấm. Chưa có đánh giá: Head Trainer chấm sau ở
+     * Session review (UC12).
+     *
+     * Trước đây chỉ có đánh giá hoặc Stop mới đóng được buổi tập, nên Head
+     * Trainer quên chấm là buổi nằm RUNNING mãi và con ngựa không Start được
+     * buổi nào nữa (hasRunningSession).
+     */
+    @Transactional
+    public TrainingSessionResponse finish(int sessionId, AuthenticatedUser user, String ip) {
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if (!"RUNNING".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a RUNNING session can be finished (currently " + s.status() + ")");
+        }
+        if (repository.markFinished(sessionId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just been stopped or finished by someone else");
+        }
+        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_FINISH", "TRAINING_SESSION", sessionId,
+                "SUCCESS", ip);
+        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+                "TRAINING_SESSION_FINISHED",
+                "Training session finished",
+                s.horseName() + " finished the session of " + s.sessionDate().format(WHEN)
+                        + ". Ready for evaluation.",
+                Notice.TRAINING_SESSION, sessionId));
+        return getOrThrow(sessionId);
+    }
     
     public TrainingSessionResponse get(int sessionId, AuthenticatedUser user) {
         TrainingSessionResponse s = getOrThrow(sessionId);
@@ -241,10 +275,14 @@ public TrainingSessionResponse reschedule(
                 "Assignee must be an active Groom");
     }
 
-    // 7. Ngày mới không được ở trong quá khứ.
+    // 7. Giờ mới không được ở trong quá khứ (so cả giờ, không chỉ ngày).
+    // Giữ nguyên giờ cũ thì bỏ qua: buổi hôm nay đã quá giờ mà chưa Start
+    // vẫn phải đổi được Groom, không bắt Head Trainer dời giờ theo.
     LocalDate day = request.sessionDate().toLocalDate();
+    boolean timeChanged = !request.sessionDate().equals(current.sessionDate());
 
-    if (day.isBefore(LocalDate.now())) {
+    if (day.isBefore(LocalDate.now())
+            || (timeChanged && request.sessionDate().isBefore(LocalDateTime.now()))) {
         errors.put(
                 "sessionDate",
                 "Cannot schedule a session in the past");

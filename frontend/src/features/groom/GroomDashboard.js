@@ -7,7 +7,7 @@ import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import {
-  formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
+  finishSession, formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
   startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
   COMMON_SYMPTOMS, URGENCY_OPTIONS,
 } from "./groomApi";
@@ -158,8 +158,8 @@ function SessionsCard({ items, total, filter, selectedId, onSelect }) {
 /**
  * SCHEDULED: nút Start. RUNNING: ô nhập số đo, mỗi lần gửi backend so với ngưỡng
  * nhịp tim của giai đoạn và sinh cảnh báo cho Head Trainer nếu vượt.
- * Groom không tự kết thúc buổi tập: Head Trainer chấm điểm ở Session review
- * (UC12) mới chuyển sang COMPLETED, hoặc dừng sớm từ Live Session Monitor.
+ * Buổi xong bình thường thì Groom bấm Finish (COMPLETED, chờ chấm điểm ở
+ * Session review - UC12); ngựa bất thường thì bấm Stop để gọi bác sĩ.
  */
 function SessionPanel({ session, onChanged, navigate }) {
   const [busy, setBusy] = useState(false);
@@ -252,6 +252,14 @@ function SessionPanel({ session, onChanged, navigate }) {
       setVelocity("");
       onChanged(null); // tải lại để thấy nhịp tim đỉnh và số cảnh báo mới
     }
+  };
+
+  const finish = async () => {
+    if (!window.confirm(`Finish the session with ${session.horseName}? You cannot send readings after this.`)) {
+      return;
+    }
+    const updated = await run(() => finishSession(session.sessionId));
+    if (updated) onChanged(updated);
   };
 
   /* Ngựa bất thường giữa buổi: dừng buổi và mở báo cáo sự cố cho bác sĩ thú y.
@@ -365,9 +373,14 @@ function SessionPanel({ session, onChanged, navigate }) {
       )}
 
       {session.status === "RUNNING" && !stopOpen && (
-        <button type="button" className="report-incident" onClick={() => setStopOpen(true)} disabled={busy}>
-          Horse unwell? Stop this session
-        </button>
+        <>
+          <button type="button" className="start-session" onClick={finish} disabled={busy}>
+            {busy ? "Saving…" : "Finish session"}
+          </button>
+          <button type="button" className="report-incident" onClick={() => setStopOpen(true)} disabled={busy}>
+            Horse unwell? Stop this session
+          </button>
+        </>
       )}
 
       {session.status === "RUNNING" && stopOpen && (
@@ -445,7 +458,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
       {session.status === "RUNNING" && (
         <p className="session-note">
-          The head trainer ends the session from the live monitor or the session review.
+          Press Finish when the work is done. The head trainer evaluates the session afterwards.
         </p>
       )}
 

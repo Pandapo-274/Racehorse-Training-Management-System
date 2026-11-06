@@ -144,10 +144,4 @@ public class AlertRepository {
                 .param("id", alertId)
                 .update() == 1;
     }
-
-    public void stopSession(int sessionId) {
-        jdbc.sql("UPDATE TRAINING_SESSION SET status = 'STOPPED_EARLY' WHERE session_id = :id AND status = 'RUNNING'")
-                .param("id", sessionId)
-                .update();
-    }
 }

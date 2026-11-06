@@ -200,6 +200,27 @@ public class TrainingPlanRepository {
                 .update();
     }
 
+    /**
+     * Xoá giáo án cùng các giai đoạn của nó, chỉ khi giáo án vẫn còn DRAFT.
+     * Giai đoạn phải xoá trước (FK_PHASE_plan). Cả hai câu cùng điều kiện
+     * DRAFT, và service chạy trong một giao dịch: 0 dòng ở câu sau thì
+     * service ném lỗi và việc xoá giai đoạn cũng được huỷ.
+     *
+     * @return số giáo án đã xoá (0 hoặc 1).
+     */
+    public int deleteDraft(int planId) {
+        jdbc.sql("""
+                DELETE ph FROM PLAN_PHASE ph
+                JOIN TRAINING_PLAN tp ON tp.plan_id = ph.plan_id
+                WHERE ph.plan_id = :id AND tp.status = 'DRAFT'
+                """)
+                .param("id", planId)
+                .update();
+        return jdbc.sql("DELETE FROM TRAINING_PLAN WHERE plan_id = :id AND status = 'DRAFT'")
+                .param("id", planId)
+                .update();
+    }
+
     /** excludeId = id giáo án đang xét, để nó không tự tính là "đã có giáo án khác". */
     public boolean existsActivePlan(int horseId, int excludeId) {
         return jdbc.sql("""

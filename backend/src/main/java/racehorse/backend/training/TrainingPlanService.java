@@ -135,21 +135,45 @@ public class TrainingPlanService {
     }
 
     /**
-     * Kết thúc mọi giáo án ACTIVE đã qua ngày kết thúc (MissedTaskJob gọi mỗi đêm).
+     * Xoá một giáo án DRAFT (chọn nhầm ngựa, gõ sai ngày...).
+     *
+     * Chỉ DRAFT: DRAFT chỉ đi được tới ACTIVE, và chưa ACTIVE thì chưa xếp được
+     * buổi tập nào, nên xoá không mất lịch sử. Không có đường này thì giáo án
+     * nháp sai nằm trong danh sách mãi - qua ngày kết thúc thì cũng không kích
+     * hoạt được nữa.
+     */
+    @Transactional
+    public void deleteDraft(int planId, AuthenticatedUser user, String ip) {
+        TrainingPlanResponse plan = getOrThrow(planId);
+        if (!"DRAFT".equals(plan.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a DRAFT plan can be deleted (this one is " + plan.status() + ")");
+        }
+        if (planRepository.deleteDraft(planId) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
+        }
+        userRepository.writeAudit(user.userId(), "TRAINING_PLAN_DELETE", "TRAINING_PLAN", planId, "SUCCESS", ip);
+    }
+
+    /**
+     * Kết thúc mọi giáo án ACTIVE hoặc PAUSED đã qua ngày kết thúc (MissedTaskJob
+     * gọi mỗi đêm). PAUSED cũng tính: qua ngày kết thúc thì không kích hoạt lại
+     * được nữa (checkCanActivate chặn), nên để PAUSED là treo mãi.
      * @return số giáo án đã kết thúc.
      */
     @Transactional
     public int completeExpiredPlans() {
-        return completeExpired(planRepository.findSummaries(null, "ACTIVE", null));
+        return completeExpired(planRepository.findSummaries(null, "ACTIVE", null))
+                + completeExpired(planRepository.findSummaries(null, "PAUSED", null));
     }
 
     /** Dùng lại updateStatus (có điều kiện) và cancelRemainingSessions sẵn có. */
-    private int completeExpired(List<TrainingPlanResponse.Summary> activePlans) {
+    private int completeExpired(List<TrainingPlanResponse.Summary> plans) {
         int done = 0;
         LocalDate today = LocalDate.now();
-        for (TrainingPlanResponse.Summary p : activePlans) {
+        for (TrainingPlanResponse.Summary p : plans) {
             if (p.endDate() != null && p.endDate().isBefore(today)
-                    && planRepository.updateStatus(p.planId(), "ACTIVE", "COMPLETED") == 1) {
+                    && planRepository.updateStatus(p.planId(), p.status(), "COMPLETED") == 1) {
                 planRepository.cancelRemainingSessions(p.planId());
                 userRepository.writeAudit(null, "TRAINING_PLAN_AUTO_COMPLETED", "TRAINING_PLAN",
                         p.planId(), "SUCCESS", null);
