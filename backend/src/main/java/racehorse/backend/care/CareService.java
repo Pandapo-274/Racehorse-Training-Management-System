@@ -42,6 +42,8 @@ public class CareService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
     private static final Map<String, String> TASK_TEXT = Map.of(
             "FEEDING", "feeding", "CLEANING", "stall cleaning", "BATHING", "bathing", "ICE_BATH", "ice bath");
+    /** Giao hàng loạt tối đa chừng này ngày một lần: đủ cho hai tuần, không lỡ tay tạo việc cả năm. */
+    private static final int MAX_BULK_DAYS = 14;
 
     private final CareRepository care;
     private final HorseRepository horses;
@@ -168,6 +170,81 @@ public class CareService {
                     Notice.HORSE, horse.horseId()));
         }
         return new CareModels.AssignResult(created, skipped, warnings);
+    }
+
+    /**
+     * Giao việc hàng loạt (nhiều ngựa, nhiều ngày) cho một Groom - dọn chuồng cả
+     * dãy mỗi sáng trong tuần chẳng hạn. Cùng luật với assign: mỗi ngựa mỗi ngày
+     * một việc mỗi loại (việc đã có thì bỏ qua, không đổi người làm), chỉ ngựa
+     * đang ở chuồng, không giao cho ngày đã qua. Quá tải chỉ cảnh báo.
+     * Groom nhận MỘT thông báo tóm tắt thay vì một thông báo mỗi việc.
+     */
+    @Transactional
+    public CareModels.BulkAssignResult assignBulk(CareModels.BulkAssignRequest r, AuthenticatedUser user,
+                                                  String ip) {
+        if (!sessions.isActiveGroom(r.assignedTo())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Assignee must be an active Groom",
+                    Map.of("assignedTo", "Choose an active Groom"));
+        }
+        LocalDate today = LocalDate.now();
+        if (r.fromDate().isBefore(today)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot assign tasks in the past",
+                    Map.of("fromDate", "Choose today or a later day"));
+        }
+        if (r.toDate().isBefore(r.fromDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid period",
+                    Map.of("toDate", "The end date must be on or after the start date"));
+        }
+        if (r.toDate().isAfter(r.fromDate().plusDays(MAX_BULK_DAYS - 1))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Period too long",
+                    Map.of("toDate", "At most " + MAX_BULK_DAYS + " days at once"));
+        }
+        String note = r.note() == null || r.note().isBlank() ? null : r.note().trim();
+
+        List<String> notes = new ArrayList<>();
+        List<HorseResponse> stabled = new ArrayList<>();
+        for (Integer horseId : new LinkedHashSet<>(r.horseIds())) {
+            HorseResponse h = horses.findById(horseId)
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + horseId + " not found"));
+            if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(h.recordType())) || h.isWithdrawn()) {
+                notes.add(h.horseName() + " skipped: not stabled at the club");
+            } else {
+                stabled.add(h);
+            }
+        }
+
+        int created = 0;
+        int skipped = 0;
+        LinkedHashSet<String> types = new LinkedHashSet<>(r.taskTypes());
+        for (LocalDate day = r.fromDate(); !day.isAfter(r.toDate()); day = day.plusDays(1)) {
+            for (HorseResponse h : stabled) {
+                for (String type : types) {
+                    if (care.taskExists(h.horseId(), type, day)) {
+                        skipped++;
+                        continue;
+                    }
+                    int id = care.insertTask(h.horseId(), type, r.assignedTo(), day, note);
+                    users.writeAudit(user.userId(), "DAILY_TASK_ASSIGN", "DAILY_TASK", id, "SUCCESS", ip);
+                    created++;
+                }
+            }
+            int open = care.openTasksOf(r.assignedTo(), day);
+            if (open > maxTasksPerGroom) {
+                notes.add("Warning: " + open + " open tasks on " + day.format(DAY) + " (more than "
+                        + maxTasksPerGroom + ")");
+            }
+        }
+
+        if (created > 0) {
+            String what = types.stream().map(TASK_TEXT::get).reduce((a, b) -> a + ", " + b).orElse("");
+            String period = r.fromDate().equals(r.toDate()) ? "on " + r.fromDate().format(DAY)
+                    : "from " + r.fromDate().format(DAY) + " to " + r.toDate().format(DAY);
+            notifications.notifyUser(r.assignedTo(), new Notice(
+                    "DAILY_TASK_ASSIGNED", "New care tasks",
+                    created + " task(s) " + period + " for " + stabled.size() + " horse(s): " + what + ".",
+                    null, null));
+        }
+        return new CareModels.BulkAssignResult(created, skipped, notes);
     }
 
     /**
@@ -324,9 +401,18 @@ public class CareService {
         return n;
     }
 
+    /**
+     * Xoá việc giao nhầm. Chỉ việc của hôm nay trở đi: việc của ngày đã qua mà
+     * chưa làm là MISSED, và xoá nó là xoá luôn bằng chứng chuồng không được dọn
+     * (báo cáo Missed sẽ không còn thấy).
+     */
     @Transactional
     public void delete(int taskId, AuthenticatedUser user, String ip) {
-        requireTask(taskId, user);
+        CareModels.Task t = requireTask(taskId, user);
+        if (t.taskDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "A task of an earlier day stays on record (missed or done) and cannot be deleted");
+        }
         if (care.deleteOpenTask(taskId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "A completed task cannot be deleted");
         }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -30,6 +31,7 @@ import racehorse.backend.alert.VitalsResult;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.expense.ExpenseRepository;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
 import racehorse.backend.horse.HorseService;
@@ -53,12 +55,20 @@ import racehorse.backend.medical.TrainingLockRepository;
 import racehorse.backend.medical.TreatmentRepository;
 import racehorse.backend.medical.TreatmentRow;
 import racehorse.backend.medical.TreatmentService;
+import racehorse.backend.care.CareModels;
+import racehorse.backend.care.CareRepository;
+import racehorse.backend.care.CareService;
 import racehorse.backend.notification.NotificationService;
+import racehorse.backend.preventive.PreventiveCareService;
+import racehorse.backend.race.RaceModels;
+import racehorse.backend.race.RaceRepository;
 import racehorse.backend.race.RaceRiskNotifier;
+import racehorse.backend.race.RaceService;
 import racehorse.backend.session.EvaluateSessionRequest;
 import racehorse.backend.session.SessionRepository;
 import racehorse.backend.session.SessionResponse;
 import racehorse.backend.session.SessionService;
+import racehorse.backend.supply.SupplyService;
 import racehorse.backend.training.TrainingPlanRepository;
 import racehorse.backend.training.TrainingPlanResponse;
 import racehorse.backend.training.TrainingPlanService;
@@ -76,6 +86,7 @@ import racehorse.backend.training.TrainingSessionService;
 class BusinessRulesTest {
 
     private static final LocalDate TODAY = LocalDate.now();
+    private static final AuthenticatedUser MANAGER = user(1, "CLUB_MANAGER");
     private static final AuthenticatedUser TRAINER = user(2, "HEAD_TRAINER");
     private static final AuthenticatedUser VET = user(3, "VETERINARIAN");
     private static final AuthenticatedUser GROOM = user(5, "GROOM");
@@ -672,5 +683,187 @@ class BusinessRulesTest {
         ApiException ex = expect(ApiException.class, 400, () -> service.updateByOwner(100, new HorseUpdateRequest(
                 "Horse 100", "TB", "STALLION", TODAY.minusYears(10), "Bay", 200, null), OWNER, "ip"));
         assertTrue(ex.getFieldErrors().containsKey("sireId"), ex.getFieldErrors().toString());
+    }
+
+    // ---------------------------------------------------------------- Flow 5: đua
+
+    private static RaceModels.RaceEvent raceEvent(String status) {
+        return new RaceModels.RaceEvent(50, "Japan Cup", TODAY.plusDays(20), 2400, "Tokyo",
+                TODAY.plusDays(13), new BigDecimal("50000000"), 18, status, null, 3);
+    }
+
+    /** Một đăng ký của ngựa 100 (chủ 7) vào giải #50. */
+    private static RaceModels.Entry entry(int id, String state, String approval, LocalDate raceDate) {
+        return new RaceModels.Entry(id, 100, "Horse 100", "A-100", 7, "Owner", "Japan Cup", raceDate, 2, "Trainer",
+                null, null, null, state, 50, 2400, "Tokyo", "OPEN", null, null, null, approval, null);
+    }
+
+    private static RaceService raceService(RaceRepository races, HorseRepository horses) {
+        return raceService(races, horses, mock(ExpenseRepository.class));
+    }
+
+    private static RaceService raceService(RaceRepository races, HorseRepository horses, ExpenseRepository expenses) {
+        return new RaceService(races, horses, mock(HorseVitalsRepository.class), mock(IncidentRepository.class),
+                mock(UserRepository.class), mock(NotificationService.class), mock(PreventiveCareService.class),
+                expenses, 14, 30, 7);
+    }
+
+    /** Giải #50, lệ phí 50 triệu, hạn đăng ký = deadline. */
+    private static RaceModels.RaceEvent raceWithDeadline(LocalDate deadline) {
+        return new RaceModels.RaceEvent(50, "Japan Cup", TODAY.plusDays(20), 2400, "Tokyo",
+                deadline, new BigDecimal("50000000"), 18, "OPEN", null, 3);
+    }
+
+    @Test
+    void approvingAnEntryChargesTheFeeToTheHorse() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(races.updateApproval(1, "APPROVED", null)).thenReturn(1);
+        when(expenses.insert(any(), eq(2))).thenReturn(77);
+
+        raceService(races, horses, expenses).approveEntry(1, OWNER, "ip");
+
+        verify(expenses).insert(argThat(r -> "OTHER".equals(r.category()) && r.horseId() == 100
+                && r.amount().compareTo(new BigDecimal("50000000")) == 0), eq(2));
+        verify(races).setFeeExpense(1, 77);
+    }
+
+    @Test
+    void withdrawingBeforeTheDeadlineRefundsTheFee() {
+        RaceRepository races = mock(RaceRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        when(races.findRace(50)).thenReturn(Optional.of(raceWithDeadline(TODAY.plusDays(13))));
+        when(races.scratch(eq(1), any())).thenReturn(1);
+        when(races.findFeeExpense(1)).thenReturn(Optional.of(77));
+
+        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", TRAINER, "ip");
+        verify(expenses).cancel(77, 2, "Withdrawn before entries closed");
+    }
+
+    @Test
+    void withdrawingAfterTheDeadlineKeepsTheFee() {
+        RaceRepository races = mock(RaceRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        when(races.findRace(50)).thenReturn(Optional.of(raceWithDeadline(TODAY.minusDays(1))));
+        when(races.scratch(eq(1), any())).thenReturn(1);
+        when(races.findFeeExpense(1)).thenReturn(Optional.of(77));
+
+        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", TRAINER, "ip");
+        verify(expenses, never()).cancel(anyInt(), anyInt(), any());
+    }
+
+    @Test
+    void cancelledRaceRefundsTheFeeEvenAfterTheDeadline() {
+        RaceRepository races = mock(RaceRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        when(races.findRace(50)).thenReturn(Optional.of(raceWithDeadline(TODAY.minusDays(1))));
+        when(races.cancelRace(eq(50), any())).thenReturn(1);
+        when(races.openEntries(50)).thenReturn(List.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        when(races.scratch(eq(1), any())).thenReturn(1);
+        when(races.findFeeExpense(1)).thenReturn(Optional.of(77));
+
+        raceService(races, mock(HorseRepository.class), expenses).cancelRace(50, "Track flooded", MANAGER, "ip");
+        verify(expenses).cancel(77, 1, "Race cancelled by the club");
+    }
+
+    @Test
+    void resultCannotBeRecordedForAnEntryTheOwnerNeverApproved() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.minusDays(1))));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 409, () -> service.recordResult(1,
+                new RaceModels.ResultRequest("WON", new BigDecimal("100000000"), null, 1, null, null), TRAINER, "ip"));
+        verify(races, never()).saveResult(anyInt(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void ownerCannotApproveAnEntryForACancelledRace() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.findRace(50)).thenReturn(Optional.of(raceEvent("CANCELLED")));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 409, () -> service.approveEntry(1, OWNER, "ip"));
+        verify(races, never()).updateApproval(anyInt(), any(), any());
+    }
+
+    @Test
+    void declinedEntryCanBeProposedAgain() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
+        // Chủ đã từ chối lần trước: dòng cũ còn đó, chưa bị rút.
+        when(races.findEntry(100, 50)).thenReturn(Optional.of(new RaceRepository.ExistingEntry(9, null, "REJECTED")));
+        when(races.reinstate(9, 2, null)).thenReturn(1);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        RaceService service = raceService(races, horses);
+
+        service.register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip");
+        verify(races).reinstate(9, 2, null);
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    // ---------------------------------------------------------------- Flow 4: phân công chăm sóc
+
+    private static CareService careService(CareRepository care, HorseRepository horses,
+                                           TrainingSessionRepository sessions, NotificationService notifications) {
+        return new CareService(care, horses, sessions, mock(UserRepository.class), notifications,
+                mock(SupplyService.class), 1, 12);
+    }
+
+    @Test
+    void bulkAssignCoversEveryHorseAndDayAndSkipsWhatIsPlanned() {
+        CareRepository care = mock(CareRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(horses.findById(101)).thenReturn(Optional.of(horse(101, "INJURED", TODAY.minusYears(5), "FILLY")));
+        // Ngựa 100 hôm nay đã có người dọn chuồng.
+        when(care.taskExists(100, "CLEANING", TODAY)).thenReturn(true);
+
+        CareModels.BulkAssignResult r = careService(care, horses, sessions, notifications).assignBulk(
+                new CareModels.BulkAssignRequest(List.of(100, 101), 5, TODAY, TODAY.plusDays(1),
+                        List.of("CLEANING"), null), TRAINER, "ip");
+
+        assertEquals(3, r.created());   // 2 ngựa x 2 ngày - 1 việc đã có
+        assertEquals(1, r.skipped());
+        verify(notifications).notifyUser(eq(5), any());   // một thông báo tóm tắt, không phải 3
+    }
+
+    @Test
+    void bulkAssignIsLimitedToTwoWeeks() {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        when(sessions.isActiveGroom(5)).thenReturn(true);
+        CareRepository care = mock(CareRepository.class);
+        CareService service = careService(care, mock(HorseRepository.class), sessions,
+                mock(NotificationService.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.assignBulk(
+                new CareModels.BulkAssignRequest(List.of(100), 5, TODAY, TODAY.plusDays(14),
+                        List.of("CLEANING"), null), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("toDate"), ex.getFieldErrors().toString());
+        verify(care, never()).insertTask(anyInt(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void missedTaskOfAnEarlierDayCannotBeDeleted() {
+        CareRepository care = mock(CareRepository.class);
+        when(care.findTask(1)).thenReturn(Optional.of(new CareModels.Task(1, 100, "Horse 100", "A-100", "CLEANING",
+                5, "Groom 5", TODAY.minusDays(1), false, null, null, null, null, "MISSED")));
+        CareService service = careService(care, mock(HorseRepository.class), mock(TrainingSessionRepository.class),
+                mock(NotificationService.class));
+
+        expect(ApiException.class, 409, () -> service.delete(1, TRAINER, "ip"));
+        verify(care, never()).deleteOpenTask(anyInt());
     }
 }

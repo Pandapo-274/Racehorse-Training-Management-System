@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.expense.ExpenseModels;
+import racehorse.backend.expense.ExpenseRepository;
 import racehorse.backend.horse.HorsePolicy;
 import racehorse.backend.horse.HorseRepository;
 import racehorse.backend.horse.HorseResponse;
@@ -45,8 +47,11 @@ import racehorse.backend.preventive.PreventiveCareService;
  * the race; after that only the Club Manager may change it, with a reason (#5).
  *
  * Tiền thưởng thuộc về chủ ngựa, không phải doanh thu câu lạc bộ. Hệ thống chưa
- * mô hình phí huấn luyện hay hoa hồng. Entry fees are recorded on the race but
- * do not create a cost yet.
+ * mô hình phí huấn luyện hay hoa hồng.
+ *
+ * Entry fee (V36): charged to the horse (EXPENSE_LOG, OTHER) when the owner
+ * approves the entry; refunded if the club cancels the race or the horse is
+ * withdrawn on or before the entry deadline, kept if withdrawn after it.
  */
 @Service
 public class RaceService {
@@ -60,13 +65,14 @@ public class RaceService {
     private final UserRepository users;
     private final NotificationService notifications;
     private final PreventiveCareService preventive;
+    private final ExpenseRepository expenses;
     private final int minRestDays;
     private final int trialWindowDays;
     private final int resultEditWindowDays;
 
     public RaceService(RaceRepository races, HorseRepository horses, HorseVitalsRepository vitals,
                        IncidentRepository incidents, UserRepository users, NotificationService notifications,
-                       PreventiveCareService preventive,
+                       PreventiveCareService preventive, ExpenseRepository expenses,
                        @Value("${app.race.min-rest-days:14}") int minRestDays,
                        @Value("${app.race.trial-window-days:30}") int trialWindowDays,
                        @Value("${app.race.result.edit-window-days:7}") int resultEditWindowDays) {
@@ -77,6 +83,7 @@ public class RaceService {
         this.users = users;
         this.notifications = notifications;
         this.preventive = preventive;
+        this.expenses = expenses;
         this.minRestDays = minRestDays;
         this.trialWindowDays = trialWindowDays;
         this.resultEditWindowDays = resultEditWindowDays;
@@ -88,30 +95,113 @@ public class RaceService {
         return races.find(year, horseId, ownerId);
     }
 
+    /**
+     * Chủ ngựa đồng ý cho ngựa chạy.
+     *
+     * Kiểm lại giải và con ngựa ngay lúc duyệt, không chỉ lúc Head Trainer đề
+     * xuất: giữa hai lúc đó giải có thể đã bị huỷ hoặc đã chạy, và con ngựa có
+     * thể vừa bị khoá tập hay có báo cáo sự cố. Không kiểm thì một đề xuất cũ
+     * vẫn duyệt được thành một suất đua mà con ngựa không được phép chạy.
+     */
     @Transactional
     public RaceModels.Entry approveEntry(int id, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
         checkCanManageEntry(e, user);
-        if (!"PENDING_OWNER".equals(e.approvalStatus())) {
+        if (!"PENDING_APPROVAL".equals(e.state())) {
             throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
         }
-        races.updateApproval(id, "APPROVED", null);
+        RaceModels.RaceEvent race = requireRace(e.raceId());
+        if (!"OPEN".equals(race.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " has been cancelled");
+        }
+        if (!race.raceDate().isAfter(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " has already been run");
+        }
+        HorseResponse h = horses.findById(e.horseId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + e.horseId() + " not found"));
+        Check c = check(h, race);
+        if (!c.problems.isEmpty()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This entry can no longer be approved: " + c.problems.get(0));
+        }
+        if (races.updateApproval(id, "APPROVED", null) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry has just been changed by the head trainer");
+        }
         users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
+        String fee = chargeEntryFee(e, race, user, ip);
         notifications.notifyRole("HEAD_TRAINER", user, new Notice(
                 "RACE_APPROVED", "Race entry approved",
-                "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName() + ".",
+                "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName()
+                        + (fee == null ? "." : " (entry fee " + fee + " charged)."),
                 Notice.HORSE, e.horseId()));
         return require(id);
+    }
+
+    /**
+     * V36: the owner has just agreed to the fee shown in the proposal, so it
+     * becomes a cost of the horse (EXPENSE_LOG, OTHER) on their expense page,
+     * where they can also dispute it (V30). The row id is kept on the entry so a
+     * scratch can void exactly this charge.
+     *
+     * @return the fee as text, or null when the race has no fee.
+     */
+    private String chargeEntryFee(RaceModels.Entry e, RaceModels.RaceEvent race, AuthenticatedUser owner,
+                                  String ip) {
+        BigDecimal fee = race.entryFee();
+        if (fee == null || fee.signum() <= 0) {
+            return null;
+        }
+        String note = clip("Race entry fee: " + race.raceName() + " (" + race.raceDate().format(DAY) + ")", 255);
+        int expenseId = expenses.insert(new ExpenseModels.ExpenseRequest(e.horseId(), "OTHER", fee,
+                LocalDate.now(), note), e.registeredBy());
+        races.setFeeExpense(e.registrationId(), expenseId);
+        String amount = fee.stripTrailingZeros().toPlainString();
+        users.writeAudit(owner.userId(), "EXPENSE_CREATE", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
+                e.horseName() + ", OTHER, " + amount + ": " + note);
+        return amount;
+    }
+
+    /**
+     * V36: what happens to the fee when an approved entry is scratched.
+     * Refunded (the expense is voided, V19) when the club cancels the race or
+     * the horse is withdrawn on or before the entry deadline; kept after the
+     * deadline - entries are closed and the place was held.
+     *
+     * @return a sentence for the owner's notice, or "" when no fee was charged.
+     */
+    private String settleEntryFee(RaceModels.Entry e, boolean raceCancelled, AuthenticatedUser user, String ip) {
+        Integer expenseId = races.findFeeExpense(e.registrationId()).orElse(null);
+        if (expenseId == null) {
+            return "";
+        }
+        RaceModels.RaceEvent race = requireRace(e.raceId());
+        LocalDate lastFreeDay = race.entryDeadline() != null ? race.entryDeadline() : race.raceDate().minusDays(1);
+        boolean refund = raceCancelled || !LocalDate.now().isAfter(lastFreeDay);
+        if (!refund) {
+            return " The entry fee is not refunded: entries closed on " + lastFreeDay.format(DAY) + ".";
+        }
+        String why = raceCancelled ? "Race cancelled by the club" : "Withdrawn before entries closed";
+        if (expenses.cancel(expenseId, user.userId(), why) == 1) {
+            users.writeAudit(user.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
+                    e.horseName() + ", race entry fee for " + e.raceName() + ". Reason: " + why);
+        }
+        return " The entry fee has been refunded.";
+    }
+
+    private static String clip(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max - 3) + "...";
     }
 
     @Transactional
     public RaceModels.Entry rejectEntry(int id, String reason, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
         checkCanManageEntry(e, user);
-        if (!"PENDING_OWNER".equals(e.approvalStatus())) {
+        if (!"PENDING_APPROVAL".equals(e.state())) {
             throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
         }
-        races.updateApproval(id, "REJECTED", reason);
+        if (races.updateApproval(id, "REJECTED", reason) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry has just been changed by the head trainer");
+        }
         users.writeAudit(user.userId(), "RACE_OWNER_REJECT", "RACE_REGISTRATION", id, "SUCCESS", ip, reason);
         notifications.notifyRole("HEAD_TRAINER", user, new Notice(
                 "RACE_REJECTED", "Race entry declined",
@@ -212,7 +302,7 @@ public class RaceService {
         }
         List<RaceModels.Entry> open = races.openEntries(raceId);
         for (RaceModels.Entry e : open) {
-            doScratch(e, "Race cancelled: " + why, user, ip);
+            doScratch(e, "Race cancelled: " + why, true, user, ip);
         }
         users.writeAudit(user.userId(), "RACE_CANCEL", "RACE", raceId, "SUCCESS", ip,
                 describe(race) + ". " + open.size() + " entr" + (open.size() == 1 ? "y" : "ies")
@@ -243,7 +333,11 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, c.problems.get(0));
         }
         var existing = races.findEntry(h.horseId(), race.raceId());
-        if (existing.isPresent() && !existing.get().scratched()) {
+        /* Một đề xuất bị rút, hoặc bị chủ từ chối, đề xuất lại được (dùng lại dòng
+           cũ - reinstate). Trước đây đề xuất bị từ chối vẫn bị coi là "đã đăng ký",
+           nên Head Trainer không bao giờ hỏi lại chủ được cho giải đó. */
+        boolean reusable = existing.isPresent() && (existing.get().scratched() || existing.get().rejected());
+        if (existing.isPresent() && !reusable) {
             throw new ApiException(HttpStatus.CONFLICT, h.horseName() + " is already registered for "
                     + race.raceName() + " on " + race.raceDate().format(DAY));
         }
@@ -263,9 +357,9 @@ public class RaceService {
         }
 
         int id;
-        if (existing.isPresent()) {
-            /* The horse was scratched from this very race earlier. Re-entering
-               it reuses that row - see RaceRepository.reinstate for why. */
+        if (reusable) {
+            /* The horse was scratched from (or declined for) this very race earlier.
+               Re-entering it reuses that row - see RaceRepository.reinstate for why. */
             id = existing.get().id();
             if (races.reinstate(id, user.userId(), blankToNull(r.note())) == 0) {
                 throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
@@ -307,6 +401,14 @@ public class RaceService {
         RaceModels.Entry e = require(id);
         if ("SCRATCHED".equals(e.result())) {
             throw new ApiException(HttpStatus.CONFLICT, "This entry was scratched and has no result");
+        }
+        /* Chỉ ngựa chủ đã đồng ý mới được chạy, nên chỉ nó mới có kết quả. Không
+           chặn thì đề xuất chưa duyệt hay bị từ chối vẫn ghi được WON kèm tiền
+           thưởng, và tổng thưởng của câu lạc bộ đếm cả nó. */
+        if (!"APPROVED".equals(e.approvalStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "PENDING_OWNER".equals(e.approvalStatus())
+                    ? "The owner never approved this entry, so the horse did not run"
+                    : "The owner declined this entry, so the horse did not run");
         }
         if (e.raceDate().isAfter(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -366,24 +468,33 @@ public class RaceService {
         if (e.result() != null) {
             throw new ApiException(HttpStatus.CONFLICT, "Only an entry without a result can be scratched");
         }
+        if ("REJECTED".equals(e.approvalStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, "The owner already declined this entry; there is nothing to withdraw");
+        }
         if (e.raceDate().isBefore(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT, "The race has already run. Record its result instead");
         }
-        doScratch(e, reason.trim(), user, ip);
+        doScratch(e, reason.trim(), false, user, ip);
         return require(id);
     }
 
-    /** V23: the reason has its own column; the entry's note is left untouched. */
-    private void doScratch(RaceModels.Entry e, String reason, AuthenticatedUser user, String ip) {
+    /**
+     * V23: the reason has its own column; the entry's note is left untouched.
+     * V36: an entry fee already charged is refunded or kept (settleEntryFee),
+     * and the owner is told which.
+     */
+    private void doScratch(RaceModels.Entry e, String reason, boolean raceCancelled, AuthenticatedUser user,
+                           String ip) {
         String why = reason.length() <= 500 ? reason : reason.substring(0, 500);
         if (races.scratch(e.registrationId(), why) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
         }
         users.writeAudit(user.userId(), "RACE_SCRATCH", "RACE_REGISTRATION", e.registrationId(), "SUCCESS", ip,
                 e.horseName() + " from " + e.raceName() + " on " + e.raceDate() + ". Reason: " + why);
+        String fee = settleEntryFee(e, raceCancelled, user, ip);
         notifications.notifyUser(e.ownerId(), new Notice(
                 "RACE_SCRATCHED", "Race entry withdrawn",
-                e.horseName() + " was withdrawn from " + e.raceName() + ": " + why + ".",
+                clip(e.horseName() + " was withdrawn from " + e.raceName() + ": " + why + "." + fee, 500),
                 Notice.HORSE, e.horseId()));
     }
 

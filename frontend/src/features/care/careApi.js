@@ -48,6 +48,17 @@ export function assignTasks({ horseId, assignedTo, taskDate, taskTypes, note }) 
   });
 }
 
+/**
+ * POST /api/daily-tasks/bulk: several horses, fromDate..toDate (at most 14 days), one groom.
+ * Returns { created, skipped, notes }. Tasks a horse already has that day are skipped.
+ */
+export function assignTasksBulk({ horseIds, assignedTo, fromDate, toDate, taskTypes, note }) {
+  return authFetch("/api/daily-tasks/bulk", {
+    method: "POST",
+    body: JSON.stringify({ horseIds, assignedTo, fromDate, toDate, taskTypes, note }),
+  });
+}
+
 export function completeTask(id) {
   return authFetch(`/api/daily-tasks/${id}/complete`, { method: "PUT" });
 }

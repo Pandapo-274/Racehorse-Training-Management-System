@@ -100,6 +100,7 @@ final class PermissionCatalog {
             new Entry(CARE, "Approve a horse's ration", "PUT /api/feeding/horse/{horseId}", NONE),
             new Entry(CARE, "View daily care tasks", "GET /api/daily-tasks", GROOM),
             new Entry(CARE, "Assign daily care tasks", "POST /api/daily-tasks", NONE),
+            new Entry(CARE, "Assign care tasks for many horses and days", "POST /api/daily-tasks/bulk", NONE),
             new Entry(CARE, "Mark a care task done", "PUT /api/daily-tasks/{id}/complete", GROOM),
             new Entry(CARE, "View supplies", "GET /api/supplies", NONE),
             new Entry(CARE, "Add or edit supply items", "POST /api/supplies", NONE),

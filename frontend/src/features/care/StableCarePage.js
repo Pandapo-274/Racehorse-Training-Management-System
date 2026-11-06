@@ -1,7 +1,8 @@
 // src/features/care/StableCarePage.js
 // Flow 4 - Head Trainer's stable care page.
-//   Daily tasks: assign feeding / cleaning / bathing / ice bath to a Groom for a
-//                horse and a day, see what is done, delete what is not needed.
+//   Daily tasks: assign feeding / cleaning / bathing / ice bath to a Groom for
+//                several horses over up to 14 days at once, see what is done,
+//                delete what is not needed (today or later only).
 //   Rations:     approve what each horse eats (FeedingBoard).
 //   Missed:      tasks of earlier days that were never ticked (#14).
 // A task can be handed to another groom while it is open (#15). Assigning
@@ -13,75 +14,123 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import FeedingBoard from "./FeedingBoard";
 import {
-  TASK_STATE, TASK_TEXT, TASK_TYPES, assignTasks, deleteTask, formatClock, listGrooms, listMissedTasks,
+  TASK_STATE, TASK_TEXT, TASK_TYPES, assignTasksBulk, deleteTask, formatClock, listGrooms, listMissedTasks,
   listTasks, reassignTask, todayIso,
 } from "./careApi";
 import "./care.css";
 
-const EMPTY_FORM = { horseId: "", assignedTo: "", taskTypes: [], note: "" };
+const EMPTY_FORM = { horseIds: [], assignedTo: "", taskTypes: [], note: "" };
+/** Same limit as the backend (CareService.MAX_BULK_DAYS). */
+const MAX_DAYS = 14;
 
+function addDays(iso, n) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Assign one groom several horses for a period (e.g. stall cleaning for the
+ * whole row every day this week) in one go. The day picked above the task list
+ * is the first day; "Until" is the last (at most 14 days). A horse that already
+ * has that kind of task on a day is skipped, not handed to the new groom.
+ */
 function AssignForm({ date, horses, grooms, onAssigned }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [until, setUntil] = useState(date);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // A new first day moves the period with it.
+  useEffect(() => setUntil(date), [date]);
 
   const toggleType = (t) =>
     setForm((f) => ({
       ...f,
       taskTypes: f.taskTypes.includes(t) ? f.taskTypes.filter((x) => x !== t) : [...f.taskTypes, t],
     }));
+  const toggleHorse = (id) =>
+    setForm((f) => ({
+      ...f,
+      horseIds: f.horseIds.includes(id) ? f.horseIds.filter((x) => x !== id) : [...f.horseIds, id],
+    }));
+  const allChosen = horses.length > 0 && form.horseIds.length === horses.length;
+  const toggleAll = () =>
+    setForm((f) => ({ ...f, horseIds: allChosen ? [] : horses.map((h) => h.horseId) }));
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     setInfo("");
     const local = {};
-    if (!form.horseId) local.horseId = "Choose a horse";
+    if (!form.horseIds.length) local.horseIds = "Choose at least one horse";
     if (!form.assignedTo) local.assignedTo = "Choose a groom";
     if (!form.taskTypes.length) local.taskTypes = "Choose at least one task";
+    if (!until || until < date) local.toDate = "Must be on or after the first day";
+    else if (until > addDays(date, MAX_DAYS - 1)) local.toDate = `At most ${MAX_DAYS} days at once`;
     setErrors(local);
     if (Object.keys(local).length) return;
 
     setSaving(true);
     try {
-      const res = await assignTasks({
-        horseId: Number(form.horseId),
+      const res = await assignTasksBulk({
+        horseIds: form.horseIds,
         assignedTo: Number(form.assignedTo),
-        taskDate: date,
+        fromDate: date,
+        toDate: until,
         taskTypes: TASK_TYPES.filter((t) => form.taskTypes.includes(t)),
         note: form.note.trim() || null,
       });
-      const parts = [];
-      if (res.created.length) parts.push(`${res.created.length} task${res.created.length > 1 ? "s" : ""} assigned`);
-      if (res.skipped.length) parts.push(`already planned: ${res.skipped.map((t) => TASK_TEXT[t]).join(", ")} (use Hand over to change the groom)`);
-      if (res.warnings?.length) parts.push(`warning: ${res.warnings.join("; ")}`);
+      const parts = [`${res.created} task${res.created === 1 ? "" : "s"} assigned`];
+      if (res.skipped) parts.push(`${res.skipped} already planned and left as they were (use Hand over to change the groom)`);
+      if (res.notes?.length) parts.push(res.notes.join("; "));
       setInfo(parts.join("; ") + ".");
       setForm((f) => ({ ...f, taskTypes: [], note: "" }));
-      onAssigned(res.created);
+      onAssigned();
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(err.message);
-      setErrors(err.errors || {});
+      setErrors(err.fieldErrors || {});
     } finally {
       setSaving(false);
     }
   };
 
+  const days = until >= date ? Math.round((new Date(`${until}T00:00:00`) - new Date(`${date}T00:00:00`)) / 86400000) + 1 : 0;
+
   return (
-    <Card title="Assign care tasks" hint="Each horse gets at most one task of each kind per day.">
+    <Card title="Assign care tasks"
+      hint="Pick horses, a groom and the days. Each horse gets at most one task of each kind per day.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
+          <div className="hz-field care-field-wide">
+            <label id="as-horses">
+              Horses ({form.horseIds.length} of {horses.length})
+            </label>
+            <div className="care-checks" role="group" aria-labelledby="as-horses">
+              <label className="care-check">
+                <input type="checkbox" checked={allChosen} onChange={toggleAll} />
+                All stabled horses
+              </label>
+              {horses.map((h) => (
+                <label key={h.horseId} className="care-check">
+                  <input type="checkbox" checked={form.horseIds.includes(h.horseId)}
+                    onChange={() => toggleHorse(h.horseId)} />
+                  {h.stallNo} · {h.horseName}
+                </label>
+              ))}
+            </div>
+            {errors.horseIds && <p className="hz-field__error">{errors.horseIds}</p>}
+          </div>
           <div className="hz-field">
-            <label htmlFor="as-horse">Horse</label>
-            <select id="as-horse" value={form.horseId} aria-invalid={!!errors.horseId}
-              onChange={(e) => setForm((f) => ({ ...f, horseId: e.target.value }))}>
-              <option value="">Choose a horse…</option>
-              {horses.map((h) => <option key={h.horseId} value={h.horseId}>{h.stallNo} · {h.horseName}</option>)}
-            </select>
-            {errors.horseId && <p className="hz-field__error">{errors.horseId}</p>}
+            <label htmlFor="as-until">Until (first day: {date})</label>
+            <input id="as-until" type="date" value={until} min={date} max={addDays(date, MAX_DAYS - 1)}
+              aria-invalid={!!errors.toDate} onChange={(e) => setUntil(e.target.value)} />
+            {errors.toDate && <p className="hz-field__error">{errors.toDate}</p>}
           </div>
           <div className="hz-field">
             <label htmlFor="as-groom">Groom</label>
@@ -113,7 +162,11 @@ function AssignForm({ date, horses, grooms, onAssigned }) {
         {error && <p className="hz-form-error" role="alert">{error}</p>}
         {info && <p className="care-ok" role="status">{info}</p>}
         <div className="hz-form-footer">
-          <button type="submit" className="hz-btn" disabled={saving}>{saving ? "Assigning…" : "Assign"}</button>
+          <button type="submit" className="hz-btn" disabled={saving}>
+            {saving ? "Assigning…"
+              : `Assign${form.horseIds.length && form.taskTypes.length && days
+                ? ` ${form.horseIds.length * form.taskTypes.length * days} task(s)` : ""}`}
+          </button>
         </div>
       </form>
     </Card>
@@ -278,7 +331,8 @@ function DailyTasks() {
                           Hand over
                         </button>
                       )}
-                      {!t.completed && (
+                      {/* A missed task of an earlier day stays on record (backend refuses the delete). */}
+                      {!t.completed && date >= today && (
                         <button type="button" className="care-link-btn care-link-btn--danger"
                           disabled={busyId === t.taskId} onClick={() => remove(t)}>
                           Delete

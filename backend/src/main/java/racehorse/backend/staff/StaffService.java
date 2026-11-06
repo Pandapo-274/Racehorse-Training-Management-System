@@ -199,6 +199,17 @@ public class StaffService {
                             + (open == 1 ? " session" : " sessions") + " to reassign.",
                     null, null));
         }
+        /* Việc chăm sóc cũng vậy: báo riêng để Head Trainer vào Stable care > Hand over. */
+        int tasks = staff.countOpenCareTasks(target.userId());
+        if (tasks > 0) {
+            notifications.notifyRole("HEAD_TRAINER", actor, new Notice(
+                    "CARE_TASKS_NEED_GROOM",
+                    "Care tasks need a new groom",
+                    target.fullName() + " " + reason + " and still has " + tasks
+                            + (tasks == 1 ? " care task" : " care tasks")
+                            + " (feeding, stall cleaning...) to hand over in Stable care.",
+                    null, null));
+        }
         return open;
     }
 

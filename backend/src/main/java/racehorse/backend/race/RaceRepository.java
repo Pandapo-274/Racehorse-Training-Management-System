@@ -51,10 +51,14 @@ public class RaceRepository {
                 rs.getString("approval_status"), rs.getString("reject_reason"));
     }
 
+    /**
+     * SCRATCHED đứng trước trạng thái duyệt: một đề xuất còn chờ chủ mà bị rút
+     * (Head Trainer rút, hay huỷ cả giải) là đã rút, không còn "chờ chủ duyệt".
+     */
     static String stateOf(String result, LocalDate raceDate, String approvalStatus) {
+        if ("SCRATCHED".equals(result)) return "SCRATCHED";
         if ("REJECTED".equals(approvalStatus)) return "REJECTED";
         if ("PENDING_OWNER".equals(approvalStatus)) return "PENDING_APPROVAL";
-        if ("SCRATCHED".equals(result)) return "SCRATCHED";
         if (result != null) return "FINISHED";
         return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
@@ -91,8 +95,10 @@ public class RaceRepository {
     }
 
     /** The existing entry for (horse, race, date), if any, with its result. */
-    public record ExistingEntry(int id, String result) {
+    public record ExistingEntry(int id, String result, String approvalStatus) {
         public boolean scratched() { return "SCRATCHED".equals(result); }
+        /** Chủ đã từ chối: không chiếm chỗ, đề xuất lại được (reinstate). */
+        public boolean rejected() { return "REJECTED".equals(approvalStatus); }
     }
 
     /**
@@ -104,10 +110,11 @@ public class RaceRepository {
      */
     public Optional<ExistingEntry> findEntry(int horseId, int raceId) {
         return jdbc.sql("""
-                SELECT registration_id, result FROM RACE_REGISTRATION
+                SELECT registration_id, result, approval_status FROM RACE_REGISTRATION
                 WHERE horse_id = :h AND race_id = :r
                 """).param("h", horseId).param("r", raceId)
-                .query((rs, n) -> new ExistingEntry(rs.getInt("registration_id"), rs.getString("result")))
+                .query((rs, n) -> new ExistingEntry(rs.getInt("registration_id"), rs.getString("result"),
+                        rs.getString("approval_status")))
                 .optional();
     }
 
@@ -126,25 +133,35 @@ public class RaceRepository {
                 UPDATE RACE_REGISTRATION
                 SET result = NULL, prize_money = NULL, registered_by = :by, note = :note,
                     scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL,
-                    approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL
-                WHERE registration_id = :id AND result = 'SCRATCHED'
+                    approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL,
+                    fee_expense_id = NULL   -- V36: the old fee is settled; a new approval charges again
+                WHERE registration_id = :id
+                  AND (result = 'SCRATCHED' OR (result IS NULL AND approval_status = 'REJECTED'))
                 """).param("id", id).param("by", by).param("note", note).update();
     }
 
-    /** Ngựa đã có giải khác (chưa rút) trong cùng ngày: một con không chạy hai giải một ngày. */
+    /**
+     * Ngựa đã có giải khác trong cùng ngày: một con không chạy hai giải một ngày.
+     * Đề xuất bị rút hoặc bị chủ từ chối không tính - con ngựa sẽ không chạy giải đó.
+     */
     public Optional<String> otherRaceOn(int horseId, LocalDate date) {
         return jdbc.sql("""
                 SELECT TOP 1 race_name FROM RACE_REGISTRATION
                 WHERE horse_id = :h AND race_date = :d AND (result IS NULL OR result <> 'SCRATCHED')
+                  AND approval_status <> 'REJECTED'
                 """).param("h", horseId).param("d", date).query(String.class).optional();
     }
 
-    /** race_name and race_date are copies of the race's (V22); they never change after this. */
+    /**
+     * Chủ ngựa duyệt / từ chối. Có điều kiện: chỉ đề xuất còn chờ và chưa bị rút,
+     * nên chủ bấm duyệt đúng lúc Head Trainer rút thì một bên nhận 0 dòng.
+     * race_name and race_date are copies of the race's (V22); they never change after this.
+     */
     public int updateApproval(int id, String status, String reason) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION
                 SET approval_status = :status, reject_reason = :reason, owner_decision_at = SYSUTCDATETIME()
-                WHERE registration_id = :id
+                WHERE registration_id = :id AND approval_status = 'PENDING_OWNER' AND result IS NULL
                 """).param("id", id).param("status", status).param("reason", reason).update();
     }
 
@@ -178,10 +195,25 @@ public class RaceRepository {
                 """).param("id", id).param("reason", reason).update();
     }
 
+    /** V36: the EXPENSE_LOG row holding this entry's fee, if one was charged. */
+    public Optional<Integer> findFeeExpense(int registrationId) {
+        return jdbc.sql("SELECT fee_expense_id FROM RACE_REGISTRATION WHERE registration_id = :id")
+                .param("id", registrationId)
+                .query((rs, n) -> rs.getObject("fee_expense_id", Integer.class))
+                .optional()
+                .filter(java.util.Objects::nonNull);
+    }
+
+    public void setFeeExpense(int registrationId, Integer expenseId) {
+        jdbc.sql("UPDATE RACE_REGISTRATION SET fee_expense_id = :e WHERE registration_id = :id")
+                .param("e", expenseId).param("id", registrationId).update();
+    }
+
     /** Entries (not scratched) within gapDays of raceDate, other than this race (#3). */
     public Optional<RaceModels.Entry> nearbyEntry(int horseId, LocalDate raceDate, int gapDays, Integer exceptRaceId) {
         StringBuilder sql = new StringBuilder(SELECT).append("""
                  WHERE r.horse_id = :h AND (r.result IS NULL OR r.result <> 'SCRATCHED')
+                   AND r.approval_status <> 'REJECTED'
                    AND ABS(DATEDIFF(DAY, r.race_date, :d)) < :gap
                 """);
         Map<String, Object> p = new HashMap<>();
@@ -202,7 +234,8 @@ public class RaceRepository {
             SELECT rc.race_id, rc.race_name, rc.race_date, rc.distance_m, rc.venue, rc.entry_deadline,
                    rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason,
                    (SELECT COUNT(*) FROM RACE_REGISTRATION x
-                    WHERE x.race_id = rc.race_id AND (x.result IS NULL OR x.result <> 'SCRATCHED')) AS entries
+                    WHERE x.race_id = rc.race_id AND (x.result IS NULL OR x.result <> 'SCRATCHED')
+                      AND x.approval_status <> 'REJECTED') AS entries
             FROM RACE rc
             """;
 
@@ -270,9 +303,12 @@ public class RaceRepository {
                 """).param("id", raceId).param("reason", reason).update();
     }
 
-    /** Entries of a race still waiting for the race (no result) - scratched when the race is cancelled. */
+    /**
+     * Entries of a race still waiting for the race (no result) - scratched when the race is cancelled.
+     * Entries the owner declined are left alone: they were never going to run.
+     */
     public List<RaceModels.Entry> openEntries(int raceId) {
-        return jdbc.sql(SELECT + " WHERE r.race_id = :id AND r.result IS NULL")
+        return jdbc.sql(SELECT + " WHERE r.race_id = :id AND r.result IS NULL AND r.approval_status <> 'REJECTED'")
                 .param("id", raceId).query(RaceRepository::map).list();
     }
 

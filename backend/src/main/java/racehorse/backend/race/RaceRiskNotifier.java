@@ -43,8 +43,9 @@ public class RaceRiskNotifier {
      *             "has just been locked from training (FULL)".
      */
     public void warn(int horseId, String horseName, int ownerId, AuthenticatedUser actor, String what) {
+        // Đề xuất còn chờ chủ duyệt cũng báo: chủ sắp phải quyết định cho một con ngựa vừa có vấn đề.
         List<RaceModels.Entry> upcoming = races.find(null, horseId, null).stream()
-                .filter(e -> "UPCOMING".equals(e.state()))
+                .filter(e -> "UPCOMING".equals(e.state()) || "PENDING_APPROVAL".equals(e.state()))
                 .toList();
         for (RaceModels.Entry e : upcoming) {
             String message = clip(horseName + " is entered in " + e.raceName() + " on " + e.raceDate()

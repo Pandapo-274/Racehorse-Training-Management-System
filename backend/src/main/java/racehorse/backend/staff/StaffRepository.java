@@ -141,6 +141,22 @@ public class StaffRepository {
                 .single();
     }
 
+    /**
+     * Việc chăm sóc (cho ăn, dọn chuồng...) chưa làm của người này từ hôm nay trở
+     * đi. Groom bị khoá mà không ai giao lại thì sáng mai chuồng không ai dọn và
+     * việc chỉ hiện ra khi đã thành MISSED.
+     */
+    public int countOpenCareTasks(int userId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM DAILY_TASK t JOIN HORSE h ON h.horse_id = t.horse_id
+                WHERE t.assigned_to = :id AND t.is_completed = 0
+                  AND t.task_date >= CAST(GETDATE() AS DATE) AND h.activity_status = 'ACTIVE'
+                """)
+                .param("id", userId)
+                .query(Integer.class)
+                .single();
+    }
+
     /** Khoá / mở khoá: chỉ đổi cột status (CK_USER_status chỉ nhận ACTIVE, SUSPENDED). */
     public int updateStatus(int userId, String status) {
         return jdbc.sql("UPDATE APP_USER SET status = :status WHERE user_id = :id")
