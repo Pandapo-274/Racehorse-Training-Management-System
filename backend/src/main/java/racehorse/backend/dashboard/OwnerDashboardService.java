@@ -205,7 +205,10 @@ public class OwnerDashboardService {
     /**
      * Năm chỉ số huấn luyện, thang 0-100. Schema không lưu sẵn, nên mỗi chỉ số
      * gắn với một số đo thật của buổi tập:
-     *   Speed   - vận tốc đỉnh trung bình, SPEED_FULL_MARK m/s = 100.
+     *   Speed   - vận tốc đỉnh so với tốc độ mục tiêu của giai đoạn (V34,
+     *             đạt mục tiêu = 100). Giai đoạn không đặt mục tiêu thì so với
+     *             SPEED_FULL_MARK m/s. So với mục tiêu để buổi tập sức bền chạy
+     *             đều 10 m/s đúng yêu cầu không bị chấm như ngựa chạy chậm.
      *   Stamina - nhịp tim hồi phục (FITNESS_EXPR, cùng thang với thể lực).
      *   Power   - cự ly thực tế so với cự ly giáo án đặt ra.
      *   Guts    - tỉ lệ buổi chạy hết, không bị dừng sớm.
@@ -216,7 +219,12 @@ public class OwnerDashboardService {
         String sql = """
                 SELECT
                     COUNT(*) AS session_count,
-                    AVG(CAST(s.peak_velocity AS FLOAT)) AS avg_velocity,
+                    AVG(CASE
+                            WHEN s.peak_velocity IS NULL THEN NULL
+                            WHEN p.target_velocity > 0 AND s.peak_velocity >= p.target_velocity THEN 100.0
+                            WHEN p.target_velocity > 0 THEN s.peak_velocity * 100.0 / p.target_velocity
+                            ELSE s.peak_velocity * 100.0 / %s
+                        END) AS speed_score,
                     AVG(CAST(%s AS FLOAT)) AS avg_recovery,
                     AVG(CASE WHEN s.planned_distance > 0 AND s.actual_distance IS NOT NULL
                              THEN s.actual_distance * 100.0 / s.planned_distance END) AS completion,
@@ -228,16 +236,16 @@ public class OwnerDashboardService {
                             WHEN 'POOR'      THEN 25.0
                         END) AS evaluation_score
                 FROM TRAINING_SESSION s
+                JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
                 WHERE s.horse_id = ?
                   AND s.status IN ('COMPLETED', 'STOPPED_EARLY')
                   AND s.session_date >= DATEADD(DAY, ?, GETDATE())
-                """.formatted(TrainerDashboardService.FITNESS_EXPR);
+                """.formatted(SPEED_FULL_MARK, TrainerDashboardService.FITNESS_EXPR);
 
         return jdbc.queryForObject(sql, (rs, n) -> {
-            Double velocity = toDouble(rs.getObject("avg_velocity"));
             return new OwnerDashboard.Stats(
                     rs.getInt("session_count"),
-                    score(velocity == null ? null : velocity * 100.0 / SPEED_FULL_MARK),
+                    score(toDouble(rs.getObject("speed_score"))),
                     score(toDouble(rs.getObject("avg_recovery"))),
                     score(toDouble(rs.getObject("completion"))),
                     score(toDouble(rs.getObject("finished"))),

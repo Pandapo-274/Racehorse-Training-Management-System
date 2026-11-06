@@ -18,7 +18,8 @@ import racehorse.backend.race.RaceRiskNotifier;
 @Service
 public class IncidentService {
 
-    private static final Set<String> STATUS_FILTERS = Set.of("OPEN", "PENDING", "RECEIVED", "EXAMINED", "ALL");
+    private static final Set<String> STATUS_FILTERS =
+            Set.of("OPEN", "PENDING", "RECEIVED", "EXAMINED", "DISMISSED", "ALL");
 
     private final IncidentRepository incidents;
     private final UserRepository users;
@@ -126,14 +127,15 @@ public class IncidentService {
     }
 
     /**
-     * Hàng chờ khám. status: OPEN (mặc định = PENDING + RECEIVED), PENDING, RECEIVED, EXAMINED hoặc ALL.
+     * Hàng chờ khám. status: OPEN (mặc định = PENDING + RECEIVED), PENDING, RECEIVED, EXAMINED,
+     * DISMISSED hoặc ALL.
      * Groom chỉ thấy báo cáo do mình lập, chủ ngựa chỉ thấy ngựa của mình, còn lại thấy tất.
      */
     public List<IncidentReportResponse> list(String status, Integer horseId, int limit, AuthenticatedUser user) {
         String f = (status == null || status.isBlank()) ? "OPEN" : status.trim().toUpperCase(Locale.ROOT);
         if (!STATUS_FILTERS.contains(f)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid status filter",
-                    Map.of("status", "Must be one of OPEN, PENDING, RECEIVED, EXAMINED, ALL"));
+                    Map.of("status", "Must be one of OPEN, PENDING, RECEIVED, EXAMINED, DISMISSED, ALL"));
         }
         List<String> statuses = switch (f) {
             case "OPEN" -> List.of("PENDING", "RECEIVED");
@@ -142,7 +144,7 @@ public class IncidentService {
         };
         Integer reporterId = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        boolean urgentFirst = !"EXAMINED".equals(f) && !"ALL".equals(f);
+        boolean urgentFirst = !"EXAMINED".equals(f) && !"DISMISSED".equals(f) && !"ALL".equals(f);
         return incidents.search(statuses, horseId, reporterId, ownerId, urgentFirst,
                 Math.max(1, Math.min(limit, 200)));
     }
@@ -157,6 +159,49 @@ public class IncidentService {
             throw new ApiException(HttpStatus.FORBIDDEN, "This report belongs to another owner's horse");
         }
         return r;
+    }
+
+    /**
+     * Head Trainer huỷ báo động giả: PENDING -> DISMISSED, ngựa hết bị IncidentGuard chặn.
+     *
+     * Chỉ với báo cáo sinh ra từ một lần dừng buổi tập, và khi bác sĩ CHƯA nhận ca: Groom
+     * mới vào nghề bấm Stop vì ngựa vấp sỏi thì Head Trainer - người đứng ở sân - thẩm định
+     * được và gỡ chặn ngay, không phải đóng băng lịch tập chờ bác sĩ. Bác sĩ đã nhận ca thì
+     * quyết định thuộc về bác sĩ. Bắt buộc ghi lý do; báo cáo vẫn nằm trong lịch sử, và
+     * bác sĩ, chủ ngựa, người báo đều được báo.
+     */
+    @Transactional
+    public IncidentReportResponse dismiss(AuthenticatedUser trainer, int reportId, String reason, String ip) {
+        IncidentReportResponse r = incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Incident report not found"));
+        if (r.sessionId() == null) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a report from a stopped training session can be dismissed by the head trainer");
+        }
+        if (!"PENDING".equals(r.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "RECEIVED".equals(r.status())
+                    ? "A veterinarian has already taken this case; only the vet can close it"
+                    : "This report is already closed (" + r.status() + ")");
+        }
+        String why = reason.trim();
+        if (incidents.markDismissed(reportId, trainer.userId(), why) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "A veterinarian has just taken this case");
+        }
+        users.writeAudit(trainer.userId(), "INCIDENT_DISMISS", "INCIDENT_REPORT", reportId, "SUCCESS", ip,
+                Text.clip(why, 200));
+
+        Notice notice = new Notice("INCIDENT_DISMISSED", "Incident dismissed as a false alarm",
+                Text.clip(r.horseName() + ": the head trainer dismissed the report (" + r.symptoms() + "). Reason: "
+                        + why, 500),
+                Notice.HORSE, r.horseId());
+        notifications.notifyRole("VETERINARIAN", trainer, notice);
+        notifications.notifyHorseWatchers(r.ownerId(), trainer, notice);
+        if (r.reporterId() != trainer.userId()) {
+            notifications.notifyUser(r.reporterId(), notice);
+        }
+        return incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "The report was updated but could not be read back"));
     }
 
     /** Bác sĩ nhận ca: PENDING -> RECEIVED. Chưa phải đã khám: báo cáo chỉ đóng khi có bản khám kèm reportId. */

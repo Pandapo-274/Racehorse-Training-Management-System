@@ -36,11 +36,12 @@ public class TrainingSessionService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
 
     /**
-     * Hai buổi tập của cùng một ngựa, hoặc của cùng một Groom, phải cách nhau ít
-     * nhất chừng này phút. Bảng không có cột thời lượng buổi tập nên dùng một
-     * khoảng đệm cố định: một buổi tập kèm khởi động và hạ nhiệt mất khoảng 1,5 giờ.
+     * Khoảng đệm mặc định giữa hai buổi của cùng một ngựa (khi giai đoạn không
+     * đặt min_gap_minutes) và giữa hai buổi của cùng một Groom với hai ngựa khác
+     * nhau. Bảng không có cột thời lượng buổi tập: một buổi kèm khởi động và hạ
+     * nhiệt mất khoảng 1,5 giờ.
      */
-    private static final long MIN_GAP_MINUTES = 90;
+    private static final long DEFAULT_GAP_MINUTES = 90;
 
     /** Buổi còn chiếm chỗ trên lịch. */
     private static final Set<String> OPEN = Set.of("SCHEDULED", "RUNNING");
@@ -419,35 +420,45 @@ public TrainingSessionResponse reschedule(
     }
 
     /**
-     * Lịch có còn chỗ cho buổi này không: không trùng giờ (trong MIN_GAP_MINUTES)
-     * với buổi đang mở của cùng ngựa hoặc cùng Groom, và không vượt số buổi mỗi
-     * tuần mà giai đoạn quy định. excludeId = buổi đang dời lịch (0 khi tạo mới).
+     * Lịch có còn chỗ cho buổi này không: ngựa được nghỉ đủ khoảng của giai đoạn
+     * (min_gap_minutes, mặc định DEFAULT_GAP_MINUTES), Groom không dắt hai ngựa
+     * khác nhau cùng lúc, và không vượt số buổi mỗi tuần mà giai đoạn quy định.
+     * excludeId = buổi đang dời lịch (0 khi tạo mới).
      *
      * Dùng lại findAll() và findPhases() có sẵn thay vì thêm câu SQL mới: số buổi
      * của một ngựa hay một Groom chỉ vài chục, lọc trong Java là đủ.
      */
     private void checkSlot(TrainingSessionRepository.PhaseContext ctx, int groomId,
                            LocalDateTime when, int excludeId) {
+        TrainingPlanResponse.Phase phase = planRepository.findPhases(ctx.planId()).stream()
+                .filter(p -> p.phaseId() == ctx.phaseId())
+                .findFirst().orElse(null);
+        /* Khoảng nghỉ theo giai đoạn, không cố định 90 phút: giai đoạn đi bộ
+           khởi động rồi nước rút cần hai buổi sát nhau, giai đoạn tập nặng cần
+           nghỉ lâu hơn. Head Trainer đặt khi lập giáo án. */
+        long horseGap = phase != null && phase.minGapMinutes() != null
+                ? phase.minGapMinutes() : DEFAULT_GAP_MINUTES;
+
         List<TrainingSessionResponse> horseSessions = repository.findAll(ctx.horseId(), null, null, null, false);
         for (TrainingSessionResponse s : horseSessions) {
-            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when)) {
+            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when, horseGap)) {
                 throw new ApiException(HttpStatus.CONFLICT, s.horseName() + " already has a session at "
-                        + s.sessionDate().format(WHEN) + ". Sessions must be at least "
-                        + MIN_GAP_MINUTES + " minutes apart");
+                        + s.sessionDate().format(WHEN) + ". This phase needs at least "
+                        + horseGap + " minutes of rest between sessions");
             }
         }
+        /* Cùng ngựa thì vòng trên đã xét theo khoảng nghỉ của giai đoạn; ở đây
+           chỉ chặn một Groom dắt hai ngựa KHÁC NHAU cùng lúc. Không bỏ cùng ngựa
+           ra thì khoảng nghỉ ngắn của giai đoạn vô nghĩa khi cùng một Groom dắt. */
         for (TrainingSessionResponse s : repository.findAll(null, null, groomId, null, false)) {
-            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when)) {
+            if (s.sessionId() != excludeId && s.horseId() != ctx.horseId() && OPEN.contains(s.status())
+                    && tooClose(s.sessionDate(), when, DEFAULT_GAP_MINUTES)) {
                 throw new ApiException(HttpStatus.CONFLICT, s.assignedToName() + " is already handling "
                         + s.horseName() + " at " + s.sessionDate().format(HOUR) + " that day");
             }
         }
 
-        Integer perWeek = planRepository.findPhases(ctx.planId()).stream()
-                .filter(p -> p.phaseId() == ctx.phaseId())
-                .map(TrainingPlanResponse.Phase::sessionsPerWeek)
-                .filter(n -> n != null)
-                .findFirst().orElse(null);
+        Integer perWeek = phase == null ? null : phase.sessionsPerWeek();
         if (perWeek != null) {
             LocalDate monday = when.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
             long inWeek = horseSessions.stream()
@@ -464,8 +475,8 @@ public TrainingSessionResponse reschedule(
         }
     }
 
-    private static boolean tooClose(LocalDateTime a, LocalDateTime b) {
-        return Math.abs(Duration.between(a, b).toMinutes()) < MIN_GAP_MINUTES;
+    private static boolean tooClose(LocalDateTime a, LocalDateTime b, long gapMinutes) {
+        return Math.abs(Duration.between(a, b).toMinutes()) < gapMinutes;
     }
 
     /**

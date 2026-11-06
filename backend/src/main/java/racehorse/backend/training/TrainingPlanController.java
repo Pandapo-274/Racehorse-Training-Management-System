@@ -56,7 +56,18 @@ public class TrainingPlanController {
         return service.get(id, user);
     }
 
-    /** Chỉ giáo án DRAFT; giáo án đã chạy thì kết thúc bằng COMPLETED, không xoá. */
+    /** Chủ ngựa duyệt hoặc từ chối giáo án đang chờ (service kiểm đúng chủ). */
+    @PutMapping("/{id}/owner-review")
+    @RequireRole({"HORSE_OWNER"})
+    public TrainingPlanResponse ownerReview(
+            @PathVariable int id,
+            @Valid @RequestBody TrainingPlanRequest.OwnerReview request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.ownerReview(id, request.approve(), request.note(), user, http.getRemoteAddr());
+    }
+
+    /** Chỉ giáo án chưa từng chạy; giáo án đã chạy thì kết thúc bằng COMPLETED, không xoá. */
     @DeleteMapping("/{id}")
     @RequireRole({"HEAD_TRAINER"})
     public ResponseEntity<Void> delete(@PathVariable int id,

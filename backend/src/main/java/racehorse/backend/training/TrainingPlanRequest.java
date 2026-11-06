@@ -1,9 +1,12 @@
 package racehorse.backend.training;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -36,13 +39,29 @@ public record TrainingPlanRequest(
             @Max(value = 14, message = "At most 14 sessions per week") Integer sessionsPerWeek,
             @Min(value = 100, message = "Heart rate ceiling must be between 100 and 260")
             @Max(value = 260, message = "Heart rate ceiling must be between 100 and 260") Integer heartRateCeiling,
+            /* Khoảng nghỉ tối thiểu giữa hai buổi của ngựa trong giai đoạn này. Bỏ trống = 90 phút. */
+            @Min(value = 15, message = "Rest between sessions must be between 15 and 720 minutes")
+            @Max(value = 720, message = "Rest between sessions must be between 15 and 720 minutes") Integer minGapMinutes,
+            /* Tốc độ mục tiêu (m/s): điểm Speed so với mục tiêu này thay vì 18 m/s. */
+            @DecimalMin(value = "1.0", message = "Target speed must be between 1 and 25 m/s")
+            @DecimalMax(value = "25.0", message = "Target speed must be between 1 and 25 m/s") BigDecimal targetVelocity,
             @NotNull(message = "Phase start date is required") LocalDate startDate,
             @NotNull(message = "Phase end date is required") LocalDate endDate
     ) {}
 
+    /**
+     * Head Trainer đổi trạng thái. Không có APPROVED: chỉ chủ ngựa duyệt
+     * được (OwnerReview), Head Trainer không tự đánh dấu là đã duyệt.
+     */
     public record StatusChange(
             @NotBlank(message = "Status is required")
-            @Pattern(regexp = "DRAFT|ACTIVE|PAUSED|COMPLETED",
-                     message = "Status must be DRAFT, ACTIVE, PAUSED or COMPLETED") String status
+            @Pattern(regexp = "PENDING_APPROVAL|ACTIVE|PAUSED|COMPLETED",
+                     message = "Status must be PENDING_APPROVAL, ACTIVE, PAUSED or COMPLETED") String status
+    ) {}
+
+    /** Chủ ngựa duyệt hoặc từ chối giáo án. Từ chối thì bắt buộc ghi lý do. */
+    public record OwnerReview(
+            @NotNull(message = "Decision is required") Boolean approve,
+            @Size(max = 500, message = "Note must be at most 500 characters") String note
     ) {}
 }

@@ -20,6 +20,22 @@ export function finishSession(sessionId) {
   return authFetch(`${SESSIONS_API}/${sessionId}/finish`, { method: "PUT" });
 }
 
+/**
+ * Báo cáo sự cố bác sĩ chưa nhận (PENDING). Màn này chỉ hiện những báo cáo
+ * sinh ra từ một lần dừng buổi tập (sessionId khác null).
+ */
+export function fetchPendingIncidents(signal) {
+  return authFetch("/api/incident-reports?status=PENDING&limit=20", { signal });
+}
+
+/** PUT /api/incident-reports/{id}/dismiss: huỷ báo động giả, bắt buộc có lý do. */
+export function dismissIncident(reportId, reason) {
+  return authFetch(`/api/incident-reports/${reportId}/dismiss`, {
+    method: "PUT",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function resolveAlert(alertId, actionTaken) {
   return authFetch(`${ALERTS_API}/${alertId}/resolve`, {
     method: "PUT",
