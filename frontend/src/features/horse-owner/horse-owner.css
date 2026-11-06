@@ -1129,40 +1129,64 @@ button.owner-stat-card {
    COSTS CARD
 ===================================================== */
 
+/* Chữ trong thẻ này không nhỏ hơn 12px. Trước đây có chỗ 8-9px: một số trình
+   duyệt (Chrome bản tiếng Trung/Nhật/Hàn, Android có phóng chữ) tự nâng chữ lên
+   cỡ tối thiểu, làm chữ tràn khỏi ô cao cố định và đè lên nhau. */
 .costs-card {
-  height: 254px;
+  height: auto;
 
   margin-top: 20px;
+  padding-bottom: 16px;
 
   border-top: 4px solid #e53b82;
 }
 
 .costs-heading {
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.costs-heading h3 {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.costs-heading .heading-diamond {
+  font-size: 10px;
+}
+
+.costs-heading p {
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .cost-period {
-  height: 27px;
+  height: 32px;
 
   padding: 0 10px;
 
   border: 1px solid #efd9e5;
-  border-radius: 7px;
+  border-radius: 8px;
 
   background: #ffffff;
 
-  color: #777e91;
-
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  color: #5f667e;
 
   font-family: inherit;
 
-  font-size: 8px;
+  font-size: 13px;
   font-weight: 700;
 
   cursor: pointer;
+}
+
+/* Safari trên iPhone/iPad tự zoom cả trang khi chạm vào ô chọn có chữ dưới 16px. */
+@media (hover: none) and (pointer: coarse) {
+  .cost-period {
+    height: 36px;
+    font-size: 16px;
+  }
 }
 
 .cost-period:hover {
@@ -1182,54 +1206,64 @@ button.owner-stat-card {
   overflow-x: auto;
 }
 
+/* Số cột đổi theo số ngựa (Line item + mỗi ngựa một cột + Total), nên chỉ cột
+   đầu có bề rộng cố định, các cột tiền chia đều phần còn lại. Bảng có
+   min-width tính theo số cột (style trong HorseOwnerDashboard.js): màn hẹp thì
+   cuộn ngang. Trước đây bề rộng gõ cứng cho đúng 3 ngựa (32 + 19x3 + 15 = 104%),
+   chủ có từ 4 ngựa thì các cột cuối còn ~0px và số tiền đè lên nhau. */
 .cost-table {
   width: 100%;
 
   border-collapse: collapse;
 
   table-layout: fixed;
+
+  font-variant-numeric: tabular-nums;
 }
 
 .cost-table th {
-  height: 31px;
-
-  padding: 0;
+  padding: 0 12px 10px 0;
 
   border-bottom: 1px solid var(--owner-border);
 
-  color: #9ba2b8;
+  color: #7d849b;
 
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
 
+  text-align: right;
+  vertical-align: bottom;
+
+  overflow-wrap: anywhere;
+}
+
+.cost-table th:first-child {
+  width: 190px;
+}
+
+.cost-table th:first-child,
+.cost-table td:first-child {
   text-align: left;
 }
 
-.cost-table th:nth-child(1) {
-  width: 32%;
-}
-
-.cost-table th:nth-child(2),
-.cost-table th:nth-child(3),
-.cost-table th:nth-child(4) {
-  width: 19%;
-}
-
-.cost-table th:nth-child(5) {
-  width: 15%;
-}
-
 .cost-table td {
-  height: 34px;
-
-  padding: 0;
+  padding: 10px 12px 10px 0;
 
   color: var(--owner-text);
 
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.35;
+
+  text-align: right;
+  white-space: nowrap;
 
   border-bottom: 1px solid #f6e9ef;
+}
+
+.cost-table td.line-item {
+  white-space: normal;
 }
 
 .cost-table tbody tr:last-child td {
@@ -1464,10 +1498,6 @@ button.owner-stat-card {
   .cost-table-wrapper {
     overflow-x: auto;
   }
-
-  .cost-table {
-    min-width: 650px;
-  }
 }
 
 @media (max-width: 480px) {
@@ -1696,14 +1726,6 @@ img.training-icon {
   font-weight: 700;
 }
 
-/* Số dòng của bảng thay đổi theo dữ liệu, nên thẻ cao theo nội dung. */
-.costs-card {
-  height: auto;
-  min-height: 254px;
-
-  padding-bottom: 16px;
-}
-
 select.cost-period {
   appearance: auto;
 }
@@ -1757,9 +1779,20 @@ a.horse-photo:focus-visible {
 }
 
 /* #9: each cost line behind the totals. */
-.cost-lines { margin: 10px 22px 16px; }
-.cost-lines-toggle { border: 0; background: none; padding: 0; color: var(--owner-pink); font-size: 10px; font-weight: 800; cursor: pointer; }
-.cost-lines-muted { color: #9ba2b8; font-size: 9px; margin: 6px 0 0; }
-.cost-lines-error { color: #c0392b; font-size: 9px; margin: 6px 0 0; }
-.cost-lines-table { margin-top: 8px; table-layout: auto; }
+.cost-lines { margin: 12px 22px 0; }
+.cost-lines-toggle { border: 0; background: none; padding: 4px 0; color: var(--owner-pink); font-size: 12px; font-weight: 800; cursor: pointer; }
+.cost-lines-muted { color: #7d849b; font-size: 12px; margin: 6px 0 0; }
+.cost-lines-error { color: #c0392b; font-size: 12px; margin: 6px 0 0; }
+/* Khung cuộn ngang: không có thì màn hẹp bị .owner-card (overflow: hidden) cắt mất cột bên phải. */
+.cost-lines-scroll { margin-top: 8px; overflow-x: auto; }
+.cost-lines-table { min-width: 520px; table-layout: auto; }
+/* Bảng chi tiết: chữ canh trái, chỉ cột Amount canh phải. */
+.cost-lines-table th,
+.cost-lines-table td { text-align: left; white-space: normal; }
+.cost-lines-table th:first-child { width: auto; }
+.cost-lines-table td:first-child,
+.cost-lines-table th:last-child,
+.cost-lines-table td:last-child { white-space: nowrap; }
+.cost-lines-table th:last-child,
+.cost-lines-table td:last-child { text-align: right; }
 .cost-lines-table tbody tr:last-child td:not(.line-item) { color: var(--owner-text); font-weight: 600; }

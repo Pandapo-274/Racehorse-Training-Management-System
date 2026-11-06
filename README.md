@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 6, 2026` at `10:24` by `ArichiAya`
+### Last Commited: `Nov 6, 2026` at `10:58` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Nov 6, 2026`
+- `[10:58]` `ArichiAya` - Fix `Costs and prize money` render issues on the `Horse Owner` dashboard
 - `[10:24]` `ArichiAya` - Resolved `vet.css` and `VetDashboard.js` render issues
 > #### `Nov 5, 2026`
 - `[23:05]` `Pandapo274` - Complete recovery relapse rules, vitals threshold alert distinction, training session cancellation for Head Trainer, supply pricing & inventory deduction, and race approval flow:

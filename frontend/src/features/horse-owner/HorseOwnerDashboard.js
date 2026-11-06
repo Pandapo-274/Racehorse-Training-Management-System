@@ -408,6 +408,9 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
   const costTotals = costs.horses.map((_, index) =>
     costRows.reduce((sum, row) => sum + Number(row.amounts[index] || 0), 0)
   );
+  /* Cột Line item 190px + mỗi cột tiền (từng ngựa và Total) ít nhất 120px, đủ
+     cho "₫12,500,000" ở cỡ chữ 13px. Màn hẹp hơn thì khung bảng cuộn ngang. */
+  const tableMinWidth = 190 + (costs.horses.length + 1) * 120;
 
   return (
     <section className="owner-card costs-card" id="costs-prizes">
@@ -434,7 +437,7 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
       </div>
 
       <div className="cost-table-wrapper">
-        <table className="cost-table">
+        <table className="cost-table" style={{ minWidth: tableMinWidth }}>
           <thead>
             <tr>
               <th>Line item</th>
@@ -509,21 +512,23 @@ function CostLines({ from, to }) {
       {open && !data && !error && <p className="cost-lines-muted">Loading…</p>}
       {open && data && (
         data.items.length === 0 ? <p className="cost-lines-muted">No costs in this period.</p> : (
-          <table className="cost-table cost-lines-table">
-            <thead>
-              <tr><th>Date</th><th>Horse</th><th>Item</th><th>Amount</th></tr>
-            </thead>
-            <tbody>
-              {data.items.map((e) => (
-                <tr key={e.expenseId}>
-                  <td>{formatDate(e.expenseDate)}</td>
-                  <td>{e.horseName}</td>
-                  <td>{toCostLabel(e.category)}{e.note ? ` · ${formatExpenseNote(e.note)}` : ""}</td>
-                  <td>{formatMoney(e.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="cost-lines-scroll">
+            <table className="cost-table cost-lines-table">
+              <thead>
+                <tr><th>Date</th><th>Horse</th><th>Item</th><th>Amount</th></tr>
+              </thead>
+              <tbody>
+                {data.items.map((e) => (
+                  <tr key={e.expenseId}>
+                    <td>{formatDate(e.expenseDate)}</td>
+                    <td>{e.horseName}</td>
+                    <td>{toCostLabel(e.category)}{e.note ? ` · ${formatExpenseNote(e.note)}` : ""}</td>
+                    <td>{formatMoney(e.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )
       )}
       {open && data?.truncated && <p className="cost-lines-muted">Showing the latest {data.items.length} of {data.count}.</p>}
