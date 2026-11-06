@@ -229,3 +229,10 @@
   white-space: nowrap;
   font-size: 12px;
 }
+
+/* Bảng kho: 8 cột, cột cuối có tới 4 nút. Hẹp quá thì các nút xếp chồng dọc
+   và mỗi hàng cao gần 100px; giữ đủ rộng để nút nằm một hàng, thiếu chỗ thì
+   cuộn ngang trong .hz-table-wrap. */
+.care-stock-table { min-width: 1060px; }
+.care-stock-table .care-btn-group { flex-wrap: nowrap; }
+.care-stock-table .care-btn-pill { white-space: nowrap; }

@@ -59,9 +59,11 @@
 
 .schedule-button {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  white-space: nowrap;
   min-height: 40px;
   padding: 0 17px;
   border: 1px solid transparent;

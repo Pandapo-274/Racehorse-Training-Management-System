@@ -231,11 +231,14 @@
 .manager-header {
   position: relative;
   z-index: 20;
-  height: 84px;
+  /* min-height: màn hẹp thì header cao thêm thay vì chữ tràn ra ngoài. */
+  min-height: 84px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px 0 36px;
+  gap: 10px 16px;
+  padding: 12px 32px 12px 36px;
   background: #fff;
   border-bottom: 3px solid var(--m-pink);
 }
@@ -252,6 +255,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .manager-header > div:first-child > p {
@@ -413,8 +417,13 @@
 
 .manager-card-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
+}
+.manager-card-title > div:first-of-type {
+  flex: 1 1 200px;
+  min-width: 0;
 }
 .manager-card-title > .manager-diamond {
   margin-top: 8px;
@@ -607,6 +616,8 @@
 
 .items-table {
   width: 100%;
+  /* Hẹp hơn mức này thì cuộn ngang trong wrapper, không ép cột. */
+  min-width: 700px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -713,6 +724,7 @@
 ========================= */
 
 @media (max-width: 1100px) {
+  .manager-search { width: 180px; }
   .manager-sidebar { width: 220px; }
   .manager-middle { grid-template-columns: 1fr; }
 }
@@ -733,5 +745,4 @@
   .manager-content { padding: 20px 16px 32px; }
   .manager-stats { grid-template-columns: 1fr; }
   .open-items-header { align-items: flex-start; }
-  .items-table { min-width: 700px; }
 }

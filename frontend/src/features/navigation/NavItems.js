@@ -21,12 +21,17 @@ export default function NavItems({ role, prefix, icon, badges = {} }) {
     const active = isNavActive(item, pathname);
     const count = badges[item.key];
 
+    // Màn hẹp các sidebar chỉ còn icon (chữ ẩn bằng font-size: 0): title hiện
+    // tên mục khi rê chuột, aria-label cho trình đọc màn hình.
+
     return (
       <button
         key={item.key}
         type="button"
         className={`${prefix}-nav-item${active ? " active" : ""}`}
         aria-current={active ? "page" : undefined}
+        title={item.label}
+        aria-label={count > 0 ? `${item.label} (${count})` : item.label}
         onClick={item.path ? () => navigate(navTarget(item)) : undefined}
       >
         {icon}

@@ -30,6 +30,7 @@ if "e2e" not in ARGS.db.lower() and "test" not in ARGS.db.lower():
 
 BASE = ARGS.base
 TODAY = date.today()
+TOMORROW = TODAY + timedelta(days=1)
 NOW = datetime.now().replace(microsecond=0)
 RUN = uuid.uuid4().hex[:4].upper()          # để chạy lại nhiều lần trên cùng DB
 results = []
@@ -88,6 +89,14 @@ def at(d, hh="09:00:00"):
     return f"{d.isoformat()}T{hh}"
 
 
+def make_due(session_id, minutes_ago):
+    """Từ 06/11: không xếp buổi vào giờ đã qua, và Groom chỉ Start khi đã tới giờ. Nên script xếp buổi
+    vào ngày mai rồi dời bằng SQL về vài phút trước (chỉ trên DB thử) để Start được ngay."""
+    t = (datetime.now() - timedelta(minutes=minutes_ago)).replace(microsecond=0).isoformat()
+    rc, out = sql(f"UPDATE TRAINING_SESSION SET session_date = '{t}' WHERE session_id = {session_id}")
+    check(f"(test DB) session {session_id} is due now ({t[11:16]})", rc == 0, out)
+
+
 def dob(years):
     return (TODAY.replace(year=TODAY.year - years) - timedelta(days=10)).isoformat()
 
@@ -120,6 +129,13 @@ def new_plan(horse, name, spw=3, days=60):
         "phases": [{"phaseName": "Base", "distance": 1600, "workload": "Moderate", "surface": "TURF",
                     "sessionsPerWeek": spw, "heartRateCeiling": 180, "startDate": TODAY.isoformat(),
                     "endDate": (TODAY + timedelta(days=30)).isoformat()}]})
+
+
+def activate(plan_id):
+    """Từ V34: DRAFT -> PENDING_APPROVAL (HLV gửi) -> APPROVED (chủ ngựa duyệt) -> ACTIVE (HLV kích hoạt)."""
+    call("PUT", f"/api/training-plans/{plan_id}/status", T["trainer"], {"status": "PENDING_APPROVAL"})
+    call("PUT", f"/api/training-plans/{plan_id}/owner-review", T["owner"], {"approve": True, "note": None})
+    return call("PUT", f"/api/training-plans/{plan_id}/status", T["trainer"], {"status": "ACTIVE"})
 
 
 def schedule(phase, when, groom=None, dist=None):
@@ -210,10 +226,27 @@ print("== " + flow)
 st, plan = new_plan(HORSE, f"E2E plan {RUN}", spw=6)
 expect("trainer creates a plan with a phase", st, plan, 201)
 PLAN, PHASE = plan["planId"], plan["phases"][0]["phaseId"]
-expect("plan DRAFT -> ACTIVE", *call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "ACTIVE"}), 200)
+expect("a DRAFT plan cannot skip the owner's approval",
+       *call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "ACTIVE"}), 409)
+expect("trainer sends the plan to the owner (PENDING_APPROVAL)",
+       *call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "PENDING_APPROVAL"}), 200)
+check("owner is asked to approve", notified(T["owner"], "TRAINING_PLAN_APPROVAL_REQUESTED", NAME))
+expect("another owner cannot review it", *call("PUT", f"/api/training-plans/{PLAN}/owner-review", T["owner2"],
+                                               {"approve": True}), [403, 404])
+expect("rejecting without a reason is refused", *call("PUT", f"/api/training-plans/{PLAN}/owner-review", T["owner"],
+                                                      {"approve": False, "note": " "}), 400)
+st, b = call("PUT", f"/api/training-plans/{PLAN}/owner-review", T["owner"], {"approve": False, "note": "Too much distance"})
+check("owner rejects with a reason -> back to DRAFT", st == 200 and b.get("status") == "DRAFT", f"HTTP {st}: {str(b)[:120]}")
+check("...the trainer sees the reason", notified(T["trainer"], "TRAINING_PLAN_REJECTED", "Too much distance"))
+call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "PENDING_APPROVAL"})
+st, b = call("PUT", f"/api/training-plans/{PLAN}/owner-review", T["owner"], {"approve": True})
+check("owner approves the resubmitted plan -> APPROVED", st == 200 and b.get("status") == "APPROVED", f"HTTP {st}")
+check("...the trainer is told", notified(T["trainer"], "TRAINING_PLAN_APPROVED", NAME))
+expect("plan APPROVED -> ACTIVE", *call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "ACTIVE"}), 200)
 st, p2 = new_plan(HORSE, f"E2E second {RUN}")
-expect("a second ACTIVE plan for the same horse is refused",
-       *call("PUT", f"/api/training-plans/{p2['planId']}/status", T["trainer"], {"status": "ACTIVE"}), 409)
+expect("a second ACTIVE plan for the same horse is refused", *activate(p2["planId"]), 409)
+expect("a plan that never ran can be deleted", *call("DELETE", f"/api/training-plans/{p2['planId']}", T["trainer"]), 204)
+expect("an ACTIVE plan cannot be deleted", *call("DELETE", f"/api/training-plans/{PLAN}", T["trainer"]), 409)
 
 OTHER = register_horse(f"E2E Other {RUN}", "FILLY", 4, f"E2O-{RUN}", f"O-{RUN}")
 st, old = new_plan(OTHER, f"E2E expired {RUN}")
@@ -221,35 +254,43 @@ rc, out = sql(f"UPDATE PLAN_PHASE SET start_date = DATEADD(DAY,-50,start_date), 
               f"WHERE plan_id = {old['planId']}; UPDATE TRAINING_PLAN SET start_date = DATEADD(DAY,-80,start_date), "
               f"end_date = DATEADD(DAY,-80,end_date) WHERE plan_id = {old['planId']}")
 check("(test DB) move a draft plan into the past", rc == 0, out)
-expect("a plan past its end date cannot be activated",
-       *call("PUT", f"/api/training-plans/{old['planId']}/status", T["trainer"], {"status": "ACTIVE"}), 409)
+expect("a plan past its end date cannot be sent for approval",
+       *call("PUT", f"/api/training-plans/{old['planId']}/status", T["trainer"], {"status": "PENDING_APPROVAL"}), 409)
 st, po = new_plan(OTHER, f"E2E other {RUN}")
-call("PUT", f"/api/training-plans/{po['planId']}/status", T["trainer"], {"status": "ACTIVE"})
+expect("(setup) other horse's plan approved and active", *activate(po["planId"]), 200)
 OTHER_PHASE = po["phases"][0]["phaseId"]
 
-st, s1 = schedule(PHASE, at(TODAY, "08:00:00"))
-expect("trainer schedules a session today", st, s1, 201)
+st, s1 = schedule(PHASE, at(TOMORROW, "08:00:00"))
+expect("trainer schedules a session", st, s1, 201)
 S1 = s1["sessionId"]
 check("planned distance defaults to the phase", s1.get("plannedDistance") == 1600)
 check("groom is notified", notified(T["groom"], "TRAINING_SESSION_ASSIGNED", NAME))
 expect("session in the past is refused", *schedule(PHASE, at(TODAY - timedelta(days=1))), 400)
-expect("same horse 30 minutes later is refused", *schedule(PHASE, at(TODAY, "08:30:00")), 409)
-expect("same groom with another horse at the same time is refused", *schedule(OTHER_PHASE, at(TODAY, "08:00:00")), 409)
+expect("same horse 30 minutes later is refused", *schedule(PHASE, at(TOMORROW, "08:30:00")), 409)
+expect("same groom with another horse at the same time is refused", *schedule(OTHER_PHASE, at(TOMORROW, "08:00:00")), 409)
 expect("trainer reschedules", *call("PUT", f"/api/training-sessions/{S1}/schedule", T["trainer"],
-                                    {"assignedTo": GROOM_ID, "sessionDate": at(TODAY, "10:30:00")}), 200)
+                                    {"assignedTo": GROOM_ID, "sessionDate": at(TOMORROW, "10:30:00")}), 200)
+expect("a session cannot be moved to an hour that has passed today", *call("PUT", f"/api/training-sessions/{S1}/schedule",
+       T["trainer"], {"assignedTo": GROOM_ID, "sessionDate": (NOW - timedelta(minutes=1)).isoformat()}), 400)
 monday = TODAY - timedelta(days=TODAY.weekday()) + timedelta(days=14)
 week = [schedule(OTHER_PHASE, at(monday + timedelta(days=i))) for i in range(4)]
 check("phase limit of 3 sessions/week: 3 accepted, the 4th refused",
       [w[0] for w in week] == [201, 201, 201, 409], str([w[0] for w in week]))
 
+st, early = schedule(OTHER_PHASE, (datetime.now() + timedelta(minutes=10)).replace(microsecond=0).isoformat())
+expect("a session later today cannot start before its hour",
+       *call("PUT", f"/api/training-sessions/{early.get('sessionId')}/start", T["groom"]), 409)
+call("PUT", f"/api/training-sessions/{early.get('sessionId')}/cancel", T["trainer"])
+make_due(S1, 4)
 call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "PAUSED"})
 expect("a session of a paused plan cannot start", *call("PUT", f"/api/training-sessions/{S1}/start", T["groom"]), 409)
 call("PUT", f"/api/training-plans/{PLAN}/status", T["trainer"], {"status": "ACTIVE"})
 st, fut = schedule(PHASE, at(TODAY + timedelta(days=1), "06:00:00"))
 expect("tomorrow's session cannot be started today", *call("PUT", f"/api/training-sessions/{fut['sessionId']}/start",
                                                            T["groom"]), 409)
-st, sx = schedule(PHASE, at(TODAY, "13:00:00"))
+st, sx = schedule(PHASE, at(TOMORROW, "13:00:00"))
 SX = sx["sessionId"]
+make_due(SX, 3)
 expect("groom starts the session", *call("PUT", f"/api/training-sessions/{S1}/start", T["groom"]), 200)
 expect("a second session of the same horse cannot run at the same time",
        *call("PUT", f"/api/training-sessions/{SX}/start", T["groom"]), 409)
@@ -304,12 +345,25 @@ st, own = call("GET", "/api/sessions", T["owner"])
 check("owner sees the evaluation and the video", st == 200 and any(
     s["sessionId"] == S1 and s.get("evaluation") == "GOOD" and s.get("videoUrl") for s in own))
 
-expect("13:00 session starts once the first one is over", *call("PUT", f"/api/training-sessions/{SX}/start", T["groom"]), 200)
+expect("second session starts once the first one is over", *call("PUT", f"/api/training-sessions/{SX}/start", T["groom"]), 200)
 st, v = call("POST", f"/api/sessions/{SX}/vitals", T["groom"], {"heartRate": 210})
 call("PUT", f"/api/alerts/{v['alertId']}/resolve", T["trainer"], {"actionTaken": "STOP_SESSION"})
 st, sxs = call("GET", f"/api/training-sessions/{SX}", T["trainer"])
 check("STOP_SESSION stops the session", sxs.get("status") == "STOPPED_EARLY", sxs.get("status"))
 check("...and the groom is notified", notified(T["groom"], "TRAINING_SESSION_STOPPED", NAME))
+# Từ 06/11: STOP_SESSION mở báo cáo sự cố như Groom bấm Stop; HLV huỷ được báo động giả khi bác sĩ chưa nhận ca.
+opened = [r for r in call("GET", "/api/incident-reports", T["trainer"])[1]
+          if r["horseId"] == HORSE and r["status"] == "PENDING"]
+check("...and an incident report is opened for the vet", len(opened) == 1, str(opened)[:160])
+FALSE_ALARM = opened[0]["reportId"] if opened else None
+expect("training is blocked while that report is open", *schedule(PHASE, at(TOMORROW, "15:00:00")), 409)
+expect("a groom cannot dismiss the report", *call("PUT", f"/api/incident-reports/{FALSE_ALARM}/dismiss", T["groom"],
+                                                  {"reason": "x"}), 403)
+expect("dismissing without a reason is refused", *call("PUT", f"/api/incident-reports/{FALSE_ALARM}/dismiss",
+                                                      T["trainer"], {"reason": " "}), 400)
+st, b = call("PUT", f"/api/incident-reports/{FALSE_ALARM}/dismiss", T["trainer"],
+             {"reason": "Heart rate strap slipped, reading was wrong"})
+check("trainer dismisses the false alarm", st == 200 and b.get("status") == "DISMISSED", f"HTTP {st}: {str(b)[:120]}")
 
 st, b = call("PUT", f"/api/horses/{HORSE}", T["owner"], {"horseName": NAME, "horseGender": "GELDING",
                                                           "dateOfBirth": dob(4), "sireId": None, "damId": None})
@@ -318,8 +372,10 @@ expect("sex can no longer change once the horse has trained", st, b, 400)
 # ================================================================== FLOW 3
 flow = "Flow 3 - Medical & injury"
 print("== " + flow)
-st, s2 = schedule(PHASE, at(TODAY, "15:00:00"))
+st, s2 = schedule(PHASE, at(TOMORROW, "15:00:00"))
 S2 = s2.get("sessionId") if isinstance(s2, dict) else None
+expect("(setup) trainer schedules another session", st, s2, 201)
+make_due(S2, 2)
 call("PUT", f"/api/training-sessions/{S2}/start", T["groom"])
 st, stop = call("PUT", f"/api/training-sessions/{S2}/stop", T["groom"],
                 {"symptoms": "Lame on left fore", "description": "e2e", "urgency": "HIGH"})
@@ -362,13 +418,27 @@ st, trf = call("POST", "/api/treatments", T["vet"], {"recordId": RECORD, "medici
                                                       "endDate": (TODAY + timedelta(days=10)).isoformat()})
 expect("a treatment that has not started cannot end today",
        *call("PUT", f"/api/treatments/{trf['treatmentId']}/end", T["vet"]), 409)
-expect("vet prescribes a treatment from today", *call("POST", "/api/treatments", T["vet"], {
+# Đơn chưa bắt đầu không kết thúc được và cũng không có API sửa/xoá, nên từ 05/11 (không hồi phục khi còn
+# đơn thuốc) nó chặn hồi phục tới hết ngày kết thúc. Trên DB thử thì xoá đi để đi tiếp.
+rc, out = sql(f"DELETE FROM TREATMENT WHERE treatment_id = {trf['treatmentId']}")
+check("(test DB) remove the future prescription", rc == 0, out)
+st, trt = call("POST", "/api/treatments", T["vet"], {
     "recordId": RECORD, "medicineName": "Phenylbutazone", "dosage": "2 g", "frequency": "Daily",
-    "startDate": TODAY.isoformat(), "endDate": (TODAY + timedelta(days=5)).isoformat()}), [200, 201])
+    "startDate": TODAY.isoformat(), "endDate": (TODAY + timedelta(days=5)).isoformat()})
+expect("vet prescribes a treatment from today", st, trt, [200, 201])
 expect("recovery is refused while the injury is open", *call("POST", "/api/recovery-confirmations", T["vet"], {
     "horseId": HORSE, "recoveredInjuryIds": [], "examDate": NOW.isoformat(), "diagnosis": "Too early"}), 400)
 expect("recovery before the 14 rest days without a reason is refused", *call("POST", "/api/recovery-confirmations",
        T["vet"], {"horseId": HORSE, "recoveredInjuryIds": [INJURY], "examDate": NOW.isoformat(), "diagnosis": "Healed"}), 400)
+expect("recovery is refused while a treatment is running", *call("POST", "/api/recovery-confirmations", T["vet"], {
+    "horseId": HORSE, "recoveredInjuryIds": [INJURY], "examDate": NOW.isoformat(), "diagnosis": "Healed",
+    "notes": "Ultrasound clear"}), 400)
+expect("vet ends the treatment", *call("PUT", f"/api/treatments/{trt['treatmentId']}/end", T["vet"]), 200)
+active = [t for t in call("GET", "/api/treatments/active", T["vet"])[1] if t.get("horseId") == HORSE]
+check("an ended treatment no longer counts as running", not active, str(active)[:160])
+if active:  # lỗi đã biết: end_date = hôm nay vẫn bị tính là đang điều trị (end_date >= hôm nay)
+    sql(f"UPDATE TREATMENT SET end_date = DATEADD(DAY,-1,end_date), start_date = DATEADD(DAY,-1,start_date) "
+        f"WHERE treatment_id = {trt['treatmentId']}")
 # Two reports on one horse: REPORT (real injury, examined above) and a second stable report that turns
 # out to be nothing. Recovery used to clear the horse and leave the second report open, so the horse was
 # "healthy" but the trainer could not schedule it and the groom could not start it.
@@ -402,8 +472,9 @@ expect("light-work lock (no injury) can be released", *call("POST", f"/api/train
 # ------------------------------------------------------------------ vet call: emergency stop
 flow = "Vet call - emergency stop"
 print("== " + flow)
-st, so = schedule(OTHER_PHASE, at(TODAY, "17:30:00"))
+st, so = schedule(OTHER_PHASE, at(TOMORROW, "17:30:00"))
 SO = so.get("sessionId") if isinstance(so, dict) else None
+make_due(SO, 1)
 call("PUT", f"/api/training-sessions/{SO}/start", T["groom"])
 st, v = call("POST", f"/api/sessions/{SO}/vitals", T["groom"], {"heartRate": 212})
 st, vc = call("POST", f"/api/alerts/{v.get('alertId')}/vet-call", T["trainer"], {

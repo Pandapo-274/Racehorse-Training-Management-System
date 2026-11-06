@@ -253,11 +253,14 @@
   position: relative;
   z-index: 20;
   width: 100%;
-  height: 84px;
+  /* min-height: màn hẹp thì header cao thêm thay vì chữ tràn ra ngoài. */
+  min-height: 84px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px 0 36px;
+  gap: 10px 16px;
+  padding: 12px 32px 12px 36px;
   background: #ffffff;
   border-bottom: 3px solid #f55fa9;
 }
@@ -274,6 +277,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .owner-header-title > p {
@@ -1342,6 +1346,43 @@ button.owner-stat-card {
   }
 }
 
+/* Hero (ảnh + chỉ số + thanh năng lực) dùng left cứng, chỉ vừa từ 1100px trở lên.
+   Hẹp hơn thì xếp chỉ số và thanh năng lực xuống dưới ảnh. */
+@media (max-width: 1100px) {
+  .horse-overview {
+    min-height: 430px;
+    height: auto;
+    padding-bottom: 20px;
+  }
+
+  /* Ảnh ngựa đặt tuyệt đối, đáy ở 33 + 190 = 223px. Chỉ số và thanh năng lực
+     xếp theo dòng chảy bên dưới ảnh, không còn left cứng (trước đây đè lên ảnh). */
+  .horse-title-area {
+    right: 16px;
+  }
+
+  .horse-metrics {
+    position: relative;
+    left: auto;
+    top: auto;
+
+    width: calc(100% - 40px);
+
+    margin: 240px 20px 0;
+  }
+
+  .training-stats {
+    position: relative;
+    left: auto;
+    top: auto;
+
+    width: calc(100% - 40px);
+
+    margin: 24px 20px 0;
+  }
+
+}
+
 @media (max-width: 900px) {
   .owner-sidebar {
     width: 190px;
@@ -1356,22 +1397,6 @@ button.owner-stat-card {
     width: 100%;
   }
 
-  .horse-overview {
-    min-height: 430px;
-    height: auto;
-    padding-bottom: 20px;
-  }
-
-  .training-stats {
-    position: relative;
-    left: auto;
-    top: auto;
-
-    width: calc(100% - 40px);
-
-    margin: 170px 20px 0;
-  }
-
   .training-meter {
     flex: 1;
     width: auto;
@@ -1379,17 +1404,50 @@ button.owner-stat-card {
 }
 
 @media (max-width: 700px) {
-  .owner-page {
-    display: block;
+  /* Thanh bên thu thành dải icon như các dashboard khác, không ẩn hẳn
+     (ẩn đi là chủ ngựa không sang được trang My horses, Training...). */
+  .owner-sidebar {
+    width: 68px;
+    padding: 0 8px 12px;
   }
 
-  .owner-sidebar {
+  .owner-brand {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .owner-brand div,
+  .owner-menu-title,
+  .owner-signout,
+  .owner-account div:last-child {
     display: none;
   }
 
+  .owner-nav-item {
+    font-size: 0;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .owner-nav-item.active::before {
+    inset: 0;
+    transform: none;
+    border-radius: 10px;
+  }
+
+  .owner-account {
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+  }
+
+  .owner-main {
+    min-width: 0;
+  }
+
   .owner-header {
-    height: 70px;
-    padding: 0 15px;
+    min-height: 70px;
+    padding: 10px 15px;
   }
 
   .owner-page-title h1 {

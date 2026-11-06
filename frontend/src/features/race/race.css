@@ -48,6 +48,9 @@
 .race-table {
   table-layout: fixed;
   width: 100%;
+  /* Bốn cột cố định đã chiếm 455px; dưới mức này cột Note bị ép mỗi chữ một
+     dòng và đè lên nút Record result. Hẹp hơn thì cuộn ngang. */
+  min-width: 900px;
 }
 
 .race-edit-subrow td {
