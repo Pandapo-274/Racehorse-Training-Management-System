@@ -1,0 +1,4 @@
+# GitHub Linguist language overrides
+# Keep repository language stats focused strictly on Java & ReactJS
+*.py linguist-detectable=false
+backend/dev/** linguist-vendored

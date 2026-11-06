@@ -538,7 +538,7 @@ export default function GroomDashboard() {
   const todays = useMemo(
     () =>
       (sessions || [])
-        .filter((s) => sessionDay(s.sessionDate) === today)
+        .filter((s) => s.status === "RUNNING" || sessionDay(s.sessionDate) === today)
         .sort((a, b) => String(a.sessionDate).localeCompare(String(b.sessionDate))),
     [sessions, today]
   );
