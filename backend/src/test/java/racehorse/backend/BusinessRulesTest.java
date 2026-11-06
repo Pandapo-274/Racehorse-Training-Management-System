@@ -100,7 +100,17 @@ class BusinessRulesTest {
 
     private static TrainingPlanResponse plan(String status, LocalDate end) {
         return new TrainingPlanResponse(1, 100, "Horse 100", "Plan", end.minusDays(30), end, status, 2, "Trainer",
-                LocalDateTime.now(), List.of());
+                LocalDateTime.now(), null, null, List.of());
+    }
+
+    private static TrainingPlanService planService(TrainingPlanRepository plans, HorseRepository horses,
+                                                   HorseVitalsRepository vitals, NotificationService notifications) {
+        return new TrainingPlanService(plans, horses, vitals, mock(UserRepository.class), notifications);
+    }
+
+    private static TrainingPlanService planService(TrainingPlanRepository plans) {
+        return planService(plans, mock(HorseRepository.class), mock(HorseVitalsRepository.class),
+                mock(NotificationService.class));
     }
 
     private static <T extends Throwable> T expect(Class<T> type, int status, org.junit.jupiter.api.function.Executable run) {
@@ -117,8 +127,7 @@ class BusinessRulesTest {
     void completedPlanCannotBeReactivated() {
         TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
         when(plans.findById(1)).thenReturn(Optional.of(plan("COMPLETED", TODAY.plusDays(10))));
-        TrainingPlanService service = new TrainingPlanService(plans, mock(HorseRepository.class),
-                mock(HorseVitalsRepository.class), mock(UserRepository.class));
+        TrainingPlanService service = planService(plans);
 
         expect(ApiException.class, 409, () -> service.changeStatus(1, "ACTIVE", TRAINER, "ip"));
         verify(plans, never()).updateStatus(anyInt(), any(), any());
@@ -129,21 +138,84 @@ class BusinessRulesTest {
         TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
         HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
-        when(plans.findById(1)).thenReturn(Optional.of(plan("DRAFT", TODAY.minusDays(1))));
+        when(plans.findById(1)).thenReturn(Optional.of(plan("APPROVED", TODAY.minusDays(1))));
         when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
         when(vitals.findActiveLock(100)).thenReturn(Optional.empty());
-        TrainingPlanService service = new TrainingPlanService(plans, horses, vitals, mock(UserRepository.class));
+        TrainingPlanService service = planService(plans, horses, vitals, mock(NotificationService.class));
 
         ApiException ex = expect(ApiException.class, 409, () -> service.changeStatus(1, "ACTIVE", TRAINER, "ip"));
         assertTrue(ex.getMessage().contains("ended"), ex.getMessage());
     }
 
     @Test
-    void onlyADraftPlanCanBeDeleted() {
+    void draftPlanCannotBeActivatedWithoutOwnerApproval() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("DRAFT", TODAY.plusDays(10))));
+        TrainingPlanService service = planService(plans);
+
+        expect(ApiException.class, 409, () -> service.changeStatus(1, "ACTIVE", TRAINER, "ip"));
+        verify(plans, never()).updateStatus(anyInt(), any(), any());
+    }
+
+    @Test
+    void submittingAPlanAsksTheOwnerToApprove() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("DRAFT", TODAY.plusDays(10))));
+        when(plans.updateStatus(1, "DRAFT", "PENDING_APPROVAL")).thenReturn(1);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class), notifications);
+
+        service.changeStatus(1, "PENDING_APPROVAL", TRAINER, "ip");
+        verify(notifications).notifyUser(eq(7), any());   // chủ của ngựa 100
+    }
+
+    @Test
+    void ownerApprovesAPendingPlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("PENDING_APPROVAL", TODAY.plusDays(10))));
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(plans.recordOwnerReview(1, "APPROVED", null)).thenReturn(1);
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class),
+                mock(NotificationService.class));
+
+        service.ownerReview(1, true, null, OWNER, "ip");
+        verify(plans).recordOwnerReview(1, "APPROVED", null);
+    }
+
+    @Test
+    void ownerMustSayWhyWhenRejectingAPlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("PENDING_APPROVAL", TODAY.plusDays(10))));
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class),
+                mock(NotificationService.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.ownerReview(1, false, "  ", OWNER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("note"), ex.getFieldErrors().toString());
+        verify(plans, never()).recordOwnerReview(anyInt(), any(), any());
+    }
+
+    @Test
+    void anotherOwnerCannotReviewThePlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("PENDING_APPROVAL", TODAY.plusDays(10))));
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class),
+                mock(NotificationService.class));
+
+        expect(ApiException.class, 403, () -> service.ownerReview(1, true, null, user(8, "HORSE_OWNER"), "ip"));
+    }
+
+    @Test
+    void anActivatedPlanCannotBeDeleted() {
         TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
         when(plans.findById(1)).thenReturn(Optional.of(plan("ACTIVE", TODAY.plusDays(10))));
-        TrainingPlanService service = new TrainingPlanService(plans, mock(HorseRepository.class),
-                mock(HorseVitalsRepository.class), mock(UserRepository.class));
+        TrainingPlanService service = planService(plans);
 
         expect(ApiException.class, 409, () -> service.deleteDraft(1, TRAINER, "ip"));
         verify(plans, never()).deleteDraft(anyInt());
@@ -153,10 +225,9 @@ class BusinessRulesTest {
     void pausedPlanPastItsEndDateIsCompletedOvernight() {
         TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
         when(plans.findSummaries(null, "PAUSED", null)).thenReturn(List.of(new TrainingPlanResponse.Summary(
-                1, 100, "Horse 100", "Plan", TODAY.minusDays(40), TODAY.minusDays(1), "PAUSED", 2)));
+                1, 100, "Horse 100", "Plan", TODAY.minusDays(40), TODAY.minusDays(1), "PAUSED", 2, null)));
         when(plans.updateStatus(1, "PAUSED", "COMPLETED")).thenReturn(1);
-        TrainingPlanService service = new TrainingPlanService(plans, mock(HorseRepository.class),
-                mock(HorseVitalsRepository.class), mock(UserRepository.class));
+        TrainingPlanService service = planService(plans);
 
         assertEquals(1, service.completeExpiredPlans());
         verify(plans).cancelRemainingSessions(1);
@@ -186,6 +257,12 @@ class BusinessRulesTest {
     /** Dựng một giao buổi tập hợp lệ cho ngựa 100 / Groom 5, lúc 09:00 ngày mai. */
     private static TrainingSessionRepository readyToSchedule(HorseRepository horses, HorseVitalsRepository vitals,
                                                              TrainingPlanRepository plans) {
+        return readyToSchedule(horses, vitals, plans, null);
+    }
+
+    /** minGap = khoảng nghỉ của giai đoạn (null = mặc định 90 phút). */
+    private static TrainingSessionRepository readyToSchedule(HorseRepository horses, HorseVitalsRepository vitals,
+                                                             TrainingPlanRepository plans, Integer minGap) {
         TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
         when(repo.findPhaseContext(10)).thenReturn(Optional.of(new TrainingSessionRepository.PhaseContext(
                 10, 1, "ACTIVE", 100, 1600, TODAY, TODAY.plusDays(30))));
@@ -193,8 +270,43 @@ class BusinessRulesTest {
         when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
         when(vitals.findActiveLock(100)).thenReturn(Optional.empty());
         when(plans.findPhases(1)).thenReturn(List.of(new TrainingPlanResponse.Phase(
-                10, 1, "Base", 1600, "Moderate", "TURF", 3, 180, TODAY, TODAY.plusDays(30))));
+                10, 1, "Base", 1600, "Moderate", "TURF", 3, 180, TODAY, TODAY.plusDays(30), minGap, null)));
         return repo;
+    }
+
+    @Test
+    void phaseRestGapReplacesTheFixedNinetyMinutes() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        // Giai đoạn cho nghỉ 20 phút: đi bộ khởi động 09:00 rồi nước rút 09:30, cùng Groom.
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans, 20);
+        LocalDateTime nine = TODAY.plusDays(1).atTime(9, 0);
+        List<TrainingSessionResponse> warmUp = List.of(session(1, 100, 5, nine, "SCHEDULED", 400));
+        when(repo.findAll(100, null, null, null, false)).thenReturn(warmUp);
+        when(repo.findAll(null, null, 5, null, false)).thenReturn(warmUp);
+        when(repo.insert(10, 100, 5, nine.plusMinutes(30), 1600)).thenReturn(2);
+        when(repo.findById(2)).thenReturn(Optional.of(session(2, 100, 5, nine.plusMinutes(30), "SCHEDULED", 1600)));
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        service.create(new TrainingSessionRequest(10, 5, nine.plusMinutes(30), null), TRAINER, "ip");
+        verify(repo).insert(10, 100, 5, nine.plusMinutes(30), 1600);
+    }
+
+    @Test
+    void phaseRestGapIsStillEnforced() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans, 20);
+        LocalDateTime nine = TODAY.plusDays(1).atTime(9, 0);
+        when(repo.findAll(100, null, null, null, false)).thenReturn(List.of(
+                session(1, 100, 5, nine, "SCHEDULED", 400)));
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        ApiException ex = expect(ApiException.class, 409, () -> service.create(
+                new TrainingSessionRequest(10, 5, nine.plusMinutes(10), null), TRAINER, "ip"));
+        assertTrue(ex.getMessage().contains("20 minutes"), ex.getMessage());
     }
 
     @Test
@@ -431,7 +543,37 @@ class BusinessRulesTest {
     private static IncidentReportResponse openReport(int reportId, int horseId) {
         return new IncidentReportResponse(reportId, horseId, "Horse " + horseId, "A-" + horseId, "INJURED", 7,
                 30, 5, "Groom 5", "Stopped early, looked lame", null, null, "MEDIUM", Instant.now(),
-                "PENDING", null, null, null);
+                "PENDING", null, null, null, null, null);
+    }
+
+    private static IncidentService incidentService(IncidentRepository incidents) {
+        return new IncidentService(incidents, mock(UserRepository.class), mock(NotificationService.class),
+                mock(RaceRiskNotifier.class));
+    }
+
+    @Test
+    void headTrainerDismissesAFalseAlarmBeforeTheVetTakesIt() {
+        IncidentRepository incidents = mock(IncidentRepository.class);
+        when(incidents.findById(8)).thenReturn(Optional.of(openReport(8, 100)));
+        when(incidents.markDismissed(8, 2, "Tripped on a pebble, walking sound")).thenReturn(1);
+        IncidentService service = incidentService(incidents);
+
+        service.dismiss(TRAINER, 8, "  Tripped on a pebble, walking sound ", "ip");
+        verify(incidents).markDismissed(8, 2, "Tripped on a pebble, walking sound");
+    }
+
+    @Test
+    void headTrainerCannotDismissACaseTheVetHasTaken() {
+        IncidentRepository incidents = mock(IncidentRepository.class);
+        IncidentReportResponse open = openReport(8, 100);
+        IncidentReportResponse received = new IncidentReportResponse(8, 100, open.horseName(), open.stallNo(),
+                open.horseStatus(), 7, 30, 5, "Groom 5", open.symptoms(), null, null, "MEDIUM", Instant.now(),
+                "RECEIVED", 3, "Vet 3", Instant.now(), null, null);
+        when(incidents.findById(8)).thenReturn(Optional.of(received));
+        IncidentService service = incidentService(incidents);
+
+        expect(ApiException.class, 409, () -> service.dismiss(TRAINER, 8, "False alarm", "ip"));
+        verify(incidents, never()).markDismissed(anyInt(), anyInt(), any());
     }
 
     private record Clearance(HealthClearanceService service, MedicalRecordRepository records,

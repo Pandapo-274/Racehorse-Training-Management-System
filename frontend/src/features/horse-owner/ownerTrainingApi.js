@@ -20,10 +20,25 @@ export function listMySessions(signal) {
   return authFetch("/api/training-sessions", { signal });
 }
 
-/** Giáo án đáng hiện nhất của một con ngựa: đang chạy, rồi tạm dừng, rồi mới nhất. */
+/**
+ * PUT /api/training-plans/{id}/owner-review: chủ ngựa duyệt hoặc từ chối giáo án
+ * đang chờ. Từ chối thì bắt buộc ghi lý do (backend trả fieldErrors.note).
+ */
+export function reviewPlan(planId, { approve, note }) {
+  return authFetch(`/api/training-plans/${planId}/owner-review`, {
+    method: "PUT",
+    body: JSON.stringify({ approve, note: note || null }),
+  });
+}
+
+/**
+ * Giáo án đáng hiện nhất của một con ngựa: đang chờ chủ duyệt (cần chủ làm gì
+ * đó), rồi đang chạy, tạm dừng, rồi mới nhất.
+ */
 export function pickPlan(plans, horseId) {
   const mine = (plans || []).filter((p) => p.horseId === horseId);
-  return mine.find((p) => p.status === "ACTIVE")
+  return mine.find((p) => p.status === "PENDING_APPROVAL")
+    || mine.find((p) => p.status === "ACTIVE")
     || mine.find((p) => p.status === "PAUSED")
     || mine[0]
     || null;
@@ -31,6 +46,8 @@ export function pickPlan(plans, horseId) {
 
 const PLAN_STATUS = {
   DRAFT: { label: "Draft", tone: "neutral" },
+  PENDING_APPROVAL: { label: "Waiting for your approval", tone: "warning" },
+  APPROVED: { label: "Approved, not started", tone: "good" },
   ACTIVE: { label: "In progress", tone: "good" },
   PAUSED: { label: "Paused", tone: "warning" },
   COMPLETED: { label: "Completed", tone: "neutral" },

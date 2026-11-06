@@ -148,6 +148,7 @@ export const INCIDENT_STATUS = {
   PENDING: { label: "Waiting for a vet", tone: "warning" },
   RECEIVED: { label: "Vet on the case", tone: "serious" },
   EXAMINED: { label: "Examined", tone: "good" },
+  DISMISSED: { label: "False alarm", tone: "neutral" },
 };
 
 /** Same check as the backend (ImageFiles): only JPEG, PNG, WebP up to 2 MB. */

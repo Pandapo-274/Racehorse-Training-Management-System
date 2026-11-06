@@ -52,6 +52,16 @@ public class IncidentController {
         return service.get(id, user);
     }
 
+    /** Head Trainer huỷ báo động giả của một lần dừng buổi tập (bác sĩ chưa nhận ca). */
+    @PutMapping("/incident-reports/{id}/dismiss")
+    @RequireRole({"HEAD_TRAINER"})
+    public IncidentReportResponse dismiss(@PathVariable("id") int id,
+                                          @Valid @RequestBody DismissIncidentRequest request,
+                                          @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser trainer,
+                                          HttpServletRequest http) {
+        return service.dismiss(trainer, id, request.reason(), http.getRemoteAddr());
+    }
+
     @PutMapping("/incident-reports/{id}/receive")
     @RequireRole({"VETERINARIAN"})
     public IncidentReportResponse receive(@PathVariable("id") int id,

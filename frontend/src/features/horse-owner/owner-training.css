@@ -8,6 +8,9 @@
 .ot-tab.active { border-color: var(--pink-500); background: var(--pink-500); color: #fff; }
 
 .ot-note { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--field-bg); color: var(--text-600); font-size: 13px; }
+.ot-note--attention { background: #fff4d6; color: #7a5200; font-weight: 600; }
+.ot-approval { display: grid; gap: 10px; margin-top: 14px; }
+.ot-approval__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .ot-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
 @media (max-width: 900px) { .ot-top { grid-template-columns: 1fr; } }

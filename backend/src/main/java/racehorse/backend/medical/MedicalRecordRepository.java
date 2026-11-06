@@ -150,7 +150,7 @@ public class MedicalRecordRepository {
     /**
      * Đánh dấu báo cáo đã được khám.
      *
-     * Điều kiện status <> 'EXAMINED' nằm ngay trong câu UPDATE chứ không phải
+     * Điều kiện "còn mở" (PENDING/RECEIVED; DISMISSED từ V34 cũng là đã đóng) nằm ngay trong câu UPDATE chứ không phải
      * ở một câu SELECT trước đó: hai bác sĩ cùng mở một báo cáo thì chỉ người
      * chạy trước đổi được, người sau nhận @@ROWCOUNT = 0 và service biết mà
      * từ chối. Tách ra hai câu thì cả hai đều thấy "chưa khám" rồi cùng ghi.
@@ -158,7 +158,7 @@ public class MedicalRecordRepository {
     public int markReportExamined(int reportId) {
         return jdbc.sql("""
                 UPDATE INCIDENT_REPORT SET status = 'EXAMINED'
-                WHERE report_id = :id AND status <> 'EXAMINED'
+                WHERE report_id = :id AND status IN ('PENDING', 'RECEIVED')
                 """)
                 .param("id", reportId)
                 .update();

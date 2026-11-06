@@ -28,10 +28,23 @@ const initialPhases = [
     surface: "DIRT",
     sessionsPerWeek: "",
     heartRateCeiling: "",
+    minGapMinutes: "",
+    targetVelocity: "",
     startDate: "",
     endDate: "",
   },
 ];
+
+/* Trạng thái giáo án -> chữ hiển thị. PENDING_APPROVAL / APPROVED từ V34:
+   giáo án phải được chủ ngựa duyệt trước khi kích hoạt. */
+const PLAN_STATUS_LABEL = {
+  DRAFT: "Draft",
+  PENDING_APPROVAL: "Waiting for owner",
+  APPROVED: "Approved by owner",
+  ACTIVE: "Active",
+  PAUSED: "Paused",
+  COMPLETED: "Completed",
+};
 
 function HorseshoeIcon() {
   return (
@@ -112,9 +125,16 @@ function emptyPhase(index, startDate, endDate) {
     surface: "DIRT",
     sessionsPerWeek: "",
     heartRateCeiling: "",
+    minGapMinutes: "",
+    targetVelocity: "",
     startDate: startDate || "",
     endDate: endDate || "",
   };
+}
+
+/** Ô tuỳ chọn: bản nháp cũ trong sessionStorage có thể chưa có trường này. */
+function optionalNumber(value) {
+  return value === "" || value == null ? null : Number(value);
 }
 
 const DRAFT_KEY = "tracen_training_plan_draft";
@@ -287,6 +307,8 @@ export default function TrainingPlanPage() {
           p.sessionsPerWeek === "" ? null : Number(p.sessionsPerWeek),
         heartRateCeiling:
           p.heartRateCeiling === "" ? null : Number(p.heartRateCeiling),
+        minGapMinutes: optionalNumber(p.minGapMinutes),
+        targetVelocity: optionalNumber(p.targetVelocity),
         startDate: p.startDate,
         endDate: p.endDate,
       })),
@@ -295,7 +317,7 @@ export default function TrainingPlanPage() {
     try {
       const created = await createTrainingPlan(payload);
       setNotice(
-        `Training plan “${created.planName}” was saved as ${created.status}.`,
+        `Training plan “${created.planName}” was saved as a draft. Send it to the owner for approval before activating it.`,
       );
       clearDraft();
       setPlanName("");
@@ -326,7 +348,11 @@ export default function TrainingPlanPage() {
           p.planId === updated.planId ? { ...p, status: updated.status } : p,
         ),
       );
-      setNotice(`Plan status changed to ${updated.status}.`);
+      setNotice(
+        updated.status === "PENDING_APPROVAL"
+          ? "Plan sent to the owner for approval."
+          : `Plan status changed to ${PLAN_STATUS_LABEL[updated.status] || updated.status}.`,
+      );
     } catch (err) {
       if (!handleAuthError(err, navigate))
         setError(err.message || "Could not change plan status.");
@@ -334,13 +360,13 @@ export default function TrainingPlanPage() {
   };
 
   const deletePlan = async (plan) => {
-    if (!window.confirm(`Delete the draft plan "${plan.planName}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete the plan "${plan.planName}"? This cannot be undone.`)) return;
     setError("");
     setNotice("");
     try {
       await deleteTrainingPlan(plan.planId);
       setPlans((current) => current.filter((p) => p.planId !== plan.planId));
-      setNotice(`Draft plan "${plan.planName}" deleted.`);
+      setNotice(`Plan "${plan.planName}" deleted.`);
     } catch (err) {
       if (!handleAuthError(err, navigate))
         setError(err.message || "Could not delete this plan.");
@@ -626,6 +652,41 @@ export default function TrainingPlanPage() {
                             />
                           </label>
                           <label className="training-field">
+                            Rest between sessions (min)
+                            <input
+                              type="number"
+                              min="15"
+                              max="720"
+                              value={phase.minGapMinutes ?? ""}
+                              onChange={(e) =>
+                                updatePhase(
+                                  index,
+                                  "minGapMinutes",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Default 90"
+                            />
+                          </label>
+                          <label className="training-field">
+                            Target speed (m/s)
+                            <input
+                              type="number"
+                              min="1"
+                              max="25"
+                              step="0.1"
+                              value={phase.targetVelocity ?? ""}
+                              onChange={(e) =>
+                                updatePhase(
+                                  index,
+                                  "targetVelocity",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Optional, e.g. 10"
+                            />
+                          </label>
+                          <label className="training-field">
                             Phase start
                             <input
                               type="date"
@@ -744,7 +805,7 @@ export default function TrainingPlanPage() {
                     </div>
                   </div>
                   <div className="training-plan-filter">
-                    {["ALL", "DRAFT", "ACTIVE", "PAUSED", "COMPLETED"].map(
+                    {["ALL", ...Object.keys(PLAN_STATUS_LABEL)].map(
                       (s) => (
                         <button
                           key={s}
@@ -752,7 +813,7 @@ export default function TrainingPlanPage() {
                           className={filter === s ? "selected" : ""}
                           onClick={() => setFilter(s)}
                         >
-                          {s === "ALL" ? "All" : s}
+                          {s === "ALL" ? "All" : PLAN_STATUS_LABEL[s]}
                         </button>
                       ),
                     )}
@@ -770,7 +831,7 @@ export default function TrainingPlanPage() {
                             <span
                               className={`training-status-pill ${statusClass(plan.status)}`}
                             >
-                              {plan.status}
+                              {PLAN_STATUS_LABEL[plan.status] || plan.status}
                             </span>
                           </div>
                           <p>
@@ -782,22 +843,39 @@ export default function TrainingPlanPage() {
                             {plan.phaseCount === 1 ? "" : "s"} · Plan #
                             {plan.planId}
                           </small>
+                          {plan.status === "DRAFT" && plan.ownerNote && (
+                            <p className="saved-plan-owner-note">
+                              Owner rejected: {plan.ownerNote}
+                            </p>
+                          )}
                           <div className="saved-plan-actions">
                             {plan.status === "DRAFT" && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => updateStatus(plan, "ACTIVE")}
-                                >
-                                  Activate
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deletePlan(plan)}
-                                >
-                                  Delete
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateStatus(plan, "PENDING_APPROVAL")
+                                }
+                              >
+                                Send to owner
+                              </button>
+                            )}
+                            {plan.status === "APPROVED" && (
+                              <button
+                                type="button"
+                                onClick={() => updateStatus(plan, "ACTIVE")}
+                              >
+                                Activate
+                              </button>
+                            )}
+                            {["DRAFT", "PENDING_APPROVAL", "APPROVED"].includes(
+                              plan.status,
+                            ) && (
+                              <button
+                                type="button"
+                                onClick={() => deletePlan(plan)}
+                              >
+                                Delete
+                              </button>
                             )}
                             {plan.status === "ACTIVE" && (
                               <>

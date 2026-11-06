@@ -2,7 +2,8 @@
 // Chủ ngựa xem lịch trình tập luyện, video chạy thử và nhật ký nhận xét của
 // Head Trainer (đúng một mục trong đề bài của Horse Owner).
 //
-// Chỉ xem: mọi thay đổi về giáo án và lịch tập là việc của Head Trainer.
+// Lập giáo án và xếp lịch là việc của Head Trainer; chủ ngựa chỉ có một việc
+// ở đây: duyệt hoặc từ chối giáo án trước khi nó được kích hoạt (V34).
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
@@ -12,12 +13,61 @@ import {
 } from "../horse/horseApi";
 import { toEvaluation } from "./horseOwnerApi";
 import {
-  formatMetres, getPlan, isCurrentPhase, listMyPlans, listMySessions, pickPlan,
+  formatMetres, getPlan, isCurrentPhase, listMyPlans, listMySessions, pickPlan, reviewPlan,
   toPlanStatus, toSessionStatus, todayIso,
 } from "./ownerTrainingApi";
 import "./owner-training.css";
 
-function PlanCard({ plan, detail, today }) {
+/** Duyệt / từ chối giáo án đang chờ. Từ chối bắt buộc ghi lý do cho Head Trainer. */
+function ApprovalBox({ plan, onReviewed }) {
+  const navigate = useNavigate();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (approve) => {
+    if (!approve && !note.trim()) {
+      setError("Tell the head trainer why you are rejecting this plan.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await reviewPlan(plan.planId, { approve, note: note.trim() });
+      onReviewed();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setError(Object.values(err.fieldErrors || {})[0] || err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="ot-approval">
+      <p className="ot-note">
+        The head trainer is asking for your approval. Training starts only after you approve this plan.
+      </p>
+      <div className="hz-field">
+        <label htmlFor={`plan-note-${plan.planId}`}>Note for the head trainer (required if you reject)</label>
+        <textarea id={`plan-note-${plan.planId}`} rows={2} maxLength={500} value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g. I want to aim for sprint races, please shorten the distances" />
+      </div>
+      {error && <p className="hz-form-error" role="alert">{error}</p>}
+      <div className="ot-approval__actions">
+        <button type="button" className="hz-btn" disabled={busy} onClick={() => submit(true)}>
+          {busy ? "Saving…" : "Approve plan"}
+        </button>
+        <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={() => submit(false)}>
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({ plan, detail, today, onReviewed }) {
   if (!plan) {
     return (
       <Card title="Training plan">
@@ -49,7 +99,8 @@ function PlanCard({ plan, detail, today }) {
                   {[formatMetres(ph.distance),
                     ph.surface && ph.surface.charAt(0) + ph.surface.slice(1).toLowerCase(),
                     ph.workload,
-                    ph.sessionsPerWeek ? `${ph.sessionsPerWeek} sessions / week` : null]
+                    ph.sessionsPerWeek ? `${ph.sessionsPerWeek} sessions / week` : null,
+                    ph.targetVelocity ? `target ${ph.targetVelocity} m/s` : null]
                     .filter((x) => x && x !== "—").join(" · ")}
                 </span>
               </li>
@@ -57,6 +108,7 @@ function PlanCard({ plan, detail, today }) {
           })}
         </ol>
       )}
+      {plan.status === "PENDING_APPROVAL" && <ApprovalBox plan={plan} onReviewed={onReviewed} />}
     </Card>
   );
 }
@@ -183,6 +235,7 @@ export default function OwnerTrainingPage() {
       .sort((a, b) => String(b.sessionDate).localeCompare(String(a.sessionDate))),
     [mine, trialOnly]);
   const horse = horses?.find((h) => h.horseId === horseId);
+  const waiting = useMemo(() => plans.filter((p) => p.status === "PENDING_APPROVAL"), [plans]);
 
   return (
     <HorseShell
@@ -220,12 +273,20 @@ export default function OwnerTrainingPage() {
             </div>
           )}
 
+          {waiting.length > 0 && (
+            <p className="ot-note ot-note--attention" role="status">
+              {waiting.length === 1 ? "1 training plan is" : `${waiting.length} training plans are`} waiting
+              for your approval: {waiting.map((p) => p.horseName).join(", ")}.
+            </p>
+          )}
+
           {horse && isWithdrawn(horse) && (
             <p className="ot-note">{horse.horseName} has been withdrawn from training. Its past sessions are kept below.</p>
           )}
 
           <div className="ot-top">
-            <PlanCard plan={plan} detail={planDetail} today={today} />
+            <PlanCard plan={plan} detail={planDetail} today={today}
+              onReviewed={() => setReloadKey((k) => k + 1)} />
             <UpcomingCard sessions={upcoming} />
           </div>
 

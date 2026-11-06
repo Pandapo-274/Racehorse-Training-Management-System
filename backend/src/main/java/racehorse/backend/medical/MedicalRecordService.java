@@ -146,6 +146,8 @@ public class MedicalRecordService {
                     errors.put("reportId", "That incident report belongs to a different horse");
                 } else if ("EXAMINED".equals(head.status())) {
                     errors.put("reportId", "That incident report has already been examined");
+                } else if ("DISMISSED".equals(head.status())) {
+                    errors.put("reportId", "That incident report was dismissed as a false alarm");
                 }
             }, () -> errors.put("reportId", "Incident report #" + r.reportId() + " does not exist"));
         }

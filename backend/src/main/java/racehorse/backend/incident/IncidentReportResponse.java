@@ -18,8 +18,10 @@ public record IncidentReportResponse(
         String photoUrl,
         String urgency,             // HIGH | MEDIUM | LOW
         Instant reportedAt,
-        String status,              // PENDING | RECEIVED | EXAMINED
+        String status,              // PENDING | RECEIVED | EXAMINED | DISMISSED
         Integer receivedBy,
         String receivedByName,
-        Instant receivedAt
+        Instant receivedAt,
+        String dismissedByName,     // Head Trainer huỷ báo động giả (V34), null nếu chưa huỷ
+        String dismissReason
 ) {}
