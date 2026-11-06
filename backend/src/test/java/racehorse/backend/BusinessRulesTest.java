@@ -21,7 +21,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import racehorse.backend.alert.AlertRepository;
+import racehorse.backend.alert.AlertResponse;
 import racehorse.backend.alert.AlertService;
+import racehorse.backend.alert.ResolveAlertRequest;
 import racehorse.backend.alert.SessionContext;
 import racehorse.backend.alert.VitalsRequest;
 import racehorse.backend.alert.VitalsResult;
@@ -37,6 +39,7 @@ import racehorse.backend.horse.HorseVitalsResponse;
 import racehorse.backend.incident.IncidentGuard;
 import racehorse.backend.incident.IncidentReportResponse;
 import racehorse.backend.incident.IncidentRepository;
+import racehorse.backend.incident.IncidentService;
 import racehorse.backend.medical.HealthClearanceRepository;
 import racehorse.backend.medical.HealthClearanceService;
 import racehorse.backend.medical.InjuryRepository;
@@ -52,11 +55,16 @@ import racehorse.backend.medical.TreatmentRow;
 import racehorse.backend.medical.TreatmentService;
 import racehorse.backend.notification.NotificationService;
 import racehorse.backend.race.RaceRiskNotifier;
+import racehorse.backend.session.EvaluateSessionRequest;
+import racehorse.backend.session.SessionRepository;
+import racehorse.backend.session.SessionResponse;
+import racehorse.backend.session.SessionService;
 import racehorse.backend.training.TrainingPlanRepository;
 import racehorse.backend.training.TrainingPlanResponse;
 import racehorse.backend.training.TrainingPlanService;
 import racehorse.backend.training.TrainingSessionRepository;
 import racehorse.backend.training.TrainingSessionRequest;
+import racehorse.backend.training.TrainingSessionScheduleRequest;
 import racehorse.backend.training.TrainingSessionResponse;
 import racehorse.backend.training.TrainingSessionService;
 
@@ -128,6 +136,30 @@ class BusinessRulesTest {
 
         ApiException ex = expect(ApiException.class, 409, () -> service.changeStatus(1, "ACTIVE", TRAINER, "ip"));
         assertTrue(ex.getMessage().contains("ended"), ex.getMessage());
+    }
+
+    @Test
+    void onlyADraftPlanCanBeDeleted() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        when(plans.findById(1)).thenReturn(Optional.of(plan("ACTIVE", TODAY.plusDays(10))));
+        TrainingPlanService service = new TrainingPlanService(plans, mock(HorseRepository.class),
+                mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        expect(ApiException.class, 409, () -> service.deleteDraft(1, TRAINER, "ip"));
+        verify(plans, never()).deleteDraft(anyInt());
+    }
+
+    @Test
+    void pausedPlanPastItsEndDateIsCompletedOvernight() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        when(plans.findSummaries(null, "PAUSED", null)).thenReturn(List.of(new TrainingPlanResponse.Summary(
+                1, 100, "Horse 100", "Plan", TODAY.minusDays(40), TODAY.minusDays(1), "PAUSED", 2)));
+        when(plans.updateStatus(1, "PAUSED", "COMPLETED")).thenReturn(1);
+        TrainingPlanService service = new TrainingPlanService(plans, mock(HorseRepository.class),
+                mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        assertEquals(1, service.completeExpiredPlans());
+        verify(plans).cancelRemainingSessions(1);
     }
 
     // ---------------------------------------------------------------- Flow 2: buổi tập
@@ -219,10 +251,130 @@ class BusinessRulesTest {
         assertTrue(ex.getMessage().contains("light work"), ex.getMessage());
     }
 
+    @Test
+    void sessionCannotBeScheduledEarlierToday() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans);
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(
+                new TrainingSessionRequest(10, 5, LocalDateTime.now().minusMinutes(1), null), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("sessionDate"), ex.getFieldErrors().toString());
+        verify(repo, never()).insert(anyInt(), anyInt(), anyInt(), any(), any());
+    }
+
+    @Test
+    void groomCanBeChangedOnASessionWhoseTimeHasPassedToday() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans);
+        LocalDateTime earlyToday = TODAY.atStartOfDay();
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, earlyToday, "SCHEDULED", 1600)));
+        when(repo.isActiveGroom(6)).thenReturn(true);
+        when(repo.updateSchedule(1, 6, earlyToday)).thenReturn(1);
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        service.reschedule(1, new TrainingSessionScheduleRequest(6, earlyToday), TRAINER, "ip");
+        verify(repo).updateSchedule(1, 6, earlyToday);
+    }
+
+    @Test
+    void groomFinishesTheirOwnRunningSession() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, LocalDateTime.now(), "RUNNING", 1600)));
+        when(repo.markFinished(1)).thenReturn(1);
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
+                mock(HorseRepository.class), mock(HorseVitalsRepository.class));
+
+        service.finish(1, GROOM, "ip");
+        verify(repo).markFinished(1);
+    }
+
+    @Test
+    void groomCannotFinishAnotherGroomsSession() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 6, LocalDateTime.now(), "RUNNING", 1600)));
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
+                mock(HorseRepository.class), mock(HorseVitalsRepository.class));
+
+        expect(ApiException.class, 403, () -> service.finish(1, GROOM, "ip"));
+        verify(repo, never()).markFinished(anyInt());
+    }
+
+    @Test
+    void onlyARunningSessionCanBeFinished() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, LocalDateTime.now(), "SCHEDULED", 1600)));
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
+                mock(HorseRepository.class), mock(HorseVitalsRepository.class));
+
+        expect(ApiException.class, 409, () -> service.finish(1, GROOM, "ip"));
+        verify(repo, never()).markFinished(anyInt());
+    }
+
+    // ---------------------------------------------------------------- Flow 2: đánh giá buổi tập
+
+    private static SessionResponse evaluated(String status) {
+        return new SessionResponse(1, 10, "Base", 180, 100, "Horse 100", 5, "Groom 5", LocalDateTime.now(), 1600,
+                null, null, null, null, null, null, null, null, null, status, false, null);
+    }
+
+    private static EvaluateSessionRequest evaluation(String status) {
+        return new EvaluateSessionRequest(1500, 30, 150, 190, 110, null, "GOOD", null, status);
+    }
+
+    @Test
+    void stoppedSessionCannotBeEvaluatedAsCompleted() {
+        SessionRepository repo = mock(SessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(evaluated("STOPPED_EARLY")));
+        SessionService service = new SessionService(repo, mock(UserRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400,
+                () -> service.evaluate(TRAINER, 1, evaluation("COMPLETED"), "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("status"), ex.getFieldErrors().toString());
+        verify(repo, never()).saveEvaluation(anyInt(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void evaluationDoesNotOverwriteASessionStoppedMeanwhile() {
+        SessionRepository repo = mock(SessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(evaluated("RUNNING")));
+        // Groom vừa bấm Stop: câu UPDATE có điều kiện RUNNING không trúng dòng nào.
+        when(repo.saveEvaluation(eq(1), any(), eq("RUNNING"), eq("COMPLETED"), eq(2))).thenReturn(0);
+        SessionService service = new SessionService(repo, mock(UserRepository.class));
+
+        expect(ApiException.class, 409, () -> service.evaluate(TRAINER, 1, evaluation(null), "ip"));
+    }
+
     // ---------------------------------------------------------------- Flow 2: cảnh báo
 
     private static AlertService alertService(AlertRepository alerts, NotificationService notifications) {
-        return new AlertService(alerts, mock(UserRepository.class), notifications, new BigDecimal("18.0"));
+        return alertService(alerts, notifications, mock(IncidentService.class));
+    }
+
+    private static AlertService alertService(AlertRepository alerts, NotificationService notifications,
+                                             IncidentService incidents) {
+        return new AlertService(alerts, mock(UserRepository.class), notifications, incidents,
+                new BigDecimal("18.0"));
+    }
+
+    @Test
+    void stoppingASessionFromAnAlertOpensAnIncidentForTheVet() {
+        AlertRepository alerts = mock(AlertRepository.class);
+        IncidentService incidents = mock(IncidentService.class);
+        AlertResponse alert = new AlertResponse(9, 1, 100, "Horse 100", "HEART_RATE", new BigDecimal("180"),
+                new BigDecimal("205"), "HIGH", Instant.now(), null, null, null, false);
+        when(alerts.findById(9)).thenReturn(Optional.of(alert));
+        when(alerts.resolve(9, "STOP_SESSION", 2)).thenReturn(true);
+
+        alertService(alerts, mock(NotificationService.class), incidents)
+                .resolve(TRAINER, 9, new ResolveAlertRequest("STOP_SESSION"), "ip");
+
+        // Mức HIGH của cảnh báo thành mức khẩn của báo cáo; IncidentGuard chặn ngựa tới khi bác sĩ khám.
+        verify(incidents).stopFromAlert(eq(TRAINER), eq(1), any(), eq("HIGH"), eq("ip"));
     }
 
     @Test

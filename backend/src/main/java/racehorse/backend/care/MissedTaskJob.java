@@ -51,11 +51,15 @@ public class MissedTaskJob {
         } catch (RuntimeException e) {
             log.error("Missed task job failed", e);
         }
-        /* Cùng một lần chạy đêm: kết thúc giáo án đã qua ngày kết thúc và huỷ
-           buổi tập đã lỡ ngày. Tách try để lỗi phần này không chặn phần kia. */
+        /* Cùng một lần chạy đêm: kết thúc giáo án đã qua ngày kết thúc, huỷ
+           buổi tập đã lỡ ngày và đóng buổi bị bỏ quên ở RUNNING. Tách try để
+           lỗi phần này không chặn phần kia. */
         try {
-            log.info("Expired training plans completed: {}, overdue sessions cancelled: {}",
-                    plans.completeExpiredPlans(), sessions.cancelOverdue(LocalDate.now()));
+            LocalDate today = LocalDate.now();
+            log.info("Expired training plans completed: {}, overdue sessions cancelled: {}, "
+                            + "stale running sessions closed: {}",
+                    plans.completeExpiredPlans(), sessions.cancelOverdue(today),
+                    sessions.closeStaleRunning(today));
         } catch (RuntimeException e) {
             log.error("Training clean-up failed", e);
         }

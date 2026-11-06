@@ -488,7 +488,10 @@ export default function SessionEvaluationPage() {
                       <label>
                         Final session status
                         <select name="status" value={form.status} onChange={updateField} required>
-                          <option value="COMPLETED">Completed</option>
+                          {/* Buổi đã dừng sớm thì không đổi lại thành Completed (backend cũng chặn). */}
+                          <option value="COMPLETED" disabled={selectedSession.status === "STOPPED_EARLY"}>
+                            Completed
+                          </option>
                           <option value="STOPPED_EARLY">Stopped early</option>
                         </select>
                       </label>

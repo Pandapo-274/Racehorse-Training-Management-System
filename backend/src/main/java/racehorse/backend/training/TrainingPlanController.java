@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,6 +54,16 @@ public class TrainingPlanController {
     public TrainingPlanResponse get(@PathVariable int id,
                                     @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.get(id, user);
+    }
+
+    /** Chỉ giáo án DRAFT; giáo án đã chạy thì kết thúc bằng COMPLETED, không xoá. */
+    @DeleteMapping("/{id}")
+    @RequireRole({"HEAD_TRAINER"})
+    public ResponseEntity<Void> delete(@PathVariable int id,
+                                       @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                       HttpServletRequest http) {
+        service.deleteDraft(id, user, http.getRemoteAddr());
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/status")

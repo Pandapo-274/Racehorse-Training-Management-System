@@ -73,6 +73,18 @@ public class TrainingSessionController {
     }
 
     /**
+     * PUT /api/training-sessions/{id}/finish
+     * Kết thúc bình thường một buổi đang chạy (RUNNING -> COMPLETED).
+     */
+    @PutMapping("/{id}/finish")
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
+    public TrainingSessionResponse finish(@PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.finish(id, user, http.getRemoteAddr());
+    }
+
+    /**
      * PUT /api/training-sessions/{id}/schedule
      * Head Trainer cập nhật Groom được phân công và thời gian tập.
      */

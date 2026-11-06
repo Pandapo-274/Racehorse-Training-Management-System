@@ -7,6 +7,7 @@ import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
   changeTrainingPlanStatus,
+  deleteTrainingPlan,
   createTrainingPlan,
   listTrainingPlans,
 } from "./trainingPlanApi";
@@ -329,6 +330,20 @@ export default function TrainingPlanPage() {
     } catch (err) {
       if (!handleAuthError(err, navigate))
         setError(err.message || "Could not change plan status.");
+    }
+  };
+
+  const deletePlan = async (plan) => {
+    if (!window.confirm(`Delete the draft plan "${plan.planName}"? This cannot be undone.`)) return;
+    setError("");
+    setNotice("");
+    try {
+      await deleteTrainingPlan(plan.planId);
+      setPlans((current) => current.filter((p) => p.planId !== plan.planId));
+      setNotice(`Draft plan "${plan.planName}" deleted.`);
+    } catch (err) {
+      if (!handleAuthError(err, navigate))
+        setError(err.message || "Could not delete this plan.");
     }
   };
 
@@ -769,12 +784,20 @@ export default function TrainingPlanPage() {
                           </small>
                           <div className="saved-plan-actions">
                             {plan.status === "DRAFT" && (
-                              <button
-                                type="button"
-                                onClick={() => updateStatus(plan, "ACTIVE")}
-                              >
-                                Activate
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => updateStatus(plan, "ACTIVE")}
+                                >
+                                  Activate
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deletePlan(plan)}
+                                >
+                                  Delete
+                                </button>
+                              </>
                             )}
                             {plan.status === "ACTIVE" && (
                               <>
