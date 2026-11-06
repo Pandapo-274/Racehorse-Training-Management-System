@@ -31,6 +31,7 @@ import racehorse.backend.auth.RequireRole;
  *  PUT  /api/feeding/horse/{horseId}     thay khẩu phần (Head Trainer, Vet duyệt)
  *  GET  /api/daily-tasks?date=&horseId=  việc trong ngày (Groom chỉ thấy việc của mình)
  *  POST /api/daily-tasks                 giao việc (Head Trainer, Club Manager)
+ *  POST /api/daily-tasks/bulk            giao hàng loạt: nhiều ngựa, nhiều ngày
  *  PUT  /api/daily-tasks/{id}/complete   đánh dấu xong
  *  PUT  /api/daily-tasks/{id}/undo       bỏ đánh dấu (trong ngày)
  *  DELETE /api/daily-tasks/{id}          xoá việc chưa làm
@@ -79,6 +80,17 @@ public class CareController {
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.assign(request, user, http.getRemoteAddr()));
+    }
+
+    /** Giao hàng loạt: nhiều ngựa, nhiều ngày (tối đa 14), một Groom. */
+    @PostMapping("/daily-tasks/bulk")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
+    public ResponseEntity<CareModels.BulkAssignResult> assignBulk(
+            @Valid @RequestBody CareModels.BulkAssignRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.assignBulk(request, user, http.getRemoteAddr()));
     }
 
     @PutMapping("/daily-tasks/{id}/complete")

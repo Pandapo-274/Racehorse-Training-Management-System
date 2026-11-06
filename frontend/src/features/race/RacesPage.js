@@ -271,7 +271,8 @@ function EntryForm({ races, onRegistered }) {
 /** Action buttons in row: open result editor or scratch editor. */
 function RowActions({ entry, isTrainer, isEditing, onOpenEdit, onCancelEdit }) {
   const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED") && entry.approvalStatus === "APPROVED";
-  const canScratch = isTrainer && entry.state === "UPCOMING" && entry.approvalStatus === "APPROVED";
+  // A proposal still waiting for the owner can be withdrawn too (backend allows it).
+  const canScratch = isTrainer && (entry.state === "UPCOMING" || entry.state === "PENDING_APPROVAL");
   if (!raceDone && !canScratch) return null;
 
   if (isEditing) {
@@ -291,7 +292,7 @@ function RowActions({ entry, isTrainer, isEditing, onOpenEdit, onCancelEdit }) {
       )}
       {canScratch && (
         <button type="button" className="race-link race-link--danger" onClick={() => onOpenEdit("scratch")}>
-          Scratch
+          {entry.state === "PENDING_APPROVAL" ? "Withdraw" : "Scratch"}
         </button>
       )}
     </div>
@@ -613,7 +614,7 @@ export default function RacesPage() {
               title={`Entries ${year}`}
               actions={
                 <div className="hz-segment" role="group" aria-label="Filter entries">
-                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["PENDING_APPROVAL", "Pending Owner"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"]].map(([k, l]) => (
+                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["PENDING_APPROVAL", "Pending Owner"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"], ["REJECTED", "Declined"]].map(([k, l]) => (
                     <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}>
                       {l} <b>{counts[k] || 0}</b>
                     </button>

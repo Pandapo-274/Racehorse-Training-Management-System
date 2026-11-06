@@ -52,7 +52,7 @@ export default function OwnerRacesPage() {
       setProcessingId(e.registrationId);
       setActionError("");
       await approveEntry(e.registrationId);
-      setSuccessMsg(`Approved ${e.horseName} to race in ${e.raceName}.`);
+      setSuccessMsg(`Approved ${e.horseName} to race in ${e.raceName}. Any entry fee now appears in the horse's costs.`);
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
@@ -124,7 +124,8 @@ export default function OwnerRacesPage() {
           </div>
 
           {pending.length > 0 && (
-            <Card title="Race entry proposals" hint="Proposals submitted by the Head Trainer awaiting your decision">
+            <Card title="Race entry proposals"
+              hint="Approving charges the race's entry fee to the horse's costs (see Costs & prizes). It is refunded if the horse is withdrawn by the entry deadline or the club cancels the race, but not after the deadline.">
               <div className="hz-table-wrap">
                 <table className="hz-table race-table">
                   <thead>

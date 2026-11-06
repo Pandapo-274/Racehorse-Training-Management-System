@@ -98,6 +98,31 @@ public final class CareModels {
     }
 
     /**
+     * Giao việc hàng loạt: nhiều ngựa, từ ngày fromDate tới toDate (tối đa 14 ngày),
+     * cho một Groom. Dùng cho việc lặp lại như dọn chuồng mỗi sáng cả dãy chuồng:
+     * giao từng con từng ngày thì 20 con x 7 ngày là 140 lần bấm.
+     */
+    public record BulkAssignRequest(
+            @NotEmpty(message = "Choose at least one horse")
+            @Size(max = 80, message = "At most 80 horses at once")
+            List<@NotNull Integer> horseIds,
+            @NotNull(message = "Groom is required") Integer assignedTo,
+            @NotNull(message = "Start date is required") LocalDate fromDate,
+            @NotNull(message = "End date is required") LocalDate toDate,
+            @NotEmpty(message = "Choose at least one task")
+            List<@Pattern(regexp = "FEEDING|CLEANING|BATHING|ICE_BATH",
+                    message = "Task must be FEEDING, CLEANING, BATHING or ICE_BATH") String> taskTypes,
+            @Size(max = 255, message = "Note must be at most 255 characters") String note) {
+    }
+
+    /**
+     * created / skipped: số việc vừa tạo / bỏ qua vì con ngựa đã có việc loại đó trong ngày.
+     * notes: ngựa bị bỏ qua (không ở chuồng) và cảnh báo quá tải - không chặn.
+     */
+    public record BulkAssignResult(int created, int skipped, List<String> notes) {
+    }
+
+    /**
      * created: việc vừa tạo; skipped: loại việc đã có sẵn trong ngày đó nên bỏ qua.
      * warnings: does not block - e.g. the groom already has many tasks that day.
      */
