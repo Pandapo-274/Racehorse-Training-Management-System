@@ -24,6 +24,8 @@
 .selected-horse-strip > div span { color: #8e96ad; font-size: 11px; }
 .training-status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 5px 9px; border-radius: 12px; background: #edf6e2; color: #568a27; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .training-status-pill.draft { background: #eaf0fb; color: #4b6195; }
+.training-status-pill.pending-approval { background: #fff0c9; color: #9c6d00; }
+.training-status-pill.approved { background: #e3f3f6; color: #2a7a8c; }
 .training-status-pill.active, .training-status-pill.eligible { background: #e7f5d8; color: #4f8f22; }
 .training-status-pill.paused, .training-status-pill.monitor { background: #fff0c9; color: #9c6d00; }
 .training-status-pill.completed { background: #f0e9f7; color: #7c5998; }
@@ -62,6 +64,7 @@
 .saved-plan-top strong { font-size: 12px; line-height: 1.5; }
 .saved-plan-row p { margin: 5px 0; color: #777f97; font-size: 10.5px; line-height: 1.5; }
 .saved-plan-row small { color: #a0a6bc; font-size: 10px; }
+.saved-plan-row p.saved-plan-owner-note { color: #c81e3a; font-weight: 600; }
 .saved-plan-actions { display: flex; gap: 6px; margin-top: 10px; }
 .saved-plan-actions button { padding: 6px 9px; border: 1px solid #f0cfe0; border-radius: 14px; background: #fff5fa; color: #d93b87; font: 700 10px var(--font-body); cursor: pointer; }
 .training-empty { margin: 0; padding: 12px 0; color: #9399ab; font-size: 12px; }

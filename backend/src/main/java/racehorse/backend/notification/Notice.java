@@ -22,4 +22,6 @@ public record Notice(String type, String title, String message,
     public static final String HORSE_WITHDRAWAL = "HORSE_WITHDRAWAL";
     /** Từ V27: một lần HLV gọi bác sĩ từ cảnh báo buổi tập, mở đúng ca gọi đó. */
     public static final String VET_CALL = "VET_CALL";
+    /** Từ V34: giáo án chờ chủ ngựa duyệt, hoặc chủ ngựa vừa duyệt / từ chối. */
+    public static final String TRAINING_PLAN = "TRAINING_PLAN";
 }

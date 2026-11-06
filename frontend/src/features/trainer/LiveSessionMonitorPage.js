@@ -5,7 +5,9 @@ import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError } from "../auth/authService";
-import { fetchAlerts, fetchRunningSessions, resolveAlert } from "./liveSessionApi";
+import {
+  dismissIncident, fetchAlerts, fetchPendingIncidents, fetchRunningSessions, finishSession, resolveAlert,
+} from "./liveSessionApi";
 import { toAlertMessage, toSeverity } from "./dashboardApi";
 import {
   createVetCall,
@@ -296,6 +298,9 @@ export default function LiveSessionMonitorPage() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [busyAlertId, setBusyAlertId] = useState(null);
+  const [finishingId, setFinishingId] = useState(null);
+  const [incidents, setIncidents] = useState([]);
+  const [dismissingId, setDismissingId] = useState(null);
   const [vetCalls, setVetCalls] = useState([]);
   const [callingFor, setCallingFor] = useState(null);
   const latestAlertId = useRef(0);
@@ -312,9 +317,11 @@ export default function LiveSessionMonitorPage() {
         fetchAlerts({ openOnly: !includeHistory, limit: includeHistory ? 100 : 50, signal }),
         fetchRunningSessions(signal),
         listVetCalls({ limit: 10, signal }),
+        fetchPendingIncidents(signal),
       ]);
       const nextAlerts = results[0] || [];
       setVetCalls(results[2] || []);
+      setIncidents(results[3] || []);
       setAlerts(nextAlerts);
       latestAlertId.current = nextAlerts.reduce((max, item) => Math.max(max, item.alertId || 0), 0);
       setSessions(results[1] || []);
@@ -339,10 +346,11 @@ export default function LiveSessionMonitorPage() {
     const poll = async () => {
       setRefreshing(true);
       try {
-        const [newAlerts, runningSessions, calls] = await Promise.all([
+        const [newAlerts, runningSessions, calls, pendingIncidents] = await Promise.all([
           fetchAlerts({ afterId: latestAlertId.current, openOnly: true, limit: 100 }),
           fetchRunningSessions(),
           listVetCalls({ limit: 10 }),
+          fetchPendingIncidents(),
         ]);
         if (cancelled) return;
         if (newAlerts?.length) {
@@ -358,6 +366,7 @@ export default function LiveSessionMonitorPage() {
         }
         setSessions(runningSessions || []);
         setVetCalls(calls || []);
+        setIncidents(pendingIncidents || []);
         setError("");
       } catch (err) {
         if (!cancelled && err?.name !== "AbortError") {
@@ -383,6 +392,44 @@ export default function LiveSessionMonitorPage() {
       if (!handleAuthError(err, navigate)) setActionError(err.message || "Unable to resolve this alert.");
     } finally {
       setBusyAlertId(null);
+    }
+  };
+
+  const handleFinish = async (session) => {
+    if (!window.confirm(`Finish the session with ${session.horseName || `horse #${session.horseId}`}?`)) return;
+    setFinishingId(session.sessionId);
+    setActionError("");
+    try {
+      await finishSession(session.sessionId);
+      setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId));
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setActionError(err.message || "Unable to finish this session.");
+    } finally {
+      setFinishingId(null);
+    }
+  };
+
+  /* Báo động giả (Groom bấm Stop khi ngựa chỉ vấp nhẹ): Head Trainer ở sân thẩm
+     định và gỡ chặn, bắt buộc ghi lý do. Bác sĩ đã nhận ca thì không còn nút này. */
+  const handleDismiss = async (report) => {
+    const reason = window.prompt(
+      `Why is the report for ${report.horseName} (${report.symptoms}) a false alarm?`
+        + " The vet, the owner and the groom will see this reason.",
+    );
+    if (reason == null) return;
+    if (!reason.trim()) {
+      setActionError("Give a reason to dismiss the report.");
+      return;
+    }
+    setDismissingId(report.reportId);
+    setActionError("");
+    try {
+      await dismissIncident(report.reportId, reason.trim());
+      setIncidents((current) => current.filter((r) => r.reportId !== report.reportId));
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setActionError(err.message || "Unable to dismiss this report.");
+    } finally {
+      setDismissingId(null);
     }
   };
 
@@ -480,6 +527,15 @@ export default function LiveSessionMonitorPage() {
                         <div><span>Alerts raised</span><strong>{session.alertCount ?? 0}</strong></div>
                       </div>
                       <small>Assigned Groom: {session.assignedToName || "Unassigned"}</small>
+                      <div className="live-alert-actions">
+                        <button
+                          type="button"
+                          disabled={finishingId === session.sessionId}
+                          onClick={() => handleFinish(session)}
+                        >
+                          {finishingId === session.sessionId ? "Finishing…" : "Finish session"}
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -540,6 +596,44 @@ export default function LiveSessionMonitorPage() {
             ) : (
               <div className="vet-call-list">
                 {vetCalls.map((call) => <VetCallCard key={call.callId} call={call} />)}
+              </div>
+            )}
+          </section>
+
+          <section className="live-panel" id="stopped-sessions">
+            <div className="live-panel-heading">
+              <div>
+                <span className="schedule-eyebrow">WAITING FOR A VET</span>
+                <h2>Stopped sessions</h2>
+              </div>
+              <span className="live-count">{incidents.filter((r) => r.sessionId != null).length}</span>
+            </div>
+            {incidents.filter((r) => r.sessionId != null).length === 0 ? (
+              <p className="live-empty">No stopped session is waiting for a veterinarian.</p>
+            ) : (
+              <div className="live-running-list">
+                {incidents.filter((r) => r.sessionId != null).map((r) => (
+                  <article className="live-running-card" key={r.reportId}>
+                    <div className="live-running-top">
+                      <strong>{r.horseName}</strong>
+                      <span>{r.urgency}</span>
+                    </div>
+                    <p>{r.symptoms} · Session #{r.sessionId}</p>
+                    <small>
+                      Reported by {r.reporterName} · {formatTime(r.reportedAt)}. The horse cannot train until a
+                      vet examines it, unless you dismiss this as a false alarm.
+                    </small>
+                    <div className="live-alert-actions">
+                      <button
+                        type="button"
+                        disabled={dismissingId === r.reportId}
+                        onClick={() => handleDismiss(r)}
+                      >
+                        {dismissingId === r.reportId ? "Dismissing…" : "False alarm"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </section>

@@ -95,13 +95,18 @@ public class SessionRepository {
                 .optional();
     }
 
-    public void saveEvaluation(int sessionId, EvaluateSessionRequest r, String finalStatus, int evaluatorId) {
-        jdbc.sql("""
+    /**
+     * @param expectedStatus trạng thái service vừa đọc; đổi rồi thì không ghi.
+     * @return số dòng đã ghi; 0 nghĩa là buổi vừa đổi trạng thái (vd. vừa bị Stop).
+     */
+    public int saveEvaluation(int sessionId, EvaluateSessionRequest r, String expectedStatus, String finalStatus,
+                              int evaluatorId) {
+        return jdbc.sql("""
                 UPDATE TRAINING_SESSION
                 SET actual_distance = :ad, duration_minutes = :dm, avg_heart_rate = :avg,
                     peak_heart_rate = :peak, recovery_heart_rate = :rec, peak_velocity = :vel,
                     evaluation = :ev, remarks = :rm, evaluated_by = :by, status = :st
-                WHERE session_id = :id
+                WHERE session_id = :id AND status = :expected
                 """)
                 .param("ad", r.actualDistance())
                 .param("dm", r.durationMinutes())
@@ -113,6 +118,7 @@ public class SessionRepository {
                 .param("rm", r.remarks() == null || r.remarks().isBlank() ? null : r.remarks().trim())
                 .param("by", evaluatorId)
                 .param("st", finalStatus)
+                .param("expected", expectedStatus)
                 .param("id", sessionId)
                 .update();
     }

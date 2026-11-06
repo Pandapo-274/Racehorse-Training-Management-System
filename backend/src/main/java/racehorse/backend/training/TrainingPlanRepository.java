@@ -22,7 +22,8 @@ public class TrainingPlanRepository {
 
     private static final String SELECT_PLAN = """
             SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.start_date, tp.end_date,
-                   tp.status, tp.created_by, u.full_name AS created_by_name, tp.created_at
+                   tp.status, tp.created_by, u.full_name AS created_by_name, tp.created_at,
+                   tp.owner_note, tp.owner_reviewed_at
             FROM TRAINING_PLAN tp
             JOIN HORSE h    ON h.horse_id = tp.horse_id
             JOIN APP_USER u ON u.user_id  = tp.created_by
@@ -34,7 +35,8 @@ public class TrainingPlanRepository {
                 rs.getString("plan_name"),
                 rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class),
                 rs.getString("status"), rs.getInt("created_by"), rs.getString("created_by_name"),
-                rs.getObject("created_at", LocalDateTime.class), List.of());
+                rs.getObject("created_at", LocalDateTime.class),
+                rs.getString("owner_note"), rs.getObject("owner_reviewed_at", LocalDateTime.class), List.of());
     }
 
     /** Trả giáo án kèm đầy đủ giai đoạn. */
@@ -49,7 +51,8 @@ public class TrainingPlanRepository {
     public List<TrainingPlanResponse.Phase> findPhases(int planId) {
         return jdbc.sql("""
                 SELECT phase_id, phase_no, phase_name, distance, workload, surface,
-                       sessions_per_week, heart_rate_ceiling, start_date, end_date
+                       sessions_per_week, heart_rate_ceiling, start_date, end_date,
+                       min_gap_minutes, target_velocity
                 FROM PLAN_PHASE WHERE plan_id = :id ORDER BY phase_no
                 """)
                 .param("id", planId)
@@ -60,7 +63,9 @@ public class TrainingPlanRepository {
                         rs.getObject("sessions_per_week", Integer.class),
                         rs.getObject("heart_rate_ceiling", Integer.class),
                         rs.getObject("start_date", LocalDate.class),
-                        rs.getObject("end_date", LocalDate.class)))
+                        rs.getObject("end_date", LocalDate.class),
+                        rs.getObject("min_gap_minutes", Integer.class),
+                        rs.getBigDecimal("target_velocity")))
                 .list();
     }
 
@@ -74,7 +79,7 @@ public class TrainingPlanRepository {
                                                             Integer ownerId) {
         StringBuilder sql = new StringBuilder("""
                 SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.start_date,
-                       tp.end_date, tp.status,
+                       tp.end_date, tp.status, tp.owner_note,
                        (SELECT COUNT(*) FROM PLAN_PHASE p WHERE p.plan_id = tp.plan_id) AS phase_count
                 FROM TRAINING_PLAN tp
                 JOIN HORSE h ON h.horse_id = tp.horse_id
@@ -95,7 +100,7 @@ public class TrainingPlanRepository {
                         rs.getString("plan_name"),
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class),
-                        rs.getString("status"), rs.getInt("phase_count")))
+                        rs.getString("status"), rs.getInt("phase_count"), rs.getString("owner_note")))
                 .list();
     }
 
@@ -117,9 +122,10 @@ public class TrainingPlanRepository {
     public void insertPhase(int planId, int phaseNo, TrainingPlanRequest.PhaseRequest p) {
         jdbc.sql("""
                 INSERT INTO PLAN_PHASE (plan_id, phase_no, phase_name, distance, workload, surface,
-                                        sessions_per_week, heart_rate_ceiling, start_date, end_date)
+                                        sessions_per_week, heart_rate_ceiling, start_date, end_date,
+                                        min_gap_minutes, target_velocity)
                 VALUES (:planId, :phaseNo, :phaseName, :distance, :workload, :surface,
-                        :spw, :ceiling, :startDate, :endDate)
+                        :spw, :ceiling, :startDate, :endDate, :gap, :targetVelocity)
                 """)
                 .param("planId", planId)
                 .param("phaseNo", phaseNo)
@@ -131,6 +137,8 @@ public class TrainingPlanRepository {
                 .param("ceiling", p.heartRateCeiling())
                 .param("startDate", p.startDate())
                 .param("endDate", p.endDate())
+                .param("gap", p.minGapMinutes())
+                .param("targetVelocity", p.targetVelocity())
                 .update();
     }
 
@@ -197,6 +205,47 @@ public class TrainingPlanRepository {
                 WHERE horse_id = :horseId AND status <> 'COMPLETED'
                 """)
                 .param("horseId", horseId)
+                .update();
+    }
+
+    /**
+     * Xoá giáo án cùng các giai đoạn của nó, chỉ khi giáo án chưa từng chạy
+     * (DRAFT, PENDING_APPROVAL, APPROVED - chưa có buổi tập nào).
+     * Giai đoạn phải xoá trước (FK_PHASE_plan). Cả hai câu cùng điều kiện, và
+     * service chạy trong một giao dịch: 0 dòng ở câu sau thì service ném lỗi
+     * và việc xoá giai đoạn cũng được huỷ.
+     *
+     * @return số giáo án đã xoá (0 hoặc 1).
+     */
+    public int deleteDraft(int planId) {
+        jdbc.sql("""
+                DELETE ph FROM PLAN_PHASE ph
+                JOIN TRAINING_PLAN tp ON tp.plan_id = ph.plan_id
+                WHERE ph.plan_id = :id AND tp.status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED')
+                """)
+                .param("id", planId)
+                .update();
+        return jdbc.sql("""
+                DELETE FROM TRAINING_PLAN
+                WHERE plan_id = :id AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED')
+                """)
+                .param("id", planId)
+                .update();
+    }
+
+    /**
+     * Ghi quyết định của chủ ngựa: PENDING_APPROVAL -> APPROVED hoặc về DRAFT.
+     * Có điều kiện PENDING_APPROVAL: Head Trainer vừa xoá thì 0 dòng.
+     */
+    public int recordOwnerReview(int planId, String newStatus, String note) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN
+                SET status = :status, owner_note = :note, owner_reviewed_at = SYSUTCDATETIME()
+                WHERE plan_id = :id AND status = 'PENDING_APPROVAL'
+                """)
+                .param("status", newStatus)
+                .param("note", note)
+                .param("id", planId)
                 .update();
     }
 

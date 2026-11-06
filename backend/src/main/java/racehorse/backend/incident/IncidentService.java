@@ -18,7 +18,8 @@ import racehorse.backend.race.RaceRiskNotifier;
 @Service
 public class IncidentService {
 
-    private static final Set<String> STATUS_FILTERS = Set.of("OPEN", "PENDING", "RECEIVED", "EXAMINED", "ALL");
+    private static final Set<String> STATUS_FILTERS =
+            Set.of("OPEN", "PENDING", "RECEIVED", "EXAMINED", "DISMISSED", "ALL");
 
     private final IncidentRepository incidents;
     private final UserRepository users;
@@ -60,10 +61,47 @@ public class IncidentService {
         if (incidents.markStopped(sessionId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This session has just been stopped or finished by someone else");
         }
-        int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, req.urgency());
+        int reportId = openStopReport(user, s, symptoms, description, req.urgency(), ip);
+
+        IncidentReportResponse report = incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "The report was created but could not be read back"));
+        return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
+    }
+
+    /**
+     * Head Trainer chọn STOP_SESSION khi xử lý một cảnh báo vượt ngưỡng (AlertService.resolve).
+     *
+     * Đi đúng đường của Groom bấm Stop: mở báo cáo sự cố cho bác sĩ, và tới khi khám xong
+     * IncidentGuard chặn con ngựa tập tiếp. Trước đây đường này chỉ đổi STOPPED_EARLY, nên một
+     * con ngựa vừa bị dừng vì nhịp tim vượt ngưỡng lại được xếp và Start buổi khác ngay.
+     *
+     * Không ném lỗi khi buổi không còn RUNNING (Groom vừa Finish hoặc vừa Stop): cảnh báo vẫn
+     * được ghi là đã xử lý, chỉ là không còn gì để dừng.
+     *
+     * @return id báo cáo sự cố, hoặc null nếu buổi đã không còn chạy.
+     */
+    @Transactional
+    public Integer stopFromAlert(AuthenticatedUser trainer, int sessionId, String symptoms, String urgency,
+                                 String ip) {
+        IncidentRepository.SessionForStop s = incidents.findSessionForStop(sessionId).orElse(null);
+        if (s == null || !"RUNNING".equals(s.status()) || incidents.markStopped(sessionId) == 0) {
+            return null;
+        }
+        return openStopReport(trainer, s, Text.clip(symptoms, 255), null, urgency, ip);
+    }
+
+    /**
+     * Phần chung của hai đường dừng buổi: buổi đã được markStopped, giờ mở báo cáo và báo người liên quan.
+     * @return id báo cáo vừa mở.
+     */
+    private int openStopReport(AuthenticatedUser user, IncidentRepository.SessionForStop s, String symptoms,
+                               String description, String urgency, String ip) {
+        int sessionId = s.sessionId();
+        int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, urgency);
         users.writeAudit(user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
 
-        String shortWhat = s.horseName() + ": " + symptoms + " (" + req.urgency() + ").";
+        String shortWhat = s.horseName() + ": " + symptoms + " (" + urgency + ").";
         // Bác sĩ thú y: cần đi khám. Người ra tay không cần chuông cho chính mình (notifyRole đã loại trừ).
         notifications.notifyRole("VETERINARIAN", user, new Notice(
                 "INCIDENT_REPORTED", "Horse needs examination", Text.clip(shortWhat, 500),
@@ -77,29 +115,27 @@ public class IncidentService {
         if (s.assignedTo() != user.userId()) {
             notifications.notifyUser(s.assignedTo(), new Notice(
                     "TRAINING_SESSION_STOPPED", "Training session stopped",
-                    Text.clip("Your session with " + s.horseName() + " was stopped: " + symptoms + ".", 500),
+                    Text.clip("Your session with " + s.horseName() + " was stopped: " + symptoms
+                            + ". Stop work with this horse now.", 500),
                     Notice.TRAINING_SESSION, sessionId));
         }
 
         // The open report now blocks racing too (RaceService.problemOf).
         raceRisk.warn(s.horseId(), s.horseName(), s.ownerId(), user,
                 "was stopped during training and is waiting for a veterinarian");
-
-        IncidentReportResponse report = incidents.findById(reportId)
-                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "The report was created but could not be read back"));
-        return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
+        return reportId;
     }
 
     /**
-     * Hàng chờ khám. status: OPEN (mặc định = PENDING + RECEIVED), PENDING, RECEIVED, EXAMINED hoặc ALL.
+     * Hàng chờ khám. status: OPEN (mặc định = PENDING + RECEIVED), PENDING, RECEIVED, EXAMINED,
+     * DISMISSED hoặc ALL.
      * Groom chỉ thấy báo cáo do mình lập, chủ ngựa chỉ thấy ngựa của mình, còn lại thấy tất.
      */
     public List<IncidentReportResponse> list(String status, Integer horseId, int limit, AuthenticatedUser user) {
         String f = (status == null || status.isBlank()) ? "OPEN" : status.trim().toUpperCase(Locale.ROOT);
         if (!STATUS_FILTERS.contains(f)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid status filter",
-                    Map.of("status", "Must be one of OPEN, PENDING, RECEIVED, EXAMINED, ALL"));
+                    Map.of("status", "Must be one of OPEN, PENDING, RECEIVED, EXAMINED, DISMISSED, ALL"));
         }
         List<String> statuses = switch (f) {
             case "OPEN" -> List.of("PENDING", "RECEIVED");
@@ -108,7 +144,7 @@ public class IncidentService {
         };
         Integer reporterId = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        boolean urgentFirst = !"EXAMINED".equals(f) && !"ALL".equals(f);
+        boolean urgentFirst = !"EXAMINED".equals(f) && !"DISMISSED".equals(f) && !"ALL".equals(f);
         return incidents.search(statuses, horseId, reporterId, ownerId, urgentFirst,
                 Math.max(1, Math.min(limit, 200)));
     }
@@ -123,6 +159,49 @@ public class IncidentService {
             throw new ApiException(HttpStatus.FORBIDDEN, "This report belongs to another owner's horse");
         }
         return r;
+    }
+
+    /**
+     * Head Trainer huỷ báo động giả: PENDING -> DISMISSED, ngựa hết bị IncidentGuard chặn.
+     *
+     * Chỉ với báo cáo sinh ra từ một lần dừng buổi tập, và khi bác sĩ CHƯA nhận ca: Groom
+     * mới vào nghề bấm Stop vì ngựa vấp sỏi thì Head Trainer - người đứng ở sân - thẩm định
+     * được và gỡ chặn ngay, không phải đóng băng lịch tập chờ bác sĩ. Bác sĩ đã nhận ca thì
+     * quyết định thuộc về bác sĩ. Bắt buộc ghi lý do; báo cáo vẫn nằm trong lịch sử, và
+     * bác sĩ, chủ ngựa, người báo đều được báo.
+     */
+    @Transactional
+    public IncidentReportResponse dismiss(AuthenticatedUser trainer, int reportId, String reason, String ip) {
+        IncidentReportResponse r = incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Incident report not found"));
+        if (r.sessionId() == null) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a report from a stopped training session can be dismissed by the head trainer");
+        }
+        if (!"PENDING".equals(r.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "RECEIVED".equals(r.status())
+                    ? "A veterinarian has already taken this case; only the vet can close it"
+                    : "This report is already closed (" + r.status() + ")");
+        }
+        String why = reason.trim();
+        if (incidents.markDismissed(reportId, trainer.userId(), why) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "A veterinarian has just taken this case");
+        }
+        users.writeAudit(trainer.userId(), "INCIDENT_DISMISS", "INCIDENT_REPORT", reportId, "SUCCESS", ip,
+                Text.clip(why, 200));
+
+        Notice notice = new Notice("INCIDENT_DISMISSED", "Incident dismissed as a false alarm",
+                Text.clip(r.horseName() + ": the head trainer dismissed the report (" + r.symptoms() + "). Reason: "
+                        + why, 500),
+                Notice.HORSE, r.horseId());
+        notifications.notifyRole("VETERINARIAN", trainer, notice);
+        notifications.notifyHorseWatchers(r.ownerId(), trainer, notice);
+        if (r.reporterId() != trainer.userId()) {
+            notifications.notifyUser(r.reporterId(), notice);
+        }
+        return incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "The report was updated but could not be read back"));
     }
 
     /** Bác sĩ nhận ca: PENDING -> RECEIVED. Chưa phải đã khám: báo cáo chỉ đóng khi có bản khám kèm reportId. */

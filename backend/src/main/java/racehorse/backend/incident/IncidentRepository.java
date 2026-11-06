@@ -31,12 +31,21 @@ public class IncidentRepository {
             SELECT r.report_id, r.horse_id, h.horse_name, h.stall_no, h.status AS horse_status, h.owner_id,
                    r.session_id, r.reporter_id, u.full_name AS reporter_name,
                    r.symptoms, r.description, r.photo_url, r.urgency, r.reported_at, r.status,
-                   r.received_by, rv.full_name AS receiver_name, r.received_at
+                   r.received_by, rv.full_name AS receiver_name, r.received_at,
+                   ds.full_name AS dismisser_name, r.dismiss_reason
             FROM INCIDENT_REPORT r
             JOIN HORSE h     ON h.horse_id = r.horse_id
             JOIN APP_USER u  ON u.user_id  = r.reporter_id
             LEFT JOIN APP_USER rv ON rv.user_id = r.received_by
+            LEFT JOIN APP_USER ds ON ds.user_id = r.dismissed_by
             """;
+
+    /**
+     * Báo cáo còn mở = còn chặn tập. Viết theo kiểu liệt kê trạng thái mở thay
+     * cho "status <> 'EXAMINED'": từ V34 có thêm DISMISSED, và một báo cáo bị
+     * huỷ vì báo động giả không được chặn ngựa nữa.
+     */
+    static final String OPEN_STATUSES = "('PENDING', 'RECEIVED')";
 
     private final JdbcClient jdbc;
 
@@ -58,7 +67,8 @@ public class IncidentRepository {
                 reported == null ? null : reported.toInstant(ZoneOffset.UTC),
                 rs.getString("status"),
                 rs.getObject("received_by", Integer.class), rs.getString("receiver_name"),
-                received == null ? null : received.toInstant(ZoneOffset.UTC));
+                received == null ? null : received.toInstant(ZoneOffset.UTC),
+                rs.getString("dismisser_name"), rs.getString("dismiss_reason"));
     }
 
     public Optional<SessionForStop> findSessionForStop(int sessionId) {
@@ -149,7 +159,7 @@ public class IncidentRepository {
             /* Hàng chờ (PENDING / RECEIVED) bỏ ngựa đã rút: không ai khám nữa, để
                lại thì báo cáo nằm mãi trong hàng chờ của bác sĩ. Xem lịch sử
                (EXAMINED, ALL) vẫn thấy đủ. */
-            if (!statuses.contains("EXAMINED")) {
+            if (!statuses.contains("EXAMINED") && !statuses.contains("DISMISSED")) {
                 sql.append(" AND h.activity_status = 'ACTIVE'");
             }
         }
@@ -177,7 +187,7 @@ public class IncidentRepository {
     public Optional<OpenReport> findOpenReport(int horseId) {
         return jdbc.sql("""
                 SELECT TOP 1 report_id, urgency, status FROM INCIDENT_REPORT
-                WHERE horse_id = :h AND status <> 'EXAMINED'
+                WHERE horse_id = :h AND status IN ('PENDING', 'RECEIVED')
                 ORDER BY CASE urgency WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, report_id
                 """)
                 .param("h", horseId)
@@ -192,7 +202,7 @@ public class IncidentRepository {
      * findOpenReport: còn sót báo cáo nào thì IncidentGuard vẫn chặn tập.
      */
     public List<IncidentReportResponse> findOpenByHorse(int horseId) {
-        return jdbc.sql(SELECT_REPORT + " WHERE r.horse_id = :h AND r.status <> 'EXAMINED'"
+        return jdbc.sql(SELECT_REPORT + " WHERE r.horse_id = :h AND r.status IN " + OPEN_STATUSES
                         + " ORDER BY r.reported_at, r.report_id")
                 .param("h", horseId)
                 .query(IncidentRepository::map)
@@ -204,6 +214,24 @@ public class IncidentRepository {
                 .param("h", horseId)
                 .query((rs, n) -> new RunningSession(rs.getInt("session_id"), rs.getInt("assigned_to")))
                 .list();
+    }
+
+    /**
+     * PENDING -> DISMISSED: Head Trainer huỷ báo động giả của một lần dừng buổi tập.
+     * Chỉ khi bác sĩ chưa nhận ca (PENDING) và báo cáo sinh ra từ buổi tập (session_id):
+     * bác sĩ đã nhận thì quyết định thuộc về bác sĩ. 0 dòng = vừa có bác sĩ nhận.
+     */
+    public int markDismissed(int reportId, int trainerId, String reason) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'DISMISSED', dismissed_by = :by, dismissed_at = SYSUTCDATETIME(),
+                    dismiss_reason = :reason
+                WHERE report_id = :id AND status = 'PENDING' AND session_id IS NOT NULL
+                """)
+                .param("by", trainerId)
+                .param("reason", reason)
+                .param("id", reportId)
+                .update();
     }
 
     /** PENDING -> RECEIVED. Hai bác sĩ cùng bấm nhận thì chỉ một người thắng (người kia nhận 0 dòng). */

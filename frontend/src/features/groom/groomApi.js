@@ -26,6 +26,14 @@ export function sendVitals(sessionId, { heartRate, velocity }) {
 }
 
 /**
+ * PUT /api/training-sessions/{id}/finish: buổi tập kết thúc bình thường,
+ * RUNNING -> COMPLETED. Head Trainer chấm điểm sau ở Session review.
+ */
+export function finishSession(sessionId) {
+  return authFetch(`/api/training-sessions/${sessionId}/finish`, { method: "PUT" });
+}
+
+/**
  * PUT /api/training-sessions/{id}/stop: ngựa có dấu hiệu bất thường giữa buổi.
  * Buổi chuyển STOPPED_EARLY và backend mở báo cáo sự cố cho bác sĩ thú y; tới
  * khi bác sĩ khám xong, con ngựa không được bắt đầu buổi tập nào nữa.
