@@ -487,6 +487,20 @@
   padding: 22px 28px 26px;
 }
 
+/* Tiêu đề + nhóm nút lọc. Khối chữ mặc định có flex-basis 0 nên nhóm nút
+   chiếm hết chỗ, ép chữ thành mỗi dòng một từ và đè lên "Stable map".
+   Cho khối chữ tối thiểu 220px: không đủ chỗ thì nhóm nút xuống dòng. */
+.stable-card .vet-card-title {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+.stable-card .vet-card-title > div:first-of-type {
+  flex: 1 1 220px;
+}
+.stable-card .vet-status-segment {
+  max-width: 100%;
+}
+
 .vet-status-segment {
   display: inline-flex;
   flex-wrap: wrap;
@@ -717,12 +731,14 @@
 
 .waiting-table {
   width: 100%;
+  /* Màn hẹp thì cuộn ngang trong .waiting-table-wrapper, không ép năm cột chồng lên nhau. */
+  min-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .waiting-table th {
-  padding: 0 0 14px;
+  padding: 0 12px 14px 0;
   border-bottom: 1px solid #efe0e8;
   text-align: left;
   color: var(--v-muted);
@@ -743,9 +759,14 @@
   border-bottom: 0;
 }
 
-.waiting-table th:nth-child(1), .waiting-table td:nth-child(1) { width: 32%; }
-.waiting-table th:nth-child(2), .waiting-table td:nth-child(2) { width: 48%; }
-.waiting-table th:nth-child(3), .waiting-table td:nth-child(3) { width: 20%; }
+/* Đủ cả năm cột. Trước đây chỉ có ba cột đầu (32 + 48 + 20 = 100%) từ hồi bảng
+   chưa có Priority và Case; với table-layout: fixed hai cột sau còn ~0px nên
+   chip mức khẩn cấp và nút Take case / Examine đè lên nhau. */
+.waiting-table th:nth-child(1), .waiting-table td:nth-child(1) { width: 18%; }
+.waiting-table th:nth-child(2), .waiting-table td:nth-child(2) { width: 30%; }
+.waiting-table th:nth-child(3), .waiting-table td:nth-child(3) { width: 18%; }
+.waiting-table th:nth-child(4), .waiting-table td:nth-child(4) { width: 12%; }
+.waiting-table th:nth-child(5), .waiting-table td:nth-child(5) { width: 22%; }
 
 .horse-name {
   font-family: var(--font-heading);
@@ -806,7 +827,6 @@
   .stable-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .health-content { flex-direction: column; }
   .waiting-header { align-items: flex-start; flex-direction: column; }
-  .waiting-table { min-width: 520px; }
 }
 
 /* Ô chuồng là button thật: bấm mở màn Examination của con ngựa. */

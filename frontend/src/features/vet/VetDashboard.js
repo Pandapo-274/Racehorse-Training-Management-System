@@ -202,22 +202,26 @@ function WaitingList({ items, total, onExamine, onReceive, busyId }) {
                     <td>
                       <span className={`waiting-status ${urgency.cls}`}>{urgency.label}</span>
                     </td>
-                    <td className="waiting-actions">
-                      {r.status === "PENDING" ? (
-                        <button
-                          type="button"
-                          className="waiting-action"
-                          disabled={busyId === r.reportId}
-                          onClick={() => onReceive(r)}
-                        >
-                          Take case
+                    {/* flex nằm ở div bên trong: đặt display: flex lên chính <td> làm nó
+                        mất tính chất ô bảng và lệch khỏi cột. */}
+                    <td>
+                      <div className="waiting-actions">
+                        {r.status === "PENDING" ? (
+                          <button
+                            type="button"
+                            className="waiting-action"
+                            disabled={busyId === r.reportId}
+                            onClick={() => onReceive(r)}
+                          >
+                            Take case
+                          </button>
+                        ) : (
+                          <span className="waiting-sub">Taken by {r.receivedByName}</span>
+                        )}
+                        <button type="button" className="waiting-action waiting-action--main" onClick={() => onExamine(r)}>
+                          Examine
                         </button>
-                      ) : (
-                        <span className="waiting-sub">Taken by {r.receivedByName}</span>
-                      )}
-                      <button type="button" className="waiting-action waiting-action--main" onClick={() => onExamine(r)}>
-                        Examine
-                      </button>
+                      </div>
                     </td>
                   </tr>
                 );
