@@ -10,6 +10,8 @@ import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import racehorse.backend.auth.AuthenticatedUser;
+
 /**
  * Truy vấn dữ liệu cho UC6.
  *
@@ -49,24 +51,34 @@ public class TrainerDashboardService {
     }
 
     public TrainerDashboard.Response load(int weeks) {
+        return load(weeks, null);
+    }
+
+    /** A Head Trainer only sees the horses the Club Manager assigned (HORSE.trainer_id). */
+    public TrainerDashboard.Response load(int weeks, AuthenticatedUser user) {
+        Integer t = (user != null && "HEAD_TRAINER".equals(user.role())) ? user.userId() : null;
         return new TrainerDashboard.Response(
-                loadSummary(),
-                loadFitnessTrend(weeks),
-                loadStatusBreakdown(),
-                loadHorses(),
-                loadOpenAlerts());
+                loadSummary(t),
+                loadFitnessTrend(weeks, t),
+                loadStatusBreakdown(t),
+                loadHorses(t),
+                loadOpenAlerts(t));
+    }
+
+    private static String scope(Integer t) {
+        return t == null ? "" : " AND h.trainer_id = " + t;
     }
 
     /* ------------------------------------------------------------------ */
 
-    private TrainerDashboard.Summary loadSummary() {
+    private TrainerDashboard.Summary loadSummary(Integer t) {
         String sql = """
                 SELECT
-                    (SELECT COUNT(*) FROM HORSE WHERE activity_status = 'ACTIVE')       AS total_horses,
-                    (SELECT COUNT(*) FROM TRAINING_PLAN WHERE status = 'ACTIVE')        AS active_plans,
-                    (SELECT COUNT(*) FROM TRAINING_LOCK WHERE status = 'ACTIVE')        AS locked_horses,
-                    (SELECT COUNT(*) FROM THRESHOLD_ALERT WHERE resolved_by IS NULL)    AS open_alerts
-                """;
+                    (SELECT COUNT(*) FROM HORSE h WHERE h.activity_status = 'ACTIVE' %1$s) AS total_horses,
+                    (SELECT COUNT(*) FROM TRAINING_PLAN x JOIN HORSE h ON h.horse_id = x.horse_id WHERE x.status = 'ACTIVE' %1$s) AS active_plans,
+                    (SELECT COUNT(*) FROM TRAINING_LOCK x JOIN HORSE h ON h.horse_id = x.horse_id WHERE x.status = 'ACTIVE' %1$s) AS locked_horses,
+                    (SELECT COUNT(*) FROM THRESHOLD_ALERT x JOIN TRAINING_SESSION ss ON ss.session_id = x.session_id JOIN HORSE h ON h.horse_id = ss.horse_id WHERE x.resolved_by IS NULL %1$s) AS open_alerts
+                """.formatted(scope(t));
         return jdbc.queryForObject(sql, (rs, n) -> new TrainerDashboard.Summary(
                 rs.getInt("total_horses"),
                 rs.getInt("active_plans"),
@@ -81,19 +93,21 @@ public class TrainerDashboardService {
      * về chung một mốc đầu tuần - cách gom tuần chuẩn của SQL Server, không phụ
      * thuộc DATEFIRST như DATEPART(WEEK, ...).
      */
-    private List<TrainerDashboard.FitnessPoint> loadFitnessTrend(int weeks) {
+    private List<TrainerDashboard.FitnessPoint> loadFitnessTrend(int weeks, Integer t) {
         String sql = """
                 SELECT
                     DATEADD(WEEK, DATEDIFF(WEEK, 0, s.session_date), 0) AS week_start,
                     AVG(CAST(%s AS FLOAT))                              AS avg_fitness,
                     COUNT(*)                                            AS session_count
                 FROM TRAINING_SESSION s
+                JOIN HORSE h ON h.horse_id = s.horse_id
                 WHERE s.status IN ('COMPLETED', 'STOPPED_EARLY')
                   AND s.recovery_heart_rate IS NOT NULL
                   AND s.session_date >= DATEADD(WEEK, ?, CAST(GETDATE() AS DATE))
+                  %s
                 GROUP BY DATEADD(WEEK, DATEDIFF(WEEK, 0, s.session_date), 0)
                 ORDER BY week_start
-                """.formatted(FITNESS_EXPR);
+                """.formatted(FITNESS_EXPR, scope(t));
 
         // Truyen so am thay vi viet "-?" trong SQL: mot tham so dat ngay sau dau
         // tru la cho trinh phan tich cu phap de nham nhat.
@@ -107,14 +121,14 @@ public class TrainerDashboardService {
         }, -weeks);
     }
 
-    private List<TrainerDashboard.StatusCount> loadStatusBreakdown() {
+    private List<TrainerDashboard.StatusCount> loadStatusBreakdown(Integer t) {
         String sql = """
-                SELECT status, COUNT(*) AS cnt
-                FROM HORSE
-                WHERE activity_status = 'ACTIVE'
-                GROUP BY status
-                ORDER BY status
-                """;
+                SELECT h.status, COUNT(*) AS cnt
+                FROM HORSE h
+                WHERE h.activity_status = 'ACTIVE' %s
+                GROUP BY h.status
+                ORDER BY h.status
+                """.formatted(scope(t));
         return jdbc.query(sql, (rs, n) -> new TrainerDashboard.StatusCount(
                 rs.getString("status"),
                 rs.getInt("cnt")));
@@ -132,7 +146,7 @@ public class TrainerDashboardService {
      * OUTER APPLY thay vì LEFT JOIN cho buổi gần nhất: nó cho phép TOP 1 bên
      * trong, nếu không sẽ phải viết window function rồi lọc lại.
      */
-    private List<TrainerDashboard.HorseRow> loadHorses() {
+    private List<TrainerDashboard.HorseRow> loadHorses(Integer t) {
         String sql = """
                 SELECT
                     h.horse_id,
@@ -181,9 +195,9 @@ public class TrainerDashboardService {
                     ORDER BY s.session_date DESC
                 ) last_s
 
-                WHERE h.activity_status = 'ACTIVE'
+                WHERE h.activity_status = 'ACTIVE' %s
                 ORDER BY h.horse_name
-                """.formatted(FITNESS_EXPR);
+                """.formatted(FITNESS_EXPR, scope(t));
 
         return jdbc.query(sql, (rs, n) -> {
             // getObject chu khong phai getInt + wasNull(): wasNull() noi ve cot
@@ -204,7 +218,7 @@ public class TrainerDashboardService {
         });
     }
 
-    private List<TrainerDashboard.AlertRow> loadOpenAlerts() {
+    private List<TrainerDashboard.AlertRow> loadOpenAlerts(Integer t) {
         String sql = """
                 SELECT TOP 10
                     a.alert_id, h.horse_name, a.metric_type,
@@ -212,11 +226,11 @@ public class TrainerDashboardService {
                 FROM THRESHOLD_ALERT a
                 JOIN TRAINING_SESSION s ON s.session_id = a.session_id
                 JOIN HORSE h           ON h.horse_id   = s.horse_id
-                WHERE a.resolved_by IS NULL
+                WHERE a.resolved_by IS NULL %s
                 ORDER BY
                     CASE a.severity WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,
                     a.triggered_at DESC
-                """;
+                """.formatted(scope(t));
         return jdbc.query(sql, (rs, n) -> {
             Timestamp ts = rs.getTimestamp("triggered_at");
             return new TrainerDashboard.AlertRow(

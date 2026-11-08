@@ -38,14 +38,14 @@ public class VetCallController {
 
     /** status = PENDING | ANSWERED | ALL (mặc định ALL): ca chờ trả lời luôn đứng đầu. */
     @GetMapping("/vet-calls")
-    @RequireRole({"HEAD_TRAINER", "VETERINARIAN"})
+    @RequireRole({"HEAD_TRAINER", "GROOM", "VETERINARIAN"})
     public List<VetCallResponse> list(@RequestParam(value = "status", required = false) String status,
                                       @RequestParam(value = "limit", defaultValue = "30") int limit) {
         return service.list(status, limit);
     }
 
     @GetMapping("/vet-calls/{callId}")
-    @RequireRole({"HEAD_TRAINER", "VETERINARIAN"})
+    @RequireRole({"HEAD_TRAINER", "GROOM", "VETERINARIAN"})
     public VetCallResponse get(@PathVariable("callId") int callId) {
         return service.get(callId);
     }

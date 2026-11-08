@@ -8,20 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import racehorse.backend.session.SessionService;
 import racehorse.backend.training.TrainingPlanService;
 import racehorse.backend.training.TrainingSessionRepository;
+import racehorse.backend.training.TrainingSessionService;
 
 /**
- * Each morning, stamps DAILY_TASK.missed_at (V25) on every task of an earlier
- * day that was never ticked, and tells the Head Trainers how many there were.
- *
- * The MISSED state shown on screen does not depend on this job - it is derived
- * from the date (CareRepository.stateOf) - so a night the server was off loses
- * nothing but the timestamp. The job exists for the record and the bell.
- *
- *   app.task.missed.enabled  (default true)
- *   app.task.missed.cron     (default 00:15 every day)
- *   app.task.missed.zone     (default Asia/Ho_Chi_Minh)
+ * Scheduled background jobs for care tasks and training session automation.
  */
 @Component
 public class MissedTaskJob {
@@ -31,13 +24,18 @@ public class MissedTaskJob {
     private final CareService care;
     private final TrainingPlanService plans;
     private final TrainingSessionRepository sessions;
+    private final TrainingSessionService trainingSessionService;
+    private final SessionService sessionService;
     private final boolean enabled;
 
     public MissedTaskJob(CareService care, TrainingPlanService plans, TrainingSessionRepository sessions,
+                         TrainingSessionService trainingSessionService, SessionService sessionService,
                          @Value("${app.task.missed.enabled:true}") boolean enabled) {
         this.care = care;
         this.plans = plans;
         this.sessions = sessions;
+        this.trainingSessionService = trainingSessionService;
+        this.sessionService = sessionService;
         this.enabled = enabled;
     }
 
@@ -51,9 +49,6 @@ public class MissedTaskJob {
         } catch (RuntimeException e) {
             log.error("Missed task job failed", e);
         }
-        /* Cùng một lần chạy đêm: kết thúc giáo án đã qua ngày kết thúc, huỷ
-           buổi tập đã lỡ ngày và đóng buổi bị bỏ quên ở RUNNING. Tách try để
-           lỗi phần này không chặn phần kia. */
         try {
             LocalDate today = LocalDate.now();
             log.info("Expired training plans completed: {}, overdue sessions cancelled: {}, "
@@ -62,6 +57,25 @@ public class MissedTaskJob {
                     sessions.closeStaleRunning(today));
         } catch (RuntimeException e) {
             log.error("Training clean-up failed", e);
+        }
+    }
+
+    /**
+     * V37: Quét định kỳ mỗi phút để:
+     * 1. Tự động hoàn tất (COMPLETED) các buổi tập RUNNING đã hết thời lượng và gửi về Head Trainer.
+     * 2. Tự động huỷ (CANCELLED) các buổi SCHEDULED đã qua khung giờ.
+     * 3. Tự động tạo báo cáo sơ bộ + chuyển vào khu lưu trữ (ARCHIVED_AUTO) cho các buổi quá hạn review 48h.
+     */
+    @Scheduled(fixedDelayString = "${app.training.auto-check-ms:60000}")
+    public void runPeriodicTrainingChecks() {
+        if (!enabled) {
+            return;
+        }
+        try {
+            trainingSessionService.processOverdueSessions();
+            sessionService.processOverdueReviews();
+        } catch (RuntimeException e) {
+            log.error("Periodic training check failed", e);
         }
     }
 }

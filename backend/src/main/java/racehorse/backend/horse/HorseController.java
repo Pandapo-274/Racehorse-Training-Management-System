@@ -33,12 +33,12 @@ public class HorseController {
         this.photoService = photoService;
     }
 
-    /*
-     * KHÔNG còn POST /api/horses.
-     * Ngựa chỉ vào hệ thống qua đường duyệt: chủ ngựa gửi yêu cầu
-     * (POST /api/horse-requests), Club Manager duyệt và cấp mã đăng ký + chuồng.
-     * Manager và Head Trainer chỉ XEM danh sách ngựa, không sửa hồ sơ ngựa.
-     */
+    /** V37: Danh sách Head Trainer đang ACTIVE cùng số ngựa đang quản lý & hạn mức tối đa. */
+    @GetMapping("/trainers")
+    @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
+    public List<HorseRepository.TrainerSummary> listTrainers() {
+        return horseService.listActiveTrainers();
+    }
 
     /** Chỉ chủ ngựa, và chỉ ngựa của chính mình (service kiểm quyền sở hữu). */
     @PutMapping("/{id}")
@@ -51,7 +51,7 @@ public class HorseController {
         return horseService.updateByOwner(id, request, user, http.getRemoteAddr());
     }
 
-    /** Club Manager sửa mã đăng ký và số chuồng. */
+    /** Club Manager sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách. */
     @PutMapping("/{id}/identity")
     @RequireRole({"CLUB_MANAGER"})
     public HorseResponse updateIdentity(
@@ -92,7 +92,8 @@ public class HorseController {
                              @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return horseService.get(id, user);
     }
-        @GetMapping("/{id}/pedigree")
+
+    @GetMapping("/{id}/pedigree")
     public PedigreeNode pedigree(@PathVariable int id,
                                  @RequestParam(defaultValue = "3") int generations,
                                  @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {

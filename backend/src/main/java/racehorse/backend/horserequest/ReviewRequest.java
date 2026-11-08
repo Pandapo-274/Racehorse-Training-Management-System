@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Size;
  * cấp mà chủ ngựa không có. Không kiểm bằng @NotBlank ở đây vì cùng một record
  * này cũng dùng cho lệnh TỪ CHỐI, nơi mã đăng ký không có nghĩa gì;
  * HorseRequestService kiểm nó ở đúng nhánh duyệt.
+ *
+ * V37: trainerId cho phép Club Manager điều phối ngựa ngay cho một Head Trainer.
  */
 public record ReviewRequest(
         @Size(max = 30, message = "Registration code must be at most 30 characters")
@@ -18,5 +20,11 @@ public record ReviewRequest(
         String stallNo,
 
         @Size(max = 255, message = "Note must be at most 255 characters")
-        String note
-) {}
+        String note,
+
+        Integer trainerId
+) {
+    public ReviewRequest(String registrationCode, String stallNo, String note) {
+        this(registrationCode, stallNo, note, null);
+    }
+}

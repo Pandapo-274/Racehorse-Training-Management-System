@@ -35,13 +35,19 @@ public class TrainingSessionService {
     private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH);
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
 
-    /**
-     * Khoảng đệm mặc định giữa hai buổi của cùng một ngựa (khi giai đoạn không
-     * đặt min_gap_minutes) và giữa hai buổi của cùng một Groom với hai ngựa khác
-     * nhau. Bảng không có cột thời lượng buổi tập: một buổi kèm khởi động và hạ
-     * nhiệt mất khoảng 1,5 giờ.
-     */
     private static final long DEFAULT_GAP_MINUTES = 90;
+    public static final int DEFAULT_DURATION_MINUTES = 60;
+    public static final int MIN_DURATION_MINUTES = 15;
+    public static final int MAX_DURATION_MINUTES = 720; // 12 tiếng
+
+    /** Danh mục lý do kết thúc sớm chuẩn cho Groom chọn. */
+    private static final Map<String, String> EARLY_STOP_REASONS = Map.of(
+            "TARGET_REACHED", "Target fitness reached",
+            "HORSE_FATIGUED", "Horse fatigued",
+            "WEATHER_CONDITION", "Weather or track condition",
+            "EQUIPMENT_ISSUE", "Equipment issue",
+            "INJURY", "Horse injury or abnormality"
+    );
 
     /** Buổi còn chiếm chỗ trên lịch. */
     private static final Set<String> OPEN = Set.of("SCHEDULED", "RUNNING");
@@ -53,7 +59,6 @@ public class TrainingSessionService {
     private final UserRepository userRepository;
     private final NotificationService notifications;
     private final IncidentGuard incidentGuard;
-    /** Khoá HEAVY_WORK_ONLY chỉ cho buổi có cự ly dự kiến tối đa chừng này mét. */
     private final int lightWorkMaxDistance;
 
     public TrainingSessionService(TrainingSessionRepository repository, TrainingPlanRepository planRepository,
@@ -69,14 +74,26 @@ public class TrainingSessionService {
         this.incidentGuard = incidentGuard;
         this.lightWorkMaxDistance = lightWorkMaxDistance;
     }
+
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
+        return repository.findActiveGrooms();
+    }
+
+    /** V37: Head Trainer chỉ thấy các Groom được Club Manager phân quyền cho mình. */
+    public List<TrainingSessionRepository.GroomOption> listActiveGrooms(AuthenticatedUser user) {
+        if (user != null && "HEAD_TRAINER".equals(user.role())) {
+            return repository.findActiveGroomsByTrainer(user.userId());
+        }
         return repository.findActiveGrooms();
     }
 
     /** Giao buổi tập: horse_id lấy từ phase, không nhận từ client. */
     @Transactional
     public TrainingSessionResponse create(TrainingSessionRequest r, AuthenticatedUser user, String ip) {
+        if (user != null && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can schedule training sessions");
+        }
         TrainingSessionRepository.PhaseContext ctx = repository.findPhaseContext(r.phaseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Phase #" + r.phaseId() + " not found"));
@@ -85,56 +102,54 @@ public class TrainingSessionService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Training plan is not active (current status: " + ctx.planStatus() + ")");
         }
-        // Không nhập cự ly dự kiến thì lấy theo giai đoạn.
         Integer planned = r.plannedDistance() != null ? r.plannedDistance() : ctx.distance();
-        checkHorseCanTrain(ctx.horseId(), planned);
+        HorseResponse horse = checkHorseCanTrain(ctx.horseId(), planned);
+        checkTrainerManagesHorse(horse, user);
 
         Map<String, String> errors = new LinkedHashMap<>();
-        if (!repository.isActiveGroom(r.assignedTo())) {
-            errors.put("assignedTo", "Assignee must be an active Groom");
+        if (r.plannedDuration() == null) {
+            errors.put("plannedDuration", "Planned duration is required");
         }
-        LocalDate day = r.sessionDate().toLocalDate();
-        /* So cả giờ, không chỉ ngày: chỉ so ngày thì lúc 15:00 vẫn xếp được buổi
-           06:00 cùng hôm, và vì giờ đó đã qua nên Groom Start được ngay. */
-        if (r.sessionDate().isBefore(LocalDateTime.now())) {
-            errors.put("sessionDate", "Cannot schedule a session in the past");
-        } else if ((ctx.startDate() != null && day.isBefore(ctx.startDate()))
-                || (ctx.endDate() != null && day.isAfter(ctx.endDate()))) {
-            errors.put("sessionDate", "Session must fall within the phase period");
-        }
+        int duration = r.plannedDuration() != null ? r.plannedDuration() : DEFAULT_DURATION_MINUTES;
+
+        validateGroomAssignee(r.assignedTo(), user, errors);
+        validateSessionTimeAndDuration(r.sessionDate(), duration, ctx, true, errors);
+
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
-        checkSlot(ctx, r.assignedTo(), r.sessionDate(), 0);
+        checkSlot(ctx, r.assignedTo(), r.sessionDate(), duration, 0);
 
         int id = repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
-        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_ASSIGN", "TRAINING_SESSION", id, "SUCCESS", ip);
+        if (duration != DEFAULT_DURATION_MINUTES) {
+            repository.updatePlannedDuration(id, duration);
+        }
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_ASSIGN", "TRAINING_SESSION", id, "SUCCESS", ip);
 
         TrainingSessionResponse created = getOrThrow(id);
         notifications.notifyUser(created.assignedTo(), new Notice(
                 "TRAINING_SESSION_ASSIGNED",
                 "New training session assigned",
-                created.horseName() + " on " + created.sessionDate().format(WHEN) + ".",
+                created.horseName() + " on " + created.sessionDate().format(WHEN)
+                        + " (" + duration + " mins).",
                 Notice.TRAINING_SESSION, id));
         return created;
     }
 
     /**
-     * SCHEDULED -> RUNNING. Kiểm tra lại ngựa vì tình trạng có thể đổi sau khi xếp
-     * lịch
-     * (bị khóa, bị thương). Sau bước này UC11 mới nhận được số đo của buổi tập.
+     * SCHEDULED -> RUNNING.
      */
     @Transactional
     public TrainingSessionResponse start(int sessionId, AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can start a training session");
+        }
         TrainingSessionResponse s = getOrThrow(sessionId);
         checkCanAct(s, user);
         if (!"SCHEDULED".equals(s.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Only a SCHEDULED session can be started (currently " + s.status() + ")");
         }
-        /* Chỉ bắt đầu trong đúng ngày của buổi tập. Không chặn thì Groom bắt đầu
-           được buổi của tuần sau, hoặc buổi đã lỡ từ hôm trước. Đổi ngày thì
-           Head Trainer dời lịch (reschedule). */
         LocalDate planned = s.sessionDate().toLocalDate();
         if (!planned.equals(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -146,11 +161,15 @@ public class TrainingSessionService {
                     "This session is scheduled for " + s.sessionDate().format(HOUR)
                             + ". It can only be started at or after the scheduled time");
         }
-        /* Giáo án phải còn ACTIVE. create() và reschedule() đều đã kiểm điều
-           này; chỉ start() bỏ qua, nên tạm dừng một giáo án không dừng được
-           những buổi đã lên lịch của nó - Groom vẫn bấm Start được và buổi tập
-           vẫn chạy như không có gì xảy ra. Đó là đúng cái việc mà nút Pause
-           sinh ra để làm. */
+        int plannedDuration = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
+        if (!LocalDateTime.now().isBefore(s.sessionDate().plusMinutes(plannedDuration))) {
+            repository.cancel(sessionId);
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session's scheduled time window (" + s.sessionDate().format(HOUR) + " - "
+                            + s.sessionDate().plusMinutes(plannedDuration).format(HOUR)
+                            + ") has already passed and was automatically closed");
+        }
+
         TrainingSessionRepository.PhaseContext ctx = repository.findPhaseContext(s.phaseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Training phase of this session not found"));
@@ -159,52 +178,126 @@ public class TrainingSessionService {
                     "Training plan is not active (current status: " + ctx.planStatus() + ")");
         }
         checkHorseCanTrain(s.horseId(), s.plannedDistance());
-        // Một con ngựa không chạy hai buổi cùng lúc.
         if (repository.hasRunningSession(s.horseId())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     s.horseName() + " already has a session running. Finish or stop it first");
+        }
+        // V37: 1 Groom chỉ được thực hiện 1 session tại 1 thời điểm
+        if (repository.hasRunningSessionByGroom(s.assignedTo(), sessionId)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    s.assignedToName() + " is already executing another running session. Finish or stop it first");
         }
         if (repository.markRunning(sessionId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session has just been started by someone else");
         }
-        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS",
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_START", "TRAINING_SESSION", sessionId, "SUCCESS",
                 ip);
         return getOrThrow(sessionId);
     }
 
     /**
-     * RUNNING -> COMPLETED khi buổi tập kết thúc bình thường. Groom (buổi của
-     * mình) hoặc Head Trainer bấm. Chưa có đánh giá: Head Trainer chấm sau ở
-     * Session review (UC12).
-     *
-     * Trước đây chỉ có đánh giá hoặc Stop mới đóng được buổi tập, nên Head
-     * Trainer quên chấm là buổi nằm RUNNING mãi và con ngựa không Start được
-     * buổi nào nữa (hasRunningSession).
+     * Kết thúc buổi tập (bình thường hoặc kết thúc sớm bởi Groom).
      */
     @Transactional
     public TrainingSessionResponse finish(int sessionId, AuthenticatedUser user, String ip) {
+        return finish(sessionId, null, user, ip);
+    }
+
+    @Transactional
+    public TrainingSessionResponse finish(int sessionId, FinishSessionRequest req,
+                                          AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can finish a training session");
+        }
         TrainingSessionResponse s = getOrThrow(sessionId);
         checkCanAct(s, user);
         if (!"RUNNING".equals(s.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Only a RUNNING session can be finished (currently " + s.status() + ")");
         }
+
+        int plannedDuration = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
+        LocalDateTime plannedEnd = s.sessionDate().plusMinutes(plannedDuration);
+        boolean isBeforePlannedEnd = LocalDateTime.now().isBefore(plannedEnd);
+
+        boolean earlyStopRequested = req != null
+                && (Boolean.TRUE.equals(req.earlyStop())
+                    || (req.earlyStopReason() != null && !req.earlyStopReason().isBlank()));
+
+        boolean isEarlyStop = isBeforePlannedEnd || earlyStopRequested;
+
+        if (isEarlyStop) {
+            // V37: Chỉ được kết thúc sớm khi Groom đã báo cáo cả 2 chỉ số Heart Rate và Speed ít nhất 1 lần
+            if (s.peakHeartRate() == null || s.peakVelocity() == null) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "You must report both heart rate and speed at least once during the session before ending it early");
+            }
+            String rawReason = (req != null && req.earlyStopReason() != null) ? req.earlyStopReason().trim() : "";
+            if (rawReason.isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Please select a reason for ending the session early",
+                        Map.of("earlyStopReason", "Select a reason for early termination"));
+            }
+            String reasonLabel = EARLY_STOP_REASONS.getOrDefault(rawReason.toUpperCase(Locale.ROOT), rawReason);
+            if (reasonLabel.length() > 255) {
+                reasonLabel = reasonLabel.substring(0, 255);
+            }
+            if (repository.markStoppedEarly(sessionId, reasonLabel) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "This session has just been stopped or finished by someone else");
+            }
+            userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_STOP_EARLY", "TRAINING_SESSION", sessionId,
+                    "SUCCESS", ip, reasonLabel);
+            notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+                    "TRAINING_SESSION_FINISHED",
+                    "Training session ended early",
+                    s.horseName() + " ended the session of " + s.sessionDate().format(WHEN)
+                            + " early (" + reasonLabel + "). Ready for evaluation (within 48h).",
+                    Notice.TRAINING_SESSION, sessionId));
+            return getOrThrow(sessionId);
+        }
+
         if (repository.markFinished(sessionId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session has just been stopped or finished by someone else");
         }
-        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_FINISH", "TRAINING_SESSION", sessionId,
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_FINISH", "TRAINING_SESSION", sessionId,
                 "SUCCESS", ip);
         notifications.notifyRole("HEAD_TRAINER", user, new Notice(
                 "TRAINING_SESSION_FINISHED",
                 "Training session finished",
                 s.horseName() + " finished the session of " + s.sessionDate().format(WHEN)
-                        + ". Ready for evaluation.",
+                        + ". Ready for evaluation (within 48h).",
                 Notice.TRAINING_SESSION, sessionId));
         return getOrThrow(sessionId);
     }
-    
+
+    /**
+     * V37: Tự động kết thúc các buổi RUNNING đã quá thời lượng và tự động huỷ các buổi SCHEDULED quá giờ.
+     * Gọi định kỳ từ MissedTaskJob / TrainingAutomationJob và trước khi đọc danh sách.
+     */
+    @Transactional
+    public int processOverdueSessions() {
+        LocalDateTime now = LocalDateTime.now();
+        int count = 0;
+        List<TrainingSessionResponse> overdueRunning = repository.findOverdueRunningSessions(now);
+        for (TrainingSessionResponse s : overdueRunning) {
+            if (repository.autoFinishOverdueRunning(s.sessionId()) == 1) {
+                userRepository.writeAudit(null, "TRAINING_SESSION_AUTO_FINISH", "TRAINING_SESSION",
+                        s.sessionId(), "SUCCESS", null);
+                notifications.notifyRole("HEAD_TRAINER", null, new Notice(
+                        "TRAINING_SESSION_AUTO_FINISHED",
+                        "Training session auto-completed on time limit",
+                        s.horseName() + "'s session on " + s.sessionDate().format(WHEN)
+                                + " reached its planned duration and was automatically finished. Please review within 48 hours.",
+                        Notice.TRAINING_SESSION, s.sessionId()));
+                count++;
+            }
+        }
+        count += repository.autoCancelOverdueScheduled(now);
+        return count;
+    }
+
     public TrainingSessionResponse get(int sessionId, AuthenticatedUser user) {
         TrainingSessionResponse s = getOrThrow(sessionId);
         checkCanAct(s, user);
@@ -212,163 +305,128 @@ public class TrainingSessionService {
     }
 
     public List<TrainingSessionResponse> list(Integer horseId, String status, AuthenticatedUser user) {
-        /* Groom chỉ thấy buổi tập được giao cho mình; chủ ngựa chỉ thấy buổi
-           tập của ngựa mình; các vai trò còn lại thấy toàn bộ.
-
-           Hai bộ lọc này loại trừ nhau trên thực tế (một người không thể vừa
-           là GROOM vừa là HORSE_OWNER) nhưng vẫn truyền cả hai xuống
-           repository thay vì viết if/else trả về hai câu khác nhau: nếu sau
-           này có vai trò kép, cả hai điều kiện cùng áp và kết quả vẫn đúng
-           theo nghĩa hẹp nhất. */
+        processOverdueSessions();
         Integer assignedTo = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        /* Lịch của Groom bỏ hẳn ngựa đã rút: buổi tập của chúng đã bị huỷ lúc
-           duyệt rút, và con ngựa không còn trong chuồng nữa. Các vai trò khác
-           vẫn thấy để tra lại lịch sử. */
         boolean activeHorsesOnly = assignedTo != null;
-        return repository.findAll(horseId, status, assignedTo, ownerId, activeHorsesOnly);
+        List<TrainingSessionResponse> all = repository.findAll(horseId, status, assignedTo, ownerId, activeHorsesOnly);
+        // V37: Head Trainer chỉ thấy lịch tập của những ngựa Club Manager giao cho mình.
+        if ("HEAD_TRAINER".equals(user.role())) {
+            java.util.Set<Integer> mine = horseRepository.findHorseIdsByTrainer(user.userId());
+            return all.stream().filter(s -> mine.contains(s.horseId())).toList();
+        }
+        return all;
     }
-    
-/**
- * Đổi ngày/giờ hoặc Groom phụ trách của một buổi tập.
- * Chỉ Head Trainer được gọi thông qua Controller.
- */
-@Transactional
-public TrainingSessionResponse reschedule(
-        int sessionId,
-        TrainingSessionScheduleRequest request,
-        AuthenticatedUser user,
-        String ip) {
-
-    // 1. Buổi tập phải tồn tại.
-    TrainingSessionResponse current = getOrThrow(sessionId);
-
-    // 2. Chỉ đổi được lịch khi chưa bắt đầu.
-    if (!"SCHEDULED".equals(current.status())) {
-        throw new ApiException(
-                HttpStatus.CONFLICT,
-                "Only a SCHEDULED session can be rescheduled");
-    }
-
-    // 3. Tìm phase và giáo án chứa buổi tập.
-    TrainingSessionRepository.PhaseContext ctx =
-            repository.findPhaseContext(current.phaseId())
-                    .orElseThrow(() -> new ApiException(
-                            HttpStatus.NOT_FOUND,
-                            "Training phase not found"));
-
-    // 4. Giáo án phải còn ACTIVE.
-    if (!"ACTIVE".equals(ctx.planStatus())) {
-        throw new ApiException(
-                HttpStatus.CONFLICT,
-                "Training plan is not active");
-    }
-
-    // 5. Kiểm tra lại tình trạng ngựa và training lock.
-    checkHorseCanTrain(current.horseId(), current.plannedDistance());
-
-    Map<String, String> errors = new LinkedHashMap<>();
-
-    // 6. Groom mới phải là tài khoản đang hoạt động.
-    if (!repository.isActiveGroom(request.assignedTo())) {
-        errors.put(
-                "assignedTo",
-                "Assignee must be an active Groom");
-    }
-
-    // 7. Giờ mới không được ở trong quá khứ (so cả giờ, không chỉ ngày).
-    // Giữ nguyên giờ cũ thì bỏ qua: buổi hôm nay đã quá giờ mà chưa Start
-    // vẫn phải đổi được Groom, không bắt Head Trainer dời giờ theo.
-    LocalDate day = request.sessionDate().toLocalDate();
-    boolean timeChanged = !request.sessionDate().equals(current.sessionDate());
-
-    if (day.isBefore(LocalDate.now())
-            || (timeChanged && request.sessionDate().isBefore(LocalDateTime.now()))) {
-        errors.put(
-                "sessionDate",
-                "Cannot schedule a session in the past");
-    }
-
-    // 8. Ngày mới phải nằm trong thời gian của phase.
-    if (ctx.startDate() != null && day.isBefore(ctx.startDate())) {
-        errors.put(
-                "sessionDate",
-                "Session cannot be before the phase start date");
-    }
-
-    if (ctx.endDate() != null && day.isAfter(ctx.endDate())) {
-        errors.put(
-                "sessionDate",
-                "Session cannot be after the phase end date");
-    }
-
-    if (!errors.isEmpty()) {
-        throw new ApiException(
-                HttpStatus.BAD_REQUEST,
-                "Invalid schedule data",
-                errors);
-    }
-
-    // 8b. Không trùng giờ với buổi khác của ngựa hoặc của Groom mới, và không
-    // vượt số buổi mỗi tuần (bỏ qua chính buổi đang dời).
-    checkSlot(ctx, request.assignedTo(), request.sessionDate(), sessionId);
-
-    // 9. Cập nhật có điều kiện để tránh đổi lịch khi buổi tập
-    // đã chuyển khỏi trạng thái SCHEDULED.
-    int updated = repository.updateSchedule(
-            sessionId,
-            request.assignedTo(),
-            request.sessionDate());
-
-    if (updated == 0) {
-        throw new ApiException(
-                HttpStatus.CONFLICT,
-                "Session is no longer available for rescheduling");
-    }
-
-    // 10. Ghi lịch sử thao tác.
-    userRepository.writeAudit(
-            user.userId(),
-            "TRAINING_SESSION_RESCHEDULE",
-            "TRAINING_SESSION",
-            sessionId,
-            "SUCCESS",
-            ip);
-
-    // 11. Báo cho Groom. Đổi người phụ trách thì người cũ cũng phải biết
-    // mình không còn buổi này nữa, nếu không họ vẫn ra chuồng đúng giờ cũ.
-    TrainingSessionResponse updatedSession = getOrThrow(sessionId);
-    String when = updatedSession.sessionDate().format(WHEN);
-
-    if (current.assignedTo() != updatedSession.assignedTo()) {
-        notifications.notifyUser(current.assignedTo(), new Notice(
-                "TRAINING_SESSION_UNASSIGNED",
-                "Training session reassigned",
-                updatedSession.horseName() + " is now handled by "
-                        + updatedSession.assignedToName() + ".",
-                null, null));
-        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
-                "TRAINING_SESSION_ASSIGNED",
-                "New training session assigned",
-                updatedSession.horseName() + " on " + when + ".",
-                Notice.TRAINING_SESSION, sessionId));
-    } else {
-        notifications.notifyUser(updatedSession.assignedTo(), new Notice(
-                "TRAINING_SESSION_RESCHEDULED",
-                "Training session rescheduled",
-                updatedSession.horseName() + " moved to " + when + ".",
-                Notice.TRAINING_SESSION, sessionId));
-    }
-
-    // 12. Trả lại dữ liệu mới nhất để frontend cập nhật lịch.
-    return updatedSession;
-}
 
     /**
-     * Hủy một buổi tập chưa diễn ra (SCHEDULED) bởi Head Trainer hoặc Club Manager.
+     * Đổi ngày/giờ, thời lượng hoặc Groom phụ trách của một buổi tập.
      */
     @Transactional
+    public TrainingSessionResponse reschedule(
+            int sessionId,
+            TrainingSessionScheduleRequest request,
+            AuthenticatedUser user,
+            String ip) {
+        if (user != null && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can reschedule training sessions");
+        }
+
+        TrainingSessionResponse current = getOrThrow(sessionId);
+
+        if (!"SCHEDULED".equals(current.status())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Only a SCHEDULED session can be rescheduled");
+        }
+
+        TrainingSessionRepository.PhaseContext ctx =
+                repository.findPhaseContext(current.phaseId())
+                        .orElseThrow(() -> new ApiException(
+                                HttpStatus.NOT_FOUND,
+                                "Training phase not found"));
+
+        if (!"ACTIVE".equals(ctx.planStatus())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Training plan is not active");
+        }
+
+        HorseResponse horse = checkHorseCanTrain(current.horseId(), current.plannedDistance());
+        checkTrainerManagesHorse(horse, user);
+
+        int duration = request.plannedDuration() != null
+                ? request.plannedDuration()
+                : (current.plannedDuration() != null ? current.plannedDuration() : DEFAULT_DURATION_MINUTES);
+
+        Map<String, String> errors = new LinkedHashMap<>();
+        validateGroomAssignee(request.assignedTo(), user, errors);
+
+        boolean timeChanged = !request.sessionDate().equals(current.sessionDate());
+        validateSessionTimeAndDuration(request.sessionDate(), duration, ctx, timeChanged, errors);
+
+        if (!errors.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid schedule data",
+                    errors);
+        }
+
+        checkSlot(ctx, request.assignedTo(), request.sessionDate(), duration, sessionId);
+
+        int updated = repository.updateSchedule(
+                sessionId,
+                request.assignedTo(),
+                request.sessionDate());
+
+        if (updated == 0) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Session is no longer available for rescheduling");
+        }
+
+        if (request.plannedDuration() != null) {
+            repository.updatePlannedDuration(sessionId, duration);
+        }
+
+        userRepository.writeAudit(
+                user == null ? null : user.userId(),
+                "TRAINING_SESSION_RESCHEDULE",
+                "TRAINING_SESSION",
+                sessionId,
+                "SUCCESS",
+                ip);
+
+        TrainingSessionResponse updatedSession = getOrThrow(sessionId);
+        String when = updatedSession.sessionDate().format(WHEN);
+
+        if (current.assignedTo() != updatedSession.assignedTo()) {
+            notifications.notifyUser(current.assignedTo(), new Notice(
+                    "TRAINING_SESSION_UNASSIGNED",
+                    "Training session reassigned",
+                    updatedSession.horseName() + " is now handled by "
+                            + updatedSession.assignedToName() + ".",
+                    null, null));
+            notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                    "TRAINING_SESSION_ASSIGNED",
+                    "New training session assigned",
+                    updatedSession.horseName() + " on " + when + ".",
+                    Notice.TRAINING_SESSION, sessionId));
+        } else {
+            notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                    "TRAINING_SESSION_RESCHEDULED",
+                    "Training session rescheduled",
+                    updatedSession.horseName() + " moved to " + when + ".",
+                    Notice.TRAINING_SESSION, sessionId));
+        }
+
+        return updatedSession;
+    }
+
+    @Transactional
     public TrainingSessionResponse cancel(int sessionId, AuthenticatedUser user, String ip) {
+        if (user != null && !"HEAD_TRAINER".equals(user.role()) && !"CLUB_MANAGER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer or Club Manager can cancel training sessions");
+        }
         TrainingSessionResponse current = getOrThrow(sessionId);
         checkCanAct(current, user);
         if (!"SCHEDULED".equals(current.status())) {
@@ -379,7 +437,7 @@ public TrainingSessionResponse reschedule(
             throw new ApiException(HttpStatus.CONFLICT,
                     "Session is no longer available for cancellation");
         }
-        userRepository.writeAudit(user.userId(), "TRAINING_SESSION_CANCEL", "TRAINING_SESSION",
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_CANCEL", "TRAINING_SESSION",
                 sessionId, "SUCCESS", ip);
         notifications.notifyUser(current.assignedTo(), new Notice(
                 "TRAINING_SESSION_CANCELLED",
@@ -396,16 +454,6 @@ public TrainingSessionResponse reschedule(
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Session #" + sessionId + " not found"));
     }
 
-    /**
-     * Groom chỉ thao tác trên buổi tập của chính mình; chủ ngựa chỉ xem được
-     * buổi tập của ngựa mình.
-     *
-     * Phép kiểm chủ ngựa phải có ở ĐÂY, không chỉ ở list(). Thêm HORSE_OWNER
-     * vào @RequireRole của controller mà chỉ lọc ở danh sách thì GET
-     * /api/training-sessions/{id} vẫn trả về buổi tập của bất kỳ con ngựa nào
-     * - chỉ cần đoán số id. Mở quyền xem mà quên chỗ này là biến một lỗi thiếu
-     * quyền thành một lỗ lộ dữ liệu.
-     */
     private void checkCanAct(TrainingSessionResponse s, AuthenticatedUser user) {
         if ("GROOM".equals(user.role()) && s.assignedTo() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This session is not assigned to you");
@@ -419,40 +467,106 @@ public TrainingSessionResponse reschedule(
         }
     }
 
+    private void checkTrainerManagesHorse(HorseResponse horse, AuthenticatedUser user) {
+        if (user == null || !"HEAD_TRAINER".equals(user.role())) return;
+        if (horse.trainerId() != null && !horse.trainerId().equals(user.userId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "This horse is assigned to Head Trainer "
+                            + (horse.trainerName() != null ? horse.trainerName() : "#" + horse.trainerId()));
+        } else if (horse.trainerId() == null) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "This horse has not been assigned to you by the Club Manager yet");
+        }
+    }
+
+    private void validateGroomAssignee(int groomId, AuthenticatedUser user, Map<String, String> errors) {
+        if (!repository.isActiveGroom(groomId)) {
+            errors.put("assignedTo", "Assignee must be an active Groom");
+            return;
+        }
+        if (user != null && "HEAD_TRAINER".equals(user.role())
+                && !repository.isGroomOfTrainer(groomId, user.userId())) {
+            errors.put("assignedTo", "This Groom is not assigned to your management team by the Club Manager");
+        }
+    }
+
+    private void validateSessionTimeAndDuration(LocalDateTime sessionDate, int duration,
+                                                TrainingSessionRepository.PhaseContext ctx,
+                                                boolean checkPastTime,
+                                                Map<String, String> errors) {
+        LocalDate day = sessionDate.toLocalDate();
+        if (day.isBefore(LocalDate.now()) || (checkPastTime && sessionDate.isBefore(LocalDateTime.now()))) {
+            errors.put("sessionDate", "Cannot schedule a session in the past");
+        } else if ((ctx.startDate() != null && day.isBefore(ctx.startDate()))
+                || (ctx.endDate() != null && day.isAfter(ctx.endDate()))) {
+            errors.put("sessionDate", "Session must fall within the phase period");
+        }
+
+        if (duration < MIN_DURATION_MINUTES || duration > MAX_DURATION_MINUTES) {
+            errors.put("plannedDuration", "Duration must be between 15 and 720 minutes (max 12 hours)");
+        } else {
+            LocalDateTime endTime = sessionDate.plusMinutes(duration);
+            // Không được phép qua ngày hôm sau tính từ giờ đặt lịch
+            if (!endTime.toLocalDate().equals(day)) {
+                errors.put("plannedDuration",
+                        "Session duration cannot cross into the next day (must finish before 23:59 on " + day.format(DAY) + ")");
+            }
+        }
+    }
+
     /**
-     * Lịch có còn chỗ cho buổi này không: ngựa được nghỉ đủ khoảng của giai đoạn
-     * (min_gap_minutes, mặc định DEFAULT_GAP_MINUTES), Groom không dắt hai ngựa
-     * khác nhau cùng lúc, và không vượt số buổi mỗi tuần mà giai đoạn quy định.
-     * excludeId = buổi đang dời lịch (0 khi tạo mới).
-     *
-     * Dùng lại findAll() và findPhases() có sẵn thay vì thêm câu SQL mới: số buổi
-     * của một ngựa hay một Groom chỉ vài chục, lọc trong Java là đủ.
+     * V37: Kiểm tra các nguyên tắc đặt lịch training:
+     *  - Khoảng nghỉ tối thiểu của phase (min_gap_minutes)
+     *  - 1 ngựa không được có 2 session trong cùng 1 ngày
+     *  - 1 Groom chỉ được chỉ định huấn luyện 1 ngựa tại 1 thời điểm nhất định và đang không thực hiện session nào cả
+     *  - Không vượt số buổi mỗi tuần của giai đoạn
      */
     private void checkSlot(TrainingSessionRepository.PhaseContext ctx, int groomId,
-                           LocalDateTime when, int excludeId) {
+                           LocalDateTime when, int plannedDuration, int excludeId) {
         TrainingPlanResponse.Phase phase = planRepository.findPhases(ctx.planId()).stream()
                 .filter(p -> p.phaseId() == ctx.phaseId())
                 .findFirst().orElse(null);
-        /* Khoảng nghỉ theo giai đoạn, không cố định 90 phút: giai đoạn đi bộ
-           khởi động rồi nước rút cần hai buổi sát nhau, giai đoạn tập nặng cần
-           nghỉ lâu hơn. Head Trainer đặt khi lập giáo án. */
         long horseGap = phase != null && phase.minGapMinutes() != null
                 ? phase.minGapMinutes() : DEFAULT_GAP_MINUTES;
-
+        LocalDateTime newEnd = when.plusMinutes(plannedDuration);
         List<TrainingSessionResponse> horseSessions = repository.findAll(ctx.horseId(), null, null, null, false);
         for (TrainingSessionResponse s : horseSessions) {
-            if (s.sessionId() != excludeId && OPEN.contains(s.status()) && tooClose(s.sessionDate(), when, horseGap)) {
+            if (s.sessionId() == excludeId || "CANCELLED".equals(s.status())) continue;
+
+            int sDur = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
+            LocalDateTime sStart = s.sessionDate();
+            LocalDateTime sEnd = sStart.plusMinutes(sDur);
+            boolean overlaps = when.isBefore(sEnd) && sStart.isBefore(newEnd);
+
+            if (OPEN.contains(s.status()) && tooClose(s.sessionDate(), when, horseGap)) {
                 throw new ApiException(HttpStatus.CONFLICT, s.horseName() + " already has a session at "
                         + s.sessionDate().format(WHEN) + ". This phase needs at least "
                         + horseGap + " minutes of rest between sessions");
             }
+            if (overlaps) {
+                throw new ApiException(HttpStatus.CONFLICT, s.horseName() + " already has an overlapping session on "
+                        + when.toLocalDate().format(DAY) + " from " + sStart.format(HOUR) + " to " + sEnd.format(HOUR)
+                        + ". A horse cannot have 2 sessions on the same day with overlapping time slots");
+            }
+            if (s.sessionDate().toLocalDate().equals(when.toLocalDate())) {
+                throw new ApiException(HttpStatus.CONFLICT, s.horseName() + " already has a session on "
+                        + when.toLocalDate().format(DAY) + " at " + s.sessionDate().format(HOUR)
+                        + ". A horse cannot have 2 sessions on the same day");
+            }
         }
-        /* Cùng ngựa thì vòng trên đã xét theo khoảng nghỉ của giai đoạn; ở đây
-           chỉ chặn một Groom dắt hai ngựa KHÁC NHAU cùng lúc. Không bỏ cùng ngựa
-           ra thì khoảng nghỉ ngắn của giai đoạn vô nghĩa khi cùng một Groom dắt. */
         for (TrainingSessionResponse s : repository.findAll(null, null, groomId, null, false)) {
-            if (s.sessionId() != excludeId && s.horseId() != ctx.horseId() && OPEN.contains(s.status())
-                    && tooClose(s.sessionDate(), when, DEFAULT_GAP_MINUTES)) {
+            if (s.sessionId() == excludeId || !OPEN.contains(s.status())) continue;
+
+            if ("RUNNING".equals(s.status())) {
+                throw new ApiException(HttpStatus.CONFLICT, s.assignedToName()
+                        + " is currently executing an active session with " + s.horseName()
+                        + " and cannot be assigned while a session is running");
+            }
+            int sDur = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
+            LocalDateTime sStart = s.sessionDate();
+            LocalDateTime sEnd = sStart.plusMinutes(sDur);
+            boolean overlaps = when.isBefore(sEnd) && sStart.isBefore(newEnd);
+            if (overlaps || (s.horseId() != ctx.horseId() && tooClose(sStart, when, DEFAULT_GAP_MINUTES))) {
                 throw new ApiException(HttpStatus.CONFLICT, s.assignedToName() + " is already handling "
                         + s.horseName() + " at " + s.sessionDate().format(HOUR) + " that day");
             }
@@ -479,17 +593,9 @@ public TrainingSessionResponse reschedule(
         return Math.abs(Duration.between(a, b).toMinutes()) < gapMinutes;
     }
 
-    /**
-     * plannedDistance: cự ly dự kiến của buổi tập, để xét khoá HEAVY_WORK_ONLY.
-     */
-    private void checkHorseCanTrain(int horseId, Integer plannedDistance) {
+    private HorseResponse checkHorseCanTrain(int horseId, Integer plannedDistance) {
         HorseResponse horse = horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this phase not found"));
-        /* Hồ sơ PEDIGREE không phải ngựa của học viện nên không giao buổi tập.
-           Phép kiểm nằm ở đây, trong checkHorseCanTrain, chứ không rải ra ba
-           chỗ gọi: create(), start() và reschedule() đều đi qua hàm này, nên
-           đặt một lần là cả ba đường đều được bảo vệ - và đường thứ tư, nếu
-           sau này có, cũng vậy. */
         String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
         if (typeProblem != null) {
             throw new ApiException(HttpStatus.CONFLICT, typeProblem);
@@ -498,8 +604,6 @@ public TrainingSessionResponse reschedule(
         if (withdrawn != null) {
             throw new ApiException(HttpStatus.CONFLICT, withdrawn);
         }
-        /* FULL chặn mọi buổi tập. HEAVY_WORK_ONLY chỉ cho buổi nhẹ (cự ly tối đa lightWorkMaxDistance)
-           để phục hồi chức năng ở chặng Light work. */
         var activeLock = vitalsRepository.findActiveLock(horseId);
         if (activeLock.isPresent()) {
             var lock = activeLock.get();
@@ -514,8 +618,7 @@ public TrainingSessionResponse reschedule(
             throw new ApiException(HttpStatus.CONFLICT,
                     "Horse status is " + horse.status() + ", cannot train");
         }
-        /* Còn báo cáo sự cố chưa được bác sĩ khám (vd. ngựa vừa bị dừng giữa buổi) thì không
-           xếp, không đổi lịch và không Start. Nằm trong hàm này nên cả ba đường đều được chặn. */
         incidentGuard.assertNoOpenReport(horseId);
+        return horse;
     }
 }

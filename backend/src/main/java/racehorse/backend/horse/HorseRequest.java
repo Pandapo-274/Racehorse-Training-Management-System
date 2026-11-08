@@ -14,17 +14,17 @@ import jakarta.validation.constraints.Size;
  *  Không còn endpoint POST /api/horses.
  *  status KHÔNG nằm ở đây: trạng thái do bác sĩ thú y quyết định (UC14, UC18). */
 public record HorseRequest(
-        @NotNull(message = "Chủ ngựa là bắt buộc") Integer ownerId,
+        @NotNull(message = "Owner is required") Integer ownerId,
         Integer sireId,
         Integer damId,
-        @NotBlank(message = "Tên ngựa là bắt buộc") @Size(max = 100) String horseName,
-        @NotBlank(message = "Mã đăng ký là bắt buộc") @Size(max = 30) String registrationCode,
+        @NotBlank(message = "Horse name is required") @Size(max = 100) String horseName,
+        @NotBlank(message = "Registration code is required") @Size(max = 30) String registrationCode,
         @Size(max = 50) String breed,
         @Pattern(regexp = "COLT|FILLY|STALLION|MARE|GELDING",
-                 message = "Giới tính phải là COLT, FILLY, STALLION, MARE hoặc GELDING") String horseGender,
-        @PastOrPresent(message = "Ngày sinh không được ở tương lai") LocalDate dateOfBirth,
+                 message = "Sex must be COLT, FILLY, STALLION, MARE or GELDING") String horseGender,
+        @PastOrPresent(message = "Date of birth cannot be in the future") LocalDate dateOfBirth,
         @Size(max = 50) String color,
-        @DecimalMin(value = "0.0", inclusive = false, message = "Cân nặng phải lớn hơn 0") BigDecimal weight,
+        @DecimalMin(value = "0.0", inclusive = false, message = "Weight must be greater than 0") BigDecimal weight,
         @Size(max = 20) String stallNo,
         @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE") String recordType
 ) {}

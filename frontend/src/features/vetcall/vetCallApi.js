@@ -72,6 +72,7 @@ export const SIGN_SUGGESTIONS = [
 ];
 
 export function metricText(call) {
+  if (!call.metricType) return "Reported directly during the training session";
   const unit = call.metricType === "VELOCITY" ? "m/s" : "bpm";
   const name = call.metricType === "VELOCITY" ? "Speed" : "Heart rate";
   return `${name} ${Number(call.actualValue)} ${unit}, limit ${Number(call.thresholdValue)} ${unit}`;

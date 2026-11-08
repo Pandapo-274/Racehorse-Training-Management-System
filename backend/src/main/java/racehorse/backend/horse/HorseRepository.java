@@ -20,12 +20,23 @@ public class HorseRepository {
         this.jdbc = jdbc;
     }
 
+    public record TrainerSummary(
+            int userId,
+            String username,
+            String fullName,
+            int managedHorseCount,
+            int maxHorses
+    ) {}
+
     private static final String SELECT_HORSE = """
             SELECT h.horse_id, h.owner_id, u.full_name AS owner_name, h.sire_id, h.dam_id,
                    h.horse_name, h.registration_code, h.breed, h.horse_gender, h.date_of_birth,
                    h.color, h.weight, h.stall_no, h.status, h.created_at, h.updated_at,
-                   h.record_type, h.photo_url, h.activity_status, h.withdrawn_at
-            FROM HORSE h JOIN APP_USER u ON u.user_id = h.owner_id
+                   h.record_type, h.photo_url, h.activity_status, h.withdrawn_at,
+                   h.trainer_id, tr.full_name AS trainer_name
+            FROM HORSE h
+            JOIN APP_USER u ON u.user_id = h.owner_id
+            LEFT JOIN APP_USER tr ON tr.user_id = h.trainer_id
             """;
 
     private static HorseResponse mapHorse(ResultSet rs, int rowNum) throws SQLException {
@@ -42,7 +53,9 @@ public class HorseRepository {
                 rs.getString("record_type"),
                 rs.getString("photo_url"),
                 rs.getString("activity_status"),
-                rs.getObject("withdrawn_at", LocalDateTime.class));
+                rs.getObject("withdrawn_at", LocalDateTime.class),
+                rs.getObject("trainer_id", Integer.class),
+                rs.getString("trainer_name"));
     }
 
     public Optional<HorseResponse> findById(int horseId) {
@@ -70,6 +83,22 @@ public class HorseRepository {
                 .param("ownerId", ownerId)
                 .query(HorseRepository::mapHorse)
                 .list();
+    }
+
+    /** V37: Chỉ những ngựa Club Manager đã giao cho Head Trainer này quản lý. */
+    public List<HorseResponse> findByTrainer(int trainerId) {
+        return jdbc.sql(SELECT_HORSE + " WHERE h.trainer_id = :trainerId ORDER BY h.horse_name")
+                .param("trainerId", trainerId)
+                .query(HorseRepository::mapHorse)
+                .list();
+    }
+
+    /** V37: Id các ngựa Head Trainer này đang được giao quản lý. */
+    public java.util.Set<Integer> findHorseIdsByTrainer(int trainerId) {
+        return new java.util.HashSet<>(jdbc.sql("SELECT horse_id FROM HORSE WHERE trainer_id = :trainerId")
+                .param("trainerId", trainerId)
+                .query(Integer.class)
+                .list());
     }
 
     /** excludeId = id ngựa đang sửa (để không tự báo trùng với chính mình); khi tạo mới truyền 0. */
@@ -142,6 +171,7 @@ public class HorseRepository {
                 .param("color", r.color())
                 .update();
     }
+
     /** Mã đăng ký và số chuồng, chỉ Club Manager đổi (HorseService.updateIdentity). */
     public int updateIdentity(int horseId, String registrationCode, String stallNo) {
         return jdbc.sql("""
@@ -152,6 +182,73 @@ public class HorseRepository {
                 .param("stall", stallNo)
                 .param("id", horseId)
                 .update();
+    }
+
+    /** V37: Club Manager gán hoặc gỡ Head Trainer phụ trách ngựa. */
+    public int updateTrainer(int horseId, Integer trainerId) {
+        return jdbc.sql("""
+                UPDATE HORSE SET trainer_id = :trainerId, updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id
+                """)
+                .param("trainerId", trainerId)
+                .param("id", horseId)
+                .update();
+    }
+
+    /** V37: Danh sách Head Trainer đang ACTIVE cùng số ngựa đang quản lý và hạn mức. */
+    public List<TrainerSummary> listActiveTrainers() {
+        return jdbc.sql("""
+                SELECT u.user_id, u.username, u.full_name,
+                       (SELECT COUNT(*) FROM HORSE h
+                        WHERE h.trainer_id = u.user_id AND h.activity_status = 'ACTIVE') AS managed_horse_count,
+                       ISNULL(u.max_horses, 10) AS max_horses
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'HEAD_TRAINER' AND u.status = 'ACTIVE'
+                ORDER BY u.full_name
+                """)
+                .query((rs, n) -> new TrainerSummary(
+                        rs.getInt("user_id"),
+                        rs.getString("username"),
+                        rs.getString("full_name"),
+                        rs.getInt("managed_horse_count"),
+                        rs.getInt("max_horses")))
+                .list();
+    }
+
+    /** V37: Tìm một Head Trainer đang ACTIVE theo id. */
+    public Optional<TrainerSummary> findActiveTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT u.user_id, u.username, u.full_name,
+                       (SELECT COUNT(*) FROM HORSE h
+                        WHERE h.trainer_id = u.user_id AND h.activity_status = 'ACTIVE') AS managed_horse_count,
+                       ISNULL(u.max_horses, 10) AS max_horses
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE u.user_id = :id AND r.role_name = 'HEAD_TRAINER' AND u.status = 'ACTIVE'
+                """)
+                .param("id", trainerId)
+                .query((rs, n) -> new TrainerSummary(
+                        rs.getInt("user_id"),
+                        rs.getString("username"),
+                        rs.getString("full_name"),
+                        rs.getInt("managed_horse_count"),
+                        rs.getInt("max_horses")))
+                .optional();
+    }
+
+    /** V37: Đếm số ngựa đang ACTIVE thuộc quyền của trainerId (trừ excludeHorseId). */
+    public int countManagedHorses(int trainerId, int excludeHorseId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM HORSE
+                WHERE trainer_id = :trainerId
+                  AND activity_status = 'ACTIVE'
+                  AND horse_id <> :excludeId
+                """)
+                .param("trainerId", trainerId)
+                .param("excludeId", excludeHorseId)
+                .query(Integer.class)
+                .single();
     }
 
     /**
@@ -175,11 +272,6 @@ public class HorseRepository {
 
     /**
      * Đánh dấu ngựa đã rút và trả chuồng, CHỈ khi nó vẫn đang ACTIVE.
-     *
-     * Trả chuồng (stall_no = NULL) vì con ngựa đã rời học viện: giữ số chuồng
-     * thì UX_HORSE_stall chặn không cho xếp ngựa khác vào ô đó.
-     *
-     * @return 1 nếu đổi được, 0 nếu ngựa đã rút từ trước.
      */
     public int markWithdrawn(int horseId) {
         return jdbc.sql("""
@@ -187,6 +279,7 @@ public class HorseRepository {
                 SET activity_status = 'WITHDRAWN',
                     withdrawn_at = SYSUTCDATETIME(),
                     stall_no = NULL,
+                    trainer_id = NULL,
                     updated_at = SYSUTCDATETIME()
                 WHERE horse_id = :id AND activity_status = 'ACTIVE'
                 """)
@@ -201,31 +294,10 @@ public class HorseRepository {
                 """)
                 .param("id", userId).query(Integer.class).single() > 0;
     }
-        public record PedigreeRow(int horseId, String horseName, String registrationCode,
+
+    public record PedigreeRow(int horseId, String horseName, String registrationCode,
                               String horseGender, Integer sireId, Integer damId) {}
 
-    /** Lấy tổ tiên bằng recursive CTE. maxDepth chặn luôn trường hợp dữ liệu vòng lặp. */
-    /**
-     * candidateId có nằm trong danh sách tổ tiên của horseId không.
-     *
-     * Dùng để chặn vòng lặp phả hệ: trước khi gán P làm cha/mẹ của H, phải
-     * chắc H chưa là tổ tiên của P. Không kiểm thì tạo được A là cha của B
-     * trong khi B đã là cha của A, và cây phả hệ hiện ra một con ngựa làm ông
-     * của chính nó.
-     *
-     * Hai điểm trong câu này đều có lý do:
-     *
-     *  - depth < 50 chứ không phải < 5 như findAncestors. findAncestors chỉ
-     *    cần đủ sâu cho màn hình (tối đa 5 đời); còn ở đây bỏ sót một vòng lặp
-     *    nằm sâu hơn nghĩa là cho phép tạo ra nó. 50 đời là quá đủ cho ngựa
-     *    thật, mà vẫn là một con số hữu hạn.
-     *
-     *  - Và nó phải chịu được dữ liệu ĐÃ có vòng lặp từ trước. Nếu database
-     *    hiện tại đã lẫn một vòng (vì phép kiểm này ra đời muộn), một CTE
-     *    không chặn độ sâu sẽ chạy đến khi SQL Server ném lỗi MAXRECURSION, và
-     *    phép kiểm an toàn lại chính là chỗ làm sập. Mốc 50 khiến câu này luôn
-     *    kết thúc.
-     */
     public boolean isAncestorOf(int candidateId, int horseId) {
         Integer hit = jdbc.sql("""
                 WITH tree AS (

@@ -27,5 +27,22 @@ public record StaffRow(
         String avatarUrl,
         LocalDateTime createdAt,
         /** Horses currently registered to this account. Non-zero only for HORSE_OWNER. */
-        int horseCount
-) {}
+        int horseCount,
+        /** V37: Head Trainer phụ trách Groom này (chỉ có ở vai trò GROOM). */
+        Integer trainerId,
+        String trainerName,
+        /** V37: Số Groom đang ACTIVE thuộc quyền quản lý của Head Trainer này (tối đa 3). */
+        int groomCount,
+        /** V37: Số ngựa đang thuộc quyền quản lý của Head Trainer này. */
+        int managedHorseCount,
+        /** V37: Hạn mức ngựa tối đa Club Manager cấp cho Head Trainer này. */
+        Integer maxHorses
+) {
+    public StaffRow(
+            int userId, String username, String fullName, String email, String phone,
+            String roleName, String roleLabel, String status, String avatarUrl,
+            LocalDateTime createdAt, int horseCount) {
+        this(userId, username, fullName, email, phone, roleName, roleLabel, status,
+                avatarUrl, createdAt, horseCount, null, null, 0, 0, null);
+    }
+}

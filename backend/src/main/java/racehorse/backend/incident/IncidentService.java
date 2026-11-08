@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import racehorse.backend.auth.UserRepository;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
 import racehorse.backend.race.RaceRiskNotifier;
+import racehorse.backend.vetcall.VetCallRepository;
 
 @Service
 public class IncidentService {
@@ -25,27 +27,37 @@ public class IncidentService {
     private final UserRepository users;
     private final NotificationService notifications;
     private final RaceRiskNotifier raceRisk;
+    private final VetCallRepository vetCalls;
 
     public IncidentService(IncidentRepository incidents, UserRepository users, NotificationService notifications,
                            RaceRiskNotifier raceRisk) {
+        this(incidents, users, notifications, raceRisk, null);
+    }
+
+    @Autowired
+    public IncidentService(IncidentRepository incidents, UserRepository users, NotificationService notifications,
+                           RaceRiskNotifier raceRisk, VetCallRepository vetCalls) {
         this.incidents = incidents;
         this.users = users;
         this.notifications = notifications;
         this.raceRisk = raceRisk;
+        this.vetCalls = vetCalls;
     }
 
     /**
      * Dừng một buổi đang chạy vì ngựa bất thường: đổi trạng thái buổi tập, mở báo cáo sự cố và báo người liên quan.
      *
-     * @Transactional vì chạm hai bảng (TRAINING_SESSION, INCIDENT_REPORT) cộng thông báo: dừng được buổi
-     * mà không mở được báo cáo là trạng thái tệ nhất - ngựa ngưng tập nhưng không bác sĩ nào biết để khám.
+     * V37: Nếu Groom chủ động dừng sớm buổi tập (kể cả khi chấn thương và gọi Vet), bắt buộc Groom phải
+     * báo cáo cả 2 chỉ số Heart Rate và Speed ít nhất 1 lần trong buổi tập đó.
      */
     @Transactional
     public StopSessionResponse stopSession(AuthenticatedUser user, int sessionId, StopSessionRequest req, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can stop a training session");
+        }
         IncidentRepository.SessionForStop s = incidents.findSessionForStop(sessionId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Training session not found"));
 
-        // Groom chỉ được dừng buổi mình phụ trách; Head Trainer dừng được mọi buổi.
         if ("GROOM".equals(user.role()) && s.assignedTo() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This session is not assigned to you");
         }
@@ -54,11 +66,17 @@ public class IncidentService {
                     "Only a RUNNING session can be stopped (currently " + s.status() + ")");
         }
 
+        // V37: Groom chỉ được kết thúc sớm khi đã báo cáo cả 2 chỉ số heart rate và speed ít nhất 1 lần
+        if ("GROOM".equals(user.role()) && (s.peakHeartRate() == null || s.peakVelocity() == null)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "You must report both heart rate and speed at least once during the session before ending it early");
+        }
+
         String symptoms = req.symptoms().trim();
         String description = (req.description() == null || req.description().isBlank()) ? null : req.description().trim();
 
-        // Đổi trạng thái trước, có điều kiện: nếu người khác vừa dừng/kết thúc buổi này thì nhận 0 dòng và huỷ cả giao dịch.
-        if (incidents.markStopped(sessionId) == 0) {
+        String earlyReason = Text.clip("Horse injury / Vet called: " + symptoms, 255);
+        if (incidents.markStopped(sessionId, earlyReason) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This session has just been stopped or finished by someone else");
         }
         int reportId = openStopReport(user, s, symptoms, description, req.urgency(), ip);
@@ -69,49 +87,41 @@ public class IncidentService {
         return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
     }
 
-    /**
-     * Head Trainer chọn STOP_SESSION khi xử lý một cảnh báo vượt ngưỡng (AlertService.resolve).
-     *
-     * Đi đúng đường của Groom bấm Stop: mở báo cáo sự cố cho bác sĩ, và tới khi khám xong
-     * IncidentGuard chặn con ngựa tập tiếp. Trước đây đường này chỉ đổi STOPPED_EARLY, nên một
-     * con ngựa vừa bị dừng vì nhịp tim vượt ngưỡng lại được xếp và Start buổi khác ngay.
-     *
-     * Không ném lỗi khi buổi không còn RUNNING (Groom vừa Finish hoặc vừa Stop): cảnh báo vẫn
-     * được ghi là đã xử lý, chỉ là không còn gì để dừng.
-     *
-     * @return id báo cáo sự cố, hoặc null nếu buổi đã không còn chạy.
-     */
     @Transactional
     public Integer stopFromAlert(AuthenticatedUser trainer, int sessionId, String symptoms, String urgency,
                                  String ip) {
         IncidentRepository.SessionForStop s = incidents.findSessionForStop(sessionId).orElse(null);
-        if (s == null || !"RUNNING".equals(s.status()) || incidents.markStopped(sessionId) == 0) {
+        String reason = Text.clip("Threshold alert: " + symptoms, 255);
+        if (s == null || !"RUNNING".equals(s.status()) || incidents.markStopped(sessionId, reason) == 0) {
             return null;
         }
         return openStopReport(trainer, s, Text.clip(symptoms, 255), null, urgency, ip);
     }
 
-    /**
-     * Phần chung của hai đường dừng buổi: buổi đã được markStopped, giờ mở báo cáo và báo người liên quan.
-     * @return id báo cáo vừa mở.
-     */
     private int openStopReport(AuthenticatedUser user, IncidentRepository.SessionForStop s, String symptoms,
                                String description, String urgency, String ip) {
         int sessionId = s.sessionId();
         int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, urgency);
-        users.writeAudit(user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
+        users.writeAudit(user == null ? null : user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
 
         String shortWhat = s.horseName() + ": " + symptoms + " (" + urgency + ").";
-        // Bác sĩ thú y: cần đi khám. Người ra tay không cần chuông cho chính mình (notifyRole đã loại trừ).
         notifications.notifyRole("VETERINARIAN", user, new Notice(
                 "INCIDENT_REPORTED", "Horse needs examination", Text.clip(shortWhat, 500),
                 Notice.HORSE, s.horseId()));
-        // Chủ ngựa và Head Trainer: ngựa vừa bị dừng giữa buổi và sẽ không tập tiếp cho tới khi bác sĩ khám.
+        /* The stop is also a vet call, so it lands in the veterinarian's "Vet calls" queue. */
+        if (vetCalls != null) {
+            int callId = vetCalls.insert(null, sessionId, s.horseId(), user.userId(),
+                    Text.clip(symptoms, 500), description == null ? null : Text.clip(description, 1000),
+                    urgency, true, reportId);
+            notifications.notifyRole("VETERINARIAN", user, new Notice(
+                    "VET_CALL_REQUESTED", "Veterinarian needed at training",
+                    Text.clip(s.horseName() + " (" + urgency + "): " + symptoms, 500),
+                    Notice.VET_CALL, callId));
+        }
         notifications.notifyHorseWatchers(s.ownerId(), user, new Notice(
                 "TRAINING_SESSION_STOPPED", "Training session stopped",
                 Text.clip(s.horseName() + " was stopped during training: " + symptoms + ".", 500),
                 Notice.TRAINING_SESSION, sessionId));
-        // Head Trainer dừng hộ thì Groom phụ trách phải biết để ngưng việc.
         if (s.assignedTo() != user.userId()) {
             notifications.notifyUser(s.assignedTo(), new Notice(
                     "TRAINING_SESSION_STOPPED", "Training session stopped",
@@ -120,17 +130,11 @@ public class IncidentService {
                     Notice.TRAINING_SESSION, sessionId));
         }
 
-        // The open report now blocks racing too (RaceService.problemOf).
         raceRisk.warn(s.horseId(), s.horseName(), s.ownerId(), user,
                 "was stopped during training and is waiting for a veterinarian");
         return reportId;
     }
 
-    /**
-     * Hàng chờ khám. status: OPEN (mặc định = PENDING + RECEIVED), PENDING, RECEIVED, EXAMINED,
-     * DISMISSED hoặc ALL.
-     * Groom chỉ thấy báo cáo do mình lập, chủ ngựa chỉ thấy ngựa của mình, còn lại thấy tất.
-     */
     public List<IncidentReportResponse> list(String status, Integer horseId, int limit, AuthenticatedUser user) {
         String f = (status == null || status.isBlank()) ? "OPEN" : status.trim().toUpperCase(Locale.ROOT);
         if (!STATUS_FILTERS.contains(f)) {
@@ -161,15 +165,6 @@ public class IncidentService {
         return r;
     }
 
-    /**
-     * Head Trainer huỷ báo động giả: PENDING -> DISMISSED, ngựa hết bị IncidentGuard chặn.
-     *
-     * Chỉ với báo cáo sinh ra từ một lần dừng buổi tập, và khi bác sĩ CHƯA nhận ca: Groom
-     * mới vào nghề bấm Stop vì ngựa vấp sỏi thì Head Trainer - người đứng ở sân - thẩm định
-     * được và gỡ chặn ngay, không phải đóng băng lịch tập chờ bác sĩ. Bác sĩ đã nhận ca thì
-     * quyết định thuộc về bác sĩ. Bắt buộc ghi lý do; báo cáo vẫn nằm trong lịch sử, và
-     * bác sĩ, chủ ngựa, người báo đều được báo.
-     */
     @Transactional
     public IncidentReportResponse dismiss(AuthenticatedUser trainer, int reportId, String reason, String ip) {
         IncidentReportResponse r = incidents.findById(reportId)
@@ -204,7 +199,6 @@ public class IncidentService {
                         "The report was updated but could not be read back"));
     }
 
-    /** Bác sĩ nhận ca: PENDING -> RECEIVED. Chưa phải đã khám: báo cáo chỉ đóng khi có bản khám kèm reportId. */
     @Transactional
     public IncidentReportResponse receive(AuthenticatedUser vet, int reportId, String ip) {
         IncidentReportResponse r = incidents.findById(reportId)
@@ -216,7 +210,6 @@ public class IncidentService {
         users.writeAudit(vet.userId(), "INCIDENT_RECEIVE", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
 
         String vetName = users.findById(vet.userId()).map(UserRecord::fullName).orElse("A veterinarian");
-        // Người đã báo (thường là Groom) muốn biết có người nhận ca chưa.
         if (r.reporterId() != vet.userId()) {
             notifications.notifyUser(r.reporterId(), new Notice(
                     "INCIDENT_RECEIVED", "Veterinarian assigned",

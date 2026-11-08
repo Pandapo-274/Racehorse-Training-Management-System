@@ -123,7 +123,7 @@ function UpcomingCard({ sessions }) {
           {sessions.slice(0, 6).map((s) => (
             <li key={s.sessionId}>
               <strong>{formatDateTime(s.sessionDate, { local: true })}</strong>
-              <span>{s.phaseName} · {formatMetres(s.plannedDistance)}{s.trialRun ? " · Trial run" : ""}</span>
+              <span>{s.phaseName} · {formatMetres(s.plannedDistance)} ({s.plannedDuration || 60} min){s.trialRun ? " · Trial run" : ""}</span>
             </li>
           ))}
         </ul>
@@ -135,6 +135,7 @@ function UpcomingCard({ sessions }) {
 function LogEntry({ s }) {
   const st = toSessionStatus(s.status);
   const evaluated = s.evaluation != null;
+  const isAutoPreliminary = s.reviewStatus === "ARCHIVED_AUTO";
   return (
     <li className="ot-entry">
       <div className="ot-entry__head">
@@ -144,6 +145,14 @@ function LogEntry({ s }) {
         </div>
         <div className="ot-entry__chips">
           {s.trialRun && <span className="ot-badge">Trial run</span>}
+          {isAutoPreliminary && (
+            <span
+              className="ot-badge"
+              style={{ backgroundColor: "#fef3c7", color: "#92400e", border: "1px solid #f59e0b" }}
+            >
+              ⚠️ Automated Preliminary Report
+            </span>
+          )}
           <StatusChip tone={st.tone} label={st.label} />
         </div>
       </div>
@@ -151,10 +160,27 @@ function LogEntry({ s }) {
       {s.status !== "CANCELLED" && (
         <dl className="ot-metrics">
           <div><dt>Distance</dt><dd>{formatMetres(s.actualDistance)} <small>of {formatMetres(s.plannedDistance)}</small></dd></div>
-          <div><dt>Duration</dt><dd>{s.durationMinutes != null ? `${s.durationMinutes} min` : "—"}</dd></div>
+          <div><dt>Duration</dt><dd>{s.durationMinutes != null ? `${s.durationMinutes} min` : (s.plannedDuration ? `${s.plannedDuration} min (planned)` : "—")}</dd></div>
           <div><dt>Heart rate</dt><dd>{s.avgHeartRate != null ? `${s.avgHeartRate} avg / ${s.peakHeartRate} peak` : (s.peakHeartRate != null ? `${s.peakHeartRate} peak` : "—")}</dd></div>
           <div><dt>Top speed</dt><dd>{s.peakVelocity != null ? `${s.peakVelocity} m/s` : "—"}</dd></div>
         </dl>
+      )}
+
+      {isAutoPreliminary && (
+        <p
+          role="alert"
+          style={{
+            margin: "8px 0",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            backgroundColor: "#fffbeb",
+            border: "1px solid #fcd34d",
+            color: "#92400e",
+            fontSize: "13px",
+          }}
+        >
+          ⚠️ <strong>Notice:</strong> This is an automated preliminary summary generated from Groom metrics because the 48-hour review window expired. It is NOT an official evaluation from the Head Trainer. The session is archived awaiting the Head Trainer&apos;s official review.
+        </p>
       )}
 
       {evaluated ? (
@@ -164,7 +190,7 @@ function LogEntry({ s }) {
         </blockquote>
       ) : (
         s.status !== "CANCELLED" && s.status !== "RUNNING" && (
-          <p className="ot-pending">Waiting for the head trainer's evaluation.</p>
+          <p className="ot-pending">Waiting for the head trainer's evaluation (within 48h of completion).</p>
         )
       )}
 

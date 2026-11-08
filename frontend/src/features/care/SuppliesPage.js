@@ -22,7 +22,7 @@ import "./care.css";
 
 function formatSupplyPrice(price, unit) {
   if (!price || Number(price) <= 0) return "—";
-  return `${Number(price).toLocaleString("vi-VN")}đ/1 ${unit || "đơn vị"}`;
+  return `${Number(price).toLocaleString("en-US")} VND / 1 ${unit || "unit"}`;
 }
 
 const EMPTY = { supplyName: "", category: "FEED", unit: "kg", minThreshold: "", currentQty: "", area: "", expiryDate: "" };
@@ -130,7 +130,6 @@ function StockAction({ kind, item, areas = [], onDone, onCancel }) {
   const navigate = useNavigate();
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState(item.unit || "");
-  const [unitPrice, setUnitPrice] = useState(item.unitPrice ? String(item.unitPrice) : "");
   const [area, setArea] = useState(item.area || "");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -261,7 +260,7 @@ function StockAction({ kind, item, areas = [], onDone, onCancel }) {
                   id="sa-unit"
                   value={unit}
                   maxLength={20}
-                  placeholder="e.g. tuýp, kg, viên, lọ"
+                  placeholder="e.g. tube, kg, tablet, vial"
                   onChange={(e) => setUnit(e.target.value)}
                 />
               </div>
@@ -272,7 +271,7 @@ function StockAction({ kind, item, areas = [], onDone, onCancel }) {
                   type="text"
                   readOnly
                   disabled
-                  value={item.unitPrice ? `${Number(item.unitPrice).toLocaleString("vi-VN")} ₫ / 1 ${item.unit}` : "0 ₫"}
+                  value={item.unitPrice ? `${Number(item.unitPrice).toLocaleString("en-US")} VND / 1 ${item.unit}` : "0 ₫"}
                   className="care-qty-input--readonly"
                   style={{ background: "#f8fafc", cursor: "not-allowed" }}
                 />
@@ -284,7 +283,7 @@ function StockAction({ kind, item, areas = [], onDone, onCancel }) {
                   list="sa-areas"
                   value={area}
                   maxLength={100}
-                  placeholder="e.g. Kho A, Tủ thuốc"
+                  placeholder="e.g. Store A, Medicine cabinet"
                   onChange={(e) => setArea(e.target.value)}
                 />
                 <datalist id="sa-areas">{areas.map((a) => <option key={a} value={a} />)}</datalist>

@@ -18,14 +18,14 @@ import {
 function formatExpenseNote(note) {
   if (!note) return "";
   return note.replace(/\(Qty:\s*(\d+(?:\.\d+)?)\s*@\s*\d+\)/gi, (match, q) => {
-    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} viên)`;
-    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tuýp)`;
-    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} lọ)`;
-    if (note.includes("Probiotic")) return `(${q} gói)`;
-    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} chai)`;
-    if (note.includes("Glucosamine")) return `(${q} hộp)`;
-    if (note.includes("Hyaluronic")) return `(${q} ống)`;
-    if (note.includes("Electrolytes") || note.includes("điện giải")) return `(${q} lít)`;
+    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} tablets)`;
+    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tubes)`;
+    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} vials)`;
+    if (note.includes("Probiotic")) return `(${q} sachets)`;
+    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} bottles)`;
+    if (note.includes("Glucosamine")) return `(${q} boxes)`;
+    if (note.includes("Hyaluronic")) return `(${q} ampoules)`;
+    if (note.includes("Electrolytes") || note.includes("Electrolytes")) return `(${q} litres)`;
     return `(${q})`;
   });
 }
