@@ -50,8 +50,13 @@ public class HorseRequestController {
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
-    /** Chủ ngựa nhận yêu cầu của mình; học viện nhận cả hàng chờ. */
+    /**
+     * Chủ ngựa nhận yêu cầu của mình; Club Manager nhận cả hàng chờ. Trước đây
+     * không có @RequireRole nên Groom, Vet, Head Trainer cũng đọc được hàng chờ
+     * kèm tên chủ ngựa và ghi chú của họ.
+     */
     @GetMapping
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER"})
     public List<HorseRequestRow> list(
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.list(user);

@@ -21,6 +21,12 @@ public class AuthService {
     static final Set<String> SELF_REGISTER_ROLES =
             Set.of("HORSE_OWNER");
 
+    /** V39: this many wrong passwords in a row lock sign-in for LOCK_MINUTES. */
+    static final int MAX_FAILED_LOGINS = 5;
+    static final int LOCK_MINUTES = 15;
+    private static final java.time.format.DateTimeFormatter CLOCK =
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(java.time.ZoneId.systemDefault());
+
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwt;
@@ -69,7 +75,11 @@ public class AuthService {
 
         users.writeAudit(userId, "REGISTER", "APP_USER", userId, "SUCCESS", ip);
 
-        // TODO: gửi email xác nhận (cần spring-boot-starter-mail + cấu hình SMTP).
+        /* Không bắt xác minh email ở đây, có chủ đích: mail tắt mặc định
+           (app.mail.enabled=false) nên bắt xác minh là khoá mọi tài khoản mới; và
+           mối nguy "đăng ký trước bằng email của người khác" đã được chặn ở
+           GoogleAuthService (liên kết Google vô hiệu mật khẩu cũ) và ở quên mật
+           khẩu (link chỉ tới hộp thư thật của chủ email). */
         return new RegisterResponse(userId, username, fullName, email, roleName, "ACTIVE");
     }
 
@@ -84,18 +94,32 @@ public class AuthService {
         String hash = found.map(UserRecord::passwordHash).orElse(dummyHash);
         boolean passwordOk = passwordEncoder.matches(req.password(), hash);
 
+        /* V39: a locked account is refused even with the right password, and the
+           password is not even compared, so guessing during the lock teaches
+           nothing. BCrypt above still ran, so the response time is the same. */
+        if (found.isPresent() && found.get().isLocked()) {
+            users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip, "locked");
+            throw locked(found.get().lockedUntil());
+        }
         // Sai username và sai password dùng CHUNG một thông báo để kẻ xấu không dò được tài khoản nào tồn tại.
         if (found.isEmpty() || !passwordOk) {
             users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip);
+            if (found.isPresent()) {
+                java.time.Instant lockedNow = users.recordFailedLogin(foundId, MAX_FAILED_LOGINS, LOCK_MINUTES);
+                if (lockedNow != null) {
+                    users.writeAudit(foundId, "LOGIN_LOCKED", "APP_USER", foundId, "SUCCESS", ip,
+                            MAX_FAILED_LOGINS + " wrong passwords in a row");
+                    throw locked(lockedNow);
+                }
+            }
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
-
         UserRecord u = found.get();
         if (!"ACTIVE".equals(u.status())) {
             users.writeAudit(u.userId(), "LOGIN", "APP_USER", u.userId(), "DENIED", ip);
             throw new ApiException(HttpStatus.FORBIDDEN, "Account is suspended. Please contact the club manager");
         }
-
+        users.clearLoginLock(u.userId());
         users.writeAudit(u.userId(), "LOGIN", "APP_USER", u.userId(), "SUCCESS", ip);
         String token = jwt.generate(u.userId(), u.username(), u.role());
         return new LoginResponse(token, "Bearer", jwt.expiresInSeconds(), toInfo(u));
@@ -120,6 +144,12 @@ public class AuthService {
     private UserInfo toInfo(UserRecord u) {
         return new UserInfo(u.userId(), u.username(), u.fullName(), u.email(), u.role(),
                 u.avatarUrl(), u.mustChangePassword());
+    }
+
+    private static ApiException locked(java.time.Instant until) {
+        return new ApiException(HttpStatus.TOO_MANY_REQUESTS,
+                "Too many wrong passwords. Sign-in is locked until " + CLOCK.format(until)
+                        + ". Wait, reset your password, or ask the club manager for a temporary password");
     }
 
     private ApiException conflict(Map<String, String> errors) {

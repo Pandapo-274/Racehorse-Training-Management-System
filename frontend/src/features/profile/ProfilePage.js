@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { handleAuthError, updateStoredUser } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
+import PasswordField from "../password/PasswordField";
 import {
   getProfile, updateProfile, uploadAvatar, checkAvatar,
   toRoleLabel, toAccountStatus, formatJoined, toInitials,
@@ -76,7 +77,7 @@ export default function ProfilePage() {
   const fileInput = useRef(null);
 
   const [profile, setProfile] = useState(null);
-  const [form, setForm] = useState({ fullName: "", email: "", phone: "" });
+  const [form, setForm] = useState({ fullName: "", email: "", phone: "", currentPassword: "" });
   const [errors, setErrors] = useState({});
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -91,7 +92,7 @@ export default function ProfilePage() {
   // thứ hiện trên màn phải là thứ máy chủ đã ghi, không phải thứ người dùng gõ.
   const adopt = useCallback((p) => {
     setProfile(p);
-    setForm({ fullName: p.fullName || "", email: p.email || "", phone: p.phone || "" });
+    setForm({ fullName: p.fullName || "", email: p.email || "", phone: p.phone || "", currentPassword: "" });
 
     // Đồng bộ luôn vào localStorage, không chỉ sau khi lưu. Thanh bên đọc
     // avatarUrl từ đó chứ không gọi API, nên hai trường hợp này cần nó:
@@ -199,6 +200,12 @@ export default function ProfilePage() {
       setUploading(false);
     }
   };
+
+  // Changing the email changes where password-reset links go, so the server
+  // asks for the current password first (a borrowed, signed-in session must
+  // not be enough to take the account over).
+  const emailChanging =
+    !!profile && form.email.trim().toLowerCase() !== (profile.email || "").toLowerCase();
 
   const dirty =
     profile &&
@@ -346,6 +353,20 @@ export default function ProfilePage() {
               />
             </Field>
           </div>
+
+          {emailChanging && (
+            <div className="pf-form-grid">
+              <PasswordField
+                id="currentPassword"
+                label="Current password"
+                value={form.currentPassword}
+                onChange={(e) => setForm((f) => ({ ...f, currentPassword: e.target.value }))}
+                error={errors.currentPassword}
+                hint="Needed to change your email. Signed up with Google? Set a password with Forgot password first."
+                autoComplete="current-password"
+              />
+            </div>
+          )}
 
           {saveError && <p className="pf-error" role="alert">{saveError}</p>}
 

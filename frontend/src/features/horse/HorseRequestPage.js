@@ -139,6 +139,24 @@ export default function HorseRequestPage() {
     }
   };
 
+  // A rejected or cancelled request cannot be reopened (its review is history),
+  // but the owner should not have to type everything again: copy it into the
+  // form, fix what the club's note asked for, and send it as a new request.
+  const resubmit = (r) => {
+    setForm({
+      horseName: r.horseName || "",
+      breed: r.breed || "",
+      horseGender: r.horseGender || "",
+      dateOfBirth: r.dateOfBirth || "",
+      color: r.color || "",
+      note: r.note || "",
+      recordType: r.recordType || EMPTY.recordType,
+    });
+    setErrors({});
+    setSubmitError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <HorseShell
       title="Register a horse"
@@ -273,7 +291,7 @@ export default function HorseRequestPage() {
 
                     {/* Lý do từ chối phải hiện ra. Không có nó thì lần gửi lại
                         sẽ hỏng y như lần đầu. */}
-                    {r.status === "REJECTED" && r.reviewNote && (
+                    {(r.status === "REJECTED" || r.status === "CANCELLED") && r.reviewNote && (
                       <p className="hz-reject-note">Club: {r.reviewNote}</p>
                     )}
                   </div>
@@ -289,6 +307,16 @@ export default function HorseRequestPage() {
                         onClick={() => cancel(r)}
                       >
                         {cancellingId === r.requestId ? "Cancelling…" : "Cancel request"}
+                      </button>
+                    )}
+                    {(r.status === "REJECTED" || r.status === "CANCELLED") && (
+                      <button
+                        type="button"
+                        className="hz-btn hz-btn--ghost"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => resubmit(r)}
+                      >
+                        Submit again
                       </button>
                     )}
                   </div>

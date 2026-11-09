@@ -121,6 +121,7 @@ public class PasswordService {
         }
 
         passwords.updatePasswordHash(userId, encoder.encode(req.newPassword()));
+        users.clearLoginLock(userId);        // V39: reset là cách tự mở khoá sau 5 lần sai
         blacklist.revokeAllSessions(userId); // lỡ mật khẩu bị lộ thì kẻ đang đăng nhập cũng bị đá ra
         users.writeAudit(userId, "RESET_PASSWORD", "APP_USER", userId, "SUCCESS", ip);
     }

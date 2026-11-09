@@ -15,7 +15,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import {
-  listHorses, getHorse, updateHorse, canEditHorse, getHorseBasePath,
+  listParentCandidates, getHorse, updateHorse, canEditHorse, getHorseBasePath,
   GENDER_OPTIONS, toGender, SIRE_GENDERS, DAM_GENDERS, ageProblem, isPedigreeOnly,
   uploadHorsePhoto, removeHorsePhoto, checkHorsePhoto,
 } from "./horseApi";
@@ -91,7 +91,7 @@ export default function HorseFormPage() {
     (signal) => {
       setLoading(true);
       setLoadError("");
-      Promise.all([listHorses(signal), getHorse(id, signal)])
+      Promise.all([listParentCandidates(signal, id), getHorse(id, signal)])
         .then(([all, h]) => {
           setHerd(all || []);
           setHorse(h);
@@ -121,8 +121,8 @@ export default function HorseFormPage() {
     return () => ctrl.abort();
   }, [load]);
 
-  // Chủ ngựa chỉ nhận ngựa của mình từ GET /api/horses, nên danh sách cha/mẹ
-  // ở đây là những con ngựa (kể cả hồ sơ pedigree) đứng tên mình.
+  // GET /api/horses/parent-candidates: mọi hồ sơ phả hệ của CLB + ngựa đứng tên
+  // mình. Trước đây chỉ có ngựa của mình nên không gắn được vào phả hệ chung.
   const sires = useMemo(
     () => herd.filter((h) => SIRE_GENDERS.has(h.horseGender) && String(h.horseId) !== String(id)),
     [herd, id]
@@ -305,24 +305,24 @@ export default function HorseFormPage() {
           </div>
         </Card>
 
-        <Card title="Pedigree" hint="Optional. Choose from the horses registered in your name.">
+        <Card title="Pedigree" hint="Optional. Choose a club pedigree record or one of your own horses.">
           <div className="hz-form-grid">
             <Field id="sireId" label="Sire" error={errors.sireId}
-                   hint={sires.length === 0 ? "No colt or stallion in your name yet" : undefined}>
+                   hint={sires.length === 0 ? "No colt or stallion to choose from yet" : undefined}>
               <select id="sireId" name="sireId" value={form.sireId} onChange={change}>
                 <option value="">Unknown</option>
                 {sires.map((h) => (
-                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}</option>
+                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}{h.recordType === "PEDIGREE" ? " · pedigree" : ""}</option>
                 ))}
               </select>
             </Field>
 
             <Field id="damId" label="Dam" error={errors.damId}
-                   hint={dams.length === 0 ? "No filly or mare in your name yet" : undefined}>
+                   hint={dams.length === 0 ? "No filly or mare to choose from yet" : undefined}>
               <select id="damId" name="damId" value={form.damId} onChange={change}>
                 <option value="">Unknown</option>
                 {dams.map((h) => (
-                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}</option>
+                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}{h.recordType === "PEDIGREE" ? " · pedigree" : ""}</option>
                 ))}
               </select>
             </Field>

@@ -49,6 +49,29 @@ export function updateHorseIdentity(id, { registrationCode, stallNo }) {
   });
 }
 
+/** Cha / mẹ chọn được: hồ sơ phả hệ của CLB + ngựa của chính chủ ngựa. */
+/** horseId: the horse being edited, so its current parents stay in the list even if not choosable now. */
+export function listParentCandidates(signal, horseId) {
+  const q = horseId ? `?horseId=${encodeURIComponent(horseId)}` : "";
+  return authFetch(`${API}/parent-candidates${q}`, { signal });
+}
+
+/** Chỉ CLUB_MANAGER: chuyển ngựa sang chủ khác. */
+export function transferHorseOwner(id, ownerId, reason) {
+  return authFetch(`${API}/${id}/owner`, {
+    method: "PUT",
+    body: JSON.stringify({ ownerId, reason: reason.trim() }),
+  });
+}
+
+/** Chỉ CLUB_MANAGER: nhận lại ngựa đã rút vào một chuồng. */
+export function readmitHorse(id, stallNo) {
+  return authFetch(`${API}/${id}/readmit`, {
+    method: "PUT",
+    body: JSON.stringify({ stallNo: stallNo.trim() }),
+  });
+}
+
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
 }

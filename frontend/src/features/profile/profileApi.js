@@ -32,13 +32,15 @@ export function getProfile(signal) {
  * Chỉ ba trường. Backend cố ý không nhận username, role hay status - đổi vai
  * trò hay khoá tài khoản là việc của Manager, không phải của chính người dùng.
  */
-export function updateProfile({ fullName, email, phone }) {
+export function updateProfile({ fullName, email, phone, currentPassword }) {
   return authFetch(API, {
     method: "PUT",
     body: JSON.stringify({
       fullName: fullName.trim(),
       email: email.trim(),
       phone: phone.trim() || null,
+      // Only checked by the server when the email changes.
+      currentPassword: currentPassword || null,
     }),
   });
 }

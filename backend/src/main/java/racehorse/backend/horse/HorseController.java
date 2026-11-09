@@ -28,10 +28,51 @@ public class HorseController {
     private final HorseService horseService;
     private final HorsePhotoService photoService;
 
-    public HorseController(HorseService horseService, HorsePhotoService photoService) {
+    private final HorseAdminService adminService;
+
+    public HorseController(HorseService horseService, HorsePhotoService photoService,
+                           HorseAdminService adminService) {
         this.horseService = horseService;
         this.photoService = photoService;
+        this.adminService = adminService;
     }
+
+    /** Hồ sơ phả hệ của câu lạc bộ + ngựa của chính chủ ngựa: danh sách chọn cha / mẹ. */
+    @GetMapping("/parent-candidates")
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER"})
+    public List<HorseResponse> parentCandidates(@RequestParam(required = false) Integer horseId,
+                                                @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return horseService.parentCandidates(user, horseId);
+    }
+
+    /** Club Manager chuyển ngựa sang chủ khác (bán, tặng). Bắt buộc lý do. */
+    @PutMapping("/{id}/owner")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseResponse transferOwner(@PathVariable int id, @Valid @RequestBody TransferRequest request,
+                                       @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                       HttpServletRequest http) {
+        return adminService.transferOwner(id, request.ownerId(), request.reason(), user, http.getRemoteAddr());
+    }
+
+    /** Club Manager nhận lại ngựa đã rút, xếp chuồng mới. */
+    @PutMapping("/{id}/readmit")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseResponse readmit(@PathVariable int id, @Valid @RequestBody ReadmitRequest request,
+                                 @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                 HttpServletRequest http) {
+        return adminService.readmit(id, request.stallNo(), user, http.getRemoteAddr());
+    }
+
+    public record TransferRequest(
+            @jakarta.validation.constraints.NotNull(message = "New owner is required") Integer ownerId,
+            @jakarta.validation.constraints.NotBlank(message = "Reason is required")
+            @jakarta.validation.constraints.Size(max = 255, message = "Reason must be at most 255 characters")
+            String reason) {}
+
+    public record ReadmitRequest(
+            @jakarta.validation.constraints.NotBlank(message = "Stall is required")
+            @jakarta.validation.constraints.Size(max = 20, message = "Stall must be at most 20 characters")
+            String stallNo) {}
 
     /*
      * KHÔNG còn POST /api/horses.

@@ -40,6 +40,14 @@ public class StaffService {
     /** Vai trò manager được cấp. CLUB_MANAGER và HORSE_OWNER cố ý không có ở đây. */
     static final Set<String> STAFF_ROLES = Set.of("GROOM", "HEAD_TRAINER", "VETERINARIAN");
 
+    /**
+     * Vai trò manager được TẠO tài khoản. Thêm HORSE_OWNER cho chủ ngựa đến làm
+     * thủ tục tại câu lạc bộ mà không tự đăng ký online. Vẫn không có
+     * CLUB_MANAGER, và đổi vai trò (changeRole) vẫn chỉ trong STAFF_ROLES: chủ
+     * ngựa là khách hàng, không biến thành nhân viên.
+     */
+    static final Set<String> CREATE_ROLES = Set.of("GROOM", "HEAD_TRAINER", "VETERINARIAN", "HORSE_OWNER");
+
     private final UserRepository users;
     private final StaffRepository staff;
     private final PasswordEncoder passwordEncoder;
@@ -60,7 +68,11 @@ public class StaffService {
      * Kết quả khoá / mở khoá / đổi vai trò. sessionsToReassign > 0 nghĩa là
      * người này còn buổi tập chưa xong cần Head Trainer giao lại.
      */
-    public record StaffUpdate(StaffRow member, int sessionsToReassign) {}
+    public record StaffUpdate(StaffRow member, int sessionsToReassign, String notice) {
+        StaffUpdate(StaffRow member, int sessionsToReassign) {
+            this(member, sessionsToReassign, null);
+        }
+    }
 
     /** @Transactional: insert user + ghi audit hoặc cùng thành công, hoặc cùng rollback. */
     @Transactional
@@ -123,14 +135,112 @@ public class StaffService {
 
         staff.updateStatus(userId, status);
         int toReassign = 0;
+        String notice = null;
         if ("SUSPENDED".equals(status)) {
             blacklist.revokeAllSessions(userId);
             toReassign = warnIfGroomLeaves(target, actor, "was suspended");
+            if ("HORSE_OWNER".equals(target.roleName())) {
+                notice = ownerSuspended(target, actor);
+            }
+        } else {
+            // Mở khoá tài khoản cũng gỡ khoá đăng nhập do sai mật khẩu (V39).
+            users.clearLoginLock(userId);
         }
         users.writeAudit(actor.userId(),
                 "SUSPENDED".equals(status) ? "STAFF_SUSPEND" : "STAFF_ACTIVATE",
                 "APP_USER", userId, "SUCCESS", ip);
-        return new StaffUpdate(staff.findRow(userId).orElse(target), toReassign);
+        return new StaffUpdate(staff.findRow(userId).orElse(target), toReassign, notice);
+    }
+
+    /**
+     * Manager sửa họ tên, email, số điện thoại của một tài khoản (nhân viên hoặc
+     * chủ ngựa). Không sửa tài khoản Club Manager ở đây - kể cả của mình: mình
+     * sửa ở trang Profile, nơi đổi email phải nhập mật khẩu.
+     */
+    @Transactional
+    public StaffRow updateContact(int userId, StaffController.ContactRequest req, AuthenticatedUser actor, String ip) {
+        StaffRow target = staff.findRow(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if ("CLUB_MANAGER".equals(target.roleName())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Club manager details are changed on the Profile page by their owner");
+        }
+        String fullName = req.fullName().trim();
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        String phone = req.phone() == null || req.phone().isBlank() ? null : req.phone().trim();
+        if (staff.emailTakenByOther(email, userId)) {
+            throw conflict(Map.of("email", "Email is already registered"));
+        }
+        try {
+            staff.updateContact(userId, fullName, email, phone);
+        } catch (DuplicateKeyException e) {
+            throw conflict(Map.of("email", "Email is already registered"));
+        }
+        StringBuilder detail = new StringBuilder();
+        if (!target.fullName().equals(fullName)) detail.append("name: ").append(target.fullName()).append(" -> ").append(fullName);
+        if (!target.email().equalsIgnoreCase(email)) {
+            detail.append(detail.length() > 0 ? "; " : "").append("email: ").append(target.email()).append(" -> ").append(email);
+        }
+        if (!java.util.Objects.equals(target.phone(), phone)) {
+            detail.append(detail.length() > 0 ? "; " : "").append("phone: ").append(target.phone()).append(" -> ").append(phone);
+        }
+        users.writeAudit(actor.userId(), "STAFF_UPDATE", "APP_USER", userId, "SUCCESS", ip,
+                detail.length() == 0 ? null : detail.toString());
+        return staff.findRow(userId).orElse(target);
+    }
+
+    /**
+     * Manager đặt mật khẩu TẠM mới cho một tài khoản (quên mật khẩu mà mail tắt,
+     * hoặc bị khoá vì sai 5 lần). Như lúc tạo tài khoản: người dùng phải đổi ở
+     * lần đăng nhập kế (V14), mọi phiên cũ bị đá, khoá đăng nhập được gỡ (V39).
+     */
+    @Transactional
+    public StaffRow setTemporaryPassword(int userId, String password, AuthenticatedUser actor, String ip) {
+        StaffRow target = staff.findRow(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (target.userId() == actor.userId()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Change your own password on the Profile page");
+        }
+        if ("CLUB_MANAGER".equals(target.roleName())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Club manager passwords cannot be reset here");
+        }
+        staff.setTemporaryPassword(userId, passwordEncoder.encode(password));
+        blacklist.revokeAllSessions(userId);
+        users.writeAudit(actor.userId(), "STAFF_TEMP_PASSWORD", "APP_USER", userId, "SUCCESS", ip);
+        notifications.notifyUser(userId, new Notice("TEMP_PASSWORD_SET", "Your password was reset",
+                "The club manager set a temporary password for you. Change it when you next sign in.",
+                null, null));
+        return staff.findRow(userId).orElse(target);
+    }
+
+    /**
+     * Chủ ngựa bị khoá thì những gì đang chờ HỌ quyết sẽ treo mãi: yêu cầu đăng
+     * ký ngựa (huỷ luôn - chưa có hồ sơ nào), giáo án và đăng ký giải chờ họ
+     * duyệt (không tự huỷ - đó là việc của Head Trainer, chỉ báo). Ngựa vẫn ở
+     * câu lạc bộ và vẫn được chăm sóc: khoá tài khoản không phải rút ngựa.
+     *
+     * @return câu tóm tắt cho màn hình Staff, hoặc null nếu không có gì treo.
+     */
+    private String ownerSuspended(StaffRow owner, AuthenticatedUser actor) {
+        int requests = staff.cancelOpenHorseRequests(owner.userId(), actor.userId());
+        int plans = staff.countPlansAwaitingOwner(owner.userId());
+        int entries = staff.countRaceEntriesAwaitingOwner(owner.userId());
+        int horses = staff.countActiveHorses(owner.userId());
+        if (plans + entries > 0) {
+            notifications.notifyRole("HEAD_TRAINER", actor, new Notice(
+                    "OWNER_SUSPENDED",
+                    "Owner approvals on hold",
+                    owner.fullName() + " was suspended. " + plans + " training plan(s) and " + entries
+                            + " race entr" + (entries == 1 ? "y" : "ies")
+                            + " wait for their approval and cannot be approved until the account is active again.",
+                    null, null));
+        }
+        if (requests + plans + entries + horses == 0) {
+            return null;
+        }
+        return owner.fullName() + " still has " + horses + " horse(s) at the club. "
+                + (requests > 0 ? requests + " registration request(s) were cancelled. " : "")
+                + (plans + entries > 0 ? (plans + entries) + " approval(s) are on hold; head trainers were told." : "");
     }
 
     /**

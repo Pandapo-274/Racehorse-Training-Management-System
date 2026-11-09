@@ -23,7 +23,9 @@ import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
   canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
+  readmitHorse, transferHorseOwner,
 } from "./horseApi";
+import { listStaff } from "../manager/staffApi";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -96,6 +98,105 @@ function IdentityForm({ horse, onSaved }) {
         {message && <p className="hz-muted hz-note" role="status">{message}</p>}
         <div className="hz-form-footer">
           <button type="submit" className="hz-btn" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * Club Manager: chuyển ngựa sang chủ khác, hoặc nhận lại ngựa đã rút. Backend
+ * chặn chuyển chủ khi chủ hiện tại còn việc phải duyệt (giáo án, đăng ký giải,
+ * yêu cầu rút) - lỗi đó hiện nguyên văn ở đây.
+ */
+function OwnershipForm({ horse, onSaved }) {
+  const navigate = useNavigate();
+  const [owners, setOwners] = useState([]);
+  const [ownerId, setOwnerId] = useState("");
+  const [reason, setReason] = useState("");
+  const [stall, setStall] = useState("");
+  const [message, setMessage] = useState("");
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const withdrawn = isWithdrawn(horse);
+  const pedigree = isPedigreeOnly(horse);
+
+  useEffect(() => {
+    if (withdrawn) return undefined;
+    let alive = true;
+    listStaff()
+      .then((groups) => {
+        if (!alive) return;
+        const g = (groups || []).find((x) => x.roleName === "HORSE_OWNER");
+        setOwners((g?.members || []).filter((m) => m.status === "ACTIVE" && m.userId !== horse.ownerId));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [withdrawn, horse.ownerId]);
+
+  const run = async (e, fn, done) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setMessage("");
+    try {
+      const updated = await fn();
+      onSaved(updated);
+      setMessage(done(updated));
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) setErrors(err.fieldErrors);
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (withdrawn) {
+    if (pedigree) return null;
+    return (
+      <Card title="Re-admit to the club" hint="The horse comes back with a new stall. Its health status stays as the vet left it.">
+        <form onSubmit={(e) => run(e, () => readmitHorse(horse.horseId, stall), (h) => `${h.horseName} is back in stall ${h.stallNo}.`)} noValidate>
+          <div className="hz-form-grid">
+            <div className="hz-field">
+              <label htmlFor="readmit-stall">Stall</label>
+              <input id="readmit-stall" className="hz-mono" maxLength={20} value={stall}
+                     onChange={(e) => setStall(e.target.value)} />
+              {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
+            </div>
+          </div>
+          {message && <p className="hz-muted hz-note" role="status">{message}</p>}
+          <div className="hz-form-footer">
+            <button type="submit" className="hz-btn" disabled={busy || !stall.trim()}>{busy ? "Saving…" : "Re-admit"}</button>
+          </div>
+        </form>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Transfer to another owner" hint="For a sale or a gift. The current and the new owner are both told.">
+      <form onSubmit={(e) => run(e, () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
+                                  (h) => `${h.horseName} now belongs to ${h.ownerName}.`)} noValidate>
+        <div className="hz-form-grid">
+          <div className="hz-field">
+            <label htmlFor="transfer-owner">New owner</label>
+            <select id="transfer-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+              <option value="">Choose an owner…</option>
+              {owners.map((o) => <option key={o.userId} value={o.userId}>{o.fullName} (@{o.username})</option>)}
+            </select>
+            {errors.ownerId && <p className="hz-field__error">{errors.ownerId}</p>}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="transfer-reason">Reason</label>
+            <input id="transfer-reason" maxLength={255} value={reason} placeholder="e.g. Sold on 9 Nov 2026"
+                   onChange={(e) => setReason(e.target.value)} />
+            {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
+          </div>
+        </div>
+        {message && <p className="hz-muted hz-note" role="status">{message}</p>}
+        <div className="hz-form-footer">
+          <button type="submit" className="hz-btn" disabled={busy || !ownerId || !reason.trim()}>{busy ? "Saving…" : "Transfer"}</button>
         </div>
       </form>
     </Card>
@@ -364,7 +465,8 @@ export default function HorseDetailPage() {
             </Row>
           </Card>
 
-          {user?.role === "CLUB_MANAGER" && <IdentityForm horse={horse} onSaved={setHorse} />}
+          {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
+          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
 

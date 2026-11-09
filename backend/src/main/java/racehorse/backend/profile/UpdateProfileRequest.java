@@ -20,5 +20,10 @@ public record UpdateProfileRequest(
         String email,
 
         @Pattern(regexp = "^(\\+?[0-9]{9,15})?$", message = "Phone number is invalid")
-        String phone
+        String phone,
+        /* Required only when the email changes: the email is where "forgot
+           password" sends the reset link, so whoever holds an open session must
+           not be able to redirect it without knowing the password. */
+        @Size(max = 72, message = "Must be at most 72 characters")
+        String currentPassword
 ) {}

@@ -1,8 +1,10 @@
 // src/features/manager/StaffPage.js
 // The club manager's Staff screen: every account in the system, grouped by role.
 //
-// The manager can add staff accounts (Head Trainer, Vet, Groom), move them
-// between those three roles, and suspend / activate any non-manager account.
+// The manager can add accounts (Head Trainer, Vet, Groom, and Horse Owners who
+// register at the desk), move staff between the three staff roles, correct
+// contact details, set a temporary password, and suspend / activate any
+// non-manager account.
 // Permissions belong to roles (RBAC), so the role picker on each staff row is
 // how the manager changes what someone can do. New accounts get a temporary
 // password that the person must change at their first sign-in.
@@ -14,7 +16,8 @@ import PasswordField from "../password/PasswordField";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
   createStaff, setStaffStatus, changeStaffRole, reassignNotice,
-  STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES,
+  updateStaffContact, setTemporaryPassword,
+  STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES, CREATE_ROLE_OPTIONS,
 } from "./staffApi";
 import "../password/password.css"; // styles for PasswordField (.pw-*)
 import "./staff.css";
@@ -34,7 +37,7 @@ const EMPTY_FORM = {
   fullName: "", username: "", email: "", phone: "", roleName: "GROOM", password: "",
 };
 
-function MemberRow({ row, canToggle, canChangeRole, onToggleStatus, onChangeRole, busy }) {
+function MemberRow({ row, canToggle, canChangeRole, onToggleStatus, onChangeRole, onEdit, onResetPassword, busy }) {
   return (
     <li className="st-row">
       <Avatar row={row} />
@@ -64,6 +67,16 @@ function MemberRow({ row, canToggle, canChangeRole, onToggleStatus, onChangeRole
 
       <div className="st-actions">
         {canToggle && (
+          <button type="button" className="st-action" disabled={busy} onClick={() => onEdit(row)}>
+            Edit
+          </button>
+        )}
+        {canToggle && (
+          <button type="button" className="st-action" disabled={busy} onClick={() => onResetPassword(row)}>
+            Reset password
+          </button>
+        )}
+        {canToggle && (
           <button
             type="button"
             className="st-action"
@@ -91,7 +104,7 @@ function MemberRow({ row, canToggle, canChangeRole, onToggleStatus, onChangeRole
   );
 }
 
-function RoleGroup({ group, query, myId, busyId, onToggleStatus, onChangeRole }) {
+function RoleGroup({ group, query, myId, busyId, onToggleStatus, onChangeRole, onEdit, onResetPassword }) {
   const shown = group.members.filter((m) => matchesQuery(m, query));
 
   /* "Empty because of the filter" and "empty because nobody holds this role"
@@ -122,11 +135,86 @@ function RoleGroup({ group, query, myId, busyId, onToggleStatus, onChangeRole })
               canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
               onToggleStatus={onToggleStatus}
               onChangeRole={onChangeRole}
+              onEdit={onEdit}
+              onResetPassword={onResetPassword}
               busy={busyId === row.userId}
             />
           ))}
         </ul>
       )}
+    </Card>
+  );
+}
+
+/** Edit contact details, or set a temporary password, for one account. */
+function AccountPanel({ mode, row, onDone, onCancel }) {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ fullName: row.fullName, email: row.email, phone: row.phone || "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const editing = mode === "edit";
+
+  const submit = (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setMessage("");
+    const call = editing ? updateStaffContact(row.userId, form) : setTemporaryPassword(row.userId, form.password);
+    call
+      .then((member) => onDone(member, editing
+        ? `Saved @${member.username}.`
+        : `New temporary password set for @${member.username}. They are signed out and must choose their own password at the next sign-in.`))
+      .catch((err) => {
+        if (handleAuthError(err, navigate)) return;
+        setErrors(err.fieldErrors || {});
+        setMessage(err.message);
+      })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Card title={editing ? `Edit @${row.username}` : `Reset password of @${row.username}`}
+          hint={editing ? "Username and role are changed elsewhere" : "Tell them the temporary password in person"}>
+      <form className="st-form" onSubmit={submit} noValidate>
+        {editing ? (
+          <>
+            <label className="st-field">
+              Full name
+              <input value={form.fullName} onChange={set("fullName")} />
+              {errors.fullName && <span className="st-field__error">{errors.fullName}</span>}
+            </label>
+            <label className="st-field">
+              Email
+              <input type="email" value={form.email} onChange={set("email")} />
+              {errors.email && <span className="st-field__error">{errors.email}</span>}
+            </label>
+            <label className="st-field">
+              Phone (optional)
+              <input value={form.phone} onChange={set("phone")} />
+              {errors.phone && <span className="st-field__error">{errors.phone}</span>}
+            </label>
+          </>
+        ) : (
+          <PasswordField
+            id="tempPassword"
+            label="Temporary password"
+            value={form.password}
+            onChange={set("password")}
+            error={errors.password}
+            autoComplete="new-password"
+            showRules
+          />
+        )}
+        <div className="st-form__foot">
+          <button type="submit" className="hz-btn" disabled={busy}>
+            {busy ? "Saving…" : editing ? "Save" : "Set password"}
+          </button>
+          <button type="button" className="st-action" onClick={onCancel}>Cancel</button>
+          {message && <span className="st-field__error" role="alert">{message}</span>}
+        </div>
+      </form>
     </Card>
   );
 }
@@ -146,6 +234,7 @@ export default function StaffPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
+  const [panel, setPanel] = useState(null); // { mode: "edit" | "password", row }
 
   const load = useCallback(() => {
     setError("");
@@ -211,10 +300,11 @@ export default function StaffPage() {
     setBusyId(row.userId);
     setNotice("");
     setStaffStatus(row.userId, next)
-      .then(({ member, sessionsToReassign }) => {
+      .then(({ member, sessionsToReassign, notice: extra }) => {
         replaceRow(member);
         setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
-          + reassignNotice(member.fullName, sessionsToReassign));
+          + reassignNotice(member.fullName, sessionsToReassign)
+          + (extra ? ` ${extra}` : ""));
       })
       .catch((err) => {
         if (handleAuthError(err, navigate)) return;
@@ -287,7 +377,7 @@ export default function StaffPage() {
       )}
 
       {formOpen && (
-        <Card title="Add staff account" hint="Head Trainer, Veterinarian or Groom">
+        <Card title="Add account" hint="Head Trainer, Veterinarian, Groom, or a Horse Owner registering at the desk">
           <form className="st-form" onSubmit={submitForm} noValidate>
             <label className="st-field">
               Full name
@@ -297,7 +387,7 @@ export default function StaffPage() {
             <label className="st-field">
               Role
               <select value={form.roleName} onChange={setField("roleName")}>
-                {STAFF_ROLE_OPTIONS.map((o) => (
+                {CREATE_ROLE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
@@ -339,6 +429,16 @@ export default function StaffPage() {
         </Card>
       )}
 
+      {panel && (
+        <AccountPanel
+          key={`${panel.mode}-${panel.row.userId}`}
+          mode={panel.mode}
+          row={panel.row}
+          onCancel={() => setPanel(null)}
+          onDone={(member, message) => { replaceRow(member); setPanel(null); setNotice(message); }}
+        />
+      )}
+
       {notice && <p className="st-notice" role="status">{notice}</p>}
 
       {!error && groups !== null && (
@@ -357,6 +457,8 @@ export default function StaffPage() {
               busyId={busyId}
               onToggleStatus={toggleStatus}
               onChangeRole={changeRole}
+              onEdit={(row) => { setNotice(""); setPanel({ mode: "edit", row }); }}
+              onResetPassword={(row) => { setNotice(""); setPanel({ mode: "password", row }); }}
             />
           ))}
         </>

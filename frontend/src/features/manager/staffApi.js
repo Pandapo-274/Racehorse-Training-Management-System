@@ -29,6 +29,32 @@ export function createStaff(body) {
   return authFetch("/api/staff", { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * Roles the manager can CREATE: the three staff roles plus Horse Owner, for an
+ * owner who registers at the club desk instead of signing up online. Changing
+ * role still stays within STAFF_ROLE_OPTIONS.
+ */
+export const CREATE_ROLE_OPTIONS = [
+  ...STAFF_ROLE_OPTIONS,
+  { value: "HORSE_OWNER", label: "Horse Owner" },
+];
+
+/** Correct name, email or phone of an account (not a club manager's). */
+export function updateStaffContact(userId, { fullName, email, phone }) {
+  return authFetch(`/api/staff/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify({ fullName: fullName.trim(), email: email.trim(), phone: phone?.trim() || null }),
+  });
+}
+
+/** New temporary password: must be changed at next sign-in; old sessions end; sign-in lock cleared. */
+export function setTemporaryPassword(userId, password) {
+  return authFetch(`/api/staff/${userId}/password`, {
+    method: "PUT",
+    body: JSON.stringify({ password }),
+  });
+}
+
 /** Staff role codes the manager can move people between (same as STAFF_ROLES in StaffService). */
 export const STAFF_ROLE_CODES = new Set(STAFF_ROLE_OPTIONS.map((o) => o.value));
 

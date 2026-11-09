@@ -164,4 +164,67 @@ public class StaffRepository {
                 .param("id", userId)
                 .update();
     }
+
+    /** Manager corrects name, email or phone of an account (not a Club Manager's). */
+    public int updateContact(int userId, String fullName, String email, String phone) {
+        return jdbc.sql("""
+                UPDATE APP_USER SET full_name = :name, email = :email, phone = :phone
+                WHERE user_id = :id
+                """)
+                .param("name", fullName).param("email", email).param("phone", phone).param("id", userId)
+                .update();
+    }
+
+    /** Another account already uses this email. */
+    public boolean emailTakenByOther(String email, int userId) {
+        return jdbc.sql("SELECT COUNT(*) FROM APP_USER WHERE email = :e AND user_id <> :id")
+                .param("e", email).param("id", userId).query(Integer.class).single() > 0;
+    }
+
+    /** New temporary password: must be changed at next sign-in (V14), lock cleared (V39). */
+    public int setTemporaryPassword(int userId, String hash) {
+        return jdbc.sql("""
+                UPDATE APP_USER SET password_hash = :h, must_change_password = 1,
+                       failed_login_count = 0, locked_until = NULL
+                WHERE user_id = :id
+                """)
+                .param("h", hash).param("id", userId).update();
+    }
+
+    /* ---------- An owner is suspended (Flow 1 #6) ---------- */
+
+    /** Closes the owner's registration requests still waiting: nobody can answer for them now. */
+    public int cancelOpenHorseRequests(int ownerId, int byUserId) {
+        return jdbc.sql("""
+                UPDATE HORSE_REQUEST
+                SET status = 'CANCELLED', reviewed_by = :by, reviewed_at = SYSUTCDATETIME(),
+                    review_note = N'Cancelled: the owner account was suspended'
+                WHERE owner_id = :owner AND status = 'PENDING'
+                """)
+                .param("by", byUserId).param("owner", ownerId).update();
+    }
+
+    /** Training plans of the owner's horses waiting for the owner's approval (V34). */
+    public int countPlansAwaitingOwner(int ownerId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM TRAINING_PLAN p JOIN HORSE h ON h.horse_id = p.horse_id
+                WHERE h.owner_id = :owner AND p.status = 'PENDING_APPROVAL'
+                """).param("owner", ownerId).query(Integer.class).single();
+    }
+
+    /** Race entries of the owner's horses waiting for the owner's approval (V28). */
+    public int countRaceEntriesAwaitingOwner(int ownerId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM RACE_REGISTRATION r JOIN HORSE h ON h.horse_id = r.horse_id
+                WHERE h.owner_id = :owner AND r.approval_status = 'PENDING_OWNER' AND r.result IS NULL
+                """).param("owner", ownerId).query(Integer.class).single();
+    }
+
+    /** Club horses the owner still has at the club. */
+    public int countActiveHorses(int ownerId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM HORSE
+                WHERE owner_id = :owner AND record_type = 'ACADEMY' AND activity_status = 'ACTIVE'
+                """).param("owner", ownerId).query(Integer.class).single();
+    }
 }

@@ -73,6 +73,72 @@ public class HorseRepository {
     }
 
     /** excludeId = id ngựa đang sửa (để không tự báo trùng với chính mình); khi tạo mới truyền 0. */
+    /** Hồ sơ phả hệ của cả câu lạc bộ cộng ngựa của chủ này (form chọn cha / mẹ). */
+    /**
+     * Pedigree records + the owner's own horses + the parents already on the
+     * horse being edited (forHorseId, 0 = none): a parent set before the rule
+     * may belong to someone else, and the form must still show it, or saving
+     * would look like the link was lost.
+     */
+    public List<HorseResponse> findParentCandidates(int ownerId, int forHorseId) {
+        return jdbc.sql(SELECT_HORSE + """
+                 WHERE h.record_type = 'PEDIGREE' OR h.owner_id = :ownerId
+                    OR h.horse_id IN (SELECT x.sire_id FROM HORSE x WHERE x.horse_id = :forId AND x.owner_id = :ownerId)
+                    OR h.horse_id IN (SELECT x.dam_id  FROM HORSE x WHERE x.horse_id = :forId AND x.owner_id = :ownerId)
+                 ORDER BY h.horse_name
+                """)
+                .param("ownerId", ownerId)
+                .param("forId", forHorseId)
+                .query(HorseRepository::mapHorse)
+                .list();
+    }
+
+    /** Ngựa này đã là cha hoặc mẹ của ít nhất một ngựa khác. */
+    public boolean hasOffspring(int horseId) {
+        return jdbc.sql("SELECT COUNT(*) FROM HORSE WHERE sire_id = :id OR dam_id = :id")
+                .param("id", horseId).query(Integer.class).single() > 0;
+    }
+
+    /** Những việc đang chờ CHỦ HIỆN TẠI của ngựa: chặn chuyển chủ khi còn. */
+    public record PendingOnOwner(int plans, int raceEntries, int withdrawals) {
+        public boolean any() { return plans + raceEntries + withdrawals > 0; }
+    }
+
+    public PendingOnOwner pendingOnOwner(int horseId) {
+        return jdbc.sql("""
+                SELECT
+                  (SELECT COUNT(*) FROM TRAINING_PLAN WHERE horse_id = :id AND status = 'PENDING_APPROVAL') AS plans,
+                  (SELECT COUNT(*) FROM RACE_REGISTRATION WHERE horse_id = :id
+                          AND approval_status = 'PENDING_OWNER' AND result IS NULL) AS entries,
+                  (SELECT COUNT(*) FROM HORSE_WITHDRAWAL WHERE horse_id = :id AND status = 'PENDING') AS withdrawals
+                """).param("id", horseId)
+                .query((rs, n) -> new PendingOnOwner(rs.getInt("plans"), rs.getInt("entries"), rs.getInt("withdrawals")))
+                .single();
+    }
+
+    /** Tài khoản là HORSE_OWNER và đang ACTIVE. */
+    public boolean isActiveHorseOwner(int userId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
+                WHERE u.user_id = :id AND r.role_name = 'HORSE_OWNER' AND u.status = 'ACTIVE'
+                """).param("id", userId).query(Integer.class).single() > 0;
+    }
+
+    /** Chuyển chủ (Club Manager). */
+    public int updateOwner(int horseId, int ownerId) {
+        return jdbc.sql("UPDATE HORSE SET owner_id = :o, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+                .param("o", ownerId).param("id", horseId).update();
+    }
+
+    /** Nhận lại ngựa đã rút: về ACTIVE, xếp chuồng. Điều kiện WITHDRAWN trong câu UPDATE. */
+    public int readmit(int horseId, String stallNo) {
+        return jdbc.sql("""
+                UPDATE HORSE SET activity_status = 'ACTIVE', withdrawn_at = NULL, stall_no = :stall,
+                       updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id AND activity_status = 'WITHDRAWN'
+                """).param("stall", stallNo).param("id", horseId).update();
+    }
+
     public boolean existsByRegistrationCode(String code, int excludeId) {
         return jdbc.sql("SELECT COUNT(*) FROM HORSE WHERE registration_code = :v AND horse_id <> :id")
                 .param("v", code).param("id", excludeId)

@@ -26,11 +26,14 @@ public class ProfileService {
     private final ProfileRepository profiles;
     private final UserRepository users; // dùng lại writeAudit của UC1
     private final Path avatarDir;
+    private final org.springframework.security.crypto.password.PasswordEncoder encoder;
 
     public ProfileService(ProfileRepository profiles, UserRepository users,
+                          org.springframework.security.crypto.password.PasswordEncoder encoder,
                           @Value("${app.upload.dir:uploads}") String uploadDir) {
         this.profiles = profiles;
         this.users = users;
+        this.encoder = encoder;
         this.avatarDir = Path.of(uploadDir).toAbsolutePath().normalize().resolve("avatars");
     }
 
@@ -47,12 +50,30 @@ public class ProfileService {
         String phone = (req.phone() == null || req.phone().isBlank()) ? null : req.phone().trim();
 
         if (profiles.emailTakenByOther(email, userId)) throw emailConflict();
+        /* Đổi email phải nhập mật khẩu hiện tại: email là nơi "quên mật khẩu" gửi
+           link, ai cầm được phiên đang mở mà đổi được email thì chiếm luôn tài
+           khoản. Tài khoản chỉ đăng nhập Google có mật khẩu ngẫu nhiên: đặt mật
+           khẩu bằng "Forgot password" trước. */
+        var account = users.findById(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account no longer exists"));
+        if (!email.equalsIgnoreCase(account.email())) {
+            String pw = req.currentPassword();
+            if (pw == null || pw.isBlank()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Enter your current password to change your email",
+                        Map.of("currentPassword", "Required to change your email"));
+            }
+            if (!encoder.matches(pw, account.passwordHash())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Current password is incorrect",
+                        Map.of("currentPassword", "Current password is incorrect"));
+            }
+        }
         try {
             profiles.updateBasic(userId, fullName, email, phone);
         } catch (DuplicateKeyException e) {
             throw emailConflict(); // UNIQUE của DB là chốt chặn cuối khi 2 người đổi cùng lúc
         }
-        users.writeAudit(userId, "UPDATE_PROFILE", "APP_USER", userId, "SUCCESS", ip);
+        users.writeAudit(userId, "UPDATE_PROFILE", "APP_USER", userId, "SUCCESS", ip,
+                email.equalsIgnoreCase(account.email()) ? null : "email: " + account.email() + " -> " + email);
         return getProfile(userId);
     }
 

@@ -9,4 +9,12 @@ public record UserRecord(int userId, String username, String passwordHash,
                          String avatarUrl,
                          /* V14: đang dùng mật khẩu tạm do Club Manager đặt, phải đổi trước
                             khi dùng hệ thống. Cũng thêm ở cuối, cùng lý do như trên. */
-                         boolean mustChangePassword) {}
+                         boolean mustChangePassword,
+                         /* V39: sign-in locked until this moment (UTC) after too many
+                            wrong passwords; null = not locked. */
+                         java.time.Instant lockedUntil) {
+
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(java.time.Instant.now());
+    }
+}

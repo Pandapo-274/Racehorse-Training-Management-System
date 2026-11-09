@@ -58,6 +58,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (!"ACTIVE".equals(account.status())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "This account is suspended");
         }
+        if (account.tokensValidAfter() != null && user.issuedAt().isBefore(account.tokensValidAfter())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Token has been revoked, please log in again");
+        }
         if (!account.roleName().equals(user.role())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Your role has changed, please log in again");
         }

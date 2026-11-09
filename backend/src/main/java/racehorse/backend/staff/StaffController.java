@@ -87,6 +87,47 @@ public class StaffController {
         return service.changeRole(id, request.roleName(), user, http.getRemoteAddr());
     }
 
+    /** Sửa họ tên, email, số điện thoại (không đổi username, vai trò, mật khẩu). */
+    @PutMapping("/{id}")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffRow updateContact(
+            @PathVariable int id,
+            @Valid @RequestBody ContactRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.updateContact(id, request, user, http.getRemoteAddr());
+    }
+
+    /** Mật khẩu tạm mới: phải đổi ở lần đăng nhập kế, mọi phiên cũ bị đá, gỡ khoá đăng nhập. */
+    @PutMapping("/{id}/password")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffRow setTemporaryPassword(
+            @PathVariable int id,
+            @Valid @RequestBody PasswordRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.setTemporaryPassword(id, request.password(), user, http.getRemoteAddr());
+    }
+
+    public record ContactRequest(
+            @NotBlank(message = "Full name is required")
+            @Size(max = 100, message = "Full name must be at most 100 characters")
+            String fullName,
+
+            @NotBlank(message = "Email is required")
+            @Email(message = "Email is invalid")
+            @Size(max = 100, message = "Email must be at most 100 characters")
+            String email,
+
+            @Pattern(regexp = "^(\\+?[0-9]{9,15})?$", message = "Phone number is invalid")
+            String phone) {}
+
+    public record PasswordRequest(
+            @NotBlank(message = "Password is required")
+            @Size(min = 8, max = 72, message = "Password must be 8-72 characters")
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).*$", message = "Password must contain both letters and digits")
+            String password) {}
+
     /** Cùng luật kiểm với RegisterRequest. Mật khẩu là mật khẩu TẠM do manager đặt:
         người dùng phải đổi ở lần đăng nhập đầu (V14). */
     public record CreateRequest(
