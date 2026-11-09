@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import racehorse.backend.auth.AuthInterceptor;
@@ -25,19 +28,6 @@ import racehorse.backend.auth.RequireRole;
 
 /**
  * UC19 - the club manager's Staff screen.
- *
- * CLUB_MANAGER ONLY. This is the single route in the system that returns
- * every account with its full name, email and phone number, so the role list
- * here has to be as narrow as it can be. A head trainer who needs to know
- * which grooms exist already has GET /api/training-sessions/assignees, which
- * returns just that group and carries no contact details.
- *
- * Write half: staff accounts (Head Trainer, Vet, Groom) are no longer
- * self-registered - AuthService only lets HORSE_OWNER sign up - so the manager
- * creates them here, moves them between the three staff roles, and can
- * suspend / re-activate any non-manager account. Permissions belong to roles
- * (RBAC), so changing someone's role is how the manager changes what they can
- * do. See StaffService for the rules.
  */
 @RestController
 @RequestMapping("/api/staff")
@@ -128,6 +118,28 @@ public class StaffController {
             @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).*$", message = "Password must contain both letters and digits")
             String password) {}
 
+    /** V37: Club Manager gán hoặc gỡ Groom cho một Head Trainer (tối đa 3 Groom / Head Trainer). */
+    @PutMapping("/{id}/trainer")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffRow assignTrainer(
+            @PathVariable int id,
+            @RequestBody TrainerAssignRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.assignTrainer(id, request == null ? null : request.trainerId(), user, http.getRemoteAddr());
+    }
+
+    /** V37: Club Manager thiết lập hạn mức số ngựa tối đa cho một Head Trainer. */
+    @PutMapping("/{id}/max-horses")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffRow updateMaxHorses(
+            @PathVariable int id,
+            @Valid @RequestBody MaxHorsesRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.updateMaxHorses(id, request.maxHorses(), user, http.getRemoteAddr());
+    }
+
     /** Cùng luật kiểm với RegisterRequest. Mật khẩu là mật khẩu TẠM do manager đặt:
         người dùng phải đổi ở lần đăng nhập đầu (V14). */
     public record CreateRequest(
@@ -154,7 +166,16 @@ public class StaffController {
             String phone,
 
             @NotBlank(message = "Role is required")
-            String roleName) {}
+            String roleName,
+
+            Integer trainerId,
+            Integer maxHorses) {
+
+        public CreateRequest(String username, String password, String fullName,
+                             String email, String phone, String roleName) {
+            this(username, password, fullName, email, phone, roleName, null, null);
+        }
+    }
 
     public record RoleRequest(
             @NotBlank(message = "Role is required")
@@ -164,4 +185,12 @@ public class StaffController {
             @NotBlank(message = "Status is required")
             @Pattern(regexp = "^(ACTIVE|SUSPENDED)$", message = "Status must be ACTIVE or SUSPENDED")
             String status) {}
+
+    public record TrainerAssignRequest(Integer trainerId) {}
+
+    public record MaxHorsesRequest(
+            @NotNull(message = "Max horses is required")
+            @Min(value = 1, message = "Max horses must be at least 1")
+            @Max(value = 100, message = "Max horses must be at most 100")
+            Integer maxHorses) {}
 }

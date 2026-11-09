@@ -29,10 +29,9 @@ import racehorse.backend.notification.NotificationService;
  *  - Groom còn buổi tập chưa xong mà bị khoá hoặc chuyển vai trò thì các buổi
  *    đó không còn ai làm: báo cho mọi Head Trainer để giao lại, và trả số buổi
  *    về cho màn hình Staff cảnh báo manager.
- *
- * Why it exists: AuthService.SELF_REGISTER_ROLES now holds only HORSE_OWNER, so
- * nobody can sign themselves up as a trainer, vet or groom. This is the only
- * way those accounts come into being.
+ *  - V37: 1 Head Trainer quản lý tối đa 3 Groom đang hoạt động tại 1 thời điểm
+ *    và được Club Manager tự phê duyệt, đăng ký Grooms cũng như thiết lập hạn mức
+ *    ngựa (max_horses) cho từng Head Trainer.
  */
 @Service
 public class StaffService {
@@ -47,6 +46,10 @@ public class StaffService {
      * ngựa là khách hàng, không biến thành nhân viên.
      */
     static final Set<String> CREATE_ROLES = Set.of("GROOM", "HEAD_TRAINER", "VETERINARIAN", "HORSE_OWNER");
+
+    /** V37: 1 Head Trainer chỉ quản lý tối đa 3 Groom tại 1 thời điểm. */
+    public static final int MAX_GROOMS_PER_TRAINER = 3;
+    public static final int DEFAULT_MAX_HORSES_PER_TRAINER = 10;
 
     private final UserRepository users;
     private final StaffRepository staff;
@@ -77,6 +80,9 @@ public class StaffService {
     /** @Transactional: insert user + ghi audit hoặc cùng thành công, hoặc cùng rollback. */
     @Transactional
     public StaffRow create(StaffController.CreateRequest req, AuthenticatedUser actor, String ip) {
+        if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can create staff accounts");
+        }
         String username = req.username().trim();
         String email = req.email().trim().toLowerCase(Locale.ROOT);
         String fullName = req.fullName().trim();
@@ -97,6 +103,22 @@ public class StaffService {
             throw conflict(Map.of("email", "Email is already registered"));
         }
 
+        // V37: Nếu tạo GROOM có gán cho Head Trainer thì kiểm tra Head Trainer hợp lệ và chưa quá 3 Groom
+        StaffRow trainer = null;
+        if ("GROOM".equals(roleName) && req.trainerId() != null) {
+            trainer = validateTrainerForGroom(req.trainerId(), null);
+        }
+
+        // V37: Nếu tạo HEAD_TRAINER thì kiểm tra maxHorses (1..100, mặc định 10)
+        int maxHorses = DEFAULT_MAX_HORSES_PER_TRAINER;
+        if ("HEAD_TRAINER".equals(roleName) && req.maxHorses() != null) {
+            if (req.maxHorses() < 1 || req.maxHorses() > 100) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Max horses must be between 1 and 100",
+                        Map.of("maxHorses", "Must be between 1 and 100"));
+            }
+            maxHorses = req.maxHorses();
+        }
+
         int userId;
         try {
             userId = users.insert(roleId, username, passwordEncoder.encode(req.password()),
@@ -106,9 +128,25 @@ public class StaffService {
             throw conflict(Map.of("username", "Username or email already exists"));
         }
 
+        if ("GROOM".equals(roleName) && trainer != null) {
+            staff.updateTrainer(userId, trainer.userId());
+            notifications.notifyUser(trainer.userId(), new Notice(
+                    "GROOM_ASSIGNED",
+                    "New groom assigned to your team",
+                    "Club manager assigned groom " + fullName + " to your team.",
+                    null, null));
+            notifications.notifyUser(userId, new Notice(
+                    "TRAINER_ASSIGNED",
+                    "Assigned to Head Trainer",
+                    "Club manager assigned you to Head Trainer " + trainer.fullName() + ".",
+                    null, null));
+        } else if ("HEAD_TRAINER".equals(roleName)) {
+            staff.updateMaxHorses(userId, maxHorses);
+        }
+
         // Mật khẩu này manager đặt và biết, nên chỉ là mật khẩu tạm (V14).
         users.setMustChangePassword(userId, true);
-        users.writeAudit(actor.userId(), "STAFF_CREATE", "APP_USER", userId, "SUCCESS", ip);
+        users.writeAudit(actor == null ? null : actor.userId(), "STAFF_CREATE", "APP_USER", userId, "SUCCESS", ip);
         return staff.findRow(userId).orElseThrow(
                 () -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not load the new account"));
     }
@@ -120,10 +158,13 @@ public class StaffService {
      */
     @Transactional
     public StaffUpdate setStatus(int userId, String status, AuthenticatedUser actor, String ip) {
+        if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can change staff account status");
+        }
         StaffRow target = staff.findRow(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
 
-        if (target.userId() == actor.userId()) {
+        if (actor != null && target.userId() == actor.userId()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own account status");
         }
         if ("CLUB_MANAGER".equals(target.roleName())) {
@@ -131,6 +172,11 @@ public class StaffService {
         }
         if (status.equals(target.status())) {
             return new StaffUpdate(target, 0);
+        }
+
+        // V37: Khi mở khoá lại 1 GROOM đang gắn với 1 Head Trainer, kiểm tra Head Trainer đó đã đủ 3 Groom chưa
+        if ("ACTIVE".equals(status) && "GROOM".equals(target.roleName()) && target.trainerId() != null) {
+            validateTrainerForGroom(target.trainerId(), target.userId());
         }
 
         staff.updateStatus(userId, status);
@@ -146,7 +192,7 @@ public class StaffService {
             // Mở khoá tài khoản cũng gỡ khoá đăng nhập do sai mật khẩu (V39).
             users.clearLoginLock(userId);
         }
-        users.writeAudit(actor.userId(),
+        users.writeAudit(actor == null ? null : actor.userId(),
                 "SUSPENDED".equals(status) ? "STAFF_SUSPEND" : "STAFF_ACTIVATE",
                 "APP_USER", userId, "SUCCESS", ip);
         return new StaffUpdate(staff.findRow(userId).orElse(target), toReassign, notice);
@@ -246,18 +292,17 @@ public class StaffService {
     /**
      * Đổi vai trò giữa Head Trainer, Vet và Groom - phần "phân quyền cho từng
      * vai trò" của UC19: quyền gắn với vai trò, nên đổi vai trò là đổi quyền.
-     *
-     * Không đổi được: chính mình, tài khoản Club Manager, và chủ ngựa (chủ ngựa
-     * là khách hàng chứ không phải nhân viên; họ không được biến thành nhân viên
-     * và nhân viên cũng không bị biến thành chủ ngựa ở đây).
      */
     @Transactional
     public StaffUpdate changeRole(int userId, String requestedRole, AuthenticatedUser actor, String ip) {
+        if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can change staff roles");
+        }
         String roleName = requestedRole.trim().toUpperCase(Locale.ROOT);
         StaffRow target = staff.findRow(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
 
-        if (target.userId() == actor.userId()) {
+        if (actor != null && target.userId() == actor.userId()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own role");
         }
         if (!STAFF_ROLES.contains(target.roleName())) {
@@ -275,11 +320,19 @@ public class StaffService {
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Role does not exist"));
 
         staff.updateRole(userId, roleId);
-        // Token đang dùng còn mang vai trò cũ: đăng xuất ở mọi nơi để lần đăng
-        // nhập sau nhận đúng quyền mới.
+        if ("GROOM".equals(target.roleName())) {
+            staff.updateTrainer(userId, null);
+        }
+        if ("HEAD_TRAINER".equals(target.roleName())) {
+            staff.detachGroomsFromTrainer(userId);
+        }
+        if ("HEAD_TRAINER".equals(roleName) && target.maxHorses() == null) {
+            staff.updateMaxHorses(userId, DEFAULT_MAX_HORSES_PER_TRAINER);
+        }
+
         blacklist.revokeAllSessions(userId);
         int toReassign = warnIfGroomLeaves(target, actor, "is no longer a groom");
-        users.writeAudit(actor.userId(), "STAFF_ROLE_CHANGE:" + target.roleName() + "->" + roleName,
+        users.writeAudit(actor == null ? null : actor.userId(), "STAFF_ROLE_CHANGE:" + target.roleName() + "->" + roleName,
                 "APP_USER", userId, "SUCCESS", ip);
 
         StaffRow updated = staff.findRow(userId).orElse(target);
@@ -292,12 +345,85 @@ public class StaffService {
     }
 
     /**
-     * Groom rời vị trí (bị khoá hoặc đổi vai trò) mà còn buổi tập chưa xong:
-     * báo mọi Head Trainer để giao lại. Không chặn thao tác của manager - khoá
-     * khẩn cấp vẫn phải làm được - chỉ đảm bảo không buổi nào bị bỏ quên.
-     *
-     * @return số buổi cần giao lại (0 nếu người này không phải Groom).
+     * V37: Club Manager phê duyệt và gán (hoặc gỡ) Groom cho 1 Head Trainer.
+     * Mỗi Head Trainer chỉ được quản lý tối đa 3 Groom đang hoạt động tại 1 thời điểm.
      */
+    @Transactional
+    public StaffRow assignTrainer(int groomId, Integer trainerId, AuthenticatedUser actor, String ip) {
+        if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can assign Grooms to Head Trainers");
+        }
+        StaffRow groom = staff.findRow(groomId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Groom account not found"));
+        if (!"GROOM".equals(groom.roleName())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only Groom accounts can be assigned to a Head Trainer");
+        }
+
+        if (trainerId != null) {
+            StaffRow trainer = validateTrainerForGroom(trainerId, groomId);
+            staff.updateTrainer(groomId, trainer.userId());
+            notifications.notifyUser(trainer.userId(), new Notice(
+                    "GROOM_ASSIGNED",
+                    "New groom assigned to your team",
+                    "Club manager assigned groom " + groom.fullName() + " to your team.",
+                    null, null));
+            notifications.notifyUser(groomId, new Notice(
+                    "TRAINER_ASSIGNED",
+                    "Assigned to Head Trainer",
+                    "Club manager assigned you to Head Trainer " + trainer.fullName() + ".",
+                    null, null));
+        } else {
+            staff.updateTrainer(groomId, null);
+        }
+
+        users.writeAudit(actor == null ? null : actor.userId(),
+                "STAFF_ASSIGN_TRAINER:" + (trainerId == null ? "NONE" : trainerId),
+                "APP_USER", groomId, "SUCCESS", ip);
+        return staff.findRow(groomId).orElse(groom);
+    }
+
+    /**
+     * V37: Club Manager cập nhật hạn mức số ngựa tối đa (max_horses) cho một Head Trainer.
+     */
+    @Transactional
+    public StaffRow updateMaxHorses(int trainerId, int maxHorses, AuthenticatedUser actor, String ip) {
+        if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can update horse quota");
+        }
+        StaffRow trainer = staff.findRow(trainerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Head Trainer account not found"));
+        if (!"HEAD_TRAINER".equals(trainer.roleName())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only Head Trainer accounts have a horse limit");
+        }
+        if (maxHorses < 1 || maxHorses > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Max horses must be between 1 and 100");
+        }
+        if (maxHorses < trainer.managedHorseCount()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    trainer.fullName() + " is currently managing " + trainer.managedHorseCount()
+                            + " horses. Please reassign some horses before lowering the limit to " + maxHorses + ".");
+        }
+
+        staff.updateMaxHorses(trainerId, maxHorses);
+        users.writeAudit(actor == null ? null : actor.userId(), "STAFF_MAX_HORSES:" + maxHorses, "APP_USER", trainerId, "SUCCESS", ip);
+        return staff.findRow(trainerId).orElse(trainer);
+    }
+
+    private StaffRow validateTrainerForGroom(int trainerId, Integer excludeGroomId) {
+        StaffRow trainer = staff.findRow(trainerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Selected Head Trainer does not exist"));
+        if (!"HEAD_TRAINER".equals(trainer.roleName()) || !"ACTIVE".equals(trainer.status())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not an active Head Trainer");
+        }
+        int currentGrooms = staff.countActiveGroomsOfTrainer(trainerId, excludeGroomId);
+        if (currentGrooms >= MAX_GROOMS_PER_TRAINER) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Head Trainer " + trainer.fullName() + " is already managing the maximum of "
+                            + MAX_GROOMS_PER_TRAINER + " active grooms");
+        }
+        return trainer;
+    }
+
     private int warnIfGroomLeaves(StaffRow target, AuthenticatedUser actor, String reason) {
         if (!"GROOM".equals(target.roleName())) return 0;
         int open = staff.countOpenAssignments(target.userId());
@@ -309,7 +435,6 @@ public class StaffService {
                             + (open == 1 ? " session" : " sessions") + " to reassign.",
                     null, null));
         }
-        /* Việc chăm sóc cũng vậy: báo riêng để Head Trainer vào Stable care > Hand over. */
         int tasks = staff.countOpenCareTasks(target.userId());
         if (tasks > 0) {
             notifications.notifyRole("HEAD_TRAINER", actor, new Notice(

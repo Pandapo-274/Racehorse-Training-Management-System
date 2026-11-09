@@ -1,9 +1,11 @@
 package racehorse.backend.horse;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -12,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.auth.ApiException;
 import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.UserRepository;
+import racehorse.backend.notification.Notice;
+import racehorse.backend.notification.NotificationService;
 
 @Service
 public class HorseService {
@@ -22,12 +26,20 @@ public class HorseService {
     private final HorseRepository horseRepository;
     private final HorseVitalsRepository vitalsRepository;
     private final UserRepository userRepository;
+    private final NotificationService notifications;
 
     public HorseService(HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
                         UserRepository userRepository) {
+        this(horseRepository, vitalsRepository, userRepository, null);
+    }
+
+    @Autowired
+    public HorseService(HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
+                        UserRepository userRepository, NotificationService notifications) {
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
+        this.notifications = notifications;
     }
 
     @Transactional
@@ -47,15 +59,17 @@ public class HorseService {
     }
 
     /**
-     * Club Manager sửa mã đăng ký và số chuồng (vd. nhập nhầm lúc duyệt, hoặc
-     * đổi chuồng). Đây là hai định danh do câu lạc bộ cấp nên chủ ngựa không sửa
-     * được; trước đây cũng không ai sửa được.
+     * Club Manager sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách (V37).
      */
     @Transactional
     public HorseResponse updateIdentity(int horseId, HorseIdentityRequest raw, AuthenticatedUser user, String ip) {
+        if (user != null && !"CLUB_MANAGER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can update horse identity and assigned trainer");
+        }
         HorseResponse current = getOrThrow(horseId);
         String code = raw.registrationCode().trim().toUpperCase(java.util.Locale.ROOT);
         String stall = blankToNull(raw.stallNo());
+        Integer trainerId = raw.trainerId();
 
         Map<String, String> errors = new HashMap<>();
         if (horseRepository.existsByRegistrationCode(code, horseId)) {
@@ -69,26 +83,115 @@ public class HorseService {
         } else if (stall != null && horseRepository.existsByStallNo(stall, horseId)) {
             errors.put("stallNo", "Another horse is already in this stall");
         }
+
+        if (trainerId != null && (pedigree || current.isWithdrawn())) {
+            errors.put("trainerId", pedigree
+                    ? "A pedigree record cannot be assigned to a Head Trainer"
+                    : "A withdrawn horse cannot be assigned to a Head Trainer");
+        } else if (trainerId != null) {
+            validateTrainerLimit(trainerId, horseId, errors);
+        }
+
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
         try {
             horseRepository.updateIdentity(horseId, code, stall);
+            horseRepository.updateTrainer(horseId, (pedigree || current.isWithdrawn()) ? null : trainerId);
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT, "The registration code or stall has just been taken by someone else");
         }
         userRepository.writeAudit(user.userId(), "HORSE_IDENTITY_UPDATE", "HORSE", horseId, "SUCCESS", ip,
                 "code: " + current.registrationCode() + " -> " + code
-                        + "; stall: " + current.stallNo() + " -> " + stall);
-        return getOrThrow(horseId);
+                        + "; stall: " + current.stallNo() + " -> " + stall
+                        + "; trainer: " + current.trainerId() + " -> " + trainerId);
+        HorseResponse updated = getOrThrow(horseId);
+        notifyTrainerChange(current, updated);
+        return updated;
+    }
+
+    /** V37: Gán Head Trainer cho ngựa lúc duyệt hồ sơ (HorseRequestService.approve). */
+    @Transactional
+    public HorseResponse assignTrainer(int horseId, Integer trainerId, AuthenticatedUser user, String ip) {
+        if (user != null && !"CLUB_MANAGER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can assign horses to Head Trainers");
+        }
+        HorseResponse current = getOrThrow(horseId);
+        boolean pedigree = HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(current.recordType()));
+        if (trainerId != null && (pedigree || current.isWithdrawn())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot assign a Head Trainer to a pedigree or withdrawn horse");
+        }
+        if (trainerId != null) {
+            Map<String, String> errors = new HashMap<>();
+            validateTrainerLimit(trainerId, horseId, errors);
+            if (!errors.isEmpty()) {
+                throw new ApiException(HttpStatus.CONFLICT, errors.get("trainerId"), errors);
+            }
+        }
+        horseRepository.updateTrainer(horseId, trainerId);
+        userRepository.writeAudit(user.userId(), "HORSE_ASSIGN_TRAINER:" + (trainerId == null ? "NONE" : trainerId),
+                "HORSE", horseId, "SUCCESS", ip);
+        HorseResponse updated = getOrThrow(horseId);
+        notifyTrainerChange(current, updated);
+        return updated;
+    }
+
+    /**
+     * V37: Khi Club Manager giao / đổi / gỡ Head Trainer phụ trách ngựa, báo cho
+     * Head Trainer mới (được giao ngựa nào), Head Trainer cũ (không còn quản lý)
+     * và chủ ngựa (ngựa của mình được giao cho Head Trainer nào).
+     */
+    private void notifyTrainerChange(HorseResponse before, HorseResponse after) {
+        if (notifications == null) return;
+        Integer oldId = before.trainerId();
+        Integer newId = after.trainerId();
+        if (java.util.Objects.equals(oldId, newId)) return;
+        String horseLabel = after.horseName() + " (" + after.registrationCode() + ")";
+
+        if (newId != null) {
+            notifications.notifyUser(newId, new Notice(
+                    "HORSE_ASSIGNED_TO_TRAINER",
+                    "New horse assigned to your management",
+                    "The club manager assigned " + horseLabel + " to your training management.",
+                    Notice.HORSE, after.horseId()));
+        }
+        if (oldId != null) {
+            notifications.notifyUser(oldId, new Notice(
+                    "HORSE_UNASSIGNED_FROM_TRAINER",
+                    "Horse removed from your management",
+                    "The club manager moved " + horseLabel + " out of your training management"
+                            + (after.trainerName() != null ? " to Head Trainer " + after.trainerName() : "") + ".",
+                    Notice.HORSE, after.horseId()));
+        }
+        notifications.notifyUser(after.ownerId(), new Notice(
+                "HORSE_TRAINER_CHANGED",
+                newId != null ? "Head trainer assigned to your horse" : "Head trainer removed from your horse",
+                newId != null
+                        ? "Your horse " + horseLabel + " is now managed by Head Trainer " + after.trainerName() + "."
+                        : "Your horse " + horseLabel + " no longer has a Head Trainer assigned.",
+                Notice.HORSE, after.horseId()));
+    }
+
+    public List<HorseRepository.TrainerSummary> listActiveTrainers() {
+        return horseRepository.listActiveTrainers();
+    }
+
+    private void validateTrainerLimit(int trainerId, int excludeHorseId, Map<String, String> errors) {
+        var trainerOpt = horseRepository.findActiveTrainer(trainerId);
+        if (trainerOpt.isEmpty()) {
+            errors.put("trainerId", "Selected user is not an active Head Trainer");
+            return;
+        }
+        var trainer = trainerOpt.get();
+        int currentCount = horseRepository.countManagedHorses(trainerId, excludeHorseId);
+        if (currentCount >= trainer.maxHorses()) {
+            errors.put("trainerId", "Head Trainer " + trainer.fullName()
+                    + " has reached their maximum limit of " + trainer.maxHorses() + " horses");
+        }
     }
 
     /**
      * Chủ ngựa sửa thông tin cơ bản của NGỰA CỦA MÌNH.
-     *
-     * Quyền sở hữu kiểm ở đây (không chỉ ở controller) vì controller chỉ biết
-     * role, còn "ngựa này có phải của người đang gọi không" là chuyện của dữ liệu.
-     * Mã đăng ký, chuồng, chủ, cân nặng, loại hồ sơ, trạng thái: giữ nguyên.
      */
     @Transactional
     public HorseResponse updateByOwner(int horseId, HorseUpdateRequest raw,
@@ -110,10 +213,6 @@ public class HorseService {
         checkParentReachable(request.sireId(), current.sireId(), "sireId", user.userId(), errors);
         checkParentReachable(request.damId(), current.damId(), "damId", user.userId(), errors);
 
-        /* Lý lịch (giới tính, ngày sinh, cha mẹ) khoá lại khi con ngựa đã là
-           cha/mẹ của ngựa khác hoặc đã có buổi tập: đổi lúc đó làm phả hệ của
-           ngựa con mâu thuẫn (vd. ngựa cha thành MARE), hoặc làm sai hồ sơ đã
-           dùng để xếp giáo án. Tên, giống, màu lông vẫn sửa được. */
         boolean pedigreeChanged = !java.util.Objects.equals(current.horseGender(), request.horseGender())
                 || !java.util.Objects.equals(current.dateOfBirth(), request.dateOfBirth())
                 || !java.util.Objects.equals(current.sireId(), request.sireId())
@@ -131,7 +230,6 @@ public class HorseService {
         if (request.sireId() != null && request.sireId().equals(request.damId())) {
             errors.put("damId", "Sire and dam cannot be the same horse");
         }
-        // Sửa ngày sinh không được là cách lách luật tuổi.
         String ageProblem = HorsePolicy.ageProblem(current.recordType(), request.dateOfBirth());
         if (ageProblem != null) errors.put("dateOfBirth", ageProblem);
 
@@ -170,18 +268,20 @@ public class HorseService {
     }
 
     public java.util.List<HorseResponse> list(AuthenticatedUser user) {
-        // Chủ ngựa chỉ thấy ngựa của mình, các role còn lại thấy toàn bộ
         if ("HORSE_OWNER".equals(user.role())) {
             return horseRepository.findByOwner(user.userId());
         }
-        // Groom làm việc với ngựa trong chuồng; ngựa đã rút không còn ở đó.
-        // Manager, Trainer, Vet vẫn thấy cả ngựa đã rút để tra lịch sử.
         if ("GROOM".equals(user.role())) {
             return horseRepository.findActive();
         }
+        // V37: Head Trainer chỉ thấy những ngựa Club Manager đã giao cho mình quản lý.
+        if ("HEAD_TRAINER".equals(user.role())) {
+            return horseRepository.findByTrainer(user.userId());
+        }
         return horseRepository.findAll();
     }
-        /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
+
+    /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
     public PedigreeNode getPedigree(int horseId, int generations, AuthenticatedUser user) {
         checkCanView(getOrThrow(horseId), user);
         int depth = Math.max(1, Math.min(generations, 5));
@@ -212,7 +312,6 @@ public class HorseService {
 
     // ---------- helper ----------
 
-    /** Giá trị cũ và mới của những trường đã đổi, ghi vào AUDIT_LOG.detail (V20). */
     private static String changes(HorseResponse before, HorseUpdateRequest after) {
         StringBuilder sb = new StringBuilder();
         java.util.function.BiConsumer<String, Object[]> diff = (name, v) -> {
@@ -241,7 +340,6 @@ public class HorseService {
         }
     }
 
-    /** Chuỗi rỗng -> null. Quan trọng với stall_no: unique index chỉ cho phép nhiều NULL, không cho nhiều "". */
     private HorseRequest normalize(HorseRequest r) {
         return new HorseRequest(r.ownerId(), r.sireId(), r.damId(), r.horseName().trim(),
                 r.registrationCode().trim().toUpperCase(), blankToNull(r.breed()),
@@ -249,7 +347,6 @@ public class HorseService {
                 blankToNull(r.stallNo()), HorsePolicy.normalizeType(r.recordType()));
     }
 
-    /** Luật theo loại hồ sơ: tuổi cho ACADEMY; PEDIGREE không có chuồng và cân nặng. */
     private void validateTypeRules(HorseRequest r) {
         Map<String, String> errors = new HashMap<>();
         String ageProblem = HorsePolicy.ageProblem(r.recordType(), r.dateOfBirth());
@@ -267,7 +364,6 @@ public class HorseService {
         return (s == null || s.isBlank()) ? null : s.trim();
     }
 
-    /** excludeId = 0 khi tạo mới, = id ngựa khi sửa. */
     private void validate(HorseRequest r, int excludeId) {
         Map<String, String> errors = new HashMap<>();
 
@@ -314,20 +410,11 @@ public class HorseService {
             if (parent.horseGender() != null && !allowedGenders.contains(parent.horseGender())) {
                 errors.put(field, label + " has the wrong sex (sire: colt or stallion; dam: filly or mare)");
             }
-            /* Cha mẹ phải lớn hơn con ít nhất FOAL_BELOW năm: ngựa dưới tuổi đó
-               chưa sinh sản được. */
             if (parent.dateOfBirth() != null && childDob != null
                     && parent.dateOfBirth().plusYears(HorsePolicy.FOAL_BELOW).isAfter(childDob)) {
                 errors.put(field, label + " must be born at least "
                         + HorsePolicy.FOAL_BELOW + " years before this horse");
             }
-            /* Chặn vòng lặp phả hệ. Phép kiểm parentId == selfId ở trên chỉ bắt
-               được vòng dài một bước (tự làm cha mình); vòng dài hai bước -
-               A là cha của B trong khi B đã là cha của A - vẫn lọt, và kết quả
-               là cây phả hệ hiện một con ngựa làm ông của chính nó.
-
-               selfId = 0 khi đang TẠO ngựa mới: con ngựa chưa tồn tại nên
-               chưa thể là tổ tiên của ai, bỏ qua luôn khỏi phải hỏi database. */
             if (selfId > 0 && horseRepository.isAncestorOf(selfId, parentId)) {
                 errors.put(field, label + " is not allowed: this horse is already an ancestor of "
                         + (parent.horseName() == null ? "that horse" : parent.horseName())

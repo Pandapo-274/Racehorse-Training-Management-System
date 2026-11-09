@@ -1,26 +1,10 @@
 // src/features/horse/horseApi.js
-// UC7 (Horse Management) + UC8 (Horse Vitals).
-//
-// Mọi lời gọi đi qua authFetch của authService nên tự có Bearer token, và lỗi
-// HTTP trở thành ApiError có .status cùng .fieldErrors - biểu mẫu đọc thẳng
-// fieldErrors để tô đỏ đúng ô, không phải tự đoán.
-//
-// Toàn bộ phép quy đổi giữa từ vựng cơ sở dữ liệu (ELIGIBLE, COLT, HIGH) và từ
-// vựng hiển thị nằm ở đây, không rải trong JSX.
-
 import { ApiError, authFetch, getToken } from "../auth/authService";
 
-/* Ảnh ngựa dùng đúng luật của avatar (2 MB; JPEG, PNG, WebP), nên kiểm trước
-   bằng chính hàm của profileApi thay vì chép lại. */
 export { checkAvatar as checkHorsePhoto } from "../profile/profileApi";
 
 const API = "/api/horses";
 
-/* ------------------------------------------------------------------ *
- * Năm endpoint
- * ------------------------------------------------------------------ */
-
-/** GET /api/horses - chủ ngựa chỉ nhận ngựa của mình, các role khác nhận tất. */
 export function listHorses(signal) {
   return authFetch(API, { signal });
 }
@@ -29,7 +13,11 @@ export function getHorse(id, signal) {
   return authFetch(`${API}/${id}`, { signal });
 }
 
-/** generations bị backend kẹp trong [1, 5] dù gửi bao nhiêu. */
+/** V37: Danh sách Head Trainer đang ACTIVE cùng số ngựa quản lý và hạn mức tối đa. */
+export function listActiveTrainers(signal) {
+  return authFetch(`${API}/trainers`, { signal });
+}
+
 export function getPedigree(id, generations = 3, signal) {
   return authFetch(`${API}/${id}/pedigree?generations=${generations}`, { signal });
 }
@@ -38,14 +26,15 @@ export function getVitals(id, signal) {
   return authFetch(`${API}/${id}/vitals`, { signal });
 }
 
-/* Không còn createHorse: ngựa chỉ vào hệ thống qua yêu cầu đăng ký (horseRequestApi),
-   Club Manager duyệt rồi backend mới tạo hồ sơ. */
-
-/** Chỉ CLUB_MANAGER: sửa mã đăng ký và số chuồng (PUT /api/horses/{id}/identity). */
-export function updateHorseIdentity(id, { registrationCode, stallNo }) {
+/** Chỉ CLUB_MANAGER: sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách. */
+export function updateHorseIdentity(id, { registrationCode, stallNo, trainerId }) {
   return authFetch(`${API}/${id}/identity`, {
     method: "PUT",
-    body: JSON.stringify({ registrationCode: registrationCode.trim(), stallNo: stallNo?.trim() || null }),
+    body: JSON.stringify({
+      registrationCode: registrationCode.trim(),
+      stallNo: stallNo?.trim() || null,
+      trainerId: trainerId ? Number(trainerId) : null,
+    }),
   });
 }
 
@@ -76,10 +65,6 @@ export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
 }
 
-/**
- * POST multipart, không qua authFetch vì authFetch tự đặt Content-Type JSON
- * (xem ghi chú đầu profileApi.js). Chỉ chủ ngựa gọi được, và chỉ ngựa của mình.
- */
 export async function uploadHorsePhoto(id, file) {
   const body = new FormData();
   body.append("file", file);
@@ -111,20 +96,10 @@ export function removeHorsePhoto(id) {
   return authFetch(`${API}/${id}/photo`, { method: "DELETE" });
 }
 
-/* ------------------------------------------------------------------ *
- * Quyền
- * ------------------------------------------------------------------ */
-
-/**
- * Chỉ CHỦ NGỰA được sửa, và chỉ ngựa của mình. Club Manager và Head Trainer
- * chỉ xem. Khớp @RequireRole trên HorseController.update và kiểm quyền sở hữu
- * trong HorseService.updateByOwner (backend mới là nơi quyết định thật).
- */
 export function canEditHorse(user, horse) {
   return !!user && !!horse && user.role === "HORSE_OWNER" && horse.ownerId === user.userId;
 }
 
-/** Hai role duyệt yêu cầu đăng ký ngựa. */
 export function canReviewRequests(user) {
   return !!user && (user.role === "CLUB_MANAGER");
 }
@@ -133,11 +108,6 @@ export function getRequestsPath(user) {
   return user?.role === "HEAD_TRAINER" ? "/trainer/horse-requests" : "/manager/horse-requests";
 }
 
-/**
- * Xem phả hệ (UC7) và chỉ số sinh tồn (UC8): backend không giới hạn theo role
- * ở hai endpoint này (chỉ kiểm tra quyền xem từng con ngựa), nên mọi role đã
- * đăng nhập đều thấy. Nếu sau này cần siết quyền, sửa tại đây.
- */
 export function canViewPedigree(user) {
   return !!user;
 }
@@ -157,18 +127,7 @@ export function getHorseBasePath(user) {
   return paths[user?.role] || "/login";
 }
 
-/* ------------------------------------------------------------------ *
- * Từ vựng hiển thị
- * ------------------------------------------------------------------ */
-
-/**
- * Trạng thái sức khoẻ. `tone` chỉ dùng cho màu nền/chấm, KHÔNG BAO GIỜ là thứ
- * duy nhất mang nghĩa: mỗi chip luôn có nhãn chữ đi kèm. Lý do cụ thể: hai màu
- * vàng và xanh lá trong token.css cách nhau ΔE 4.2 dưới mắt mù màu đỏ-lục, tức
- * gần như trùng nhau. Ai chỉ nhìn màu sẽ đọc sai.
- */
 const STATUS_TEXT = {
-  // Nhãn cũ "Eligible" dễ bị đọc là "đủ điều kiện đua". Thực ra nó chỉ là sức khoẻ.
   ELIGIBLE:   { label: "Healthy", tone: "good",   hint: "Cleared as healthy by the vet" },
   MONITOR:    { label: "Monitor",    tone: "warning",  hint: "Needs watching" },
   INJURED:    { label: "Injured",    tone: "critical", hint: "Not fit to train" },
@@ -181,10 +140,6 @@ export function toStatus(status) {
 
 export const STATUS_OPTIONS = Object.keys(STATUS_TEXT);
 
-/**
- * Ngựa còn ở học viện hay đã rút (HORSE.activity_status, V15). Khác hẳn
- * trạng thái sức khoẻ ở trên: ngựa đã rút vẫn giữ trạng thái sức khoẻ cuối cùng.
- */
 const ACTIVITY_TEXT = {
   ACTIVE:    { label: "At the club", tone: "good",    hint: "Stabled and training at the club" },
   WITHDRAWN: { label: "Withdrawn",   tone: "neutral", hint: "Has left the club. No stall, plans or sessions." },
@@ -196,24 +151,14 @@ export function toActivity(activityStatus) {
 
 export const ACTIVITY_OPTIONS = Object.keys(ACTIVITY_TEXT);
 
-/** Ngựa đã rút: không vào giáo án, bảng sức khoẻ, lịch Groom. */
 export function isWithdrawn(horse) {
   return horse?.activityStatus === "WITHDRAWN";
 }
 
-/**
- * Chủ ngựa xin rút được ngựa của chính mình, khi nó là ngựa của học viện
- * (không phải hồ sơ PEDIGREE) và còn ở học viện. Khớp WithdrawalService.submit.
- */
 export function canRequestWithdrawal(user, horse) {
   return canEditHorse(user, horse) && !isPedigreeOnly(horse) && !isWithdrawn(horse);
 }
 
-/* ------------------------------------------------------------------ *
- * Loại hồ sơ và phân loại theo tuổi
- * ------------------------------------------------------------------ */
-
-/** PHẢI khớp HorsePolicy.java ở backend. Đổi mốc thì đổi cả hai nơi. */
 export const AGE_RULES = { foalBelow: 2, racingMax: 10, clubMax: 25 };
 
 export const RECORD_TYPES = {
@@ -221,15 +166,10 @@ export const RECORD_TYPES = {
   PEDIGREE: "Pedigree record only",
 };
 
-/** Ngựa chỉ là hồ sơ tham chiếu (cha mẹ, tổ tiên): không chuồng, không tập, không khám. */
 export function isPedigreeOnly(horse) {
   return horse?.recordType === "PEDIGREE";
 }
 
-/**
- * Phân loại hiển thị, suy từ loại hồ sơ + tuổi (không lưu DB nên không bao giờ lỗi thời).
- * Trả về { key, label, tone, hint }.
- */
 export function toStage(horse) {
   if (isPedigreeOnly(horse)) {
     return { key: "PEDIGREE", label: "Pedigree only", tone: "neutral",
@@ -253,26 +193,11 @@ export const STAGE_FILTERS = [
   { key: "PEDIGREE", label: "Ancestors" },
 ];
 
-/**
- * Cột/chip Health có nghĩa với con ngựa này không?
- *
- * Health (HORSE.status) chỉ mô tả sức khoẻ để TẬP. Hai trường hợp nó vô nghĩa:
- *  - Hồ sơ PEDIGREE: không tập, không khám.
- *  - Ngựa nghỉ hưu (quá tuổi đua) mà status vẫn là mặc định ELIGIBLE: "Fit to train"
- *    cho con ngựa 24 tuổi là sai sự thật. Cột status không có giá trị "đã nghỉ"
- *    nên nó chỉ đang mang giá trị mặc định.
- *
- * Ngựa nghỉ hưu mà status là MONITOR / INJURED / QUARANTINE thì VẪN hiện: đó là
- * cảnh báo thật, giấu đi là nguy hiểm.
- */
 export function healthApplies(horse) {
   if (isPedigreeOnly(horse)) return false;
-  // Dòng code ở dưới bỏ comment nếu không muốn ngựa nghỉ hưu hiện Health
-  // if (toStage(horse).key === "RETIRED" && horse?.status === "ELIGIBLE") return false;
   return true;
 }
 
-/** Cùng luật với HorsePolicy.ageProblem: trả thông báo lỗi hoặc null. */
 export function ageProblem(recordType, dateOfBirth) {
   if (recordType === "PEDIGREE") return null;
   if (!dateOfBirth) return "Date of birth is required for a club horse";
@@ -283,7 +208,6 @@ export function ageProblem(recordType, dateOfBirth) {
   return null;
 }
 
-/** Giới tính. Backend chỉ nhận đúng năm giá trị này (@Pattern trên HorseRequest). */
 const GENDER_TEXT = {
   COLT:     "Colt",
   FILLY:    "Filly",
@@ -298,15 +222,9 @@ export function toGender(g) {
   return GENDER_TEXT[g] || "—";
 }
 
-/**
- * Giới tính hợp lệ cho cha và mẹ. Chép từ SIRE_GENDERS/DAM_GENDERS trong
- * HorseService - để biểu mẫu lọc sẵn danh sách thay vì để người dùng chọn sai
- * rồi mới nhận lỗi 400 từ máy chủ.
- */
 export const SIRE_GENDERS = new Set(["COLT", "STALLION"]);
 export const DAM_GENDERS = new Set(["FILLY", "MARE"]);
 
-/** Mức nghiêm trọng của cảnh báo và chấn thương. */
 const SEVERITY_TONE = {
   HIGH:     "critical",
   CRITICAL: "critical",
@@ -334,24 +252,11 @@ export function toMetric(m) {
   return METRIC_TEXT[m] || m;
 }
 
-/**
- * Hằng số của cơ sở dữ liệu -> câu chữ người đọc được: UNDER_TREATMENT thành
- * "Under treatment", COMPLETED thành "Completed".
- *
- * Dùng cho những cột mà backend chưa chốt danh sách giá trị (trạng thái buổi
- * tập, trạng thái chấn thương). Những cột đã chốt - status, giới tính, mức
- * nghiêm trọng - có bảng tra riêng ở trên, vì ở đó cách viết hoa chưa đủ: ví
- * dụ ELIGIBLE còn phải kèm câu giải thích "Cleared to train".
- */
 export function toEnumLabel(v) {
   if (!v) return "—";
   const s = String(v).replace(/_/g, " ").toLowerCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-/* ------------------------------------------------------------------ *
- * Định dạng
- * ------------------------------------------------------------------ */
 
 export function formatDate(iso) {
   if (!iso) return "—";
@@ -361,12 +266,6 @@ export function formatDate(iso) {
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-/**
- * Giờ hệ thống (created_at, issued_at, reviewed_at...) được backend ghi bằng
- * SYSUTCDATETIME() và trả về dạng "2026-10-30T03:04:00", không kèm múi giờ.
- * new Date() đọc chuỗi đó như giờ máy, nên ở Việt Nam bị sớm 7 tiếng. Hàm này
- * thêm "Z" khi chuỗi chưa có múi giờ; chuỗi đã có (Instant) thì giữ nguyên.
- */
 export function parseServerTime(iso) {
   if (!iso) return null;
   const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
@@ -374,10 +273,6 @@ export function parseServerTime(iso) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Mặc định coi giờ là giờ hệ thống (UTC). Giờ do người dùng nhập - giờ buổi
- * tập (sessionDate), giờ khám (examDate) - là giờ địa phương: truyền { local: true }.
- */
 export function formatDateTime(iso, { local = false } = {}) {
   if (!iso) return "—";
   const d = local ? new Date(iso) : parseServerTime(iso) || new Date(NaN);
@@ -389,7 +284,6 @@ export function formatDateTime(iso, { local = false } = {}) {
       });
 }
 
-/** Ngày sinh -> số tuổi. Ngựa đua tính tuổi theo năm nên lấy tròn năm là đủ. */
 export function toAge(dateOfBirth) {
   if (!dateOfBirth) return null;
   const born = new Date(dateOfBirth);
@@ -406,7 +300,6 @@ export function formatWeight(w) {
   return Number.isFinite(n) && n > 0 ? `${n.toFixed(1)} kg` : "—";
 }
 
-/** Chữ viết tắt cho ô avatar: "Symboli Rudolf" -> "SR". */
 export function toInitials(name) {
   if (!name) return "??";
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();

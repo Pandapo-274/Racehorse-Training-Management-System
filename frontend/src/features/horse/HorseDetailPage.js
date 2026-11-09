@@ -1,12 +1,4 @@
 // src/features/horse/HorseDetailPage.js
-
-// Hồ sơ một con ngựa, ba thẻ: Overview và Pedigree thuộc UC7, Vitals thuộc UC8.
-//
-// Ba endpoint được gọi riêng theo từng thẻ chứ không gọi hết một lượt khi mở
-// trang: phả hệ và chỉ số sinh tồn mỗi cái là một chuỗi truy vấn nặng ở
-// backend (đệ quy nhiều đời, ghép năm bảng), mà phần lớn người mở hồ sơ chỉ
-// xem thẻ đầu. Đã tải rồi thì giữ lại, chuyển qua chuyển lại không gọi thêm.
-
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 
@@ -21,7 +13,7 @@ import HorseWithdrawalPanel from "./HorseWithdrawalPanel";
 
 import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
-  canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity,
+  canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity, listActiveTrainers,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
   readmitHorse, transferHorseOwner,
 } from "./horseApi";
@@ -44,16 +36,32 @@ function Row({ label, children }) {
   );
 }
 
-/** Club Manager sửa mã đăng ký và số chuồng (định danh do câu lạc bộ cấp). */
+/** Club Manager sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách (V37). */
 function IdentityForm({ horse, onSaved }) {
   const navigate = useNavigate();
   const [code, setCode] = useState(horse.registrationCode || "");
   const [stall, setStall] = useState(horse.stallNo || "");
+  const [trainerId, setTrainerId] = useState(horse.trainerId ? String(horse.trainerId) : "");
+  const [trainers, setTrainers] = useState([]);
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  // Hồ sơ pedigree và ngựa đã rút không có chuồng.
   const stallAllowed = !isPedigreeOnly(horse) && !isWithdrawn(horse);
+
+  useEffect(() => {
+    setCode(horse.registrationCode || "");
+    setStall(horse.stallNo || "");
+    setTrainerId(horse.trainerId ? String(horse.trainerId) : "");
+  }, [horse.registrationCode, horse.stallNo, horse.trainerId]);
+
+  useEffect(() => {
+    if (!stallAllowed) return undefined;
+    const ctrl = new AbortController();
+    listActiveTrainers(ctrl.signal)
+      .then((rows) => setTrainers(rows || []))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [stallAllowed, horse.trainerId]);
 
   const save = async (e) => {
     e.preventDefault();
@@ -64,9 +72,13 @@ function IdentityForm({ horse, onSaved }) {
       const updated = await updateHorseIdentity(horse.horseId, {
         registrationCode: code,
         stallNo: stallAllowed ? stall : null,
+        trainerId: stallAllowed && trainerId ? Number(trainerId) : null,
       });
       onSaved(updated);
       setMessage("Saved.");
+      if (stallAllowed) {
+        listActiveTrainers().then((rows) => setTrainers(rows || [])).catch(() => {});
+      }
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) setErrors(err.fieldErrors);
@@ -77,7 +89,7 @@ function IdentityForm({ horse, onSaved }) {
   };
 
   return (
-    <Card title="Club records" hint="Only the club manager can change these">
+    <Card title="Club records & Trainer allocation" hint="Only the club manager can change these">
       <form onSubmit={save} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
@@ -87,12 +99,34 @@ function IdentityForm({ horse, onSaved }) {
             {errors.registrationCode && <p className="hz-field__error">{errors.registrationCode}</p>}
           </div>
           {stallAllowed && (
-            <div className="hz-field">
-              <label htmlFor="identity-stall">Stall</label>
-              <input id="identity-stall" className="hz-mono" maxLength={20} value={stall}
-                     onChange={(e) => setStall(e.target.value)} />
-              {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-            </div>
+            <>
+              <div className="hz-field">
+                <label htmlFor="identity-stall">Stall</label>
+                <input id="identity-stall" className="hz-mono" maxLength={20} value={stall}
+                       onChange={(e) => setStall(e.target.value)} />
+                {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
+              </div>
+              <div className="hz-field">
+                <label htmlFor="identity-trainer">Assigned Head Trainer</label>
+                <select
+                  id="identity-trainer"
+                  value={trainerId}
+                  onChange={(e) => setTrainerId(e.target.value)}
+                >
+                  <option value="">— Unassigned —</option>
+                  {trainers.map((t) => {
+                    const isCurrent = Number(trainerId) === t.userId || horse.trainerId === t.userId;
+                    const full = t.managedHorseCount >= t.maxHorses && !isCurrent;
+                    return (
+                      <option key={t.userId} value={t.userId} disabled={full}>
+                        {t.fullName} ({t.managedHorseCount}/{t.maxHorses} horses)
+                      </option>
+                    );
+                  })}
+                </select>
+                {errors.trainerId && <p className="hz-field__error">{errors.trainerId}</p>}
+              </div>
+            </>
           )}
         </div>
         {message && <p className="hz-muted hz-note" role="status">{message}</p>}
@@ -228,60 +262,41 @@ export default function HorseDetailPage() {
   const fail = useCallback(
     (set) => (err) => {
       if (err.name === "AbortError") return;
-
       if (handleAuthError(err, navigate)) return;
-
       set(err.message);
     },
     [navigate]
   );
 
-  // Load horse
   useEffect(() => {
     const ctrl = new AbortController();
-
     setError("");
-
     getHorse(id, ctrl.signal)
       .then(setHorse)
       .catch(fail(setError));
-
     return () => ctrl.abort();
   }, [id, fail]);
 
-  // Load pedigree only when the Pedigree tab is opened.
-  // Reload when generations changes.
   useEffect(() => {
     if (tab !== "pedigree") return undefined;
-
     const ctrl = new AbortController();
-
     setPedigreeError("");
-
     getPedigree(id, generations, ctrl.signal)
       .then(setPedigree)
       .catch(fail(setPedigreeError));
-
     return () => ctrl.abort();
   }, [tab, id, generations, fail]);
 
-  // Load vitals only when the Vitals tab is opened.
-  // Keep the loaded result when switching tabs.
   useEffect(() => {
     if (tab !== "vitals" || vitals) return undefined;
-
     const ctrl = new AbortController();
-
     setVitalsError("");
-
     getVitals(id, ctrl.signal)
       .then(setVitals)
       .catch(fail(setVitalsError));
-
     return () => ctrl.abort();
   }, [tab, id, vitals, fail]);
 
-  // Error state
   if (error) {
     return (
       <HorseShell title="Horse">
@@ -292,7 +307,6 @@ export default function HorseDetailPage() {
     );
   }
 
-  // Loading state
   if (!horse) {
     return (
       <HorseShell title="Horse">
@@ -363,7 +377,6 @@ export default function HorseDetailPage() {
         </>
       }
     >
-      {/* Tabs */}
       <div className="hz-tabs" role="tablist">
         {TABS.filter((t) =>
           (t.id !== "pedigree" || mayViewPedigree) &&
@@ -382,46 +395,21 @@ export default function HorseDetailPage() {
         ))}
       </div>
 
-      {/* =========================
-          OVERVIEW
-          ========================= */}
       {tab === "overview" && (
         <div className="hz-detail-grid">
           <Card title="Identity">
             <HorsePhoto horse={horse} className="hz-photo--sm" />
-
-            <Row label="Name">
-              {horse.horseName}
-            </Row>
-
+            <Row label="Name">{horse.horseName}</Row>
             <Row label="Registration code">
-              <span className="hz-mono">
-                {horse.registrationCode}
-              </span>
+              <span className="hz-mono">{horse.registrationCode}</span>
             </Row>
-
-            <Row label="Sex">
-              {toGender(horse.horseGender)}
-            </Row>
-
+            <Row label="Sex">{toGender(horse.horseGender)}</Row>
             <Row label="Date of birth">
               {formatDate(horse.dateOfBirth)}
-
-              {age != null && (
-                <span className="hz-muted">
-                  {" "}
-                  · {age} years
-                </span>
-              )}
+              {age != null && <span className="hz-muted"> · {age} years</span>}
             </Row>
-
-            <Row label="Breed">
-              {horse.breed || "—"}
-            </Row>
-
-            <Row label="Colour">
-              {horse.color || "—"}
-            </Row>
+            <Row label="Breed">{horse.breed || "—"}</Row>
+            <Row label="Colour">{horse.color || "—"}</Row>
           </Card>
 
           <Card title={pedigreeOnly ? "Record" : "Stable"}>
@@ -433,9 +421,11 @@ export default function HorseDetailPage() {
             ) : (
               <>
                 <Row label="Weight">{formatWeight(horse.weight)}</Row>
-
                 <Row label="Stall">
                   <span className="hz-mono">{horse.stallNo || "—"}</span>
+                </Row>
+                <Row label="Head Trainer">
+                  {horse.trainerName || "Unassigned"}
                 </Row>
               </>
             )}
@@ -447,7 +437,6 @@ export default function HorseDetailPage() {
             {healthApplies(horse) && (
               <Row label="Health status">
                 <StatusChip tone={st.tone} label={st.label} title={st.hint} />
-
                 <p className="hz-muted hz-note">
                   {isVet
                     ? "Record an examination to change it, or confirm recovery to clear it."
@@ -456,13 +445,8 @@ export default function HorseDetailPage() {
               </Row>
             )}
 
-            <Row label="Registered">
-              {formatDateTime(horse.createdAt)}
-            </Row>
-
-            <Row label="Last updated">
-              {formatDateTime(horse.updatedAt)}
-            </Row>
+            <Row label="Registered">{formatDateTime(horse.createdAt)}</Row>
+            <Row label="Last updated">{formatDateTime(horse.updatedAt)}</Row>
           </Card>
 
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
@@ -474,19 +458,12 @@ export default function HorseDetailPage() {
         </div>
       )}
 
-      {/* =========================
-          PEDIGREE
-          ========================= */}
       {tab === "pedigree" && (
         <Card
           title="Pedigree"
           hint="Sire line runs along the top of each pair, dam line along the bottom"
           actions={
-            <div
-              className="hz-segment"
-              role="group"
-              aria-label="Generations to show"
-            >
+            <div className="hz-segment" role="group" aria-label="Generations to show">
               {GENERATION_OPTIONS.map((g) => (
                 <button
                   key={g}
@@ -501,10 +478,7 @@ export default function HorseDetailPage() {
           }
         >
           {pedigreeError ? (
-            <StateBlock
-              kind="error"
-              title={pedigreeError}
-            />
+            <StateBlock kind="error" title={pedigreeError} />
           ) : !pedigree ? (
             <StateBlock title="Loading pedigree…" />
           ) : !pedigree.sire && !pedigree.dam ? (
@@ -519,15 +493,9 @@ export default function HorseDetailPage() {
         </Card>
       )}
 
-      {/* =========================
-          VITALS
-          ========================= */}
       {tab === "vitals" &&
         (vitalsError ? (
-          <StateBlock
-            kind="error"
-            title={vitalsError}
-          />
+          <StateBlock kind="error" title={vitalsError} />
         ) : !vitals ? (
           <StateBlock title="Loading vitals…" />
         ) : (

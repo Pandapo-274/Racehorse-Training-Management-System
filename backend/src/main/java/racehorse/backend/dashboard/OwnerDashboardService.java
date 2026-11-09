@@ -135,7 +135,9 @@ public class OwnerDashboardService {
                     ORDER BY r.race_date
                 ) nr
 
-                WHERE h.owner_id = ? AND h.record_type = 'ACADEMY'
+                -- Only horses at the club: a withdrawn horse is not "stabled".
+                -- It is still listed (as withdrawn) on My horses, and its costs stay in Costs & prizes.
+                WHERE h.owner_id = ? AND h.record_type = 'ACADEMY' AND h.activity_status = 'ACTIVE'
                 ORDER BY h.horse_name
                 """;
 
