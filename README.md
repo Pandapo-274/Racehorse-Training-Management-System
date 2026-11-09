@@ -45,6 +45,8 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 9, 2026`
+- `[01:23]` `DevilJack422` - Modified new training flow
 > #### `Nov 6, 2026`
 - `[12:45]` `Pandapo274` - Update Groom dashboard to display ongoing training sessions and refine responsive UI layout
 - `[11:14]` `tqt195` - Responsive layout for the whole frontend (checked on every page at 1440 / 1280 / 1024 / 768 / 390 px): `Sign in`, `Register` and `Forgot password` no longer cut off on phones; on narrow screens the sidebar of the shared pages (horses, races, supplies, costs, audit log, staff, owner pages) and of the `Horse Owner` dashboard shrinks to an icon bar instead of disappearing; wide tables scroll inside their card instead of stretching the page; page headers grow instead of overflowing; card titles no longer squeeze into one word per line; owner hero card no longer overlaps the photo below 1100 px; `Races` note column, `Supplies` stock rows and trainer `Horses in your care` status column fixed; vet `Stable map` grid adapts to the width. e2e script updated for the new rules (owner approves plans, no sessions in a past hour, `STOP_SESSION` opens an incident report, false-alarm dismiss): 160/161 steps pass

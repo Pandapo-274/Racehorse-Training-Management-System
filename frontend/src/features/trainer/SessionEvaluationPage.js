@@ -75,11 +75,43 @@ function statusLabel(status) {
   return String(status || "UNKNOWN").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function computeReviewDeadlineBadge(session) {
+  if (!session) return null;
+  if (session.reviewStatus === "ARCHIVED_AUTO") {
+    return {
+      text: "Archived · Auto-reported (>48h)",
+      bg: "#fef3c7",
+      color: "#92400e",
+      border: "#fcd34d",
+    };
+  }
+  if (session.reviewStatus === "REVIEWED") {
+    return {
+      text: "Official Review Sent",
+      bg: "#dcfce7",
+      color: "#166534",
+      border: "#86efac",
+    };
+  }
+  const endRef = session.endedAt || session.sessionDate;
+  if (!endRef) return null;
+  const endMs = new Date(endRef).getTime();
+  if (Number.isNaN(endMs)) return null;
+  const deadlineMs = endMs + 48 * 3600 * 1000;
+  const remainingHours = Math.max(0, Math.ceil((deadlineMs - Date.now()) / (3600 * 1000)));
+  return {
+    text: `Review due in ${remainingHours}h (48h limit)`,
+    bg: remainingHours <= 12 ? "#fee2e2" : "#e0f2fe",
+    color: remainingHours <= 12 ? "#991b1b" : "#075985",
+    border: remainingHours <= 12 ? "#fca5a5" : "#7dd3fc",
+  };
+}
+
 function emptyForm(session) {
   return {
     actualDistance: session?.actualDistance ?? session?.plannedDistance ?? "",
-    durationMinutes: session?.durationMinutes ?? "",
-    avgHeartRate: session?.avgHeartRate ?? "",
+    durationMinutes: session?.durationMinutes ?? session?.plannedDuration ?? "",
+    avgHeartRate: session?.avgHeartRate ?? session?.peakHeartRate ?? "",
     peakHeartRate: session?.peakHeartRate ?? "",
     recoveryHeartRate: session?.recoveryHeartRate ?? "",
     peakVelocity: session?.peakVelocity ?? "",
@@ -89,10 +121,6 @@ function emptyForm(session) {
   };
 }
 
-/**
- * Lượt chạy thử và video. Lưu riêng với form đánh giá: video thường có sau khi
- * đã chấm điểm (phải tải lên YouTube / Drive trước), và ngược lại.
- */
 function TrialRunCard({ session, onSaved }) {
   const navigate = useNavigate();
   const [trialRun, setTrialRun] = useState(!!session.trialRun);
@@ -180,7 +208,7 @@ export default function SessionEvaluationPage() {
       setSelectedId((current) => {
         if (current && next.some((item) => item.sessionId === current)) return current;
         return (
-          next.find((item) => !hasNotRun(item.status) && !item.evaluation)?.sessionId ??
+          next.find((item) => !hasNotRun(item.status) && item.reviewStatus !== "REVIEWED")?.sessionId ??
           next.find((item) => !hasNotRun(item.status))?.sessionId ??
           null
         );
@@ -210,15 +238,28 @@ export default function SessionEvaluationPage() {
     setNotice("");
   }, [selectedSession]);
 
+  const archivedCount = useMemo(
+    () => sessions.filter((s) => !hasNotRun(s.status) && s.reviewStatus === "ARCHIVED_AUTO").length,
+    [sessions]
+  );
+
   const visibleSessions = useMemo(
     () =>
       sessions
         .filter((session) => !hasNotRun(session.status))
-        .filter(
-          (session) =>
-            filter === "ALL" ||
-            (filter === "NEEDS_REVIEW" ? !session.evaluation : session.evaluation === filter)
-        )
+        .filter((session) => {
+          if (filter === "ALL") return true;
+          if (filter === "NEEDS_REVIEW") {
+            return session.reviewStatus === "PENDING" || (!session.evaluation && session.reviewStatus !== "ARCHIVED_AUTO");
+          }
+          if (filter === "ARCHIVED") {
+            return session.reviewStatus === "ARCHIVED_AUTO";
+          }
+          if (filter === "REVIEWED") {
+            return session.reviewStatus === "REVIEWED";
+          }
+          return session.evaluation === filter;
+        })
         .sort((a, b) => new Date(b.sessionDate) - new Date(a.sessionDate)),
     [sessions, filter]
   );
@@ -250,7 +291,7 @@ export default function SessionEvaluationPage() {
       const updated = await evaluateSession(selectedSession.sessionId, payload);
       setSessions((current) => current.map((item) => item.sessionId === updated.sessionId ? updated : item));
       setForm(emptyForm(updated));
-      setNotice(`Session #${updated.sessionId} evaluation saved successfully.`);
+      setNotice(`Session #${updated.sessionId} official review saved and sent to the Horse Owner.`);
     } catch (err) {
       if (!handleAuthError(err, navigate)) setError(err.message || "Unable to save this evaluation.");
     } finally {
@@ -271,9 +312,24 @@ export default function SessionEvaluationPage() {
               <span className="trainer-diamond" aria-hidden="true" />
               <h1>Session Review</h1>
             </div>
-            <p>Record workout results and evaluate horse performance after a training session.</p>
+            <p>Record workout results within the 48-hour review window or finalize archived auto-reviews.</p>
           </div>
           <div className="trainer-header-actions">
+            {archivedCount > 0 && (
+              <button
+                type="button"
+                className="session-review-refresh"
+                style={{
+                  background: "#fef3c7",
+                  color: "#92400e",
+                  borderColor: "#f59e0b",
+                  fontWeight: 700,
+                }}
+                onClick={() => setFilter("ARCHIVED")}
+              >
+                🗄️ Archive ({archivedCount})
+              </button>
+            )}
             <button
               type="button"
               className="session-review-refresh"
@@ -303,7 +359,9 @@ export default function SessionEvaluationPage() {
                 </p>
               </div>
               <select aria-label="Filter sessions" value={filter} onChange={(event) => setFilter(event.target.value)}>
-                <option value="NEEDS_REVIEW">Needs review</option>
+                <option value="NEEDS_REVIEW">Pending review (within 48h)</option>
+                <option value="ARCHIVED">Archive (Overdue &gt;48h auto-reported)</option>
+                <option value="REVIEWED">Official review completed</option>
                 <option value="ALL">All sessions</option>
                 <option value="POOR">Poor</option>
                 <option value="FAIR">Fair</option>
@@ -315,43 +373,65 @@ export default function SessionEvaluationPage() {
               <p className="session-review-empty">No sessions match this filter.</p>
             ) : (
               <div className="session-review-list">
-                {visibleSessions.map((session) => (
-                  <button
-                    type="button"
-                    key={session.sessionId}
-                    className={`session-review-item ${session.sessionId === selectedId ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelectedId(session.sessionId);
-                      setError("");
-                    }}
-                  >
-                    <span className="session-review-item-top">
-                      <strong>{session.horseName || `Horse #${session.horseId}`}</strong>
-                      <span
-                        className={`session-review-status status-${String(session.status).toLowerCase()}`}
-                      >
-                        {statusLabel(session.status)}
+                {visibleSessions.map((session) => {
+                  const badge = computeReviewDeadlineBadge(session);
+                  return (
+                    <button
+                      type="button"
+                      key={session.sessionId}
+                      className={`session-review-item ${session.sessionId === selectedId ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedId(session.sessionId);
+                        setError("");
+                      }}
+                    >
+                      <span className="session-review-item-top">
+                        <strong>{session.horseName || `Horse #${session.horseId}`}</strong>
+                        <span
+                          className={`session-review-status status-${String(session.status).toLowerCase()}`}
+                        >
+                          {statusLabel(session.status)}
+                        </span>
                       </span>
-                    </span>
-                    <span className="session-review-item-meta">
-                      Session #{session.sessionId} · {formatDate(session.sessionDate)}
-                    </span>
-                    <span className="session-review-item-meta">
-                      {session.phaseName || `Phase #${session.phaseId}`} · Groom:{" "}
-                      {session.assignedToName || `#${session.assignedTo}`}
-                    </span>
-                    <span className="session-review-item-bottom">
-                      <span>
-                        {session.evaluation
-                          ? `Rating: ${statusLabel(session.evaluation)}`
-                          : "Awaiting evaluation"}
+                      <span className="session-review-item-meta">
+                        Session #{session.sessionId} · {formatDate(session.sessionDate)}
                       </span>
-                      <span>
-                        {session.actualDistance == null ? "No result yet" : `${session.actualDistance} m`}
+                      <span className="session-review-item-meta">
+                        {session.phaseName || `Phase #${session.phaseId}`} · Groom:{" "}
+                        {session.assignedToName || `#${session.assignedTo}`}
                       </span>
-                    </span>
-                  </button>
-                ))}
+                      {badge && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: "4px",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            backgroundColor: badge.bg,
+                            color: badge.color,
+                            border: `1px solid ${badge.border}`,
+                          }}
+                        >
+                          {badge.text}
+                        </span>
+                      )}
+                      <span className="session-review-item-bottom">
+                        <span>
+                          {session.reviewStatus === "ARCHIVED_AUTO"
+                            ? "Auto preliminary report"
+                            : session.evaluation
+                              ? `Rating: ${statusLabel(session.evaluation)}`
+                              : "Awaiting evaluation"}
+                        </span>
+                        <span>
+                          {session.actualDistance == null ? "No result yet" : `${session.actualDistance} m`}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -369,6 +449,7 @@ export default function SessionEvaluationPage() {
                     <h2>{selectedSession.horseName || `Horse #${selectedSession.horseId}`}</h2>
                     <p>
                       Session #{selectedSession.sessionId} · {formatDate(selectedSession.sessionDate)}
+                      {selectedSession.endedAt ? ` · Ended ${formatDate(selectedSession.endedAt)}` : ""}
                     </p>
                   </div>
                   <span
@@ -377,6 +458,44 @@ export default function SessionEvaluationPage() {
                     {statusLabel(selectedSession.status)}
                   </span>
                 </div>
+
+                {selectedSession.reviewStatus === "ARCHIVED_AUTO" && (
+                  <div
+                    role="alert"
+                    style={{
+                      backgroundColor: "#fffbeb",
+                      border: "1px solid #f59e0b",
+                      color: "#92400e",
+                      padding: "12px 16px",
+                      borderRadius: "10px",
+                      marginBottom: "16px",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong>🗄️ Archived Overdue Session (Automated Preliminary Report Sent)</strong>
+                    <p style={{ margin: "4px 0 0" }}>
+                      This session exceeded the 2-day (48-hour) review deadline. The system automatically sent a preliminary summary report (based on Groom metrics) with a warning to the Horse Owner and moved this session to the Archive. Submitting your review below will replace the preliminary report and send an official Head Trainer notification to the Horse Owner.
+                    </p>
+                  </div>
+                )}
+
+                {selectedSession.earlyStopReason && (
+                  <div
+                    style={{
+                      backgroundColor: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      color: "#1e40af",
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      marginBottom: "12px",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <strong>Early stop reason reported by Groom:</strong> {selectedSession.earlyStopReason}
+                  </div>
+                )}
+
                 {selectedSession.status === "SCHEDULED" ? (
                   <p className="session-review-empty">This session has not started and cannot be evaluated yet.</p>
                 ) : (
@@ -387,8 +506,10 @@ export default function SessionEvaluationPage() {
                         <strong>{selectedSession.phaseName || `Phase #${selectedSession.phaseId}`}</strong>
                       </span>
                       <span>
-                        <small>Planned distance</small>
-                        <strong>{selectedSession.plannedDistance ?? "—"} m</strong>
+                        <small>Planned distance / duration</small>
+                        <strong>
+                          {selectedSession.plannedDistance ?? "—"} m · {selectedSession.plannedDuration ?? 60} mins
+                        </strong>
                       </span>
                       <span>
                         <small>Heart-rate ceiling</small>
@@ -416,7 +537,7 @@ export default function SessionEvaluationPage() {
                           name="durationMinutes"
                           type="number"
                           min="1"
-                          max="600"
+                          max="720"
                           step="1"
                           value={form.durationMinutes}
                           onChange={updateField}
@@ -462,7 +583,7 @@ export default function SessionEvaluationPage() {
                         />
                       </label>
                       <label>
-                        Peak velocity
+                        Peak velocity (m/s)
                         <input
                           name="peakVelocity"
                           type="number"
@@ -488,7 +609,6 @@ export default function SessionEvaluationPage() {
                       <label>
                         Final session status
                         <select name="status" value={form.status} onChange={updateField} required>
-                          {/* Buổi đã dừng sớm thì không đổi lại thành Completed (backend cũng chặn). */}
                           <option value="COMPLETED" disabled={selectedSession.status === "STOPPED_EARLY"}>
                             Completed
                           </option>
@@ -509,16 +629,20 @@ export default function SessionEvaluationPage() {
                     </label>
                     <div className="session-review-form-footer">
                       <span>
-                        {selectedSession.evaluation
-                          ? "Updating the existing evaluation will replace its current values."
-                          : "Evaluation is saved to the training session record."}
+                        {selectedSession.reviewStatus === "ARCHIVED_AUTO"
+                          ? "Submitting will finalize this archived session and notify the Horse Owner."
+                          : selectedSession.evaluation
+                            ? "Updating the existing evaluation will replace its current values."
+                            : "Official review must be submitted within 48 hours of session completion."}
                       </span>
                       <button type="submit" disabled={saving}>
                         {saving
                           ? "Saving…"
-                          : selectedSession.evaluation
-                            ? "Update evaluation"
-                            : "Save evaluation"}
+                          : selectedSession.reviewStatus === "ARCHIVED_AUTO"
+                            ? "Submit official review & notify owner"
+                            : selectedSession.evaluation
+                              ? "Update evaluation"
+                              : "Save evaluation"}
                       </button>
                     </div>
                   </form>

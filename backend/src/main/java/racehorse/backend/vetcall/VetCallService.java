@@ -135,7 +135,8 @@ public class VetCallService {
                 + (medication == null ? "" : " Medication: " + medication + ".");
         notifications.notifyUser(call.calledBy(), new Notice("VET_CALL_ANSWERED",
                 "Veterinarian answered: " + call.horseName(), clip(summary, 500), Notice.VET_CALL, callId));
-        alerts.findSessionContext(call.sessionId()).ifPresent(s -> notifications.notifyUser(s.assignedTo(),
+        alerts.findSessionContext(call.sessionId()).filter(s -> s.assignedTo() != call.calledBy())
+                .ifPresent(s -> notifications.notifyUser(s.assignedTo(),
                 new Notice("VET_CALL_ANSWERED", "Vet instructions: " + call.horseName(), clip(summary, 500),
                         Notice.TRAINING_SESSION, call.sessionId())));
 

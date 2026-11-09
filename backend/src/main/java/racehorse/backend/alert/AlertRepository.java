@@ -112,6 +112,10 @@ public class AlertRepository {
      * afterId == null: lấy N cảnh báo gần nhất, mới -> cũ (dùng khi mở màn hình lần đầu).
      */
     public List<AlertResponse> search(Integer afterId, boolean openOnly, int limit) {
+        return search(afterId, openOnly, limit, null);
+    }
+
+    public List<AlertResponse> search(Integer afterId, boolean openOnly, int limit, Integer trainerId) {
         StringBuilder sql = new StringBuilder(SELECT_ALERT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();
         if (afterId != null) {
@@ -120,6 +124,10 @@ public class AlertRepository {
         }
         if (openOnly) {
             sql.append(" AND a.action_taken IS NULL");
+        }
+        if (trainerId != null) {
+            sql.append(" AND h.trainer_id = :trainerId");
+            params.put("trainerId", trainerId);
         }
         sql.append(afterId != null ? " ORDER BY a.alert_id ASC" : " ORDER BY a.alert_id DESC");
         sql.append(" OFFSET 0 ROWS FETCH NEXT ").append(limit).append(" ROWS ONLY");

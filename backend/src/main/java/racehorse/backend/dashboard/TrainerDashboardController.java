@@ -1,10 +1,13 @@
 package racehorse.backend.dashboard;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import racehorse.backend.auth.AuthInterceptor;
+import racehorse.backend.auth.AuthenticatedUser;
 import racehorse.backend.auth.RequireRole;
 
 /**
@@ -44,8 +47,9 @@ public class TrainerDashboardController {
     @GetMapping
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
     public TrainerDashboard.Response get(
-            @RequestParam(defaultValue = "" + DEFAULT_WEEKS) int weeks) {
+            @RequestParam(defaultValue = "" + DEFAULT_WEEKS) int weeks,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         int safeWeeks = Math.max(1, Math.min(MAX_WEEKS, weeks));
-        return service.load(safeWeeks);
+        return service.load(safeWeeks, user);
     }
 }

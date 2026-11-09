@@ -224,7 +224,7 @@ public class TreatmentService {
                     }
                 }
                 if (unit == null || unit.isBlank()) {
-                    unit = "liều";
+                    unit = "dose";
                 }
 
                 String qtyStr = raw.quantity().stripTrailingZeros().toPlainString();

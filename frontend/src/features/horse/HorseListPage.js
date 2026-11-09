@@ -95,6 +95,8 @@ export default function HorseListPage() {
       subtitle={
         user?.role === "HORSE_OWNER"
           ? "The horses registered in your name"
+          : user?.role === "HEAD_TRAINER"
+          ? "The horses assigned to your management"
           : "Every horse registered at the club"
       }
       actions={actions}

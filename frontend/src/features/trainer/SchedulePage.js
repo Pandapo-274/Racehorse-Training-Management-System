@@ -16,6 +16,7 @@ const EMPTY_FORM = {
   assignedTo: "",
   sessionDate: "",
   plannedDistance: "",
+  plannedDuration: "60",
 };
 
 function dateKey(date) {
@@ -61,6 +62,21 @@ function toApiDateTime(value) {
   return value.length === 16 ? `${value}:00` : value;
 }
 
+function computeEndInfo(sessionDateStr, plannedDurationStr) {
+  if (!sessionDateStr) return null;
+  const start = new Date(sessionDateStr);
+  const dur = Number(plannedDurationStr || 60);
+  if (Number.isNaN(start.getTime()) || !Number.isFinite(dur) || dur <= 0) return null;
+  const end = new Date(start.getTime() + dur * 60000);
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate();
+  const pad = (n) => String(n).padStart(2, "0");
+  const endTimeText = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  return { end, sameDay, endTimeText, dur };
+}
+
 function getErrorMessage(error) {
   if (error?.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return Object.values(error.fieldErrors).join(" ");
@@ -89,7 +105,6 @@ function HorseshoeIcon() {
 }
 
 function ScheduleSidebar({ onSignOut }) {
-
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
@@ -108,8 +123,6 @@ function ScheduleSidebar({ onSignOut }) {
         <NavItems role="HEAD_TRAINER" prefix="trainer" icon={<HorseshoeIcon />} />
       </nav>
 
-
-
       <div className="trainer-sidebar-bottom">
         <button type="button" className="trainer-signout" onClick={onSignOut}>
           Sign out
@@ -127,6 +140,7 @@ function ScheduleSidebar({ onSignOut }) {
 function SessionCard({ session, onEdit, now }) {
   const canEdit = session.status === "SCHEDULED";
   const due = canEdit && session.sessionDate && new Date(session.sessionDate) <= now;
+  const durationMins = session.plannedDuration || 60;
 
   return (
     <article
@@ -135,7 +149,7 @@ function SessionCard({ session, onEdit, now }) {
       ).toLowerCase()}${due ? " is-due" : ""}`}
     >
       <div className="schedule-session-time">
-        {formatTime(session.sessionDate)}
+        {formatTime(session.sessionDate)} · {durationMins}m
       </div>
 
       <strong className="schedule-session-horse">
@@ -183,6 +197,7 @@ function SessionModal({
   const selectedPlan = plans.find(
     (plan) => String(plan.planId) === String(form.planId),
   );
+  const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
 
   return (
     <div
@@ -205,8 +220,8 @@ function SessionModal({
             </h2>
             <p>
               {editingSession
-                ? "Change the assigned Groom and session time."
-                : "Choose an active plan, a training phase and a Groom."}
+                ? "Change the assigned Groom, session time, and planned duration."
+                : "Choose an active plan, a training phase, a Groom managed by you, and session duration."}
             </p>
           </div>
           <button
@@ -260,7 +275,7 @@ function SessionModal({
                       ...old,
                       phaseId: event.target.value,
                       plannedDistance: phase?.distance ?? "",
-                    }));
+                    }))
                   }}
                 >
                   <option value="">Select a phase</option>
@@ -308,7 +323,7 @@ function SessionModal({
           )}
 
           <label>
-            Assigned Groom
+            Assigned Groom (managed by you, max 3)
             <select
               required
               value={form.assignedTo}
@@ -323,9 +338,13 @@ function SessionModal({
                 </option>
               ))}
             </select>
-            {grooms.length === 0 && (
+            {grooms.length === 0 ? (
               <small className="schedule-field-hint">
-                No active Groom accounts are available.
+                No active Groom accounts are assigned to your management. Ask the Club Manager to assign Grooms to you.
+              </small>
+            ) : (
+              <small className="schedule-field-hint">
+                1 Groom can only train 1 horse at a time and must not be executing an active session.
               </small>
             )}
           </label>
@@ -343,6 +362,39 @@ function SessionModal({
                 }))
               }
             />
+            <small className="schedule-field-hint">
+              Must be today or in the future. 1 horse can only have 1 session per day.
+            </small>
+          </label>
+
+          <label>
+            Planned duration (minutes, max 720 = 12 hours)
+            <input
+              type="number"
+              required
+              min="15"
+              max="720"
+              step="5"
+              value={form.plannedDuration}
+              onChange={(event) =>
+                setForm((old) => ({
+                  ...old,
+                  plannedDuration: event.target.value,
+                }))
+              }
+            />
+            {endInfo && (
+              <small
+                className="schedule-field-hint"
+                style={{ color: endInfo.sameDay && endInfo.dur <= 720 ? undefined : "#b91c1c", fontWeight: endInfo.sameDay ? 400 : 600 }}
+              >
+                {endInfo.dur > 720
+                  ? "⚠️ Duration cannot exceed 720 minutes (12 hours)."
+                  : endInfo.sameDay
+                    ? `Scheduled to end at ${endInfo.endTimeText} on the same day. Auto-completes if overdue.`
+                    : `⚠️ Invalid: Session would end at ${endInfo.endTimeText} on the next day. Sessions cannot cross midnight.`}
+              </small>
+            )}
           </label>
 
           <div className="schedule-form-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -378,7 +430,8 @@ function SessionModal({
                 disabled={
                   saving ||
                   grooms.length === 0 ||
-                  (!editingSession && phases.length === 0)
+                  (!editingSession && phases.length === 0) ||
+                  (endInfo != null && (!endInfo.sameDay || endInfo.dur > 720 || endInfo.dur < 15))
                 }
               >
                 {saving
@@ -443,7 +496,7 @@ export default function SchedulePage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (modalOpen) return undefined; 
+    if (modalOpen) return undefined;
     const timer = setInterval(() => {
       setNow(new Date());
       loadData(true);
@@ -524,6 +577,7 @@ export default function SchedulePage() {
       assignedTo: String(session.assignedTo),
       sessionDate: toLocalDateTimeInput(session.sessionDate),
       plannedDistance: session.plannedDistance ?? "",
+      plannedDuration: String(session.plannedDuration ?? 60),
     });
     setError("");
     setNotice("");
@@ -540,6 +594,17 @@ export default function SchedulePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const plannedDuration = Number(form.plannedDuration || 60);
+    if (!Number.isInteger(plannedDuration) || plannedDuration < 15 || plannedDuration > 720) {
+      setError("Planned duration must be between 15 and 720 minutes (max 12 hours).");
+      return;
+    }
+    const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
+    if (endInfo && !endInfo.sameDay) {
+      setError("Session duration cannot cross into the next calendar day.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setNotice("");
@@ -553,6 +618,7 @@ export default function SchedulePage() {
           body: JSON.stringify({
             assignedTo: Number(form.assignedTo),
             sessionDate,
+            plannedDuration,
           }),
         });
         setNotice("Schedule updated successfully.");
@@ -564,6 +630,7 @@ export default function SchedulePage() {
           plannedDistance: form.plannedDistance
             ? Number(form.plannedDistance)
             : null,
+          plannedDuration,
         };
 
         await authFetch(SESSION_API, {

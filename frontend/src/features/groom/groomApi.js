@@ -26,15 +26,19 @@ export function sendVitals(sessionId, { heartRate, velocity }) {
 }
 
 /**
- * PUT /api/training-sessions/{id}/finish: buổi tập kết thúc bình thường,
- * RUNNING -> COMPLETED. Head Trainer chấm điểm sau ở Session review.
+ * PUT /api/training-sessions/{id}/finish: buổi tập kết thúc bình thường hoặc kết thúc sớm.
+ * Nếu body = { earlyStop: true, earlyStopReason } thì yêu cầu đã báo cáo cả HR & Speed >= 1 lần.
  */
-export function finishSession(sessionId) {
-  return authFetch(`/api/training-sessions/${sessionId}/finish`, { method: "PUT" });
+export function finishSession(sessionId, body = null) {
+  const options = { method: "PUT" };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  return authFetch(`/api/training-sessions/${sessionId}/finish`, options);
 }
 
 /**
- * PUT /api/training-sessions/{id}/stop: ngựa có dấu hiệu bất thường giữa buổi.
+ * PUT /api/training-sessions/{id}/stop: ngựa có dấu hiệu bất thường / chấn thương giữa buổi.
  * Buổi chuyển STOPPED_EARLY và backend mở báo cáo sự cố cho bác sĩ thú y; tới
  * khi bác sĩ khám xong, con ngựa không được bắt đầu buổi tập nào nữa.
  * Trả về { sessionId, sessionStatus, report }.
@@ -45,6 +49,15 @@ export function stopSession(sessionId, { symptoms, description, urgency }) {
     body: JSON.stringify({ symptoms, description: description || null, urgency }),
   });
 }
+
+/** Danh sách lý do kết thúc sớm buổi tập cho Groom chọn. */
+export const EARLY_STOP_REASON_OPTIONS = [
+  { value: "TARGET_REACHED", label: "Target fitness reached" },
+  { value: "HORSE_FATIGUED", label: "Horse fatigued" },
+  { value: "WEATHER_CONDITION", label: "Weather / track condition" },
+  { value: "EQUIPMENT_ISSUE", label: "Equipment issue" },
+  { value: "INJURY", label: "Horse injury / abnormality — Call Vet" },
+];
 
 /** Triệu chứng hay gặp, để Groom chọn nhanh; vẫn sửa tay được. */
 export const COMMON_SYMPTOMS = [

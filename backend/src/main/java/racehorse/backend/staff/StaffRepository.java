@@ -43,9 +43,18 @@ public class StaffRepository {
             SELECT u.user_id, u.username, u.full_name, u.email, u.phone,
                    r.role_name, r.description AS role_label,
                    u.status, u.avatar_url, u.created_at,
-                   (SELECT COUNT(*) FROM HORSE h WHERE h.owner_id = u.user_id) AS horse_count
+                   (SELECT COUNT(*) FROM HORSE h WHERE h.owner_id = u.user_id) AS horse_count,
+                   u.trainer_id,
+                   tr.full_name AS trainer_name,
+                   (SELECT COUNT(*) FROM APP_USER g
+                    JOIN ROLE gr ON gr.role_id = g.role_id
+                    WHERE g.trainer_id = u.user_id AND gr.role_name = 'GROOM' AND g.status = 'ACTIVE') AS groom_count,
+                   (SELECT COUNT(*) FROM HORSE mh
+                    WHERE mh.trainer_id = u.user_id AND mh.activity_status = 'ACTIVE') AS managed_horse_count,
+                   u.max_horses
             FROM APP_USER u
             JOIN ROLE r ON r.role_id = u.role_id
+            LEFT JOIN APP_USER tr ON tr.user_id = u.trainer_id
             """;
 
     private static StaffRow map(ResultSet rs, int rowNum) throws SQLException {
@@ -60,7 +69,12 @@ public class StaffRepository {
                 rs.getString("status"),
                 rs.getString("avatar_url"),
                 rs.getObject("created_at", LocalDateTime.class),
-                rs.getInt("horse_count"));
+                rs.getInt("horse_count"),
+                rs.getObject("trainer_id", Integer.class),
+                rs.getString("trainer_name"),
+                rs.getInt("groom_count"),
+                rs.getInt("managed_horse_count"),
+                rs.getObject("max_horses", Integer.class));
     }
 
     /**
@@ -162,6 +176,46 @@ public class StaffRepository {
         return jdbc.sql("UPDATE APP_USER SET status = :status WHERE user_id = :id")
                 .param("status", status)
                 .param("id", userId)
+                .update();
+    }
+
+    /** V37: Đếm số Groom đang ACTIVE được gán cho một Head Trainer (trừ excludeUserId nếu đang cập nhật). */
+    public int countActiveGroomsOfTrainer(int trainerId, Integer excludeUserId) {
+        return jdbc.sql("""
+                SELECT COUNT(*)
+                FROM APP_USER g
+                JOIN ROLE r ON r.role_id = g.role_id
+                WHERE g.trainer_id = :trainerId
+                  AND r.role_name = 'GROOM'
+                  AND g.status = 'ACTIVE'
+                  AND (:excludeId IS NULL OR g.user_id <> :excludeId)
+                """)
+                .param("trainerId", trainerId)
+                .param("excludeId", excludeUserId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** V37: Gán hoặc gỡ Head Trainer phụ trách một Groom. */
+    public int updateTrainer(int groomId, Integer trainerId) {
+        return jdbc.sql("UPDATE APP_USER SET trainer_id = :trainerId WHERE user_id = :id")
+                .param("trainerId", trainerId)
+                .param("id", groomId)
+                .update();
+    }
+
+    /** V37: Cập nhật hạn mức số ngựa tối đa cho một Head Trainer. */
+    public int updateMaxHorses(int trainerId, int maxHorses) {
+        return jdbc.sql("UPDATE APP_USER SET max_horses = :maxHorses WHERE user_id = :id")
+                .param("maxHorses", maxHorses)
+                .param("id", trainerId)
+                .update();
+    }
+
+    /** V37: Khi một Head Trainer đổi vai trò sang vai trò khác, gỡ liên kết trainer_id của các Groom thuộc quyền. */
+    public int detachGroomsFromTrainer(int trainerId) {
+        return jdbc.sql("UPDATE APP_USER SET trainer_id = NULL WHERE trainer_id = :trainerId")
+                .param("trainerId", trainerId)
                 .update();
     }
 }

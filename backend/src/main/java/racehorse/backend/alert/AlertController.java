@@ -43,10 +43,11 @@ public class AlertController {
      */
     @GetMapping("/alerts")
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
-    public List<AlertResponse> list(@RequestParam(value = "afterId", required = false) Integer afterId,
+    public List<AlertResponse> list(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me,
+                                    @RequestParam(value = "afterId", required = false) Integer afterId,
                                     @RequestParam(value = "openOnly", defaultValue = "true") boolean openOnly,
                                     @RequestParam(value = "limit", defaultValue = "50") int limit) {
-        return service.list(afterId, openOnly, limit);
+        return service.list(me, afterId, openOnly, limit);
     }
 
     @PutMapping("/alerts/{alertId}/resolve")

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
-import { handleAuthError } from "../auth/authService";
+import { getUser, handleAuthError } from "../auth/authService";
 import { useSignOutModal } from "../auth/SignOutModal";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -35,8 +35,6 @@ const initialPhases = [
   },
 ];
 
-/* Trạng thái giáo án -> chữ hiển thị. PENDING_APPROVAL / APPROVED từ V34:
-   giáo án phải được chủ ngựa duyệt trước khi kích hoạt. */
 const PLAN_STATUS_LABEL = {
   DRAFT: "Draft",
   PENDING_APPROVAL: "Waiting for owner",
@@ -67,7 +65,6 @@ function HorseshoeIcon() {
 }
 
 function TrainerSidebar({ active, onSignOut }) {
-
   return (
     <aside className="trainer-sidebar">
       <div className="trainer-brand">
@@ -132,7 +129,6 @@ function emptyPhase(index, startDate, endDate) {
   };
 }
 
-/** Ô tuỳ chọn: bản nháp cũ trong sessionStorage có thể chưa có trường này. */
 function optionalNumber(value) {
   return value === "" || value == null ? null : Number(value);
 }
@@ -164,6 +160,7 @@ function clearDraft() {
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
   const savedDraft = useMemo(() => loadDraft(), []);
+  const myUser = getUser();
 
   const [horses, setHorses] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -202,13 +199,15 @@ export default function TrainingPlanPage() {
           listHorses(signal),
           listTrainingPlans({ signal }),
         ]);
-        // Khớp TRAINABLE ở backend (ELIGIBLE, MONITOR); hồ sơ PEDIGREE và ngựa
-        // đã rút khỏi học viện không vào giáo án.
+        const myId = getUser()?.userId;
+        const myRole = getUser()?.role;
+        // V37: Head Trainer chỉ lập giáo án cho các ngựa đã được Club Manager điều phối cho mình
         const eligibleHorses = (horseRows || []).filter(
           (horse) =>
             !isPedigreeOnly(horse) &&
             !isWithdrawn(horse) &&
-            (horse.status === "ELIGIBLE" || horse.status === "MONITOR"),
+            (horse.status === "ELIGIBLE" || horse.status === "MONITOR") &&
+            (myRole !== "HEAD_TRAINER" || !myId || horse.trainerId === myId),
         );
 
         setHorses(eligibleHorses);
@@ -218,12 +217,7 @@ export default function TrainingPlanPage() {
           const currentHorseIsEligible = eligibleHorses.some(
             (horse) => String(horse.horseId) === String(current),
           );
-
-          if (currentHorseIsEligible) {
-            return current;
-          }
-
-          return "";
+          return currentHorseIsEligible ? current : "";
         });
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -262,7 +256,7 @@ export default function TrainingPlanPage() {
     const nextNum = phases.length + 1;
     const newPhase = emptyPhase(phases.length, startDate, endDate);
     setPhases((current) => [...current, newPhase]);
-    const msg = `Đã thêm Phase ${nextNum} thành công!`;
+    const msg = `Phase ${nextNum} added successfully!`;
     setNotice(msg);
     setPhaseNotice(msg);
     setTimeout(() => {
@@ -386,7 +380,7 @@ export default function TrainingPlanPage() {
               <span className="trainer-diamond" aria-hidden="true" />
               <h1>Training plan</h1>
             </div>
-            <p>Build a phased programme for a horse</p>
+            <p>Build a phased programme for a horse assigned to you ({horses.length} managed eligible horses)</p>
           </div>
           <div className="trainer-header-actions">
             <span className="training-plan-target">
@@ -422,7 +416,7 @@ export default function TrainingPlanPage() {
                     <span className="trainer-diamond" />
                     <div>
                       <h2>Plan details</h2>
-                      <p>Choose a horse and define the preparation period.</p>
+                      <p>Choose a horse allocated to you by the Club Manager and define the preparation period.</p>
                     </div>
                   </div>
                   <div className="training-plan-form-grid">
@@ -437,7 +431,7 @@ export default function TrainingPlanPage() {
                       />
                     </label>
                     <label className="training-field">
-                      Horse
+                      Horse (allocated to {myUser?.fullName || "you"})
                       <select
                         value={horseId}
                         onChange={(e) => setHorseId(e.target.value)}
