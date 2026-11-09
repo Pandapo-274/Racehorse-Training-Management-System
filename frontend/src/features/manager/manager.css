@@ -28,11 +28,15 @@
   align-self: flex-start;
   width: 265px;
   height: 100vh;
+  max-height: 100vh;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   padding: 0 12px 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   color: #fff;
   background:
     repeating-linear-gradient(108deg, rgba(245, 95, 169, 0.12) 0 6px, transparent 6px 60px) top / 100% 140px no-repeat,
@@ -40,7 +44,8 @@
 }
 
 .manager-brand {
-  height: 92px;
+  height: 80px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -72,13 +77,14 @@
 }
 
 .manager-menu-title {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   align-self: flex-start;
-  margin: 22px 0 14px 12px;
+  margin: 16px 0 10px 12px;
   padding: 0 28px 0 14px;
-  height: 32px;
+  height: 30px;
   background: linear-gradient(90deg, #f55fa9, #e43e8c);
   box-shadow: 0 0 0 1px #c9317a;
   font-family: var(--font-heading);
@@ -95,20 +101,38 @@
 .manager-nav {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.manager-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.manager-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
 }
 
 .manager-nav-item {
   position: relative;
-  height: 46px;
+  height: 42px;
+  min-height: 42px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 0 0 24px;
+  padding: 0 0 0 22px;
   border: 0;
   background: transparent;
   color: #a2abca;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -117,8 +141,8 @@
 
 .manager-nav-item .manager-nav-icon {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: #c3cae3;
 }
 
@@ -146,20 +170,27 @@
 
 .manager-sidebar-bottom {
   margin-top: auto;
+  flex-shrink: 0;
+  padding-top: 10px;
 }
 
 .manager-signout {
   width: 100%;
-  height: 44px;
-  margin-bottom: 12px;
-  padding-left: 18px;
+  height: 42px;
+  margin-bottom: 10px;
+  padding: 0 16px;
   border: 0;
   border-radius: 10px;
   background: #16203f;
   color: #a2abca;
   font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .manager-signout:hover {
   color: #fff;
@@ -170,7 +201,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 66px;
+  min-height: 60px;
   padding: 0 14px;
   border-radius: 12px;
   background: #16203f;

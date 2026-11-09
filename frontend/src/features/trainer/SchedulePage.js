@@ -235,7 +235,7 @@ function SessionModal({
           </button>
         </div>
 
-        <form className="schedule-form" onSubmit={onSubmit}>
+        <form className="schedule-form" onSubmit={onSubmit} noValidate>
           {!editingSession && (
             <>
               <label>
@@ -293,10 +293,11 @@ function SessionModal({
               </label>
 
               <label>
-                Planned distance (meters)
+                Planned distance (meters, max 5,000)
                 <input
                   type="number"
                   min="1"
+                  max="5000"
                   step="1"
                   value={form.plannedDistance}
                   onChange={(event) =>
@@ -305,8 +306,11 @@ function SessionModal({
                       plannedDistance: event.target.value,
                     }))
                   }
-                  placeholder="Use phase distance if left empty"
+                  placeholder="e.g. 1200 (max 5,000m)"
                 />
+                <small className="schedule-field-hint">
+                  Target distance in meters for this session (maximum 5,000m).
+                </small>
               </label>
             </>
           )}
@@ -368,7 +372,7 @@ function SessionModal({
           </label>
 
           <label>
-            Planned duration (minutes, max 720 = 12 hours)
+            Planned duration (minutes, integer divisible by 5)
             <input
               type="number"
               required
@@ -383,6 +387,9 @@ function SessionModal({
                 }))
               }
             />
+            <small className="schedule-field-hint">
+              Must be an integer divisible by 5 (between 15 and 720 minutes = 12 hours).
+            </small>
             {endInfo && (
               <small
                 className="schedule-field-hint"
@@ -594,11 +601,27 @@ export default function SchedulePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const plannedDuration = Number(form.plannedDuration || 60);
-    if (!Number.isInteger(plannedDuration) || plannedDuration < 15 || plannedDuration > 720) {
-      setError("Planned duration must be between 15 and 720 minutes (max 12 hours).");
+    if (form.plannedDistance !== "" && form.plannedDistance != null) {
+      const dist = Number(form.plannedDistance);
+      if (!Number.isFinite(dist) || dist <= 0 || dist > 5000) {
+        setError("Planned distance must be between 1 and 5,000 meters (maximum 5,000m).");
+        return;
+      }
+    }
+
+    const durRaw = form.plannedDuration;
+    const durNum = Number(durRaw);
+    if (
+      durRaw === "" ||
+      !Number.isInteger(durNum) ||
+      durNum < 15 ||
+      durNum > 720 ||
+      durNum % 5 !== 0
+    ) {
+      setError("Planned duration must be an integer divisible by 5 (e.g. 15, 20, 25... up to 720 minutes = 12 hours).");
       return;
     }
+    const plannedDuration = durNum;
     const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
     if (endInfo && !endInfo.sameDay) {
       setError("Session duration cannot cross into the next calendar day.");

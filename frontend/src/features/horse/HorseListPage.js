@@ -20,6 +20,7 @@ export default function HorseListPage() {
   const user = getUser();
   const isVet = user?.role === "VETERINARIAN";
   const isOwner = user?.role === "HORSE_OWNER";
+  const isManager = user?.role === "CLUB_MANAGER";
   const horseBase = getHorseBasePath(user);
 
   const [horses, setHorses] = useState(null);
@@ -31,6 +32,7 @@ export default function HorseListPage() {
   const [stage, setStage] = useState("ALL");
   const [status, setStatus] = useState("ALL");
   const [activity, setActivity] = useState("ALL");
+  const [trainerFilter, setTrainerFilter] = useState("ALL");
 
   const load = useCallback(
     (signal) => {
@@ -60,15 +62,18 @@ export default function HorseListPage() {
       if (stage !== "ALL" && toStage(h).key !== stage) return false;
       if (status !== "ALL" && (!healthApplies(h) || h.status !== status)) return false;
       if (activity !== "ALL" && (h.activityStatus || "ACTIVE") !== activity) return false;
+      if (trainerFilter === "ASSIGNED" && !h.trainerId) return false;
+      if (trainerFilter === "UNASSIGNED" && h.trainerId) return false;
       if (!q) return true;
       return (
         (h.horseName || "").toLowerCase().includes(q) ||
         (h.registrationCode || "").toLowerCase().includes(q) ||
         (h.ownerName || "").toLowerCase().includes(q) ||
-        (h.stallNo || "").toLowerCase().includes(q)
+        (h.stallNo || "").toLowerCase().includes(q) ||
+        (h.trainerName || "").toLowerCase().includes(q)
       );
     });
-  }, [horses, query, stage, status, activity]);
+  }, [horses, query, stage, status, activity, trainerFilter]);
 
   // Đếm theo phân loại để dán số lên từng nút lọc. Đếm trên toàn đàn, không
   // phải trên kết quả đang hiển thị - nếu không, bấm sang bộ lọc khác sẽ thấy
@@ -155,6 +160,15 @@ export default function HorseListPage() {
                   <option key={a} value={a}>{toActivity(a).label}</option>
                 ))}
               </select>
+
+              {isManager && (
+                <select className="hz-search" value={trainerFilter} aria-label="Filter by assigned trainer"
+                        onChange={(e) => setTrainerFilter(e.target.value)}>
+                  <option value="ALL">All Trainer Statuses</option>
+                  <option value="ASSIGNED">Assigned to Trainer</option>
+                  <option value="UNASSIGNED">Unassigned</option>
+                </select>
+              )}
             </div>
           }
         >
@@ -198,6 +212,7 @@ export default function HorseListPage() {
                     <th>Owner</th>
                     <th>Type</th>
                     <th>Health</th>
+                    {isManager && <th>Assigned Head Trainer</th>}
                     <th aria-label="Actions" />
                   </tr>
                 </thead>
@@ -249,6 +264,49 @@ export default function HorseListPage() {
                             <StatusChip tone={st.tone} label={st.label} title={st.hint} />
                           )}
                         </td>
+                        {isManager && (
+                          <td>
+                            {pedigree || isWithdrawn(h) ? (
+                              <span className="hz-muted" title={pedigree ? "Pedigree record" : "Withdrawn horse"}>—</span>
+                            ) : h.trainerName ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  color: "#065f46",
+                                  backgroundColor: "#ecfdf5",
+                                  border: "1px solid #a7f3d0",
+                                  padding: "3px 9px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                }}
+                                title={`Assigned to Head Trainer ${h.trainerName}`}
+                              >
+                                <span style={{ color: "#10b981", fontSize: "10px" }}>●</span> {h.trainerName}
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  color: "#b91c1c",
+                                  backgroundColor: "#fef2f2",
+                                  border: "1px solid #fecaca",
+                                  padding: "3px 9px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                }}
+                                title="No Head Trainer assigned yet"
+                              >
+                                <span style={{ color: "#ef4444", fontSize: "10px" }}>○</span> Unassigned
+                              </span>
+                            )}
+                          </td>
+                        )}
                         <td className="hz-row-action">
                           {canEditHorse(user, h) && (
                             <button

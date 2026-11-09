@@ -157,6 +157,47 @@ function clearDraft() {
   } catch {}
 }
 
+function formatPlanErrors(err) {
+  if (!err) return "";
+  const friendlyField = (field) => {
+    const phaseMatch = field.match(/^phases\[(\d+)\]\.(.*)$/);
+    if (phaseMatch) {
+      const phaseNum = Number(phaseMatch[1]) + 1;
+      const subField = phaseMatch[2];
+      const subLabels = {
+        startDate: "start date",
+        endDate: "end date",
+        distance: "distance",
+        phaseName: "name",
+        workload: "workload",
+        surface: "surface",
+        sessionsPerWeek: "sessions/week",
+        heartRateCeiling: "heart-rate ceiling",
+        minGapMinutes: "rest between sessions",
+        targetVelocity: "target speed",
+      };
+      return `Phase ${phaseNum} ${subLabels[subField] || subField}`;
+    }
+    const map = {
+      startDate: "Plan start date",
+      endDate: "Plan end date",
+      planName: "Plan name",
+      horseId: "Horse",
+    };
+    return map[field] || field;
+  };
+
+  if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+    return Object.entries(err.fieldErrors).map(([field, msg]) => {
+      if (msg.toLowerCase().startsWith("phase ") || msg.toLowerCase().startsWith("plan ")) {
+        return msg;
+      }
+      return `${friendlyField(field)}: ${msg}`;
+    });
+  }
+  return err.message || "Could not save training plan.";
+}
+
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
   const savedDraft = useMemo(() => loadDraft(), []);
@@ -322,10 +363,7 @@ export default function TrainingPlanPage() {
       await load();
     } catch (err) {
       if (!handleAuthError(err, navigate)) {
-        const fieldMessages = Object.entries(err.fieldErrors || {}).map(
-          ([field, message]) => `${field}: ${message}`,
-        );
-        setError([err.message, ...fieldMessages].filter(Boolean).join(" · "));
+        setError(formatPlanErrors(err));
       }
     } finally {
       setSaving(false);
@@ -391,16 +429,29 @@ export default function TrainingPlanPage() {
         </header>
         <section className="trainer-content training-plan-content">
           {error && (
-            <div className="trainer-state trainer-state--error" role="alert">
-              <strong>Could not complete the request</strong>
-              <p>{error}</p>
-              <button
-                className="trainer-retry"
-                type="button"
-                onClick={() => load()}
-              >
-                Try again
-              </button>
+            <div className="trainer-state trainer-state--error" role="alert" style={{ display: "flex", flexDirection: "column", gap: "8px", textAlign: "left", padding: "16px 20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <strong style={{ fontSize: "15px", color: "#b91c1c" }}>⚠️ Training plan could not be saved</strong>
+                <button
+                  type="button"
+                  onClick={() => setError("")}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "#666", fontWeight: "bold", padding: "0 4px" }}
+                  title="Close error"
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: "1.5" }}>
+                {Array.isArray(error) ? (
+                  <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                    {error.map((msg, i) => (
+                      <li key={i} style={{ marginBottom: "4px" }}>{msg}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span>{error}</span>
+                )}
+              </div>
             </div>
           )}
           {notice && (
@@ -451,7 +502,16 @@ export default function TrainingPlanPage() {
                       <input
                         type="date"
                         value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStartDate(val);
+                          setPhases((current) => {
+                            if (current.length === 1 && (!current[0].startDate || current[0].startDate === startDate)) {
+                              return [{ ...current[0], startDate: val }];
+                            }
+                            return current;
+                          });
+                        }}
                         required
                       />
                     </label>
@@ -460,7 +520,16 @@ export default function TrainingPlanPage() {
                       <input
                         type="date"
                         value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEndDate(val);
+                          setPhases((current) => {
+                            if (current.length === 1 && (!current[0].endDate || current[0].endDate === endDate)) {
+                              return [{ ...current[0], endDate: val }];
+                            }
+                            return current;
+                          });
+                        }}
                         min={startDate}
                         required
                       />
@@ -685,6 +754,8 @@ export default function TrainingPlanPage() {
                             <input
                               type="date"
                               value={phase.startDate}
+                              min={startDate || undefined}
+                              max={endDate || undefined}
                               onChange={(e) =>
                                 updatePhase(index, "startDate", e.target.value)
                               }
@@ -696,10 +767,11 @@ export default function TrainingPlanPage() {
                             <input
                               type="date"
                               value={phase.endDate}
+                              min={phase.startDate || startDate || undefined}
+                              max={endDate || undefined}
                               onChange={(e) =>
                                 updatePhase(index, "endDate", e.target.value)
                               }
-                              min={phase.startDate}
                               required
                             />
                           </label>

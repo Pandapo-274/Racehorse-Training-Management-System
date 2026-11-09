@@ -275,10 +275,10 @@ public class TrainingPlanService {
             checkTrainerManagesHorse(horse, user, errors);
         }
         if (r.endDate().isBefore(r.startDate())) {
-            errors.put("endDate", "End date must be on or after start date");
+            errors.put("endDate", "Plan end date must be on or after start date");
         }
         if (r.startDate().isBefore(LocalDate.now())) {
-            errors.put("startDate", "Start date cannot be in the past");
+            errors.put("startDate", "Plan start date cannot be in the past. Please choose today or a future date");
         }
 
         LocalDate prevEnd = null;
@@ -286,13 +286,13 @@ public class TrainingPlanService {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
             if (p.endDate().isBefore(p.startDate())) {
-                errors.putIfAbsent(key + ".endDate", "Phase end date must be on or after phase start date");
+                errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
             }
             if (p.startDate().isBefore(r.startDate()) || p.endDate().isAfter(r.endDate())) {
-                errors.putIfAbsent(key + ".startDate", "Phase must fall within the plan period");
+                errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " must fall within the plan period (" + r.startDate() + " to " + r.endDate() + ")");
             }
             if (prevEnd != null && p.startDate().isBefore(prevEnd)) {
-                errors.putIfAbsent(key + ".startDate", "Phase starts before the previous phase ends");
+                errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " starts before Phase " + i + " ends");
             }
             prevEnd = p.endDate();
         }

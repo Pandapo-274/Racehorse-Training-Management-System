@@ -816,6 +816,34 @@ class BusinessRulesTest {
     }
 
     @Test
+    void sessionDurationNotDivisibleByFiveIsRejected() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans);
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(
+                new TrainingSessionRequest(10, 5, TODAY.plusDays(1).atTime(9, 0), 1600, 123), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("plannedDuration"), ex.getFieldErrors().toString());
+        assertTrue(ex.getFieldErrors().get("plannedDuration").contains("divisible by 5"), ex.getFieldErrors().toString());
+    }
+
+    @Test
+    void sessionPlannedDistanceExceedingFiveThousandMetersIsRejected() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        TrainingSessionRepository repo = readyToSchedule(horses, vitals, plans);
+        TrainingSessionService service = sessionService(repo, plans, horses, vitals);
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(
+                new TrainingSessionRequest(10, 5, TODAY.plusDays(1).atTime(9, 0), 5001, 60), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("plannedDistance"), ex.getFieldErrors().toString());
+        assertTrue(ex.getFieldErrors().get("plannedDistance").contains("5,000 meters"), ex.getFieldErrors().toString());
+    }
+
+    @Test
     void sessionDurationExceedingTwelveHoursIsRejected() {
         HorseRepository horses = mock(HorseRepository.class);
         HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);

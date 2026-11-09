@@ -16,7 +16,8 @@ public record TrainingSessionRequest(
         @NotNull(message = "Phase is required") Integer phaseId,
         @NotNull(message = "Assignee is required") Integer assignedTo,
         @NotNull(message = "Session time is required") LocalDateTime sessionDate,
-        @Positive(message = "Planned distance must be greater than 0 (meters)") Integer plannedDistance,
+        @Positive(message = "Planned distance must be greater than 0 (meters)")
+        @Max(value = 5000, message = "Planned distance cannot exceed 5,000 meters") Integer plannedDistance,
         @NotNull(message = "Planned duration is required")
         @Min(value = 15, message = "Duration must be at least 15 minutes")
         @Max(value = 720, message = "Duration cannot exceed 12 hours (720 minutes)")

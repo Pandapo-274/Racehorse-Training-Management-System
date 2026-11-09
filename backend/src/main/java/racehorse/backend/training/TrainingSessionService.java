@@ -107,8 +107,13 @@ public class TrainingSessionService {
         checkTrainerManagesHorse(horse, user);
 
         Map<String, String> errors = new LinkedHashMap<>();
+        if (planned != null && (planned <= 0 || planned > 5000)) {
+            errors.put("plannedDistance", "Planned distance cannot exceed 5,000 meters");
+        }
         if (r.plannedDuration() == null) {
             errors.put("plannedDuration", "Planned duration is required");
+        } else if (r.plannedDuration() % 5 != 0) {
+            errors.put("plannedDuration", "Duration must be an integer divisible by 5, between 15 and 720 minutes (max 12 hours)");
         }
         int duration = r.plannedDuration() != null ? r.plannedDuration() : DEFAULT_DURATION_MINUTES;
 
@@ -502,8 +507,8 @@ public class TrainingSessionService {
             errors.put("sessionDate", "Session must fall within the phase period");
         }
 
-        if (duration < MIN_DURATION_MINUTES || duration > MAX_DURATION_MINUTES) {
-            errors.put("plannedDuration", "Duration must be between 15 and 720 minutes (max 12 hours)");
+        if (duration < MIN_DURATION_MINUTES || duration > MAX_DURATION_MINUTES || duration % 5 != 0) {
+            errors.put("plannedDuration", "Duration must be an integer divisible by 5, between 15 and 720 minutes (max 12 hours)");
         } else {
             LocalDateTime endTime = sessionDate.plusMinutes(duration);
             // Không được phép qua ngày hôm sau tính từ giờ đặt lịch

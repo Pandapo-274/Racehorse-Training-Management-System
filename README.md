@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > #### `Nov 9, 2026`
+- `[22:10]` `DevilJack422` - Fix some error notifications and sign out button. Added trainer assigned colum in horse table of manager
 - `[01:23]` `DevilJack422` - Modified new training flow
 > #### `Nov 6, 2026`
 - `[12:45]` `Pandapo274` - Update Groom dashboard to display ongoing training sessions and refine responsive UI layout
