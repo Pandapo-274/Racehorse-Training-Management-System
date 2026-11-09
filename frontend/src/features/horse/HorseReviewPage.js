@@ -1,22 +1,18 @@
 // src/features/horse/HorseReviewPage.js
-// Club Manager (và Head Trainer) duyệt yêu cầu đăng ký ngựa do chủ ngựa gửi.
-//
-// Duyệt = cấp mã đăng ký + chuồng, rồi backend tạo hồ sơ ngựa. Hai thứ này sau
-// đó cố định, chủ ngựa không sửa được. Từ chối bắt buộc có lý do để chủ ngựa
-// biết sửa gì trước khi gửi lại.
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
-  toGender, formatDate, formatDateTime, toAge, toStage, ageProblem, canReviewRequests,
+  toGender, formatDate, formatDateTime, toAge, toStage, ageProblem, canReviewRequests, listActiveTrainers,
 } from "./horseApi";
 import { listRequests, approveRequest, rejectRequest, toRequestStatus } from "./horseRequestApi";
 
-function PendingRow({ row, onDone }) {
+function PendingRow({ row, trainers, onDone }) {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [stall, setStall] = useState("");
+  const [trainerId, setTrainerId] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -48,7 +44,12 @@ function PendingRow({ row, onDone }) {
     if (!pedigreeOnly && !stall.trim()) e.stallNo = "Assign a stall";
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    run(() => approveRequest(row.requestId, { registrationCode: code, stallNo: stall, note }));
+    run(() => approveRequest(row.requestId, {
+      registrationCode: code,
+      stallNo: stall,
+      note,
+      trainerId: !pedigreeOnly && trainerId ? Number(trainerId) : null,
+    }));
   };
 
   const reject = () => {
@@ -85,12 +86,31 @@ function PendingRow({ row, onDone }) {
           </div>
 
           {!pedigreeOnly && (
-            <div className="hz-field">
-              <label htmlFor={`stall-${row.requestId}`}>Stall</label>
-              <input id={`stall-${row.requestId}`} className="hz-mono" value={stall} maxLength={20}
-                     onChange={(e) => setStall(e.target.value)} />
-              {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-            </div>
+            <>
+              <div className="hz-field">
+                <label htmlFor={`stall-${row.requestId}`}>Stall</label>
+                <input id={`stall-${row.requestId}`} className="hz-mono" value={stall} maxLength={20}
+                       onChange={(e) => setStall(e.target.value)} />
+                {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
+              </div>
+
+              <div className="hz-field">
+                <label htmlFor={`trainer-${row.requestId}`}>Assign Head Trainer</label>
+                <select
+                  id={`trainer-${row.requestId}`}
+                  value={trainerId}
+                  onChange={(e) => setTrainerId(e.target.value)}
+                >
+                  <option value="">— Assign later —</option>
+                  {(trainers || []).map((t) => (
+                    <option key={t.userId} value={t.userId} disabled={t.managedHorseCount >= t.maxHorses}>
+                      {t.fullName} ({t.managedHorseCount}/{t.maxHorses} horses)
+                    </option>
+                  ))}
+                </select>
+                {errors.trainerId && <p className="hz-field__error">{errors.trainerId}</p>}
+              </div>
+            </>
           )}
         </div>
 
@@ -118,13 +138,20 @@ export default function HorseReviewPage() {
   const navigate = useNavigate();
   const user = getUser();
   const [rows, setRows] = useState(null);
+  const [trainers, setTrainers] = useState([]);
   const [error, setError] = useState("");
 
   const load = useCallback(
     (signal) => {
       setError("");
-      listRequests(signal)
-        .then(setRows)
+      Promise.all([
+        listRequests(signal),
+        listActiveTrainers(signal).catch(() => []),
+      ])
+        .then(([reqs, trs]) => {
+          setRows(reqs);
+          setTrainers(trs || []);
+        })
         .catch((err) => {
           if (err.name === "AbortError") return;
           if (handleAuthError(err, navigate)) return;
@@ -164,7 +191,7 @@ export default function HorseReviewPage() {
             ) : (
               <ul className="hz-list">
                 {pending.map((r) => (
-                  <PendingRow key={r.requestId} row={r} onDone={() => load()} />
+                  <PendingRow key={r.requestId} row={r} trainers={trainers} onDone={() => load()} />
                 ))}
               </ul>
             )}

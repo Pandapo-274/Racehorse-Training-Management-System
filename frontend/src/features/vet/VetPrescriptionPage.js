@@ -27,19 +27,19 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function formatExpenseNote(note) {
   if (!note) return "";
   return note.replace(/\(Qty:\s*(\d+(?:\.\d+)?)\s*@\s*\d+\)/gi, (match, q) => {
-    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} viên)`;
-    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tuýp)`;
-    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} lọ)`;
-    if (note.includes("Probiotic")) return `(${q} gói)`;
-    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} chai)`;
-    if (note.includes("Glucosamine")) return `(${q} hộp)`;
-    if (note.includes("Hyaluronic")) return `(${q} ống)`;
-    if (note.includes("Electrolytes") || note.includes("điện giải")) return `(${q} lít)`;
+    if (note.includes("Prednisolone") || note.includes("Firocoxib")) return `(${q} tablets)`;
+    if (note.includes("Phenylbutazone") || note.includes("TMS") || note.includes("GastroGard") || note.includes("Omeprazole") || note.includes("Povidone") || note.includes("Ivermectin")) return `(${q} tubes)`;
+    if (note.includes("Flunixin") || note.includes("Dexamethasone") || note.includes("Amoxicillin") || note.includes("Gentamicin") || note.includes("Penicillin") || note.includes("Xylazine")) return `(${q} vials)`;
+    if (note.includes("Probiotic")) return `(${q} sachets)`;
+    if (note.includes("Ventipulmin") || note.includes("Clenbuterol")) return `(${q} bottles)`;
+    if (note.includes("Glucosamine")) return `(${q} boxes)`;
+    if (note.includes("Hyaluronic")) return `(${q} ampoules)`;
+    if (note.includes("Electrolytes") || note.includes("Electrolytes")) return `(${q} litres)`;
     return `(${q})`;
   });
 }
 
-const formatVND = (v) => `${Number(v || 0).toLocaleString("vi-VN")} đ`;
+const formatVND = (v) => `${Number(v || 0).toLocaleString("en-US")} VND`;
 
 const treatmentTitle = (t) => t.medicineName || t.instruction || "Treatment";
 const dose = (t) => [t.dosage, t.frequency].filter(Boolean).join(" · ") || "—";
@@ -48,23 +48,23 @@ const period = (t) =>
 
 // 17 loại thuốc phổ biến cho các bệnh lý của ngựa
 const COMMON_MEDICINES = [
-  { supplyName: "Phenylbutazone (Bute)", unit: "tuýp", unitPrice: 180000, category: "Kháng viêm & Giảm đau" },
-  { supplyName: "Flunixin Meglumine (Banamine)", unit: "lọ", unitPrice: 250000, category: "Đau bụng Colic & Hạ sốt" },
-  { supplyName: "Firocoxib (Equioxx)", unit: "viên", unitPrice: 45000, category: "Viêm khớp mãn tính" },
-  { supplyName: "Dexamethasone", unit: "lọ", unitPrice: 120000, category: "Chống dị ứng & Viêm cấp" },
-  { supplyName: "Amoxicillin Trihydrate", unit: "lọ", unitPrice: 210000, category: "Kháng sinh nhiễm trùng" },
-  { supplyName: "Gentamicin Sulfate", unit: "lọ", unitPrice: 320000, category: "Kháng sinh hô hấp & khớp" },
-  { supplyName: "Trimethoprim-Sulfadiazine (TMS)", unit: "tuýp", unitPrice: 280000, category: "Kháng sinh vết thương" },
-  { supplyName: "Penicillin G Procaine", unit: "lọ", unitPrice: 195000, category: "Kháng sinh tiêm bắp" },
-  { supplyName: "Omeprazole (GastroGard)", unit: "tuýp", unitPrice: 350000, category: "Viêm loét dạ dày" },
-  { supplyName: "Dung dịch điện giải (Electrolytes)", unit: "lít", unitPrice: 95000, category: "Bù nước & Điện giải" },
-  { supplyName: "Men vi sinh tiêu hóa (Probiotic)", unit: "gói", unitPrice: 65000, category: "Trợ lực tiêu hóa" },
-  { supplyName: "Clenbuterol (Ventipulmin)", unit: "chai", unitPrice: 420000, category: "Giãn phế quản & Trị ho" },
-  { supplyName: "Prednisolone", unit: "viên", unitPrice: 15000, category: "Chống viêm đường uống" },
-  { supplyName: "Glucosamine + Chondroitin", unit: "hộp", unitPrice: 650000, category: "Bổ trợ sụn khớp" },
-  { supplyName: "Hyaluronic Acid (Tiêm khớp)", unit: "ống", unitPrice: 550000, category: "Bôi trơn dịch khớp" },
-  { supplyName: "Thuốc mỡ sát trùng Povidone", unit: "tuýp", unitPrice: 50000, category: "Sát trùng vết thương ngoài" },
-  { supplyName: "Ivermectin (Tẩy giun sán)", unit: "tuýp", unitPrice: 160000, category: "Ký sinh trùng đường ruột" },
+  { supplyName: "Phenylbutazone (Bute)", unit: "tube", unitPrice: 180000, category: "Anti-inflammatory & Pain relief" },
+  { supplyName: "Flunixin Meglumine (Banamine)", unit: "vial", unitPrice: 250000, category: "Colic & Fever" },
+  { supplyName: "Firocoxib (Equioxx)", unit: "tablet", unitPrice: 45000, category: "Chronic arthritis" },
+  { supplyName: "Dexamethasone", unit: "vial", unitPrice: 120000, category: "Anti-allergy & Acute inflammation" },
+  { supplyName: "Amoxicillin Trihydrate", unit: "vial", unitPrice: 210000, category: "Antibiotic - infections" },
+  { supplyName: "Gentamicin Sulfate", unit: "vial", unitPrice: 320000, category: "Antibiotic - respiratory & joint" },
+  { supplyName: "Trimethoprim-Sulfadiazine (TMS)", unit: "tube", unitPrice: 280000, category: "Antibiotic - wounds" },
+  { supplyName: "Penicillin G Procaine", unit: "vial", unitPrice: 195000, category: "Antibiotic - intramuscular" },
+  { supplyName: "Omeprazole (GastroGard)", unit: "tube", unitPrice: 350000, category: "Gastric ulcers" },
+  { supplyName: "Electrolyte solution (Electrolytes)", unit: "litre", unitPrice: 95000, category: "Hydration & Electrolytes" },
+  { supplyName: "Digestive probiotic (Probiotic)", unit: "sachet", unitPrice: 65000, category: "Digestive support" },
+  { supplyName: "Clenbuterol (Ventipulmin)", unit: "bottle", unitPrice: 420000, category: "Bronchodilator & Cough" },
+  { supplyName: "Prednisolone", unit: "tablet", unitPrice: 15000, category: "Oral anti-inflammatory" },
+  { supplyName: "Glucosamine + Chondroitin", unit: "box", unitPrice: 650000, category: "Joint cartilage support" },
+  { supplyName: "Hyaluronic Acid (Joint injection)", unit: "ampoule", unitPrice: 550000, category: "Joint fluid lubrication" },
+  { supplyName: "Povidone antiseptic ointment", unit: "tube", unitPrice: 50000, category: "External wound antiseptic" },
+  { supplyName: "Ivermectin (Dewormer)", unit: "tube", unitPrice: 160000, category: "Intestinal parasites" },
 ];
 
 export default function VetPrescriptionPage() {
@@ -167,6 +167,7 @@ export default function VetPrescriptionPage() {
       <div className="vx-tab-segment" role="tablist">
         <button
           type="button"
+          role="tab"
           className="vx-tab-btn"
           aria-selected={tab === "prescriptions"}
           onClick={() => setTab("prescriptions")}
@@ -175,6 +176,7 @@ export default function VetPrescriptionPage() {
         </button>
         <button
           type="button"
+          role="tab"
           className="vx-tab-btn"
           aria-selected={tab === "expenses"}
           onClick={() => setTab("expenses")}
@@ -621,7 +623,7 @@ function PrescribeDialog({ onClose, onDone }) {
     }
     const qty = Number(doseQty) > 0 ? Number(doseQty) : 1;
     const catalogItem = medCatalog.find((m) => m.supplyName === chosenMedKey);
-    const unit = doseUnit.trim() || catalogItem?.unit || "liều";
+    const unit = doseUnit.trim() || catalogItem?.unit || "dose";
     const unitPrice = catalogItem?.unitPrice || 0;
 
     // Ràng buộc tồn kho: Thuốc phải còn hàng và đủ số lượng trong kho
@@ -692,7 +694,7 @@ function PrescribeDialog({ onClose, onDone }) {
     if (finalMeds.length === 0 && pendingName) {
       const catalogItem = medCatalog.find((m) => m.supplyName === chosenMedKey);
       const qty = Number(doseQty) > 0 ? Number(doseQty) : 1;
-      const unit = doseUnit.trim() || catalogItem?.unit || "liều";
+      const unit = doseUnit.trim() || catalogItem?.unit || "dose";
       finalMeds.push({
         supplyId: catalogItem?.supplyId || null,
         name: pendingName,

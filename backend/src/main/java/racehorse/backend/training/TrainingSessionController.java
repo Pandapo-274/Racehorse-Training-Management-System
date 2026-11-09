@@ -49,12 +49,13 @@ public class TrainingSessionController {
 
     /**
      * GET /api/training-sessions/assignees
-     * Chỉ Head Trainer được xem danh sách Groom để phân công.
+     * V37: Head Trainer chỉ nhận được danh sách Groom thuộc quyền quản lý của mình (tối đa 3 Groom).
      */
     @GetMapping("/assignees")
     @RequireRole({ "HEAD_TRAINER" })
-    public List<TrainingSessionRepository.GroomOption> assignees() {
-        return service.listActiveGrooms();
+    public List<TrainingSessionRepository.GroomOption> assignees(
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.listActiveGrooms(user);
     }
 
     @GetMapping("/{id}")
@@ -74,20 +75,18 @@ public class TrainingSessionController {
 
     /**
      * PUT /api/training-sessions/{id}/finish
-     * Kết thúc bình thường một buổi đang chạy (RUNNING -> COMPLETED).
+     * Kết thúc bình thường (RUNNING -> COMPLETED) hoặc kết thúc sớm bởi Groom (RUNNING -> STOPPED_EARLY)
+     * với lý do từ danh sách và yêu cầu đã báo cáo cả 2 chỉ số Heart Rate + Speed.
      */
     @PutMapping("/{id}/finish")
     @RequireRole({ "GROOM", "HEAD_TRAINER" })
     public TrainingSessionResponse finish(@PathVariable int id,
+            @RequestBody(required = false) FinishSessionRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return service.finish(id, user, http.getRemoteAddr());
+        return service.finish(id, request, user, http.getRemoteAddr());
     }
 
-    /**
-     * PUT /api/training-sessions/{id}/schedule
-     * Head Trainer cập nhật Groom được phân công và thời gian tập.
-     */
     @PutMapping("/{id}/schedule")
     @RequireRole({ "HEAD_TRAINER" })
     public TrainingSessionResponse reschedule(
@@ -103,10 +102,6 @@ public class TrainingSessionController {
                 http.getRemoteAddr());
     }
 
-    /**
-     * PUT /api/training-sessions/{id}/cancel
-     * Hủy một buổi tập chưa diễn ra (SCHEDULED).
-     */
     @PutMapping("/{id}/cancel")
     @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER" })
     public TrainingSessionResponse cancel(
@@ -115,5 +110,4 @@ public class TrainingSessionController {
             HttpServletRequest http) {
         return service.cancel(id, user, http.getRemoteAddr());
     }
-
 }

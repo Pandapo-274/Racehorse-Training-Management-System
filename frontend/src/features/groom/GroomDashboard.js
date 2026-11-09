@@ -9,16 +9,8 @@ import NotificationBell from "../notification/NotificationBell";
 import {
   finishSession, formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
   startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
-  COMMON_SYMPTOMS, URGENCY_OPTIONS,
+  COMMON_SYMPTOMS, URGENCY_OPTIONS, EARLY_STOP_REASON_OPTIONS,
 } from "./groomApi";
-
-// Giao diện Groom dùng cùng khung với Head Trainer, Club Manager và Vet:
-// sidebar 265px + icon móng ngựa, header 84px, thẻ thống kê, card bo 18px viền
-// trên 6px, chip trạng thái. Class đều mang tiền tố "groom-".
-//
-// Phần việc của Groom trong Flow 2: xem buổi tập Head Trainer giao (UC10), bắt
-// đầu buổi tập, gửi số đo nhịp tim/vận tốc khi ngựa chạy (UC11). Cho ăn, vệ sinh,
-// dụng cụ và báo sự cố chuồng thuộc Flow 3/4, chưa có API nên không hiện ở đây.
 
 function HorseshoeIcon() {
   return (
@@ -63,7 +55,6 @@ function GroomSidebar() {
           Sign out
         </button>
 
-        {/* Tên và vai trò lấy theo người đang đăng nhập; bấm vào mở hồ sơ. */}
         <ProfileCard className="groom-user" avatarClassName="groom-avatar" role="Groom" />
       </div>
     </aside>
@@ -124,7 +115,12 @@ function SessionsCard({ items, total, filter, selectedId, onSelect }) {
                 onClick={() => onSelect(s.sessionId)}
                 aria-pressed={s.sessionId === selectedId}
               >
-                <div className="task-time">{sessionTime(s.sessionDate)}</div>
+                <div className="task-time">
+                  {sessionTime(s.sessionDate)}
+                  <small style={{ display: "block", fontSize: "11px", opacity: 0.75 }}>
+                    {s.plannedDuration || 60}m
+                  </small>
+                </div>
 
                 <div className="task-line" aria-hidden="true">
                   <span />
@@ -155,25 +151,20 @@ function SessionsCard({ items, total, filter, selectedId, onSelect }) {
    ĐIỀU KHIỂN BUỔI TẬP ĐANG CHỌN
 ===================================================== */
 
-/**
- * SCHEDULED: nút Start. RUNNING: ô nhập số đo, mỗi lần gửi backend so với ngưỡng
- * nhịp tim của giai đoạn và sinh cảnh báo cho Head Trainer nếu vượt.
- * Buổi xong bình thường thì Groom bấm Finish (COMPLETED, chờ chấm điểm ở
- * Session review - UC12); ngựa bất thường thì bấm Stop để gọi bác sĩ.
- */
 function SessionPanel({ session, onChanged, navigate }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [heartRate, setHeartRate] = useState("");
   const [velocity, setVelocity] = useState("");
   const [lastReading, setLastReading] = useState(null);
-  const [stopOpen, setStopOpen] = useState(false);
+  const [earlyOpen, setEarlyOpen] = useState(false);
+  const [earlyReason, setEarlyReason] = useState("TARGET_REACHED");
   const [stop, setStop] = useState({ symptoms: "", description: "", urgency: "HIGH" });
   const [stopResult, setStopResult] = useState(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   useEffect(() => {
-    if (session?.status !== "SCHEDULED") return undefined;
+    if (session?.status !== "SCHEDULED" && session?.status !== "RUNNING") return undefined;
     const interval = setInterval(() => setCurrentTime(Date.now()), 3000);
     return () => clearInterval(interval);
   }, [session?.status]);
@@ -184,15 +175,22 @@ function SessionPanel({ session, onChanged, navigate }) {
     return Number.isNaN(d.getTime()) ? 0 : d.getTime();
   }, [session?.sessionDate]);
 
-  const isDue = scheduledTimeMs <= currentTime;
+  const plannedEndMs = useMemo(() => {
+    const dur = session?.plannedDuration || 60;
+    return scheduledTimeMs ? scheduledTimeMs + dur * 60000 : 0;
+  }, [scheduledTimeMs, session?.plannedDuration]);
 
-  // Đổi buổi tập thì xoá trạng thái của buổi trước.
+  const isDue = scheduledTimeMs <= currentTime;
+  const isEndReached = plannedEndMs > 0 && currentTime >= plannedEndMs;
+  const hasReportedBoth = session?.peakHeartRate != null && session?.peakVelocity != null;
+
   useEffect(() => {
     setError("");
     setHeartRate("");
     setVelocity("");
     setLastReading(null);
-    setStopOpen(false);
+    setEarlyOpen(false);
+    setEarlyReason("TARGET_REACHED");
     setStop({ symptoms: "", description: "", urgency: "HIGH" });
     setStopResult(null);
   }, [session?.sessionId]);
@@ -250,35 +248,67 @@ function SessionPanel({ session, onChanged, navigate }) {
       setLastReading(result);
       setHeartRate("");
       setVelocity("");
-      onChanged(null); // tải lại để thấy nhịp tim đỉnh và số cảnh báo mới
+      onChanged(null);
     }
   };
 
-  const finish = async () => {
+  const finishNormally = async () => {
+    if (!isEndReached) {
+      setEarlyOpen(true);
+      return;
+    }
     if (!window.confirm(`Finish the session with ${session.horseName}? You cannot send readings after this.`)) {
       return;
     }
-    const updated = await run(() => finishSession(session.sessionId));
+    const updated = await run(() => finishSession(session.sessionId, { earlyStop: false }));
     if (updated) onChanged(updated);
   };
 
-  /* Ngựa bất thường giữa buổi: dừng buổi và mở báo cáo sự cố cho bác sĩ thú y.
-     Bắt buộc ghi triệu chứng: bác sĩ cần biết ngựa bị gì trước khi tới. */
-  const submitStop = async (event) => {
+  const submitEarlyFinish = async (event) => {
     event.preventDefault();
-    if (!stop.symptoms.trim()) {
-      setError("Describe what you saw so the vet knows what to check.");
+    if (!hasReportedBoth) {
+      setError("You must report both Heart Rate and Speed at least once during the session before ending early.");
       return;
     }
-    const result = await run(() => stopSession(session.sessionId, {
-      symptoms: stop.symptoms.trim(),
-      description: stop.description.trim(),
-      urgency: stop.urgency,
-    }));
-    if (result) {
-      setStopResult(result.report);
-      setStopOpen(false);
-      onChanged(null);
+    if (earlyReason === "INJURY") {
+      if (!stop.symptoms.trim()) {
+        setError("Describe the injury/symptoms so the veterinarian knows what to check.");
+        return;
+      }
+      const confirmed = window.confirm(
+        `Confirm early termination due to INJURY for ${session.horseName} and call the Veterinarian immediately?`
+      );
+      if (!confirmed) return;
+      const result = await run(() =>
+        stopSession(session.sessionId, {
+          symptoms: stop.symptoms.trim(),
+          description: stop.description.trim(),
+          urgency: stop.urgency,
+        })
+      );
+      if (result) {
+        setStopResult(result.report);
+        setEarlyOpen(false);
+        onChanged(null);
+      }
+      return;
+    }
+
+    const reasonLabel = EARLY_STOP_REASON_OPTIONS.find((o) => o.value === earlyReason)?.label || earlyReason;
+    const confirmed = window.confirm(
+      `Are you sure you want to end the session with ${session.horseName} early?\nReason: ${reasonLabel}`
+    );
+    if (!confirmed) return;
+
+    const updated = await run(() =>
+      finishSession(session.sessionId, {
+        earlyStop: true,
+        earlyStopReason: earlyReason,
+      })
+    );
+    if (updated) {
+      setEarlyOpen(false);
+      onChanged(updated);
     }
   };
 
@@ -289,7 +319,7 @@ function SessionPanel({ session, onChanged, navigate }) {
         <div>
           <h2>{session.horseName}</h2>
           <p>
-            {formatSessionDay(session.sessionDate)} · {sessionTime(session.sessionDate)} · {session.phaseName}
+            {formatSessionDay(session.sessionDate)} · {sessionTime(session.sessionDate)} ({session.plannedDuration || 60} mins) · {session.phaseName}
           </p>
         </div>
         <span className={`task-status ${st.slug}`}>{st.label}</span>
@@ -301,16 +331,16 @@ function SessionPanel({ session, onChanged, navigate }) {
           <dd>{session.plannedDistance != null ? `${session.plannedDistance.toLocaleString("en-US")} m` : "—"}</dd>
         </div>
         <div>
-          <dt>HR ceiling</dt>
-          <dd>{session.heartRateCeiling != null ? `${session.heartRateCeiling} bpm` : "—"}</dd>
+          <dt>Planned duration</dt>
+          <dd>{session.plannedDuration || 60} mins</dd>
         </div>
         <div>
           <dt>Peak HR so far</dt>
           <dd>{session.peakHeartRate != null ? `${session.peakHeartRate} bpm` : "—"}</dd>
         </div>
         <div>
-          <dt>Alerts</dt>
-          <dd>{session.alertCount}</dd>
+          <dt>Peak speed so far</dt>
+          <dd>{session.peakVelocity != null ? `${session.peakVelocity} m/s` : "—"}</dd>
         </div>
       </dl>
 
@@ -321,7 +351,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             className="start-session"
             onClick={start}
             disabled={busy || !isDue}
-            title={!isDue ? `Scheduled for ${sessionTime(session.sessionDate)} (not yet due)` : "Bắt đầu buổi tập"}
+            title={!isDue ? `Scheduled for ${sessionTime(session.sessionDate)} (not yet due)` : "Start training session"}
           >
             {busy
               ? "Starting…"
@@ -360,10 +390,11 @@ function SessionPanel({ session, onChanged, navigate }) {
             />
           </label>
           <label>
-            Speed (m/s, optional)
+            Speed (m/s)
             <input
               type="number" inputMode="decimal" min="0" max="99.99" step="0.01"
               value={velocity} onChange={(e) => setVelocity(e.target.value)}
+              placeholder="Required >= 1x for early stop"
             />
           </label>
           <button type="submit" className="start-session" disabled={busy || heartRate === ""}>
@@ -372,58 +403,123 @@ function SessionPanel({ session, onChanged, navigate }) {
         </form>
       )}
 
-      {session.status === "RUNNING" && !stopOpen && (
+      {session.status === "RUNNING" && (
+        <div
+          style={{
+            marginTop: "8px",
+            marginBottom: "8px",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            background: hasReportedBoth ? "#ecfdf5" : "#fffbeb",
+            color: hasReportedBoth ? "#065f46" : "#92400e",
+            border: `1px solid ${hasReportedBoth ? "#a7f3d0" : "#fde68a"}`,
+          }}
+        >
+          {hasReportedBoth
+            ? "✓ Both Heart Rate and Speed have been reported at least once. Early session finish is unlocked."
+            : "ℹ️ To end this session early, you must report both Heart Rate and Speed at least once during the session."}
+        </div>
+      )}
+
+      {session.status === "RUNNING" && !earlyOpen && (
         <>
-          <button type="button" className="start-session" onClick={finish} disabled={busy}>
-            {busy ? "Saving…" : "Finish session"}
-          </button>
-          <button type="button" className="report-incident" onClick={() => setStopOpen(true)} disabled={busy}>
-            Horse unwell? Stop this session
+          {isEndReached && (
+            <button type="button" className="start-session" onClick={finishNormally} disabled={busy}>
+              {busy ? "Saving…" : "Finish session (Scheduled duration completed)"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="report-incident"
+            onClick={() => setEarlyOpen(true)}
+            disabled={busy}
+          >
+            End session early / Call Vet
           </button>
         </>
       )}
 
-      {session.status === "RUNNING" && stopOpen && (
-        <form className="stop-form" onSubmit={submitStop} noValidate>
+      {session.status === "RUNNING" && earlyOpen && (
+        <form className="stop-form" onSubmit={submitEarlyFinish} noValidate>
           <p className="stop-form__lead">
-            The session stops now and the veterinarian is notified. The horse cannot train
-            again until a vet has examined it.
+            <strong>End Session Early</strong> — Select the reason for ending before the {session.plannedDuration || 60}-minute duration completes.
           </p>
+
+          {!hasReportedBoth && (
+            <p className="session-error" role="alert" style={{ marginBottom: "10px" }}>
+              ⚠️ Cannot end session early yet: You must report both Heart Rate (current: {session.peakHeartRate ?? "none"}) and Speed (current: {session.peakVelocity ?? "none"}) at least once first.
+            </p>
+          )}
+
           <label>
-            What did you see?
-            <input
-              list="common-symptoms"
-              value={stop.symptoms}
-              maxLength={255}
-              onChange={(e) => setStop((s) => ({ ...s, symptoms: e.target.value }))}
-              placeholder="e.g. Limping on the left foreleg"
-              required
-            />
-            <datalist id="common-symptoms">
-              {COMMON_SYMPTOMS.map((s) => <option key={s} value={s} />)}
-            </datalist>
-          </label>
-          <label>
-            Details (optional)
-            <textarea
-              rows={2}
-              maxLength={2000}
-              value={stop.description}
-              onChange={(e) => setStop((s) => ({ ...s, description: e.target.value }))}
-              placeholder="When it started, which lap, anything else the vet should know"
-            />
-          </label>
-          <label>
-            How urgent?
-            <select value={stop.urgency} onChange={(e) => setStop((s) => ({ ...s, urgency: e.target.value }))}>
-              {URGENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            Reason for ending early
+            <select value={earlyReason} onChange={(e) => setEarlyReason(e.target.value)}>
+              {EARLY_STOP_REASON_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </label>
+
+          {earlyReason === "INJURY" && (
+            <>
+              <p className="stop-form__lead" style={{ color: "#b91c1c", marginTop: "6px" }}>
+                Veterinary Alert: Stopping due to injury will create an incident report, notify the Veterinarian, and lock the horse from training until cleared.
+              </p>
+              <label>
+                What symptoms / injury did you see?
+                <input
+                  list="common-symptoms"
+                  value={stop.symptoms}
+                  maxLength={255}
+                  onChange={(e) => setStop((s) => ({ ...s, symptoms: e.target.value }))}
+                  placeholder="e.g. Limping on the left foreleg"
+                  required
+                />
+                <datalist id="common-symptoms">
+                  {COMMON_SYMPTOMS.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </label>
+              <label>
+                Details for Veterinarian (optional)
+                <textarea
+                  rows={2}
+                  maxLength={2000}
+                  value={stop.description}
+                  onChange={(e) => setStop((s) => ({ ...s, description: e.target.value }))}
+                  placeholder="When it started, which lap, anything else the vet should know"
+                />
+              </label>
+              <label>
+                Urgency
+                <select value={stop.urgency} onChange={(e) => setStop((s) => ({ ...s, urgency: e.target.value }))}>
+                  {URGENCY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+
           <div className="stop-form__actions">
-            <button type="submit" className="stop-button" disabled={busy}>
-              {busy ? "Stopping…" : "Stop session and call the vet"}
+            <button
+              type="submit"
+              className="stop-button"
+              disabled={busy || !hasReportedBoth}
+            >
+              {busy
+                ? "Processing…"
+                : earlyReason === "INJURY"
+                  ? "Confirm: Stop session & Call Vet"
+                  : "Confirm & End session early"}
             </button>
-            <button type="button" className="stop-cancel" onClick={() => setStopOpen(false)} disabled={busy}>
+            <button type="button" className="stop-cancel" onClick={() => setEarlyOpen(false)} disabled={busy}>
               Keep training
             </button>
           </div>
@@ -432,7 +528,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
       {stopResult && (
         <p className="vitals-result alert" role="status">
-          Session stopped. Incident report #{stopResult.reportId} was sent to the veterinarian.
+          Session stopped early due to injury. Incident report #{stopResult.reportId} was sent to the veterinarian.
         </p>
       )}
 
@@ -452,13 +548,13 @@ function SessionPanel({ session, onChanged, navigate }) {
             ? "This session was cancelled."
             : session.evaluation
               ? `Evaluated by the head trainer: ${session.evaluation.charAt(0)}${session.evaluation.slice(1).toLowerCase()}.`
-              : "Finished. Waiting for the head trainer's evaluation."}
+              : `Finished${session.earlyStopReason ? ` (Early reason: ${session.earlyStopReason})` : ""}. Waiting for the head trainer's evaluation.`}
         </p>
       )}
 
       {session.status === "RUNNING" && (
         <p className="session-note">
-          Press Finish when the work is done. The head trainer evaluates the session afterwards.
+          If the scheduled {session.plannedDuration || 60}-minute duration expires without an update, the system automatically completes this session and sends it to the Head Trainer for review.
         </p>
       )}
 
@@ -488,7 +584,7 @@ function UpcomingCard({ items }) {
             <div className="tack-item" key={s.sessionId}>
               <strong>{s.horseName} · {s.phaseName}</strong>
               <span className="tack-chip ready">
-                {formatSessionDay(s.sessionDate)} {sessionTime(s.sessionDate)}
+                {formatSessionDay(s.sessionDate)} {sessionTime(s.sessionDate)} ({s.plannedDuration || 60}m)
               </span>
             </div>
           ))}
@@ -551,7 +647,6 @@ export default function GroomDashboard() {
     [sessions, today]
   );
 
-  // Mặc định chọn buổi đang chạy, không có thì buổi kế tiếp chưa bắt đầu.
   useEffect(() => {
     if (selectedId != null && todays.some((s) => s.sessionId === selectedId)) return;
     const next = todays.find((s) => s.status === "RUNNING") || todays.find((s) => s.status === "SCHEDULED");
@@ -585,7 +680,6 @@ export default function GroomDashboard() {
   const toggleFilter = (status) => setStatusFilter(statusFilter === status ? "all" : status);
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-  // Buổi tập vừa bắt đầu trả về bản mới; gửi số đo thì tải lại cả danh sách.
   const onChanged = (updated) => {
     if (updated) {
       setSessions((rows) => rows.map((s) => (s.sessionId === updated.sessionId ? updated : s)));

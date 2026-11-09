@@ -6,7 +6,7 @@ import java.time.Instant;
 /** Một lần gọi bác sĩ, kèm cảnh báo gốc và câu trả lời (nếu đã có). Giờ là UTC. */
 public record VetCallResponse(
         int callId,
-        int alertId,
+        Integer alertId,
         int sessionId,
         String sessionStatus,
         int horseId,

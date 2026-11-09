@@ -1,22 +1,12 @@
 // src/features/horse/horseRequestApi.js
-// Yêu cầu đăng ký ngựa - đường để chủ ngựa nói với học viện rằng mình có ngựa
-// muốn gửi.
-//
-// Vì sao cần: POST /api/horses chỉ nhận HEAD_TRAINER và CLUB_MANAGER, nên chủ
-// ngựa bấm "thêm ngựa" sẽ nhận 403. Yêu cầu không phải là cửa sau vòng qua
-// luật đó - nó chỉ thành hồ sơ ngựa khi học viện bấm duyệt, và lúc duyệt backend
-// vẫn gọi đúng HorseService.create với đầy đủ kiểm tra.
-
 import { authFetch } from "../auth/authService";
 
 const API = "/api/horse-requests";
 
-/** Chủ ngựa nhận yêu cầu của mình; trainer và manager nhận cả hàng chờ. */
 export function listRequests(signal) {
   return authFetch(API, { signal });
 }
 
-/** Chỉ HORSE_OWNER gọi được. Chỉ horseName là bắt buộc. */
 export function submitRequest(form) {
   return authFetch(API, {
     method: "POST",
@@ -32,18 +22,18 @@ export function submitRequest(form) {
   });
 }
 
-export function approveRequest(id, { registrationCode, stallNo, note }) {
+export function approveRequest(id, { registrationCode, stallNo, note, trainerId }) {
   return authFetch(`${API}/${id}/approve`, {
     method: "PUT",
     body: JSON.stringify({
       registrationCode: registrationCode.trim(),
       stallNo: stallNo?.trim() || null,
       note: note?.trim() || null,
+      trainerId: trainerId ? Number(trainerId) : null,
     }),
   });
 }
 
-/** Chủ ngựa huỷ yêu cầu của mình khi nó còn đang chờ (V15). */
 export function cancelRequest(id) {
   return authFetch(`${API}/${id}/cancel`, { method: "PUT" });
 }
@@ -54,10 +44,6 @@ export function rejectRequest(id, note) {
     body: JSON.stringify({ note: note.trim() }),
   });
 }
-
-/* ------------------------------------------------------------------ *
- * Hiển thị
- * ------------------------------------------------------------------ */
 
 const STATUS = {
   PENDING:  { label: "Waiting for the club", tone: "warning" },
@@ -70,7 +56,6 @@ export function toRequestStatus(status) {
   return STATUS[status] || { label: status || "Unknown", tone: "neutral" };
 }
 
-/** Yêu cầu đang chờ, để màn hình biết có nên mời gửi thêm hay không. */
 export function pendingOnly(rows) {
   return (rows || []).filter((r) => r.status === "PENDING");
 }

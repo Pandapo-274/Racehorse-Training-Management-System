@@ -78,7 +78,7 @@ function VetCallQueue() {
   const answered = (calls || []).filter((c) => c.status === "ANSWERED");
 
   return (
-    <VetShell active="vetcalls" title="Vet calls" subtitle="Head trainers asking for advice during training">
+    <VetShell active="vetcalls" title="Vet calls" subtitle="Head trainers and grooms asking for veterinary help during training">
       {error && (
         <VetState kind="error" title={error} onRetry={() => setReload((n) => n + 1)}>
           Check that the backend is running and that you are still signed in.
@@ -94,7 +94,7 @@ function VetCallQueue() {
             tone="red"
           >
             {pending.length === 0 ? (
-              <div className="vet-inline-state">No head trainer is waiting for advice right now.</div>
+              <div className="vet-inline-state">No trainer or groom is waiting for advice right now.</div>
             ) : (
               <div className="vcall-list">
                 {pending.map((c) => (
@@ -204,10 +204,10 @@ function VetCallDetail({ callId }) {
       </button>
 
       <div className="vx-grid vx-grid--recovery">
-        <VetCard title="What the trainer reported" tone={pending ? "red" : "green"}>
+        <VetCard title="What was reported" tone={pending ? "red" : "green"}>
           <dl className="vcall-facts">
             <div><dt>Horse</dt><dd>{call.horseName} · Stall {call.stallNo || "—"}</dd></div>
-            <div><dt>Alert</dt><dd>{metricText(call)} · {String(call.severity).toLowerCase()}</dd></div>
+            <div><dt>Alert</dt><dd>{call.metricType ? `${metricText(call)} · ${String(call.severity).toLowerCase()}` : metricText(call)}</dd></div>
             <div><dt>Urgency</dt><dd><UrgencyPill urgency={call.urgency} /></dd></div>
             <div><dt>Reason</dt><dd>{call.reason}</dd></div>
             <div><dt>Signs seen</dt><dd>{call.observations || "None noted"}</dd></div>
@@ -215,7 +215,7 @@ function VetCallDetail({ callId }) {
               <dt>Session</dt>
               <dd>
                 #{call.sessionId} · {SESSION_TEXT[call.sessionStatus] || call.sessionStatus}
-                {call.sessionStopped ? " (stopped by the trainer when calling)" : ""} · Groom {call.groomName}
+                {call.sessionStopped ? " (stopped when the call was made)" : ""} · Groom {call.groomName}
               </dd>
             </div>
           </dl>
@@ -286,7 +286,7 @@ function AnswerForm({ call, onAnswered, onStale }) {
   };
 
   return (
-    <VetCard title="Your advice" hint="The trainer and the groom see it straight away" tone="pink">
+    <VetCard title="Your advice" hint="The caller and the groom see it straight away" tone="pink">
       <VetError error={error} />
       <fieldset className="vcall-decisions">
         <legend>Decision</legend>
@@ -308,7 +308,7 @@ function AnswerForm({ call, onAnswered, onStale }) {
       </fieldset>
 
       <label className="vx-field vx-field--full vcall-gap-sm">
-        <span>What should the head trainer do?</span>
+        <span>What should the trainer / groom do?</span>
         <textarea
           className="vx-input vx-textarea"
           rows={3}

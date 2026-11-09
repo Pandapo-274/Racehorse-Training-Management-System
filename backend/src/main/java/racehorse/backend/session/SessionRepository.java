@@ -19,7 +19,8 @@ public class SessionRepository {
                    s.session_date, s.planned_distance, s.actual_distance, s.duration_minutes,
                    s.avg_heart_rate, s.peak_heart_rate, s.recovery_heart_rate, s.peak_velocity,
                    s.evaluation, s.remarks, s.evaluated_by, s.status,
-                   s.is_trial_run, s.video_url
+                   s.is_trial_run, s.video_url,
+                   s.planned_duration, s.ended_at, s.early_stop_reason, s.review_status, s.auto_reviewed_at
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
             JOIN HORSE h ON h.horse_id = s.horse_id
@@ -50,10 +51,14 @@ public class SessionRepository {
                 rs.getString("evaluation"), rs.getString("remarks"),
                 rs.getObject("evaluated_by", Integer.class),
                 rs.getString("status"),
-                rs.getBoolean("is_trial_run"), rs.getString("video_url"));
+                rs.getBoolean("is_trial_run"), rs.getString("video_url"),
+                rs.getObject("planned_duration", Integer.class),
+                rs.getObject("ended_at", LocalDateTime.class),
+                rs.getString("early_stop_reason"),
+                rs.getString("review_status"),
+                rs.getObject("auto_reviewed_at", LocalDateTime.class));
     }
 
-    /** Chỉ nối điều kiện khi có giá trị, tránh kiểu "(:x IS NULL OR ...)" dễ lỗi kiểu dữ liệu trên SQL Server. */
     public List<SessionResponse> search(String status, Integer horseId, int limit, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();
@@ -65,12 +70,10 @@ public class SessionRepository {
             sql.append(" AND s.horse_id = :horseId");
             params.put("horseId", horseId);
         }
-        // Lọc theo chủ ngựa cho vai trò HORSE_OWNER - trong SQL, không lọc ở Java.
         if (ownerId != null) {
             sql.append(" AND h.owner_id = :ownerId");
             params.put("ownerId", ownerId);
         }
-        // limit là int đã bị kẹp trong service nên nối thẳng vào chuỗi là an toàn.
         sql.append(" ORDER BY s.session_date DESC OFFSET 0 ROWS FETCH NEXT ").append(limit).append(" ROWS ONLY");
         return jdbc.sql(sql.toString()).params(params).query(SessionRepository::map).list();
     }
@@ -82,7 +85,6 @@ public class SessionRepository {
                 .optional();
     }
 
-    /** Chủ ngựa của con ngựa trong một buổi tập, để kiểm quyền xem. */
     public Optional<Integer> findOwnerOfSession(int sessionId) {
         return jdbc.sql("""
                 SELECT h.owner_id
@@ -96,8 +98,7 @@ public class SessionRepository {
     }
 
     /**
-     * @param expectedStatus trạng thái service vừa đọc; đổi rồi thì không ghi.
-     * @return số dòng đã ghi; 0 nghĩa là buổi vừa đổi trạng thái (vd. vừa bị Stop).
+     * Lưu kết quả đánh giá của Head Trainer (bao gồm cả khi xem xét lại từ khu lưu trữ ARCHIVED_AUTO).
      */
     public int saveEvaluation(int sessionId, EvaluateSessionRequest r, String expectedStatus, String finalStatus,
                               int evaluatorId) {
@@ -105,7 +106,9 @@ public class SessionRepository {
                 UPDATE TRAINING_SESSION
                 SET actual_distance = :ad, duration_minutes = :dm, avg_heart_rate = :avg,
                     peak_heart_rate = :peak, recovery_heart_rate = :rec, peak_velocity = :vel,
-                    evaluation = :ev, remarks = :rm, evaluated_by = :by, status = :st
+                    evaluation = :ev, remarks = :rm, evaluated_by = :by, status = :st,
+                    review_status = 'REVIEWED',
+                    ended_at = ISNULL(ended_at, SYSUTCDATETIME())
                 WHERE session_id = :id AND status = :expected
                 """)
                 .param("ad", r.actualDistance())
@@ -119,6 +122,46 @@ public class SessionRepository {
                 .param("by", evaluatorId)
                 .param("st", finalStatus)
                 .param("expected", expectedStatus)
+                .param("id", sessionId)
+                .update();
+    }
+
+    /**
+     * V37: Tìm các buổi tập đã kết thúc (COMPLETED / STOPPED_EARLY) đang chờ review (PENDING)
+     * nhưng đã quá hạn 2 ngày (48 tiếng) kể từ lúc kết thúc.
+     */
+    public List<SessionResponse> findOverduePendingReviews(LocalDateTime cutoff) {
+        return jdbc.sql(SELECT + """
+                 WHERE s.status IN ('COMPLETED', 'STOPPED_EARLY')
+                   AND s.review_status = 'PENDING'
+                   AND ISNULL(s.ended_at, DATEADD(MINUTE, ISNULL(s.planned_duration, 60), s.session_date)) <= :cutoff
+                """)
+                .param("cutoff", cutoff)
+                .query(SessionRepository::map)
+                .list();
+    }
+
+    /**
+     * V37: Tạo báo cáo sơ bộ tự động từ chỉ số Groom đã nhập và chuyển vào khu lưu trữ (ARCHIVED_AUTO).
+     */
+    public int markAutoArchived(int sessionId, int actualDistance, int durationMinutes,
+                                Integer avgHeartRate, String evaluation, String autoRemarks) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET actual_distance = ISNULL(actual_distance, :ad),
+                    duration_minutes = ISNULL(duration_minutes, :dm),
+                    avg_heart_rate = ISNULL(avg_heart_rate, :avg),
+                    evaluation = ISNULL(evaluation, :ev),
+                    remarks = :rm,
+                    review_status = 'ARCHIVED_AUTO',
+                    auto_reviewed_at = SYSUTCDATETIME()
+                WHERE session_id = :id AND review_status = 'PENDING'
+                """)
+                .param("ad", actualDistance)
+                .param("dm", durationMinutes)
+                .param("avg", avgHeartRate)
+                .param("ev", evaluation)
+                .param("rm", autoRemarks)
                 .param("id", sessionId)
                 .update();
     }

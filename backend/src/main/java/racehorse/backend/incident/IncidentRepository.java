@@ -1,5 +1,6 @@
 package racehorse.backend.incident;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -17,7 +18,12 @@ public class IncidentRepository {
 
     /** Những gì cần biết về một buổi tập để quyết định có dừng được không. */
     public record SessionForStop(int sessionId, int horseId, String horseName, int ownerId,
-                                 int assignedTo, String status) {
+                                 int assignedTo, String status,
+                                 Integer peakHeartRate, BigDecimal peakVelocity) {
+        public SessionForStop(int sessionId, int horseId, String horseName, int ownerId,
+                              int assignedTo, String status) {
+            this(sessionId, horseId, horseName, ownerId, assignedTo, status, null, null);
+        }
     }
 
     /** Một báo cáo chưa khám xong (PENDING hoặc RECEIVED). */
@@ -40,11 +46,6 @@ public class IncidentRepository {
             LEFT JOIN APP_USER ds ON ds.user_id = r.dismissed_by
             """;
 
-    /**
-     * Báo cáo còn mở = còn chặn tập. Viết theo kiểu liệt kê trạng thái mở thay
-     * cho "status <> 'EXAMINED'": từ V34 có thêm DISMISSED, và một báo cáo bị
-     * huỷ vì báo động giả không được chặn ngựa nữa.
-     */
     static final String OPEN_STATUSES = "('PENDING', 'RECEIVED')";
 
     private final JdbcClient jdbc;
@@ -54,7 +55,6 @@ public class IncidentRepository {
     }
 
     private static IncidentReportResponse map(ResultSet rs, int rowNum) throws SQLException {
-        // reported_at / received_at lưu giờ UTC (SYSUTCDATETIME) nên gắn offset UTC để frontend hiểu đúng múi giờ.
         LocalDateTime reported = rs.getObject("reported_at", LocalDateTime.class);
         LocalDateTime received = rs.getObject("received_at", LocalDateTime.class);
         return new IncidentReportResponse(
@@ -73,24 +73,38 @@ public class IncidentRepository {
 
     public Optional<SessionForStop> findSessionForStop(int sessionId) {
         return jdbc.sql("""
-                SELECT s.session_id, s.horse_id, h.horse_name, h.owner_id, s.assigned_to, s.status
+                SELECT s.session_id, s.horse_id, h.horse_name, h.owner_id, s.assigned_to, s.status,
+                       s.peak_heart_rate, s.peak_velocity
                 FROM TRAINING_SESSION s JOIN HORSE h ON h.horse_id = s.horse_id
                 WHERE s.session_id = :id
                 """)
                 .param("id", sessionId)
                 .query((rs, n) -> new SessionForStop(rs.getInt("session_id"), rs.getInt("horse_id"),
                         rs.getString("horse_name"), rs.getInt("owner_id"), rs.getInt("assigned_to"),
-                        rs.getString("status")))
+                        rs.getString("status"),
+                        rs.getObject("peak_heart_rate", Integer.class),
+                        rs.getObject("peak_velocity", BigDecimal.class)))
                 .optional();
     }
 
     /**
-     * RUNNING -> STOPPED_EARLY. Điều kiện status nằm trong chính câu UPDATE: Groom và Head Trainer
-     * cùng bấm dừng một lúc thì chỉ một người nhận 1 dòng, người còn lại nhận 0 và biết mình đến muộn.
+     * RUNNING -> STOPPED_EARLY. V37: ghi nhận ended_at, review_status = 'PENDING' và lý do dừng sớm.
      */
     public int markStopped(int sessionId) {
-        return jdbc.sql("UPDATE TRAINING_SESSION SET status = 'STOPPED_EARLY' WHERE session_id = :id AND status = 'RUNNING'")
+        return markStopped(sessionId, null);
+    }
+
+    public int markStopped(int sessionId, String earlyStopReason) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'STOPPED_EARLY',
+                    ended_at = SYSUTCDATETIME(),
+                    review_status = 'PENDING',
+                    early_stop_reason = COALESCE(:reason, early_stop_reason)
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
                 .param("id", sessionId)
+                .param("reason", earlyStopReason)
                 .update();
     }
 
@@ -111,10 +125,6 @@ public class IncidentRepository {
                 .single();
     }
 
-    /**
-     * Báo cáo không gắn buổi tập: Groom thấy ngựa bất thường tại chuồng (bỏ ăn,
-     * đau bụng, sốt, móng xước...). session_id NULL nên không đụng UX_INC_session.
-     */
     public int insertStandaloneReport(int horseId, int reporterId, String symptoms,
                                       String description, String urgency, String photoUrl) {
         return jdbc.sql("""
@@ -139,12 +149,6 @@ public class IncidentRepository {
                 .optional();
     }
 
-    /**
-     * statuses rỗng = mọi trạng thái. reporterId / ownerId lọc cho Groom (chỉ thấy báo cáo của mình)
-     * và chủ ngựa (chỉ thấy ngựa mình): lọc trong SQL, không lọc ở Java.
-     * Hàng chờ (urgentFirst) xếp khẩn cấp nhất lên đầu, trong cùng mức thì ca chờ lâu nhất lên trước.
-     * Giá trị status chỉ lấy từ danh sách cố định ở service nên đưa vào tham số, không nối chuỗi.
-     */
     public List<IncidentReportResponse> search(List<String> statuses, Integer horseId, Integer reporterId,
                                                Integer ownerId, boolean urgentFirst, int limit) {
         StringBuilder sql = new StringBuilder(SELECT_REPORT).append(" WHERE 1 = 1");
@@ -156,9 +160,6 @@ public class IncidentRepository {
                 params.put("s" + i, statuses.get(i));
             }
             sql.append(")");
-            /* Hàng chờ (PENDING / RECEIVED) bỏ ngựa đã rút: không ai khám nữa, để
-               lại thì báo cáo nằm mãi trong hàng chờ của bác sĩ. Xem lịch sử
-               (EXAMINED, ALL) vẫn thấy đủ. */
             if (!statuses.contains("EXAMINED") && !statuses.contains("DISMISSED")) {
                 sql.append(" AND h.activity_status = 'ACTIVE'");
             }
@@ -178,12 +179,10 @@ public class IncidentRepository {
         sql.append(urgentFirst
                 ? " ORDER BY CASE r.urgency WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, r.reported_at ASC"
                 : " ORDER BY r.reported_at DESC");
-        // limit là int đã bị kẹp trong service nên nối thẳng vào chuỗi là an toàn.
         sql.append(" OFFSET 0 ROWS FETCH NEXT ").append(limit).append(" ROWS ONLY");
         return jdbc.sql(sql.toString()).params(params).query(IncidentRepository::map).list();
     }
 
-    /** Báo cáo chưa khám xong của một con ngựa (nếu có nhiều thì lấy ca khẩn cấp nhất). */
     public Optional<OpenReport> findOpenReport(int horseId) {
         return jdbc.sql("""
                 SELECT TOP 1 report_id, urgency, status FROM INCIDENT_REPORT
@@ -196,11 +195,6 @@ public class IncidentRepository {
                 .optional();
     }
 
-    /**
-     * MỌI báo cáo chưa khám xong của một con ngựa, cũ nhất trước. Xác nhận hồi
-     * phục (HealthClearanceService) cần cả danh sách, không chỉ một dòng như
-     * findOpenReport: còn sót báo cáo nào thì IncidentGuard vẫn chặn tập.
-     */
     public List<IncidentReportResponse> findOpenByHorse(int horseId) {
         return jdbc.sql(SELECT_REPORT + " WHERE r.horse_id = :h AND r.status IN " + OPEN_STATUSES
                         + " ORDER BY r.reported_at, r.report_id")
@@ -216,11 +210,6 @@ public class IncidentRepository {
                 .list();
     }
 
-    /**
-     * PENDING -> DISMISSED: Head Trainer huỷ báo động giả của một lần dừng buổi tập.
-     * Chỉ khi bác sĩ chưa nhận ca (PENDING) và báo cáo sinh ra từ buổi tập (session_id):
-     * bác sĩ đã nhận thì quyết định thuộc về bác sĩ. 0 dòng = vừa có bác sĩ nhận.
-     */
     public int markDismissed(int reportId, int trainerId, String reason) {
         return jdbc.sql("""
                 UPDATE INCIDENT_REPORT
@@ -234,7 +223,6 @@ public class IncidentRepository {
                 .update();
     }
 
-    /** PENDING -> RECEIVED. Hai bác sĩ cùng bấm nhận thì chỉ một người thắng (người kia nhận 0 dòng). */
     public int markReceived(int reportId, int vetId) {
         return jdbc.sql("""
                 UPDATE INCIDENT_REPORT

@@ -24,7 +24,7 @@ public class VetCallRepository {
                    c.answered_by, vu.full_name AS answered_by_name, c.answered_at,
                    c.decision, c.instructions, c.medication, c.report_id
             FROM VET_CALL c
-            JOIN THRESHOLD_ALERT a  ON a.alert_id   = c.alert_id
+            LEFT JOIN THRESHOLD_ALERT a ON a.alert_id = c.alert_id
             JOIN TRAINING_SESSION s ON s.session_id = c.session_id
             JOIN HORSE h            ON h.horse_id   = c.horse_id
             JOIN APP_USER g         ON g.user_id    = s.assigned_to
@@ -45,7 +45,7 @@ public class VetCallRepository {
 
     private static VetCallResponse map(ResultSet rs, int n) throws SQLException {
         return new VetCallResponse(
-                rs.getInt("call_id"), rs.getInt("alert_id"), rs.getInt("session_id"),
+                rs.getInt("call_id"), rs.getObject("alert_id", Integer.class), rs.getInt("session_id"),
                 rs.getString("session_status"), rs.getInt("horse_id"), rs.getString("horse_name"),
                 rs.getString("stall_no"), rs.getString("horse_status"), rs.getString("groom_name"),
                 rs.getString("metric_type"), rs.getBigDecimal("threshold_value"),
@@ -84,12 +84,20 @@ public class VetCallRepository {
 
     public int insert(int alertId, int sessionId, int horseId, int calledBy, String reason,
                       String observations, String urgency, boolean sessionStopped) {
+        return insert(Integer.valueOf(alertId), sessionId, horseId, calledBy, reason, observations, urgency,
+                sessionStopped, null);
+    }
+
+    /** alertId = null: a call made by a groom when stopping a session (no threshold alert). */
+    public int insert(Integer alertId, int sessionId, int horseId, int calledBy, String reason,
+                      String observations, String urgency, boolean sessionStopped, Integer reportId) {
         return jdbc.sql("""
                 INSERT INTO VET_CALL (alert_id, session_id, horse_id, called_by, reason, observations,
-                                      urgency, session_stopped)
+                                      urgency, session_stopped, report_id)
                 OUTPUT INSERTED.call_id
-                VALUES (:alert, :session, :horse, :by, :reason, :obs, :urgency, :stopped)
+                VALUES (:alert, :session, :horse, :by, :reason, :obs, :urgency, :stopped, :report)
                 """)
+                .param("report", reportId)
                 .param("alert", alertId)
                 .param("session", sessionId)
                 .param("horse", horseId)

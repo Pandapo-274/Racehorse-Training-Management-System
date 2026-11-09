@@ -19,15 +19,10 @@ public class TrainingSessionRepository {
         this.jdbc = jdbc;
     }
 
-    /**
-     * Thông tin giai đoạn kèm giáo án, để service kiểm tra mà không phải query
-     * nhiều lần.
-     */
     public record PhaseContext(int phaseId, int planId, String planStatus, int horseId,
             Integer distance, LocalDate startDate, LocalDate endDate) {
     }
 
-    /** Thông tin tối thiểu của Groom dùng trong biểu mẫu phân công. */
     public record GroomOption(
             int userId,
             String fullName) {
@@ -57,6 +52,18 @@ public class TrainingSessionRepository {
                 .param("id", userId).query(Integer.class).single() > 0;
     }
 
+    /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không. */
+    public boolean isGroomOfTrainer(int groomId, int trainerId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
+                WHERE u.user_id = :groomId AND r.role_name = 'GROOM'
+                  AND u.status = 'ACTIVE' AND u.trainer_id = :trainerId
+                """)
+                .param("groomId", groomId)
+                .param("trainerId", trainerId)
+                .query(Integer.class).single() > 0;
+    }
+
     private static final String SELECT_SESSION = """
             SELECT s.session_id, s.phase_id, ph.phase_no, ph.phase_name, s.horse_id, h.horse_name,
                    s.assigned_to, u.full_name AS assigned_to_name, s.session_date,
@@ -64,7 +71,8 @@ public class TrainingSessionRepository {
                    s.peak_heart_rate, s.recovery_heart_rate, s.peak_velocity, s.evaluation,
                    s.remarks, s.status, ph.heart_rate_ceiling,
                    (SELECT COUNT(*) FROM THRESHOLD_ALERT a WHERE a.session_id = s.session_id) AS alert_count,
-                   s.is_trial_run, s.video_url
+                   s.is_trial_run, s.video_url,
+                   s.planned_duration, s.started_at, s.ended_at, s.early_stop_reason, s.review_status
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
             JOIN HORSE h       ON h.horse_id  = s.horse_id
@@ -86,7 +94,12 @@ public class TrainingSessionRepository {
                 rs.getObject("peak_velocity", BigDecimal.class),
                 rs.getString("evaluation"), rs.getString("remarks"), rs.getString("status"),
                 rs.getObject("heart_rate_ceiling", Integer.class), rs.getInt("alert_count"),
-                rs.getBoolean("is_trial_run"), rs.getString("video_url"));
+                rs.getBoolean("is_trial_run"), rs.getString("video_url"),
+                rs.getObject("planned_duration", Integer.class),
+                rs.getObject("started_at", LocalDateTime.class),
+                rs.getObject("ended_at", LocalDateTime.class),
+                rs.getString("early_stop_reason"),
+                rs.getString("review_status"));
     }
 
     public Optional<TrainingSessionResponse> findById(int sessionId) {
@@ -96,14 +109,6 @@ public class TrainingSessionRepository {
                 .optional();
     }
 
-    /**
-     * Bốn bộ lọc đều tùy chọn; chỉ ghép điều kiện khi có giá trị.
-     *
-     * ownerId lọc theo chủ ngựa, dùng cho vai trò HORSE_OWNER. Phép lọc này
-     * nằm trong SQL chứ không lọc danh sách ở Java sau khi đã đọc hết: lọc ở
-     * Java nghĩa là database vẫn trả về buổi tập của mọi con ngựa trong chuồng,
-     * và chỉ cần một chỗ quên gọi .filter là dữ liệu của chủ khác lọt ra.
-     */
     public List<TrainingSessionResponse> findAll(Integer horseId, String status,
                                                  Integer assignedTo, Integer ownerId,
                                                  boolean activeHorsesOnly) {
@@ -147,58 +152,107 @@ public class TrainingSessionRepository {
                 .single();
     }
 
-    /**
-     * SCHEDULED -> RUNNING.
-     *
-     * Điều kiện `AND status = 'SCHEDULED'` nằm trong chính câu UPDATE chứ
-     * không chỉ ở phép kiểm của service: hai cú bấm Start đồng thời đều đọc
-     * thấy SCHEDULED, đều qua được phép kiểm kia, rồi cả hai cùng ghi RUNNING
-     * và cùng báo thành công - trong khi chỉ có một buổi tập. Người sau nhận
-     * 0 dòng và service biết là mình đến muộn.
-     *
-     * Từ V8 điều kiện này còn chặn thêm một việc: một buổi đã CANCELLED
-     * (do giáo án chuyển COMPLETED) không bị dựng lại thành RUNNING.
-     *
-     * @return số dòng đã đổi; 0 nghĩa là buổi tập đã rời trạng thái SCHEDULED.
-     */
+    public int updatePlannedDuration(int sessionId, int plannedDuration) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET planned_duration = :duration
+                WHERE session_id = :id
+                """)
+                .param("duration", plannedDuration)
+                .param("id", sessionId)
+                .update();
+    }
+
     public int markRunning(int sessionId) {
         return jdbc.sql("""
-                UPDATE TRAINING_SESSION SET status = 'RUNNING'
+                UPDATE TRAINING_SESSION
+                SET status = 'RUNNING', started_at = SYSUTCDATETIME()
                 WHERE session_id = :id AND status = 'SCHEDULED'
                 """)
                 .param("id", sessionId)
                 .update();
     }
 
-    /** RUNNING -> COMPLETED. 0 dòng = vừa có người dừng hoặc kết thúc buổi này. */
+    /** RUNNING -> COMPLETED. Ghi ended_at và đặt review_status = 'PENDING' (hạn 2 ngày). */
     public int markFinished(int sessionId) {
         return jdbc.sql("""
-                UPDATE TRAINING_SESSION SET status = 'COMPLETED'
+                UPDATE TRAINING_SESSION
+                SET status = 'COMPLETED',
+                    ended_at = SYSUTCDATETIME(),
+                    review_status = 'PENDING'
                 WHERE session_id = :id AND status = 'RUNNING'
                 """)
                 .param("id", sessionId)
                 .update();
     }
 
+    /** V37: Groom kết thúc sớm buổi tập (không gọi Vet) với lý do từ danh sách. */
+    public int markStoppedEarly(int sessionId, String earlyStopReason) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'STOPPED_EARLY',
+                    ended_at = SYSUTCDATETIME(),
+                    early_stop_reason = :reason,
+                    review_status = 'PENDING'
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("reason", earlyStopReason)
+                .param("id", sessionId)
+                .update();
+    }
+
     /**
      * Đóng những buổi còn RUNNING từ ngày trước (MissedTaskJob gọi mỗi đêm).
-     *
-     * Buổi tập chỉ Start được trong đúng ngày của nó, nên qua nửa đêm mà vẫn
-     * RUNNING nghĩa là không ai bấm Finish. Để nguyên thì con ngựa bị kẹt:
-     * hasRunningSession chặn mọi buổi Start sau, và Groom không khoá được tài
-     * khoản. Đóng thành COMPLETED, chưa đánh giá: Head Trainer vẫn chấm điểm
-     * được, và đổi sang STOPPED_EARLY nếu thực ra buổi đã dừng giữa chừng.
      */
     public int closeStaleRunning(LocalDate today) {
         return jdbc.sql("""
-                UPDATE TRAINING_SESSION SET status = 'COMPLETED'
+                UPDATE TRAINING_SESSION
+                SET status = 'COMPLETED',
+                    ended_at = ISNULL(ended_at, SYSUTCDATETIME()),
+                    review_status = CASE WHEN review_status = 'NONE' THEN 'PENDING' ELSE review_status END
                 WHERE status = 'RUNNING' AND session_date < :today
                 """)
                 .param("today", today)
                 .update();
     }
 
-    /** Buổi tập còn SCHEDULED của một con ngựa: ai phụ trách, lúc nào. */
+    /** V37: Tìm các buổi RUNNING đã quá thời lượng dự kiến (session_date + planned_duration <= hiện tại). */
+    public List<TrainingSessionResponse> findOverdueRunningSessions(LocalDateTime now) {
+        return jdbc.sql(SELECT_SESSION + """
+                 WHERE s.status = 'RUNNING'
+                   AND DATEADD(MINUTE, ISNULL(s.planned_duration, 60), s.session_date) <= :now
+                """)
+                .param("now", now)
+                .query(TrainingSessionRepository::mapSession)
+                .list();
+    }
+
+    /** V37: Tự động kết thúc một buổi RUNNING đã hết giờ tập và chuyển sang chờ Head Trainer review. */
+    public int autoFinishOverdueRunning(int sessionId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'COMPLETED',
+                    ended_at = SYSUTCDATETIME(),
+                    duration_minutes = ISNULL(duration_minutes, planned_duration),
+                    review_status = 'PENDING'
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("id", sessionId)
+                .update();
+    }
+
+    /** V37: Tự động huỷ các buổi SCHEDULED đã qua cả khung giờ tập (session_date + planned_duration <= hiện tại) mà Groom chưa Start. */
+    public int autoCancelOverdueScheduled(LocalDateTime now) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'CANCELLED'
+                WHERE status = 'SCHEDULED'
+                  AND DATEADD(MINUTE, ISNULL(planned_duration, 60), session_date) <= :now
+                """)
+                .param("now", now)
+                .update();
+    }
+
     public record ScheduledSlot(int sessionId, int assignedTo, LocalDateTime sessionDate) {
     }
 
@@ -216,11 +270,6 @@ public class TrainingSessionRepository {
                 .list();
     }
 
-    /**
-     * Buổi SCHEDULED của những ngày đã qua không bao giờ bắt đầu được nữa
-     * (start() chỉ cho trong đúng ngày), nên chuyển CANCELLED để lịch Groom
-     * không treo mãi. MissedTaskJob gọi mỗi đêm.
-     */
     public int cancelOverdue(LocalDate today) {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION SET status = 'CANCELLED'
@@ -239,10 +288,17 @@ public class TrainingSessionRepository {
                 .query(Integer.class).single() > 0;
     }
 
-    /**
-     * Huỷ mọi buổi tập còn SCHEDULED của một con ngựa (khi ngựa bị rút).
-     * Như cancelRemainingSessions của giáo án: chỉ chạm buổi chưa diễn ra.
-     */
+    /** V37: Kiểm tra Groom có đang thực hiện một buổi tập nào khác không. */
+    public boolean hasRunningSessionByGroom(int groomId, int excludeSessionId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM TRAINING_SESSION
+                WHERE assigned_to = :groomId AND status = 'RUNNING' AND session_id <> :excludeId
+                """)
+                .param("groomId", groomId)
+                .param("excludeId", excludeSessionId)
+                .query(Integer.class).single() > 0;
+    }
+
     public int cancelScheduledByHorse(int horseId) {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION SET status = 'CANCELLED'
@@ -261,10 +317,6 @@ public class TrainingSessionRepository {
                 .update();
     }
 
-    /**
-     * Lấy danh sách tài khoản Groom đang hoạt động.
-     * Dùng cho dropdown phân công của Head Trainer.
-     */
     public List<GroomOption> findActiveGrooms() {
         return jdbc.sql("""
                 SELECT u.user_id, u.full_name
@@ -280,10 +332,24 @@ public class TrainingSessionRepository {
                 .list();
     }
 
-    /**
-     * Chỉ đổi lịch khi buổi tập vẫn ở trạng thái SCHEDULED.
-     * Trả về số dòng được cập nhật.
-     */
+    /** V37: Chỉ lấy các Groom đang ACTIVE được Club Manager gán cho Head Trainer này. */
+    public List<GroomOption> findActiveGroomsByTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'GROOM'
+                  AND u.status = 'ACTIVE'
+                  AND u.trainer_id = :trainerId
+                ORDER BY u.full_name
+                """)
+                .param("trainerId", trainerId)
+                .query((rs, rowNum) -> new GroomOption(
+                        rs.getInt("user_id"),
+                        rs.getString("full_name")))
+                .list();
+    }
+
     public int updateSchedule(
             int sessionId,
             int assignedTo,

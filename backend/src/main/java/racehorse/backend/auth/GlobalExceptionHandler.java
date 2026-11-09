@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
     /** JSON gửi lên bị hỏng / thiếu body. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException ex) {
+        String msg = ex.getMessage() != null ? ex.getMessage() : "";
+        if (msg.contains("out of range of int") || msg.contains("plannedDistance")) {
+            return ResponseEntity.badRequest().body(ApiError.of(400,
+                    "Planned distance cannot exceed 5,000 meters",
+                    Map.of("plannedDistance", "Planned distance cannot exceed 5,000 meters")));
+        }
         return ResponseEntity.badRequest().body(ApiError.of(400, "Malformed JSON request body", Map.of()));
     }
 

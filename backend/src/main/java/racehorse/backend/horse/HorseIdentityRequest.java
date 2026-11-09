@@ -4,8 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * Club Manager sửa hai định danh do câu lạc bộ cấp: mã đăng ký và số chuồng.
- * stallNo để trống với hồ sơ PEDIGREE và ngựa đã rút.
+ * Club Manager sửa định danh do câu lạc bộ cấp: mã đăng ký, số chuồng và
+ * Head Trainer phụ trách (V37). stallNo và trainerId để trống với hồ sơ PEDIGREE
+ * và ngựa đã rút.
  */
 public record HorseIdentityRequest(
         @NotBlank(message = "Registration code is required")
@@ -13,5 +14,11 @@ public record HorseIdentityRequest(
         String registrationCode,
 
         @Size(max = 20, message = "Stall must be at most 20 characters")
-        String stallNo
-) {}
+        String stallNo,
+
+        Integer trainerId
+) {
+    public HorseIdentityRequest(String registrationCode, String stallNo) {
+        this(registrationCode, stallNo, null);
+    }
+}

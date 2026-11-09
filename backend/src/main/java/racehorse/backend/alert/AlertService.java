@@ -114,7 +114,13 @@ public class AlertService {
     }
 
     public List<AlertResponse> list(Integer afterId, boolean openOnly, int limit) {
-        return alerts.search(afterId, openOnly, Math.max(1, Math.min(limit, 200)));
+        return list(null, afterId, openOnly, limit);
+    }
+
+    /** A Head Trainer only sees alerts of horses assigned to them. */
+    public List<AlertResponse> list(AuthenticatedUser me, Integer afterId, boolean openOnly, int limit) {
+        Integer trainerId = (me != null && "HEAD_TRAINER".equals(me.role())) ? me.userId() : null;
+        return alerts.search(afterId, openOnly, Math.max(1, Math.min(limit, 200)), trainerId);
     }
 
     /** Head Trainer ghi lại đã xử lý thế nào. STOP_SESSION thì ca tập bị dừng luôn. */

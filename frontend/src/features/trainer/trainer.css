@@ -27,11 +27,15 @@
   align-self: flex-start;
   width: 265px;
   height: 100vh;
+  max-height: 100vh;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   padding: 0 12px 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   color: #fff;
   background:
     repeating-linear-gradient(
@@ -98,12 +102,30 @@
 .trainer-nav {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.trainer-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.trainer-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
 }
 
 .trainer-nav-item {
   position: relative;
-  height: 46px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -149,6 +171,8 @@
 
 .trainer-sidebar-bottom {
   margin-top: auto;
+  flex-shrink: 0;
+  padding-top: 10px;
 }
 
 .trainer-signout {
