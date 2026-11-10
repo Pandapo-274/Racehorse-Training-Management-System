@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 6, 2026` at `11:14` by `tqt195`
+### Last Commited: `Nov 10, 2026` at `08:39` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,39 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 10, 2026`
+- `[08:39]` `tusandthatsall` -
+Accounts
+- V39 (APP_USER columns, no new table): sign-in locks for 15 minutes after
+  5 wrong passwords in a row (429 with the unlock time). A correct sign-in,
+  password reset, temporary password or re-activation clears the lock.
+- V39 tokens_valid_after: "revoke all sessions" (password change or reset,
+  role change, suspension) is stored in the DB, so a backend restart no
+  longer brings old tokens back.
+- Profile: changing the email requires the current password.
+- Club Manager can correct an account's name / email / phone, set a
+  temporary password (must be changed at next sign-in, ends all sessions),
+  and create Horse Owner accounts at the desk.
+- Suspending an owner cancels their open horse registration requests and
+  tells the head trainers which plans / race entries are on hold.
+
+Horses
+- Club Manager can transfer a horse to another active owner. Refused while
+  a training plan, race entry or withdrawal request awaits the current
+  owner. Both owners are notified and the reason is audited.
+- Club Manager can re-admit a withdrawn horse: free stall, active owner and
+  the club age limit are checked.
+- Parent picker: owners can only choose a pedigree record or one of their
+  own horses as a new sire / dam. A horse's current parents always stay in
+  the list.
+- Grooms can no longer open withdrawn horses.
+- GET /api/horse-requests is limited to owners and the manager.
+- Owners can resubmit a rejected or cancelled registration with the form
+  pre-filled.
+- Owner dashboard counts only horses still at the club.
+- Horse validation messages translated to English.
+
+
 > #### `Nov 9, 2026`
 - `[22:10]` `DevilJack422` - Fix some error notifications and sign out button. Added trainer assigned colum in horse table of manager
 - `[01:23]` `DevilJack422` - Modified new training flow
