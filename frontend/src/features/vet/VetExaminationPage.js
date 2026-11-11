@@ -21,6 +21,7 @@ import {
   todayInputValue,
   examTimestamp,
   describeError,
+  createExternalReferral,
 } from "./vetApi";
 
 /* Khoảng cân nặng hợp lệ (kg), khớp MedicalExamRequest.weight ở backend. */
@@ -197,6 +198,123 @@ function Field({ label, full, children }) {
   );
 }
 
+
+function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, submitting }) {
+  const [hospitalName, setHospitalName] = useState("");
+  const [referralReason, setReferralReason] = useState(diagnosisDefault || report?.symptoms || "");
+  const [urgency, setUrgency] = useState(report?.urgency === "HIGH" ? "HIGH" : "HIGH");
+  const [expectedReturn, setExpectedReturn] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!hospitalName.trim() || !referralReason.trim()) {
+      setError("Vui lòng điền đầy đủ tên bệnh viện và lý do chuyển viện.");
+      return;
+    }
+    setError("");
+    onSubmit({
+      horseId: horse.horseId,
+      reportId: report?.reportId || null,
+      hospitalName: hospitalName.trim(),
+      referralReason: referralReason.trim(),
+      urgency,
+      expectedReturn: expectedReturn || null,
+    });
+  };
+
+  return (
+    <div className="vet-modal-backdrop" onClick={onClose}>
+      <div className="vet-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="vet-modal-header">
+          <h3>Chuyển viện ngoài (External Referral) · {horse.horseName}</h3>
+          <button type="button" className="vet-modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="vet-modal-body">
+            {error && <p className="waiting-error" style={{ margin: 0 }}>{error}</p>}
+            <div className="vx-banner vx-banner--warn" style={{ margin: 0 }}>
+              <strong>Quy trình chuyển viện khẩn cấp:</strong>
+              <span>
+                Ngựa sẽ được chuyển sang trạng thái <strong>INJURED</strong>, tự động kích hoạt <strong>FULL Training Lock</strong> (khoá toàn bộ luyện tập), và cảnh báo các cuộc đua đã đăng ký. Hệ thống sẽ gửi thông báo khẩn cấp tới Chủ ngựa và Huấn luyện viên trưởng.
+              </span>
+            </div>
+
+            <div className="vx-form-field">
+              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+                Bệnh viện tiếp nhận (Equine Hospital) <span style={{ color: "#e43e8c" }}>*</span>:
+              </label>
+              <input
+                type="text"
+                className="vx-input"
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
+                value={hospitalName}
+                onChange={(e) => setHospitalName(e.target.value)}
+                placeholder="Ví dụ: Bệnh viện Phẫu thuật Thú y Tuyến trên / Hanoi Equine Surgery Center"
+                required
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="vx-form-field">
+                <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+                  Mức độ khẩn cấp:
+                </label>
+                <select
+                  className="vx-input"
+                  style={{ width: "100%", padding: "8px 12px" }}
+                  value={urgency}
+                  onChange={(e) => setUrgency(e.target.value)}
+                >
+                  <option value="HIGH">HIGH (Cấp bách)</option>
+                  <option value="CRITICAL">CRITICAL (Cấp cứu đe doạ tính mạng)</option>
+                </select>
+              </div>
+
+              <div className="vx-form-field">
+                <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+                  Ngày dự kiến về CLB:
+                </label>
+                <input
+                  type="date"
+                  className="vx-input"
+                  style={{ width: "100%", padding: "8px 12px" }}
+                  value={expectedReturn}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setExpectedReturn(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="vx-form-field">
+              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+                Lý do chuyển viện & Chẩn đoán sơ bộ <span style={{ color: "#e43e8c" }}>*</span>:
+              </label>
+              <textarea
+                className="vx-input vx-textarea"
+                rows={4}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
+                value={referralReason}
+                onChange={(e) => setReferralReason(e.target.value)}
+                placeholder="Gãy xương hốc chậu phức tạp, xoắn ruột / colic cấp cần phẫu thuật ngoại khoa, chấn thương mắt nặng..."
+                required
+              />
+            </div>
+          </div>
+          <div className="vet-modal-footer">
+            <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose} disabled={submitting}>
+              Huỷ
+            </button>
+            <button type="submit" className="vx-btn vx-btn--danger" disabled={submitting}>
+              {submitting ? "Đang xử lý..." : "Xác nhận chuyển viện ngoài"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ExaminationForm({ horseId, reportId }) {
   const navigate = useNavigate();
   const user = getUser();
@@ -237,6 +355,8 @@ function ExaminationForm({ horseId, reportId }) {
   const [submitting, setSubmitting] = useState(null);
   const [error, setError] = useState(null);
   const [releasing, setReleasing] = useState(false);
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [referralSubmitting, setReferralSubmitting] = useState(false);
 
   const saved = useRef({ record: null, injury: null });
 
@@ -441,6 +561,25 @@ function ExaminationForm({ horseId, reportId }) {
       setError(info);
     } finally {
       setSubmitting(null);
+    }
+  };
+
+
+  const handleReferralSubmit = async (data) => {
+    setReferralSubmitting(true);
+    try {
+      await createExternalReferral(data);
+      setShowReferralModal(false);
+      navigate("/veterinarian", {
+        state: {
+          notice: `Đã hoàn tất thủ tục chuyển viện ngoài cho ${horse.horseName}. Lịch tập đã được khoá hoàn toàn.`,
+        },
+      });
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      alert(err.message || "Failed to submit external referral");
+    } finally {
+      setReferralSubmitting(false);
     }
   };
 
@@ -759,6 +898,16 @@ function ExaminationForm({ horseId, reportId }) {
 
               <button
                 type="button"
+                className="vx-btn"
+                style={{ background: "#c9317a", color: "#fff", borderColor: "#c9317a" }}
+                disabled={busy}
+                onClick={() => setShowReferralModal(true)}
+              >
+                Chuyển viện ngoài (External Referral)
+              </button>
+
+              <button
+                type="button"
                 className="vx-btn vx-btn--ghost"
                 disabled={busy}
                 onClick={() => submit(false)}
@@ -771,6 +920,16 @@ function ExaminationForm({ horseId, reportId }) {
           </VetCard>
         </div>
       </div>
+      {showReferralModal && (
+        <ReferralModal
+          horse={horse}
+          report={report}
+          diagnosisDefault={diagnosis}
+          onClose={() => setShowReferralModal(false)}
+          onSubmit={handleReferralSubmit}
+          submitting={referralSubmitting}
+        />
+      )}
     </VetShell>
   );
 }

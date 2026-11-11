@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 10, 2026` at `08:39` by `tusandthatsall`
+### Last Commited: `Nov 11, 2026` at `17:10` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,21 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 11, 2026`
+- `[17:10]` `Pandapo274` -
+Veterinary Flow Enhancements (Shift Handover & External Referral):
+- V40 Flyway migration: Add handover fields (handover_by, handover_at, handover_notes) to INCIDENT_REPORT; add EXTERNAL_REFERRAL table; update NOTIFICATION target constraints.
+- Phần 2: Cơ chế bàn giao ca trực y tế (Vet Shift Handover & Case Reassignment) khi bác sĩ vắng mặt/nghỉ phép:
+  - Cho phép bàn giao ca hoặc tiếp quản ca trực (hoặc chuyển về hàng đợi chung PENDING) kèm ghi chú bắt buộc (handover notes).
+  - Tự động thông báo cho bác sĩ tiếp nhận, Head Trainer và Groom.
+  - UI tại Vet Dashboard hỗ trợ nút Handover / Take over và modal bàn giao chi tiết.
+- Phần 3 Mục 4: Quy trình chuyển viện ngoài (External Hospital Referral) khi ca bệnh vượt quá khả năng CLB:
+  - Bác sĩ phát lệnh chuyển viện ngoài tới bệnh viện thú y tuyến trên kèm lý do, mức độ khẩn cấp, ngày dự kiến về.
+  - Tự động chuyển trạng thái ngựa sang INJURED, kích hoạt FULL Training Lock, cảnh báo các cuộc đua đã đăng ký.
+  - Bắn thông báo khẩn cấp tới Chủ ngựa và Huấn luyện viên trưởng.
+  - Hỗ trợ quy trình tiếp nhận xuất viện (Discharge/Return) kèm đánh giá sau điều trị để chuyển sang giai đoạn phục hồi tại CLB.
+  - UI modal chuyển viện tại Vet Examination và bảng theo dõi ngựa tại viện ngoài trên Vet Dashboard.
+
 > #### `Nov 10, 2026`
 - `[08:39]` `tusandthatsall` -
 Accounts

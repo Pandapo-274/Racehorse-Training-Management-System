@@ -45,6 +45,13 @@ public class IncidentController {
         return service.list(status, horseId, limit, user);
     }
 
+    /** Danh sách bác sĩ thú y đang hoạt động để chọn người bàn giao ca (V40). */
+    @GetMapping("/incident-reports/veterinarians")
+    @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "CLUB_MANAGER"})
+    public List<IncidentRepository.VetOption> listVeterinarians() {
+        return service.listVeterinarians();
+    }
+
     @GetMapping("/incident-reports/{id}")
     @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "CLUB_MANAGER", "GROOM", "HORSE_OWNER"})
     public IncidentReportResponse get(@PathVariable("id") int id,
@@ -68,5 +75,15 @@ public class IncidentController {
                                           @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser vet,
                                           HttpServletRequest http) {
         return service.receive(vet, id, http.getRemoteAddr());
+    }
+
+    /** Bàn giao hoặc tiếp quản ca trực y tế (V40). */
+    @PutMapping("/incident-reports/{id}/handover")
+    @RequireRole({"VETERINARIAN", "CLUB_MANAGER"})
+    public IncidentReportResponse handover(@PathVariable("id") int id,
+                                           @Valid @RequestBody HandoverIncidentRequest request,
+                                           @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                           HttpServletRequest http) {
+        return service.handover(user, id, request, http.getRemoteAddr());
     }
 }

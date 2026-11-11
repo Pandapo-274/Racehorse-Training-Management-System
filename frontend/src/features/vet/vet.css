@@ -1626,3 +1626,15 @@ button.stable-box:focus-visible {
   color: #2e7d32;
   font-weight: 600;
 }
+
+/* Modal overlay & dialog for Vet handover & external referral */
+.vet-modal-backdrop { position: fixed; inset: 0; background: rgba(11, 18, 41, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.vet-modal-card { background: #ffffff; border-radius: 18px; box-shadow: 0 20px 40px rgba(11, 18, 41, 0.25); width: 100%; max-width: 540px; overflow: hidden; display: flex; flex-direction: column; animation: vetModalFadeIn 0.2s ease-out; }
+@keyframes vetModalFadeIn { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.vet-modal-header { padding: 20px 24px; background: linear-gradient(135deg, #fff5f9, #ffffff); border-bottom: 1px solid #f3e2eb; display: flex; align-items: center; justify-content: space-between; }
+.vet-modal-header h3 { margin: 0; font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: #131c3b; }
+.vet-modal-close { background: none; border: none; font-size: 22px; color: #9aa1bc; cursor: pointer; padding: 4px; line-height: 1; }
+.vet-modal-close:hover { color: #f55fa9; }
+.vet-modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.vet-modal-footer { padding: 16px 24px; background: #faf6f8; border-top: 1px solid #f3e2eb; display: flex; justify-content: flex-end; gap: 12px; }
+.waiting-handover-tag { display: inline-block; margin-top: 4px; padding: 3px 8px; background: #fdf2f7; border: 1px solid #f8cce1; border-radius: 6px; color: #b32569; font-size: 11.5px; line-height: 1.3; }

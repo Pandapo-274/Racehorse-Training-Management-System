@@ -49,6 +49,44 @@ export function receiveIncidentReport(reportId) {
   return authFetch(`/api/incident-reports/${reportId}/receive`, { method: "PUT" });
 }
 
+/** GET /api/incident-reports/veterinarians: danh sách bác sĩ thú y để chọn bàn giao ca. */
+export function listVeterinarians(signal) {
+  return authFetch("/api/incident-reports/veterinarians", { signal });
+}
+
+/** PUT /api/incident-reports/{id}/handover: bàn giao ca cho bác sĩ khác hoặc trả về queue. */
+export function handoverIncidentReport(reportId, body) {
+  return authFetch(`/api/incident-reports/${reportId}/handover`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+/* ---------- V40: Ca chuyển viện ngoài (External Hospital Referral) ---------- */
+
+/** GET /api/external-referrals?status=&horseId= */
+export function listExternalReferrals(params = {}, signal) {
+  const q = new URLSearchParams();
+  if (params.horseId) q.set("horseId", params.horseId);
+  if (params.status) q.set("status", params.status);
+  if (params.limit) q.set("limit", params.limit);
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  return authFetch(`/api/external-referrals${qs}`, { signal });
+}
+
+/** POST /api/external-referrals */
+export function createExternalReferral(body) {
+  return post("/api/external-referrals", body);
+}
+
+/** PUT /api/external-referrals/{id}/discharge */
+export function dischargeExternalReferral(referralId, body) {
+  return authFetch(`/api/external-referrals/${referralId}/discharge`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 /** Mức khẩn cấp của báo cáo. cls là lớp CSS của chip trong vet.css. */
 const URGENCY = {
   HIGH: { label: "Urgent", cls: "urgent" },
@@ -347,3 +385,4 @@ export function updateInjuryStatus(injuryId, status) {
     body: JSON.stringify({ status }),
   });
 }
+
