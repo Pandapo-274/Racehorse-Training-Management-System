@@ -19,7 +19,7 @@ import "./horse-health.css";
 const SEVERITY = { GRADE_1: "Grade 1", GRADE_2: "Grade 2", GRADE_3: "Grade 3" };
 const INJURY_STATUS = { TREATING: "Under treatment", PARTIAL: "Partly recovered", RECOVERED: "Recovered" };
 
-export default function HorseHealthPanel({ horse, user }) {
+export default function HorseHealthPanel({ horse, user, onViewHistory }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -39,8 +39,6 @@ export default function HorseHealthPanel({ horse, user }) {
       .then(([injuries, records, locks]) => setData({ injuries, records, locks }))
       .catch((err) => {
         if (err.name === "AbortError") return;
-        // Hết phiên thì về /login; còn 403 chỉ báo trong panel, không đá cả
-        // trang hồ sơ sang access-denied vì đây là phần phụ.
         if (err instanceof ApiError && err.status === 401 && handleAuthError(err, navigate)) return;
         setError(err.message);
       });
@@ -116,6 +114,19 @@ export default function HorseHealthPanel({ horse, user }) {
 
         {open.length === 0 && !latest && !lock && (
           <p className="hh-muted">No medical details have been recorded yet.</p>
+        )}
+
+        {onViewHistory && (
+          <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f8e8f0" }}>
+            <button
+              type="button"
+              className="hz-btn hz-btn--ghost"
+              style={{ fontSize: "12.5px", padding: "6px 14px", color: "#b32569" }}
+              onClick={onViewHistory}
+            >
+              📋 Xem toàn bộ lịch sử bệnh án & điều trị (Medical History) →
+            </button>
+          </div>
         )}
       </>
     );

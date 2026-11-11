@@ -648,6 +648,16 @@ function ExaminationForm({ horseId, reportId }) {
         .filter(Boolean)
         .join(" · ")}
     >
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+        <button
+          type="button"
+          className="vx-btn vx-btn--ghost"
+          style={{ fontSize: "13px", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px", color: "#b32569", borderColor: "#f3c2db" }}
+          onClick={() => window.open(`/horses/${horseId}?tab=medical-history`, "_blank")}
+        >
+          📋 Tra cứu lịch sử bệnh án & điều trị (Medical History) ↗
+        </button>
+      </div>
       <VetError error={error} />
 
       {report && (

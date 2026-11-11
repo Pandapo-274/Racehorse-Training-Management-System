@@ -1,6 +1,7 @@
 // src/features/horse/HorseDetailPage.js
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
+import HorseMedicalHistoryTab from "./HorseMedicalHistoryTab";
 
 import { getUser, handleAuthError } from "../auth/authService";
 
@@ -21,6 +22,7 @@ import { listStaff } from "../manager/staffApi";
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "medical-history", label: "Medical History" },
   { id: "pedigree", label: "Pedigree" },
   { id: "vitals", label: "Vitals" },
 ];
@@ -248,7 +250,9 @@ export default function HorseDetailPage() {
   const mayViewVitals = canViewVitals(user);
   const horseBase = getHorseBasePath(user);
 
-  const [tab, setTab] = useState("overview");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "overview";
+  const [tab, setTab] = useState(initialTab);
   const [horse, setHorse] = useState(null);
   const [error, setError] = useState("");
 
@@ -380,7 +384,8 @@ export default function HorseDetailPage() {
       <div className="hz-tabs" role="tablist">
         {TABS.filter((t) =>
           (t.id !== "pedigree" || mayViewPedigree) &&
-          (t.id !== "vitals" || (mayViewVitals && !pedigreeOnly))
+          (t.id !== "vitals" || (mayViewVitals && !pedigreeOnly)) &&
+          (t.id !== "medical-history" || !pedigreeOnly)
         ).map((t) => (
           <button
             key={t.id}
@@ -452,10 +457,14 @@ export default function HorseDetailPage() {
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
           {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
 
-          {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
+          {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} onViewHistory={() => setTab("medical-history")} />}
 
           <HorseWithdrawalPanel horse={horse} user={user} />
         </div>
+      )}
+
+      {tab === "medical-history" && !pedigreeOnly && (
+        <HorseMedicalHistoryTab horse={horse} user={user} />
       )}
 
       {tab === "pedigree" && (

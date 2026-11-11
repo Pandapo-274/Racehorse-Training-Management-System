@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 11, 2026` at `17:10` by `Pandapo274`
+### Last Commited: `Nov 11, 2026` at `21:25` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,15 @@ npm start
 
 ## Changelogs
 > #### `Nov 11, 2026`
+- `[21:25]` `Pandapo274` -
+Horse Medical History Timeline & Treatment Records:
+- Thêm Tab "Medical History (Bệnh sử & Lịch sử Điều trị)" toàn diện trên trang chi tiết ngựa (HorseDetailPage).
+- Tích hợp thanh bộ lọc thời gian đa năng: Toàn bộ (All Time), 30 ngày gần đây, 3 tháng qua, 6 tháng qua, 1 năm qua hoặc Tùy chọn khoảng ngày (Custom Date Range: Từ ngày - Đến ngày).
+- Tích hợp bộ lọc theo phân loại sự kiện (Khám bệnh, Chấn thương, Đơn thuốc, Khóa tập, Chuyển viện ngoài, Sự cố tập luyện) và ô tìm kiếm từ khóa.
+- Thẻ thống kê KPI tổng quan số lượng các ca khám, chấn thương, đơn thuốc, chuyển viện trong khoảng thời gian đã chọn.
+- Dòng thời gian Timeline trực quan hiển thị đầy đủ chi tiết chẩn đoán, vết thương, toa thuốc điều trị, lệnh khoá và biên bản đón ngựa từ viện ngoài.
+- Nút liên kết tra cứu lịch sử bệnh án nhanh từ trang khám của Bác sĩ (VetExaminationPage) và từ khối sức khỏe hiện tại (HorseHealthPanel).
+
 - `[17:10]` `Pandapo274` -
 Veterinary Flow Enhancements (Shift Handover & External Referral):
 - V40 Flyway migration: Add handover fields (handover_by, handover_at, handover_notes) to INCIDENT_REPORT; add EXTERNAL_REFERRAL table; update NOTIFICATION target constraints.
@@ -58,7 +67,7 @@ Veterinary Flow Enhancements (Shift Handover & External Referral):
   - Tự động chuyển trạng thái ngựa sang INJURED, kích hoạt FULL Training Lock, cảnh báo các cuộc đua đã đăng ký.
   - Bắn thông báo khẩn cấp tới Chủ ngựa và Huấn luyện viên trưởng.
   - Hỗ trợ quy trình tiếp nhận xuất viện (Discharge/Return) kèm đánh giá sau điều trị để chuyển sang giai đoạn phục hồi tại CLB.
-  - UI modal chuyển viện tại Vet Examination và bảng theo dõi ngựa tại viện ngoài trên Vet Dashboard.
+a  - UI modal chuyển viện tại Vet Examination và bảng theo dõi ngựa tại viện ngoài trên Vet Dashboard.
 
 > #### `Nov 10, 2026`
 - `[08:39]` `tusandthatsall` -

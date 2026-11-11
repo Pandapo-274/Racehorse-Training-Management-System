@@ -36,6 +36,11 @@ export function listIncidentReports(signal, status = "OPEN") {
  * danh sách: còn sót báo cáo nào thì backend từ chối clear, vì ngựa đó vẫn bị
  * chặn tập dù đã hết chấn thương.
  */
+/** Toàn bộ báo cáo sự cố trong lịch sử của con ngựa. */
+export function listAllIncidentReportsForHorse(horseId, signal) {
+  return authFetch(`/api/incident-reports?status=ALL&horseId=${horseId}&limit=200`, { signal });
+}
+
 export function listOpenReportsForHorse(horseId, signal) {
   return authFetch(`/api/incident-reports?status=OPEN&horseId=${horseId}`, { signal });
 }
