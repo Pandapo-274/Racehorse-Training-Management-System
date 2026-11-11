@@ -145,14 +145,19 @@ function IdentityForm({ horse, onSaved }) {
  * chặn chuyển chủ khi chủ hiện tại còn việc phải duyệt (giáo án, đăng ký giải,
  * yêu cầu rút) - lỗi đó hiện nguyên văn ở đây.
  */
-function OwnershipForm({ horse, onSaved }) {
+/*
+ * result / setResult live in the page, not here: a successful transfer changes
+ * the owner and a re-admit changes the activity, and both remount this card
+ * (its key), which used to wipe the "Transferred ... to ..." line the moment it
+ * appeared.
+ */
+function OwnershipForm({ horse, onSaved, result, setResult }) {
   const navigate = useNavigate();
   const dialog = useAppDialog();
   const [owners, setOwners] = useState([]);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
   const [stall, setStall] = useState("");
-  const [result, setResult] = useState(null); // shown right under the button
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const withdrawn = isWithdrawn(horse);
@@ -207,7 +212,7 @@ function OwnershipForm({ horse, onSaved }) {
       <Card title="Re-admit to the club" hint="The horse comes back with a new stall. Its health status stays as the vet left it.">
         {dialog.element}
         <form onSubmit={readmit} noValidate>
-          <div className="hz-form-grid">
+          <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
             <div className="hz-field">
               <label htmlFor="readmit-stall">Stall</label>
               <input id="readmit-stall" className="hz-mono" maxLength={20} value={stall}
@@ -246,7 +251,7 @@ function OwnershipForm({ horse, onSaved }) {
     <Card title="Transfer to another owner" hint="For a sale or a gift. The current and the new owner are both told.">
       {dialog.element}
       <form onSubmit={transfer} noValidate>
-        <div className="hz-form-grid">
+        <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <div className="hz-field">
             <label htmlFor="transfer-owner">New owner</label>
             <select id="transfer-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
@@ -284,6 +289,8 @@ export default function HorseDetailPage() {
 
   const [tab, setTab] = useState("overview");
   const [horse, setHorse] = useState(null);
+  const [ownershipResult, setOwnershipResult] = useState(null); // survives the card's remount
+  useEffect(() => { setOwnershipResult(null); }, [id]); // another horse: start clean
   const [error, setError] = useState("");
 
   const [generations, setGenerations] = useState(3);
@@ -484,7 +491,8 @@ export default function HorseDetailPage() {
           </Card>
 
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
-          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
+          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse}
+                                                                  result={ownershipResult} setResult={setOwnershipResult} />}
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
 
