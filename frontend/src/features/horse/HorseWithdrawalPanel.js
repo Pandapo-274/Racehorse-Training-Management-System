@@ -18,6 +18,8 @@ import { canRequestWithdrawal, formatDateTime, isPedigreeOnly, isWithdrawn, toAc
 import {
   listWithdrawals, submitWithdrawal, cancelWithdrawal, toWithdrawalStatus, plural,
 } from "./withdrawalApi";
+import { useAppDialog } from "../common/AppDialog";
+import ResultLine, { ok, fail } from "../common/ResultLine";
 
 const REASON_MAX = 500;
 
@@ -45,6 +47,8 @@ export default function HorseWithdrawalPanel({ horse, user }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [result, setResult] = useState(null);
+  const dialog = useAppDialog();
 
   const load = useCallback(
     (signal) => {
@@ -77,18 +81,20 @@ export default function HorseWithdrawalPanel({ horse, user }) {
   const lastClosed = (rows || []).find((r) => r.status === "REJECTED");
   const activity = toActivity(horse.activityStatus);
 
-  const run = async (fn, okMessage) => {
+  /* The outcome is shown right under the button (ResultLine), with the horse's name. */
+  const run = async (fn, okMessage, failText) => {
     setBusy(true);
     setError("");
     setNotice("");
+    setResult(null);
     try {
       await fn();
-      setNotice(okMessage);
+      setResult(ok(okMessage));
       load();
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       if (err.fieldErrors?.reason) setFieldError(err.fieldErrors.reason);
-      else setError(err.message);
+      setResult(fail(`${failText}: ${err.message}`));
     } finally {
       setBusy(false);
     }
@@ -109,12 +115,23 @@ export default function HorseWithdrawalPanel({ horse, user }) {
     run(async () => {
       await submitWithdrawal(horse.horseId, text);
       setReason("");
-    }, "Request sent. The club manager will review it.");
+    }, `Withdrawal request for ${horse.horseName} sent. The club manager will review it.`,
+       `Could not send the withdrawal request for ${horse.horseName}`);
   };
 
-  const cancel = () => {
+  const cancel = async () => {
     if (!pending) return;
-    run(() => cancelWithdrawal(pending.withdrawalId), "Request cancelled.");
+    const confirmed = await dialog.confirm({
+      title: `Cancel the withdrawal of ${horse.horseName}?`,
+      message: "The request is taken back. The horse stays at the club and you can ask again later.",
+      confirmLabel: "Cancel request",
+      cancelLabel: "Keep it",
+      danger: true,
+    });
+    if (!confirmed) return;
+    run(() => cancelWithdrawal(pending.withdrawalId),
+        `Withdrawal request for ${horse.horseName} cancelled. The horse stays at the club.`,
+        `Could not cancel the withdrawal request for ${horse.horseName}`);
   };
 
   let body;
@@ -227,9 +244,11 @@ export default function HorseWithdrawalPanel({ horse, user }) {
 
   return (
     <Card title={withdrawn ? "Left the club" : "Leave the club"}>
+      {dialog.element}
       {body}
       {error && <p className="hz-form-error" role="alert">{error}</p>}
       {notice && !error && <p className="hz-muted hz-note" role="status">{notice}</p>}
+      <ResultLine result={result} />
     </Card>
   );
 }

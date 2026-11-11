@@ -171,6 +171,30 @@ class Flow1RulesTest {
         verify(blacklist).revokeAllSessions(5);
     }
 
+    // ------------------------------------------------------------ desk accounts
+
+    @Test
+    void managerCanCreateAHorseOwnerAtTheDesk() {
+        UserRepository users = mock(UserRepository.class);
+        StaffRepository staff = mock(StaffRepository.class);
+        when(users.findRoleId("HORSE_OWNER")).thenReturn(Optional.of(5));
+        when(users.insert(anyInt(), anyString(), any(), anyString(), anyString(), any())).thenReturn(40);
+        when(staff.findRow(40)).thenReturn(Optional.of(staffRow(40, "HORSE_OWNER")));
+        StaffService service = new StaffService(users, staff, mock(PasswordEncoder.class), mock(TokenBlacklist.class),
+                mock(NotificationService.class));
+
+        service.create(new racehorse.backend.staff.StaffController.CreateRequest(
+                "desk.owner", "Temp1234", "Desk Owner", "desk.owner@club.test", null, "HORSE_OWNER"), MANAGER, "ip");
+        verify(users).setMustChangePassword(40, true);
+    }
+
+    @Test
+    void managerCannotCreateAnotherClubManager() {
+        StaffService service = staffService(mock(StaffRepository.class), mock(TokenBlacklist.class));
+        expect(400, () -> service.create(new racehorse.backend.staff.StaffController.CreateRequest(
+                "boss2", "Temp1234", "Second Boss", "boss2@club.test", null, "CLUB_MANAGER"), MANAGER, "ip"));
+    }
+
     // ------------------------------------------------------------ transfer / readmit
 
     @Test

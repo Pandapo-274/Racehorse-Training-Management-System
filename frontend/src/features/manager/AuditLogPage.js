@@ -11,7 +11,7 @@ import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import {
   ACTION_GROUPS, PERIODS, formatAgo, formatFullTime, getAuditLogs, periodStart,
-  toActionText, toRoleText, toTargetText,
+  describeLog, toActionText, toRoleText,
 } from "./auditLogApi";
 import "./audit-log.css";
 
@@ -52,13 +52,14 @@ function LogTable({ items }) {
             <th scope="col">Time</th>
             <th scope="col">Who</th>
             <th scope="col">Action</th>
-            <th scope="col">On</th>
+            <th scope="col">Description</th>
             <th scope="col">Result</th>
-            <th scope="col">IP</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((r) => (
+          {items.map((r) => {
+            const d = describeLog(r);
+            return (
             <tr key={r.logId} className={r.result === "DENIED" ? "is-denied" : ""}>
               <td className="al-time">
                 {formatFullTime(r.createdAt)}
@@ -74,13 +75,10 @@ function LogTable({ items }) {
                   </>
                 )}
               </td>
-              <td>
-                {toActionText(r.action)}
-                <code className="al-code">{r.action}</code>
-              </td>
-              <td>
-                {toTargetText(r.targetEntity, r.targetId)}
-                {r.detail && <small className="al-detail">{r.detail}</small>}
+              <td title={r.action}>{toActionText(r.action, r.result)}</td>
+              <td className="al-desc">
+                {d.main}
+                {d.extra && <small className="al-detail">{d.extra}</small>}
               </td>
               <td>
                 <StatusChip
@@ -88,9 +86,9 @@ function LogTable({ items }) {
                   label={r.result === "DENIED" ? "Denied" : "Success"}
                 />
               </td>
-              <td><code className="al-ip">{r.ipAddress || "—"}</code></td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

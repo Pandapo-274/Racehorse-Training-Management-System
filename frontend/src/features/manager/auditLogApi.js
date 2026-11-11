@@ -79,17 +79,17 @@ const ACTION_TEXT = {
   LINK_GOOGLE: "Linked a Google account",
   CHANGE_PASSWORD: "Changed password",
   FORGOT_PASSWORD: "Requested a password reset",
-  RESET_PASSWORD: "Reset password by email",
+  RESET_PASSWORD: "Reset password with an email link",
   UPDATE_PROFILE: "Updated profile",
   UPLOAD_AVATAR: "Uploaded a profile photo",
   STAFF_CREATE: "Created an account",
-  STAFF_UPDATE: "Corrected account details",
+  STAFF_UPDATE: "Edited an account's contact details",
   STAFF_TEMP_PASSWORD: "Set a temporary password",
   STAFF_SUSPEND: "Suspended an account",
   STAFF_ACTIVATE: "Activated an account",
   HORSE_CREATE: "Created a horse record",
   HORSE_UPDATE: "Edited horse details",
-  HORSE_IDENTITY_UPDATE: "Corrected a horse's identity",
+  HORSE_IDENTITY_UPDATE: "Edited a horse's club records",
   HORSE_OWNER_TRANSFER: "Transferred a horse to another owner",
   HORSE_READMIT: "Re-admitted a withdrawn horse",
   HORSE_PHOTO_UPLOAD: "Uploaded a horse photo",
@@ -102,7 +102,9 @@ const ACTION_TEXT = {
   HORSE_WITHDRAWAL_APPROVE: "Approved a horse withdrawal",
   HORSE_WITHDRAWAL_REJECT: "Rejected a horse withdrawal",
   HORSE_WITHDRAWAL_CANCEL: "Cancelled a withdrawal request",
-  HORSE_WITHDRAW: "Withdrew a horse from training",
+  HORSE_WITHDRAW: "Horse left the club",
+  DAILY_TASK_REMOVE_BULK: "Removed the horse's open care tasks",
+  RACE_SCRATCH_BULK: "Scratched the horse's upcoming races",
   TRAINING_PLAN_CREATE: "Created a training plan",
   TRAINING_PLAN_ACTIVE: "Activated a training plan",
   TRAINING_PLAN_PAUSED: "Paused a training plan",
@@ -162,11 +164,35 @@ const VET_DECISION_TEXT = {
   EMERGENCY_STOP: "emergency stop",
 };
 
-/** Codes with a variable part: "ACCESS GET /api/x", "STAFF_ROLE_CHANGE:A->B", "RESOLVE_ALERT:STOP_SESSION". */
-export function toActionText(code) {
+/** The same action read differently when it was refused (result DENIED). */
+const DENIED_TEXT = {
+  LOGIN: "Failed sign-in",
+  LOGIN_GOOGLE: "Google sign-in refused",
+  CHANGE_PASSWORD: "Failed password change",
+};
+
+/**
+ * Codes with a variable part: "ACCESS GET /api/x", "STAFF_ROLE_CHANGE:A->B",
+ * "STAFF_ASSIGN_TRAINER:12", "STAFF_MAX_HORSES:15", "HORSE_ASSIGN_TRAINER:NONE",
+ * "RESOLVE_ALERT:STOP_SESSION". Pass the row's result so a refused action does
+ * not read as if it had happened ("Signed in" + Denied).
+ */
+export function toActionText(code, result) {
   if (!code) return "—";
+  if (code.startsWith("ACCESS ")) return "Blocked: no permission";
+  if (result === "DENIED") {
+    if (DENIED_TEXT[code]) return DENIED_TEXT[code];
+    const text = toActionText(code);
+    return `Blocked: ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+  }
   if (ACTION_TEXT[code]) return ACTION_TEXT[code];
-  if (code.startsWith("ACCESS ")) return `Tried to use ${code.slice(7)}`;
+  if (code.startsWith("STAFF_ASSIGN_TRAINER:")) {
+    return code.endsWith(":NONE") ? "Removed a groom from their Head Trainer" : "Assigned a groom to a Head Trainer";
+  }
+  if (code.startsWith("STAFF_MAX_HORSES:")) return "Changed a Head Trainer's horse limit";
+  if (code.startsWith("HORSE_ASSIGN_TRAINER:")) {
+    return code.endsWith(":NONE") ? "Removed a horse's Head Trainer" : "Assigned a Head Trainer to a horse";
+  }
   if (code.startsWith("STAFF_ROLE_CHANGE:")) {
     const [from, to] = code.slice("STAFF_ROLE_CHANGE:".length).split("->");
     return `Changed role: ${ROLE_TEXT[from] || from} → ${ROLE_TEXT[to] || to}`;
@@ -204,6 +230,56 @@ const TARGET_TEXT = {
   SUPPLY_STOCK: "Supply item",
   RACE_REGISTRATION: "Race entry",
 };
+
+/** Screens behind each API path, for "Blocked: no permission" rows. */
+const API_AREAS = [
+  ["/api/staff", "staff accounts"],
+  ["/api/audit-logs", "the audit log"],
+  ["/api/permissions", "permissions"],
+  ["/api/horse-requests", "horse registrations"],
+  ["/api/horse-withdrawals", "horse withdrawals"],
+  ["/api/horses", "horse records"],
+  ["/api/expenses", "costs"],
+  ["/api/training-plans", "training plans"],
+  ["/api/training-sessions", "training sessions"],
+  ["/api/races", "races"],
+  ["/api/sessions", "training sessions"],
+  ["/api/training-locks", "training locks"],
+  ["/api/medical-records", "medical records"],
+  ["/api/injuries", "injuries"],
+  ["/api/treatments", "treatments"],
+  ["/api/preventive-care", "preventive care"],
+  ["/api/supplies", "supplies"],
+  ["/api/manager/dashboard", "the manager dashboard"],
+  ["/api/trainer/dashboard", "the trainer dashboard"],
+  ["/api/owner", "the owner dashboard"],
+];
+const METHOD_VERB = { GET: "open", POST: "create in", PUT: "change", PATCH: "change", DELETE: "delete in" };
+
+/**
+ * One readable sentence for the Description column: what the action was on
+ * (by name, not only by id), then the backend's detail (what changed, why).
+ * Returns { main, extra } - extra is shown smaller under main.
+ */
+export function describeLog(r) {
+  if (r.action && r.action.startsWith("ACCESS ")) {
+    const [method, path = ""] = r.action.slice(7).split(" ");
+    const area = API_AREAS.find(([prefix]) => path.startsWith(prefix));
+    const verb = METHOD_VERB[method] || "use";
+    return {
+      main: `Tried to ${verb} ${area ? area[1] : "a function"} without permission`,
+      extra: `${method} ${path}`,
+    };
+  }
+  const kind = TARGET_TEXT[r.targetEntity] || r.targetEntity;
+  let main;
+  if (!r.targetEntity) main = "";
+  else if (r.targetName) main = `${kind}: ${r.targetName}`;
+  else main = toTargetText(r.targetEntity, r.targetId);
+  if (!main && !r.detail) return { main: "—", extra: "" };
+  if (!main) return { main: r.detail, extra: "" };
+  return { main, extra: r.detail || "" };
+}
 
 export function toTargetText(entity, id) {
   if (!entity) return "—";

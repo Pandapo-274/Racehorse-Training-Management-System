@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
+import { useAppDialog } from "../common/AppDialog";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
@@ -61,6 +62,7 @@ function Field({ id, label, error, hint, children }) {
 
 export default function HorseRequestPage() {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
@@ -124,7 +126,14 @@ export default function HorseRequestPage() {
   /* Huỷ yêu cầu còn chờ. Hỏi lại một lần trước khi gửi: huỷ xong không mở
      lại được, chỉ gửi yêu cầu mới. */
   const cancel = async (r) => {
-    if (!window.confirm(`Cancel the registration request for ${r.horseName}?`)) return;
+    const ok = await dialog.confirm({
+      title: `Cancel ${r.horseName}?`,
+      message: "The request is withdrawn from the club's queue. You can send it again later from this page.",
+      confirmLabel: "Cancel request",
+      cancelLabel: "Keep it",
+      danger: true,
+    });
+    if (!ok) return;
     setCancellingId(r.requestId);
     setListError("");
     try {
@@ -327,6 +336,7 @@ export default function HorseRequestPage() {
           </>
         )}
       </Card>
+    {dialog.element}
     </HorseShell>
   );
 }

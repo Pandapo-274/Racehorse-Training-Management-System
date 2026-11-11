@@ -76,7 +76,7 @@ public class HorseAdminService {
         horses.updateOwner(horseId, newOwnerId);
         HorseResponse after = get(horseId);
         users.writeAudit(actor.userId(), "HORSE_OWNER_TRANSFER", "HORSE", horseId, "SUCCESS", ip,
-                "owner: " + horse.ownerName() + " -> " + after.ownerName() + ". Reason: " + why);
+                "Owner: " + horse.ownerName() + " → " + after.ownerName() + ". Reason: " + why);
         notifications.notifyUser(horse.ownerId(), new Notice("HORSE_TRANSFERRED", "Horse transferred",
                 horse.horseName() + " now belongs to " + after.ownerName() + ". Reason: " + why,
                 null, null));
@@ -123,7 +123,7 @@ public class HorseAdminService {
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT, "The stall has just been taken by someone else");
         }
-        users.writeAudit(actor.userId(), "HORSE_READMIT", "HORSE", horseId, "SUCCESS", ip, "stall " + stall);
+        users.writeAudit(actor.userId(), "HORSE_READMIT", "HORSE", horseId, "SUCCESS", ip, "Back at the club in stall " + stall);
         notifications.notifyUser(horse.ownerId(), new Notice("HORSE_READMITTED", "Horse back at the club",
                 horse.horseName() + " is back at the club, stall " + stall + ".", Notice.HORSE, horseId));
         return get(horseId);

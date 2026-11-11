@@ -89,9 +89,10 @@ public class StaffService {
         String phone = (req.phone() == null || req.phone().isBlank()) ? null : req.phone().trim();
         String roleName = req.roleName().trim().toUpperCase(Locale.ROOT);
 
-        if (!STAFF_ROLES.contains(roleName)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Role must be Head Trainer, Veterinarian or Groom",
-                    Map.of("roleName", "Choose Head Trainer, Veterinarian or Groom"));
+        // CREATE_ROLES = the staff roles + HORSE_OWNER (an owner registered at the club desk).
+        if (!CREATE_ROLES.contains(roleName)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Role must be Head Trainer, Veterinarian, Groom or Horse Owner",
+                    Map.of("roleName", "Choose Head Trainer, Veterinarian, Groom or Horse Owner"));
         }
         int roleId = users.findRoleId(roleName)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Role does not exist"));
@@ -194,7 +195,7 @@ public class StaffService {
         }
         users.writeAudit(actor == null ? null : actor.userId(),
                 "SUSPENDED".equals(status) ? "STAFF_SUSPEND" : "STAFF_ACTIVATE",
-                "APP_USER", userId, "SUCCESS", ip);
+                "APP_USER", userId, "SUCCESS", ip, notice);
         return new StaffUpdate(staff.findRow(userId).orElse(target), toReassign, notice);
     }
 
@@ -223,12 +224,12 @@ public class StaffService {
             throw conflict(Map.of("email", "Email is already registered"));
         }
         StringBuilder detail = new StringBuilder();
-        if (!target.fullName().equals(fullName)) detail.append("name: ").append(target.fullName()).append(" -> ").append(fullName);
+        if (!target.fullName().equals(fullName)) detail.append("Name: ").append(target.fullName()).append(" → ").append(fullName);
         if (!target.email().equalsIgnoreCase(email)) {
-            detail.append(detail.length() > 0 ? "; " : "").append("email: ").append(target.email()).append(" -> ").append(email);
+            detail.append(detail.length() > 0 ? "; " : "").append("Email: ").append(target.email()).append(" → ").append(email);
         }
         if (!java.util.Objects.equals(target.phone(), phone)) {
-            detail.append(detail.length() > 0 ? "; " : "").append("phone: ").append(target.phone()).append(" -> ").append(phone);
+            detail.append(detail.length() > 0 ? "; " : "").append("Phone: ").append(target.phone() == null ? "none" : target.phone()).append(" → ").append(phone);
         }
         users.writeAudit(actor.userId(), "STAFF_UPDATE", "APP_USER", userId, "SUCCESS", ip,
                 detail.length() == 0 ? null : detail.toString());
@@ -376,10 +377,12 @@ public class StaffService {
             staff.updateTrainer(groomId, null);
         }
 
+        StaffRow after = staff.findRow(groomId).orElse(groom);
         users.writeAudit(actor == null ? null : actor.userId(),
                 "STAFF_ASSIGN_TRAINER:" + (trainerId == null ? "NONE" : trainerId),
-                "APP_USER", groomId, "SUCCESS", ip);
-        return staff.findRow(groomId).orElse(groom);
+                "APP_USER", groomId, "SUCCESS", ip,
+                "Head Trainer: " + orNone(groom.trainerName()) + " → " + orNone(after.trainerName()));
+        return after;
     }
 
     /**
@@ -405,7 +408,8 @@ public class StaffService {
         }
 
         staff.updateMaxHorses(trainerId, maxHorses);
-        users.writeAudit(actor == null ? null : actor.userId(), "STAFF_MAX_HORSES:" + maxHorses, "APP_USER", trainerId, "SUCCESS", ip);
+        users.writeAudit(actor == null ? null : actor.userId(), "STAFF_MAX_HORSES:" + maxHorses, "APP_USER", trainerId,
+                "SUCCESS", ip, "Max horses: " + (trainer.maxHorses() == null ? 10 : trainer.maxHorses()) + " → " + maxHorses);
         return staff.findRow(trainerId).orElse(trainer);
     }
 
@@ -450,5 +454,9 @@ public class StaffService {
 
     private ApiException conflict(Map<String, String> errors) {
         return new ApiException(HttpStatus.CONFLICT, "Account information already exists", errors);
+    }
+
+    private static String orNone(String value) {
+        return value == null || value.isBlank() ? "none" : value;
     }
 }

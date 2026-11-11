@@ -98,17 +98,19 @@ public class AuthService {
            password is not even compared, so guessing during the lock teaches
            nothing. BCrypt above still ran, so the response time is the same. */
         if (found.isPresent() && found.get().isLocked()) {
-            users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip, "locked");
+            users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip,
+                    "Sign-in is locked after too many wrong passwords");
             throw locked(found.get().lockedUntil());
         }
         // Sai username và sai password dùng CHUNG một thông báo để kẻ xấu không dò được tài khoản nào tồn tại.
         if (found.isEmpty() || !passwordOk) {
-            users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip);
+            users.writeAudit(foundId, "LOGIN", "APP_USER", foundId, "DENIED", ip,
+                    found.isPresent() ? "Wrong password" : "Unknown username or email: " + req.username().trim());
             if (found.isPresent()) {
                 java.time.Instant lockedNow = users.recordFailedLogin(foundId, MAX_FAILED_LOGINS, LOCK_MINUTES);
                 if (lockedNow != null) {
                     users.writeAudit(foundId, "LOGIN_LOCKED", "APP_USER", foundId, "SUCCESS", ip,
-                            MAX_FAILED_LOGINS + " wrong passwords in a row");
+                            MAX_FAILED_LOGINS + " wrong passwords in a row. Locked for " + LOCK_MINUTES + " minutes");
                     throw locked(lockedNow);
                 }
             }
@@ -116,7 +118,7 @@ public class AuthService {
         }
         UserRecord u = found.get();
         if (!"ACTIVE".equals(u.status())) {
-            users.writeAudit(u.userId(), "LOGIN", "APP_USER", u.userId(), "DENIED", ip);
+            users.writeAudit(u.userId(), "LOGIN", "APP_USER", u.userId(), "DENIED", ip, "Account is suspended");
             throw new ApiException(HttpStatus.FORBIDDEN, "Account is suspended. Please contact the club manager");
         }
         users.clearLoginLock(u.userId());

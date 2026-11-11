@@ -40,7 +40,16 @@ public class AuditLogRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT TOP (:limit)
                        a.log_id, a.created_at, a.user_id, u.username, u.full_name, r.role_name,
-                       a.action, a.target_entity, a.target_id, a.result, a.ip_address, a.detail
+                       a.action, a.target_entity, a.target_id, a.result, a.ip_address, a.detail,
+                       CASE a.target_entity
+                           WHEN 'APP_USER'         THEN (SELECT tu.full_name FROM APP_USER tu WHERE tu.user_id = a.target_id)
+                           WHEN 'HORSE'            THEN (SELECT th.horse_name FROM HORSE th WHERE th.horse_id = a.target_id)
+                           WHEN 'HORSE_REQUEST'    THEN (SELECT tq.horse_name FROM HORSE_REQUEST tq WHERE tq.request_id = a.target_id)
+                           WHEN 'HORSE_WITHDRAWAL' THEN (SELECT wh.horse_name FROM HORSE_WITHDRAWAL tw
+                                                         JOIN HORSE wh ON wh.horse_id = tw.horse_id
+                                                         WHERE tw.withdrawal_id = a.target_id)
+                           WHEN 'TRAINING_PLAN'    THEN (SELECT tp.plan_name FROM TRAINING_PLAN tp WHERE tp.plan_id = a.target_id)
+                       END AS target_name
                 FROM AUDIT_LOG a
                 LEFT JOIN APP_USER u ON u.user_id = a.user_id
                 LEFT JOIN ROLE r     ON r.role_id = u.role_id
@@ -93,7 +102,8 @@ public class AuditLogRepository {
                         rs.getObject("target_id", Integer.class),
                         rs.getString("result"),
                         rs.getString("ip_address"),
-                        rs.getString("detail")))
+                        rs.getString("detail"),
+                        rs.getString("target_name")))
                 .list();
     }
 

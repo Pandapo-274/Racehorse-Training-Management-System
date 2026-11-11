@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import PasswordField from "../password/PasswordField";
+import { useAppDialog } from "../common/AppDialog";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
   createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses,
@@ -263,6 +264,7 @@ function AccountPanel({ mode, row, onDone, onCancel }) {
 
 export default function StaffPage() {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [groups, setGroups] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -342,10 +344,18 @@ export default function StaffPage() {
       .finally(() => setSaving(false));
   };
 
-  const toggleStatus = (row) => {
+  const toggleStatus = async (row) => {
     const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    if (next === "SUSPENDED" && !window.confirm(`Suspend @${row.username}? They will be signed out and cannot log in.`)) {
-      return;
+    if (next === "SUSPENDED") {
+      const ok = await dialog.confirm({
+        title: `Suspend ${row.fullName}?`,
+        message: row.roleName === "HORSE_OWNER"
+          ? `@${row.username} will be signed out and cannot sign in. Their pending horse registration requests are cancelled, and head trainers are told about approvals on hold.`
+          : `@${row.username} will be signed out and cannot sign in until the account is activated again.`,
+        confirmLabel: "Suspend",
+        danger: true,
+      });
+      if (!ok) return;
     }
     setBusyId(row.userId);
     setNotice("");
@@ -363,12 +373,15 @@ export default function StaffPage() {
       .finally(() => setBusyId(null));
   };
 
-  const changeRole = (row, roleName) => {
+  const changeRole = async (row, roleName) => {
     if (roleName === row.roleName) return;
     const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
-    if (!window.confirm(`Change @${row.username} to ${label}? They will be signed out and get the new permissions when they sign in again.`)) {
-      return;
-    }
+    const ok = await dialog.confirm({
+      title: `Change role to ${label}?`,
+      message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`,
+      confirmLabel: "Change role",
+    });
+    if (!ok) return;
     setBusyId(row.userId);
     setNotice("");
     changeStaffRole(row.userId, roleName)
@@ -402,29 +415,36 @@ export default function StaffPage() {
       .finally(() => setBusyId(null));
   };
 
-  const handleUpdateMaxHorses = (row) => {
-    const input = window.prompt(
-      `Set maximum horses that Head Trainer ${row.fullName} can manage (currently managing ${row.managedHorseCount || 0}):`,
-      String(row.maxHorses ?? 10),
-    );
-    if (input === null) return;
-    const parsed = Number(input.trim());
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-      setNotice("Max horses must be an integer between 1 and 100.");
-      return;
-    }
-    setBusyId(row.userId);
-    setNotice("");
-    updateTrainerMaxHorses(row.userId, parsed)
-      .then((updated) => {
-        setNotice(`Updated max horse limit for ${updated.fullName} to ${updated.maxHorses}.`);
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+  const handleUpdateMaxHorses = async (row) => {
+    const managed = row.managedHorseCount || 0;
+    let updated = null;
+    const value = await dialog.prompt({
+      title: "Max horses",
+      message: `How many club horses can ${row.fullName} manage? They manage ${managed} now.`,
+      label: "Maximum horses (1-100)",
+      inputType: "number",
+      min: 1,
+      max: 100,
+      defaultValue: String(row.maxHorses ?? 10),
+      validate: (v) => {
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 1 || n > 100) return "Enter a whole number from 1 to 100";
+        if (n < managed) return `${row.fullName} manages ${managed} horses now. Reassign some horses before going below ${managed}.`;
+        return null;
+      },
+      // The request runs inside the dialog: a refusal from the server is shown there.
+      onSubmit: async (v) => {
+        try {
+          updated = await updateTrainerMaxHorses(row.userId, Number(v));
+        } catch (err) {
+          if (handleAuthError(err, navigate)) return;
+          throw err;
+        }
+      },
+    });
+    if (value === null || !updated) return;
+    setNotice(`${updated.fullName} can now manage up to ${updated.maxHorses} horses.`);
+    load();
   };
 
   return (
@@ -578,6 +598,7 @@ export default function StaffPage() {
           ))}
         </>
       )}
+    {dialog.element}
     </HorseShell>
   );
 }

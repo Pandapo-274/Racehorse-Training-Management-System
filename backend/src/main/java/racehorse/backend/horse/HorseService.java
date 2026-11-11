@@ -101,11 +101,9 @@ public class HorseService {
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(HttpStatus.CONFLICT, "The registration code or stall has just been taken by someone else");
         }
-        userRepository.writeAudit(user.userId(), "HORSE_IDENTITY_UPDATE", "HORSE", horseId, "SUCCESS", ip,
-                "code: " + current.registrationCode() + " -> " + code
-                        + "; stall: " + current.stallNo() + " -> " + stall
-                        + "; trainer: " + current.trainerId() + " -> " + trainerId);
         HorseResponse updated = getOrThrow(horseId);
+        userRepository.writeAudit(user.userId(), "HORSE_IDENTITY_UPDATE", "HORSE", horseId, "SUCCESS", ip,
+                identityChanges(current, updated));
         notifyTrainerChange(current, updated);
         return updated;
     }
@@ -129,9 +127,10 @@ public class HorseService {
             }
         }
         horseRepository.updateTrainer(horseId, trainerId);
-        userRepository.writeAudit(user.userId(), "HORSE_ASSIGN_TRAINER:" + (trainerId == null ? "NONE" : trainerId),
-                "HORSE", horseId, "SUCCESS", ip);
         HorseResponse updated = getOrThrow(horseId);
+        userRepository.writeAudit(user.userId(), "HORSE_ASSIGN_TRAINER:" + (trainerId == null ? "NONE" : trainerId),
+                "HORSE", horseId, "SUCCESS", ip,
+                "Head Trainer: " + orNone(current.trainerName()) + " → " + orNone(updated.trainerName()));
         notifyTrainerChange(current, updated);
         return updated;
     }
@@ -421,5 +420,24 @@ public class HorseService {
                         + ", so the pedigree would loop");
             }
         }, () -> errors.put(field, label + " does not exist"));
+    }
+
+    /** Audit detail for Club records: only the fields that changed, in plain words. */
+    private static String identityChanges(HorseResponse before, HorseResponse after) {
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (!java.util.Objects.equals(before.registrationCode(), after.registrationCode())) {
+            parts.add("Registration code: " + before.registrationCode() + " → " + after.registrationCode());
+        }
+        if (!java.util.Objects.equals(before.stallNo(), after.stallNo())) {
+            parts.add("Stall: " + orNone(before.stallNo()) + " → " + orNone(after.stallNo()));
+        }
+        if (!java.util.Objects.equals(before.trainerId(), after.trainerId())) {
+            parts.add("Head Trainer: " + orNone(before.trainerName()) + " → " + orNone(after.trainerName()));
+        }
+        return parts.isEmpty() ? "No change" : String.join(". ", parts);
+    }
+
+    private static String orNone(String value) {
+        return value == null || value.isBlank() ? "none" : value;
     }
 }

@@ -1,0 +1,88 @@
+/* Same look as the Sign out dialog (auth/signOutModal.css), plus an input row. */
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: appDialogFadeIn 0.2s ease-out;
+  padding: 16px;
+}
+
+.app-dialog-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+  width: 100%;
+  max-width: 400px;
+  padding: 30px 26px 24px;
+  text-align: center;
+  animation: appDialogSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #fae1ed;
+  box-sizing: border-box;
+}
+
+.app-dialog-icon {
+  width: 56px;
+  height: 56px;
+  background: #fff0f6;
+  color: #d93b87;
+  font-size: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  border: 1px solid #ffd6e7;
+}
+.app-dialog-icon--danger { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+.app-dialog-title { margin: 0 0 8px; font-size: 19px; font-weight: 700; color: #1e293b; }
+.app-dialog-message { margin: 0 0 18px; font-size: 14px; color: #64748b; line-height: 1.5; }
+
+.app-dialog-field { display: flex; flex-direction: column; gap: 6px; text-align: left; margin-bottom: 8px; }
+.app-dialog-field span { font-size: 13px; font-weight: 600; color: #334155; }
+.app-dialog-field input {
+  padding: 11px 14px;
+  border: 1px solid #f3c6dc;
+  border-radius: 12px;
+  font-size: 15px;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.app-dialog-field input:focus { border-color: #d93b87; box-shadow: 0 0 0 3px rgba(217, 59, 135, 0.15); }
+.app-dialog-hint { font-size: 12px; color: #94a3b8; }
+.app-dialog-error { margin: 4px 0 0; font-size: 13px; color: #dc2626; text-align: left; }
+
+.app-dialog-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+.app-dialog-btn {
+  flex: 1;
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+.app-dialog-btn:disabled { opacity: 0.6; cursor: default; }
+.app-dialog-btn--cancel { background: #f1f5f9; color: #475569; }
+.app-dialog-btn--cancel:hover:not(:disabled) { background: #e2e8f0; color: #1e293b; }
+.app-dialog-btn--confirm {
+  background: linear-gradient(135deg, #e43e8c, #d93b87);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(217, 59, 135, 0.3);
+}
+.app-dialog-btn--confirm:hover:not(:disabled) { background: linear-gradient(135deg, #d3307b, #c22974); }
+.app-dialog-btn--danger { background: #dc2626; color: #ffffff; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25); }
+.app-dialog-btn--danger:hover:not(:disabled) { background: #b91c1c; }
+
+@keyframes appDialogFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes appDialogSlideUp {
+  from { opacity: 0; transform: translateY(14px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
