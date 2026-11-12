@@ -47,6 +47,13 @@ public class StaffController {
         return repository.findAllGrouped();
     }
 
+    /** Grooms and club horses of one Head Trainer, for the Staff screen's popup. */
+    @GetMapping("/{id}/team")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffService.TrainerTeam team(@PathVariable int id) {
+        return service.trainerTeam(id);
+    }
+
     @PostMapping
     @RequireRole({"CLUB_MANAGER"})
     public ResponseEntity<StaffRow> create(

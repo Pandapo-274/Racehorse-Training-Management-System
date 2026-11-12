@@ -67,6 +67,11 @@ export function assignStaffTrainer(groomId, trainerId) {
   });
 }
 
+/** Grooms and club horses (at the club) of one Head Trainer: { trainer, grooms, horses }. */
+export function getTrainerTeam(trainerId) {
+  return authFetch(`/api/staff/${trainerId}/team`);
+}
+
 /** V37: Club Manager cập nhật hạn mức số ngựa tối đa cho một Head Trainer. */
 export function updateTrainerMaxHorses(trainerId, maxHorses) {
   return authFetch(`/api/staff/${trainerId}/max-horses`, {
@@ -78,7 +83,26 @@ export function updateTrainerMaxHorses(trainerId, maxHorses) {
 export function reassignNotice(fullName, count) {
   if (!count) return "";
   return ` ${fullName} still had ${count} unfinished training ${count === 1 ? "session" : "sessions"}; `
-    + "the head trainers have been asked to reassign them.";
+    + "their Head Trainer has been asked to reassign them.";
+}
+
+/**
+ * What leaving a role (role change or suspension) does to someone's work, said
+ * in the confirm dialog BEFORE the manager clicks, not only afterwards.
+ */
+export function leavingConsequences(row) {
+  if (row.roleName === "HEAD_TRAINER") {
+    const horses = row.managedHorseCount || 0;
+    const grooms = row.groomCount || 0;
+    const parts = [];
+    if (horses) parts.push(`${horses} ${horses === 1 ? "horse loses its" : "horses lose their"} Head Trainer (you then assign a new one in Club records)`);
+    if (grooms) parts.push(`${grooms} ${grooms === 1 ? "groom becomes" : "grooms become"} unassigned`);
+    return parts.length ? ` ${parts.join(" and ")}.` : "";
+  }
+  if (row.roleName === "GROOM") {
+    return " Their unfinished sessions and care tasks stay in their name until their Head Trainer reassigns them.";
+  }
+  return "";
 }
 
 export function groupTitle(group) {

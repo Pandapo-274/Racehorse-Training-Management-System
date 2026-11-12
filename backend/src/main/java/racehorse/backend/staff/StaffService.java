@@ -1,5 +1,6 @@
 package racehorse.backend.staff;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -189,6 +190,9 @@ public class StaffService {
             if ("HORSE_OWNER".equals(target.roleName())) {
                 notice = ownerSuspended(target, actor);
             }
+            if ("HEAD_TRAINER".equals(target.roleName())) {
+                notice = headTrainerLeaves(target, actor, "was suspended");
+            }
         } else {
             // Mở khoá tài khoản cũng gỡ khoá đăng nhập do sai mật khẩu (V39).
             users.clearLoginLock(userId);
@@ -324,8 +328,9 @@ public class StaffService {
         if ("GROOM".equals(target.roleName())) {
             staff.updateTrainer(userId, null);
         }
+        String notice = null;
         if ("HEAD_TRAINER".equals(target.roleName())) {
-            staff.detachGroomsFromTrainer(userId);
+            notice = headTrainerLeaves(target, actor, "is no longer a Head Trainer");
         }
         if ("HEAD_TRAINER".equals(roleName) && target.maxHorses() == null) {
             staff.updateMaxHorses(userId, DEFAULT_MAX_HORSES_PER_TRAINER);
@@ -334,7 +339,7 @@ public class StaffService {
         blacklist.revokeAllSessions(userId);
         int toReassign = warnIfGroomLeaves(target, actor, "is no longer a groom");
         users.writeAudit(actor == null ? null : actor.userId(), "STAFF_ROLE_CHANGE:" + target.roleName() + "->" + roleName,
-                "APP_USER", userId, "SUCCESS", ip);
+                "APP_USER", userId, "SUCCESS", ip, notice);
 
         StaffRow updated = staff.findRow(userId).orElse(target);
         notifications.notifyUser(userId, new Notice(
@@ -342,7 +347,7 @@ public class StaffService {
                 "Your role has changed",
                 "The club manager changed your role to " + updated.roleLabel() + ".",
                 null, null));
-        return new StaffUpdate(updated, toReassign);
+        return new StaffUpdate(updated, toReassign, notice);
     }
 
     /**
@@ -413,6 +418,20 @@ public class StaffService {
         return staff.findRow(trainerId).orElse(trainer);
     }
 
+    /** A Head Trainer's grooms and the club horses in their charge (read only). */
+    public record TrainerTeam(StaffRow trainer,
+                              List<StaffRepository.TeamGroom> grooms,
+                              List<StaffRepository.TeamHorse> horses) {}
+
+    public TrainerTeam trainerTeam(int trainerId) {
+        StaffRow trainer = staff.findRow(trainerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Head Trainer account not found"));
+        if (!"HEAD_TRAINER".equals(trainer.roleName())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only Head Trainer accounts have a team");
+        }
+        return new TrainerTeam(trainer, staff.groomsOfTrainer(trainerId), staff.activeHorsesOfTrainer(trainerId));
+    }
+
     private StaffRow validateTrainerForGroom(int trainerId, Integer excludeGroomId) {
         StaffRow trainer = staff.findRow(trainerId)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Selected Head Trainer does not exist"));
@@ -428,20 +447,30 @@ public class StaffService {
         return trainer;
     }
 
+    /**
+     * A groom leaves (role change or suspension): their sessions and care tasks stay
+     * in their name until a Head Trainer hands them over. The notices go to the
+     * groom's OWN Head Trainer (the one who plans for them); only a groom with no
+     * trainer falls back to telling every Head Trainer. A running session is named
+     * separately: nobody but a Head Trainer can close it now.
+     */
     private int warnIfGroomLeaves(StaffRow target, AuthenticatedUser actor, String reason) {
         if (!"GROOM".equals(target.roleName())) return 0;
         int open = staff.countOpenAssignments(target.userId());
+        int running = staff.countRunningSessions(target.userId());
         if (open > 0) {
-            notifications.notifyRole("HEAD_TRAINER", actor, new Notice(
-                    "SESSIONS_NEED_GROOM",
-                    "Training sessions need a new groom",
-                    target.fullName() + " " + reason + " and still has " + open
-                            + (open == 1 ? " session" : " sessions") + " to reassign.",
-                    null, null));
+            String text = target.fullName() + " " + reason + " and still has " + open
+                    + (open == 1 ? " session" : " sessions") + " to reassign (Reschedule → choose another groom).";
+            if (running > 0) {
+                text += " " + running + (running == 1 ? " session is" : " sessions are")
+                        + " running now: finish " + (running == 1 ? "it" : "them") + " from Training sessions.";
+            }
+            notifyGroomsTrainer(target, actor, new Notice("SESSIONS_NEED_GROOM",
+                    "Training sessions need a new groom", text, null, null));
         }
         int tasks = staff.countOpenCareTasks(target.userId());
         if (tasks > 0) {
-            notifications.notifyRole("HEAD_TRAINER", actor, new Notice(
+            notifyGroomsTrainer(target, actor, new Notice(
                     "CARE_TASKS_NEED_GROOM",
                     "Care tasks need a new groom",
                     target.fullName() + " " + reason + " and still has " + tasks
@@ -450,6 +479,51 @@ public class StaffService {
                     null, null));
         }
         return open;
+    }
+
+    private void notifyGroomsTrainer(StaffRow groom, AuthenticatedUser actor, Notice notice) {
+        Integer trainerId = groom.trainerId();
+        boolean trainerActive = trainerId != null && staff.findRow(trainerId)
+                .map(t -> "HEAD_TRAINER".equals(t.roleName()) && "ACTIVE".equals(t.status()))
+                .orElse(false);
+        if (trainerActive) {
+            notifications.notifyUser(trainerId, notice);
+        } else {
+            notifications.notifyRole("HEAD_TRAINER", actor, notice);
+        }
+    }
+
+    /**
+     * A Head Trainer leaves (role change or suspension). Their horses would stay
+     * locked to them: every other Head Trainer is refused "This horse is assigned to
+     * Head Trainer X" and nobody can plan for the horse. So the horses are released
+     * (no Head Trainer) and the grooms leave the team; the manager gets the list to
+     * assign new Head Trainers in each horse's Club records, and the grooms are told.
+     * Returns the notice for the manager, or null when there was nothing to release.
+     */
+    private String headTrainerLeaves(StaffRow trainer, AuthenticatedUser actor, String reason) {
+        List<String> horses = staff.horseNamesOfTrainer(trainer.userId());
+        List<Integer> grooms = staff.groomIdsOfTrainer(trainer.userId());
+        if (!horses.isEmpty()) staff.releaseHorsesOfTrainer(trainer.userId());
+        if (!grooms.isEmpty()) staff.detachGroomsFromTrainer(trainer.userId());
+        for (Integer groomId : grooms) {
+            notifications.notifyUser(groomId, new Notice("TRAINER_LEFT", "Your Head Trainer changed",
+                    trainer.fullName() + " " + reason + ". The club manager will assign you to another Head Trainer.",
+                    null, null));
+        }
+        if (horses.isEmpty() && grooms.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        if (!horses.isEmpty()) {
+            sb.append(horses.size()).append(horses.size() == 1 ? " horse has" : " horses have")
+              .append(" no Head Trainer now: ").append(String.join(", ", horses))
+              .append(". Assign a new one in each horse's Club records.");
+        }
+        if (!grooms.isEmpty()) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(grooms.size()).append(grooms.size() == 1 ? " groom is" : " grooms are")
+              .append(" unassigned; give them to another Head Trainer on this page.");
+        }
+        return sb.toString();
     }
 
     private ApiException conflict(Map<String, String> errors) {

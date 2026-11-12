@@ -195,6 +195,58 @@ class Flow1RulesTest {
                 "boss2", "Temp1234", "Second Boss", "boss2@club.test", null, "CLUB_MANAGER"), MANAGER, "ip"));
     }
 
+    // ------------------------------------------------------------ leaving a role
+
+    @Test
+    void headTrainerWhoChangesRoleReleasesHorsesAndGrooms() {
+        UserRepository users = mock(UserRepository.class);
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(staff.findRow(2)).thenReturn(Optional.of(staffRow(2, "HEAD_TRAINER")));
+        when(users.findRoleId("VETERINARIAN")).thenReturn(Optional.of(3));
+        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("River Song", "Thunder Bay"));
+        when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of(5));
+        StaffService service = new StaffService(users, staff, mock(PasswordEncoder.class), mock(TokenBlacklist.class),
+                notifications);
+
+        StaffService.StaffUpdate result = service.changeRole(2, "VETERINARIAN", MANAGER, "ip");
+        verify(staff).releaseHorsesOfTrainer(2);
+        verify(staff).detachGroomsFromTrainer(2);
+        verify(notifications).notifyUser(eq(5), any());
+        assertTrue(result.notice().contains("River Song, Thunder Bay"), result.notice());
+    }
+
+    @Test
+    void suspendedHeadTrainerReleasesHorsesToo() {
+        StaffRepository staff = mock(StaffRepository.class);
+        when(staff.findRow(2)).thenReturn(Optional.of(staffRow(2, "HEAD_TRAINER")));
+        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("Golden Hour"));
+        when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of());
+        StaffService service = staffService(staff, mock(TokenBlacklist.class));
+
+        StaffService.StaffUpdate result = service.setStatus(2, "SUSPENDED", MANAGER, "ip");
+        verify(staff).releaseHorsesOfTrainer(2);
+        assertTrue(result.notice().contains("Golden Hour"), result.notice());
+    }
+
+    @Test
+    void groomWhoLeavesIsReportedToTheirOwnHeadTrainerOnly() {
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        StaffRow groom = new StaffRow(5, "khoa.lv", "Le Van Khoa", "k@club.test", null, "GROOM", "Groom",
+                "ACTIVE", null, LocalDateTime.now(), 0, 2, "Ngo Anh Tuan", 0, 0, null);
+        when(staff.findRow(5)).thenReturn(Optional.of(groom));
+        when(staff.findRow(2)).thenReturn(Optional.of(staffRow(2, "HEAD_TRAINER")));
+        when(staff.countOpenAssignments(5)).thenReturn(3);
+        when(staff.countRunningSessions(5)).thenReturn(1);
+        StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
+
+        service.setStatus(5, "SUSPENDED", MANAGER, "ip");
+        verify(notifications).notifyUser(eq(2), any());
+        verify(notifications, never()).notifyRole(eq("HEAD_TRAINER"), any(), any());
+    }
+
     // ------------------------------------------------------------ transfer / readmit
 
     @Test

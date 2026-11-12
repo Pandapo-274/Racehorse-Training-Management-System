@@ -13,10 +13,11 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import PasswordField from "../password/PasswordField";
+import TrainerTeamDialog from "./TrainerTeamDialog";
 import { useAppDialog } from "../common/AppDialog";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
-  createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses,
+  createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses, leavingConsequences,
   updateStaffContact, setTemporaryPassword,
   reassignNotice, STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES, CREATE_ROLE_OPTIONS,
 } from "./staffApi";
@@ -41,7 +42,7 @@ const EMPTY_FORM = {
 
 function MemberRow({
   row, activeTrainers, canToggle, canChangeRole,
-  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, busy,
+  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam, busy,
 }) {
   return (
     <li className="st-row">
@@ -64,8 +65,16 @@ function MemberRow({
           </span>
         )}
         {row.roleName === "HEAD_TRAINER" && (
-          <span className="st-horses" title="Active Grooms (max 3) & Managed Club Horses">
-            Grooms: {row.groomCount || 0}/3 · Horses: {row.managedHorseCount || 0}/{row.maxHorses ?? 10}
+          <span className="st-horses st-team">
+            <button type="button" className="st-team-link" onClick={() => onShowTeam(row, "grooms")}
+                    title="Show the grooms of this Head Trainer (max 3 active)">
+              Grooms: {row.groomCount || 0}/3
+            </button>
+            ·
+            <button type="button" className="st-team-link" onClick={() => onShowTeam(row, "horses")}
+                    title="Show the club horses this Head Trainer manages">
+              Horses: {row.managedHorseCount || 0}/{row.maxHorses ?? 10}
+            </button>
           </span>
         )}
         {row.roleName === "GROOM" && (
@@ -150,7 +159,7 @@ function MemberRow({
 
 function RoleGroup({
   group, activeTrainers, query, myId, busyId,
-  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword,
+  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam,
 }) {
   const shown = group.members.filter((m) => matchesQuery(m, query));
   const emptyText = group.members.length === 0
@@ -180,6 +189,7 @@ function RoleGroup({
               onResetPassword={onResetPassword}
               onAssignTrainer={onAssignTrainer}
               onUpdateMaxHorses={onUpdateMaxHorses}
+              onShowTeam={onShowTeam}
               busy={busyId === row.userId}
             />
           ))}
@@ -278,6 +288,8 @@ export default function StaffPage() {
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
   const [panel, setPanel] = useState(null); // { mode: "edit" | "password", row }
+  const [team, setTeam] = useState(null); // { row, focus: "grooms" | "horses" } -> TrainerTeamDialog
+  const closeTeam = useCallback(() => setTeam(null), []);
 
   const load = useCallback(() => {
     setError("");
@@ -351,7 +363,8 @@ export default function StaffPage() {
         title: `Suspend ${row.fullName}?`,
         message: row.roleName === "HORSE_OWNER"
           ? `@${row.username} will be signed out and cannot sign in. Their pending horse registration requests are cancelled, and head trainers are told about approvals on hold.`
-          : `@${row.username} will be signed out and cannot sign in until the account is activated again.`,
+          : `@${row.username} will be signed out and cannot sign in until the account is activated again.`
+            + leavingConsequences(row),
         confirmLabel: "Suspend",
         danger: true,
       });
@@ -378,15 +391,17 @@ export default function StaffPage() {
     const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
     const ok = await dialog.confirm({
       title: `Change role to ${label}?`,
-      message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`,
+      message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`
+        + leavingConsequences(row),
       confirmLabel: "Change role",
     });
     if (!ok) return;
     setBusyId(row.userId);
     setNotice("");
     changeStaffRole(row.userId, roleName)
-      .then(({ member, sessionsToReassign }) => {
-        setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign));
+      .then(({ member, sessionsToReassign, notice: extra }) => {
+        setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign)
+          + (extra ? ` ${extra}` : ""));
         load();
       })
       .catch((err) => {
@@ -594,10 +609,14 @@ export default function StaffPage() {
               onResetPassword={(row) => { setNotice(""); setPanel({ mode: "password", row }); }}
               onAssignTrainer={handleAssignTrainer}
               onUpdateMaxHorses={handleUpdateMaxHorses}
+              onShowTeam={(row, focus) => setTeam({ row, focus })}
             />
           ))}
         </>
       )}
+    {team && (
+      <TrainerTeamDialog key={team.row.userId} row={team.row} focus={team.focus} onClose={closeTeam} />
+    )}
     {dialog.element}
     </HorseShell>
   );

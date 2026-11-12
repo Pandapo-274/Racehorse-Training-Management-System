@@ -281,4 +281,75 @@ public class StaffRepository {
                 .param("trainerId", trainerId)
                 .update();
     }
+
+    /** Names of the horses a Head Trainer is in charge of (any activity), for the "left without a trainer" notice. */
+    public List<String> horseNamesOfTrainer(int trainerId) {
+        return jdbc.sql("SELECT horse_name FROM HORSE WHERE trainer_id = :id ORDER BY horse_name")
+                .param("id", trainerId)
+                .query(String.class)
+                .list();
+    }
+
+    /** Takes a Head Trainer off all their horses (they left the role or were suspended). */
+    public int releaseHorsesOfTrainer(int trainerId) {
+        return jdbc.sql("UPDATE HORSE SET trainer_id = NULL WHERE trainer_id = :id")
+                .param("id", trainerId)
+                .update();
+    }
+
+    /** Ids of the grooms on a Head Trainer's team, to tell them before the team is dissolved. */
+    public List<Integer> groomIdsOfTrainer(int trainerId) {
+        return jdbc.sql("SELECT user_id FROM APP_USER WHERE trainer_id = :id")
+                .param("id", trainerId)
+                .query(Integer.class)
+                .list();
+    }
+
+    /* ---------- A Head Trainer's team, shown when the manager clicks "Grooms · Horses" ---------- */
+
+    public record TeamGroom(int userId, String username, String fullName, String phone,
+                            String status, String avatarUrl) {}
+
+    public record TeamHorse(int horseId, String horseName, String registrationCode, String horseGender,
+                            String status, String stallNo, String photoUrl) {}
+
+    /** Grooms assigned to the trainer; ACTIVE first (only those count toward the 3-groom limit). */
+    public List<TeamGroom> groomsOfTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT g.user_id, g.username, g.full_name, g.phone, g.status, g.avatar_url
+                FROM APP_USER g
+                JOIN ROLE r ON r.role_id = g.role_id
+                WHERE g.trainer_id = :id AND r.role_name = 'GROOM'
+                ORDER BY CASE g.status WHEN 'ACTIVE' THEN 0 ELSE 1 END, g.full_name
+                """)
+                .param("id", trainerId)
+                .query((rs, n) -> new TeamGroom(
+                        rs.getInt("user_id"), rs.getString("username"), rs.getString("full_name"),
+                        rs.getString("phone"), rs.getString("status"), rs.getString("avatar_url")))
+                .list();
+    }
+
+    /** Club horses at the club in the trainer's charge: the same set as managed_horse_count. */
+    public List<TeamHorse> activeHorsesOfTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT horse_id, horse_name, registration_code, horse_gender, status, stall_no, photo_url
+                FROM HORSE
+                WHERE trainer_id = :id AND activity_status = 'ACTIVE'
+                ORDER BY horse_name
+                """)
+                .param("id", trainerId)
+                .query((rs, n) -> new TeamHorse(
+                        rs.getInt("horse_id"), rs.getString("horse_name"), rs.getString("registration_code"),
+                        rs.getString("horse_gender"), rs.getString("status"), rs.getString("stall_no"),
+                        rs.getString("photo_url")))
+                .list();
+    }
+
+    /** Sessions a groom has started and not finished: only a Head Trainer can close them now. */
+    public int countRunningSessions(int groomId) {
+        return jdbc.sql("SELECT COUNT(*) FROM TRAINING_SESSION WHERE assigned_to = :id AND status = 'RUNNING'")
+                .param("id", groomId)
+                .query(Integer.class)
+                .single();
+    }
 }

@@ -138,3 +138,34 @@
 }
 /* Chọn vai trò ngay trên dòng nhân viên: cùng kích thước với nút Suspend. */
 .st-role { padding-right: 8px; cursor: pointer; }
+
+/* Clickable "Grooms: x/3 · Horses: y/z" on a Head Trainer row → TrainerTeamDialog */
+.st-team { display: inline-flex; align-items: center; gap: 4px; }
+.st-team-link {
+  background: none; border: none; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
+}
+.st-team-link:hover, .st-team-link:focus-visible { color: #d93b87; text-decoration-style: solid; }
+
+/* TrainerTeamDialog */
+.app-dialog-card.tt-card { max-width: 560px; text-align: left; max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.tt-card .app-dialog-title, .tt-card .app-dialog-message { text-align: center; }
+.tt-body { overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 4px; }
+.tt-heading { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: baseline; gap: 8px; }
+.tt-count { font-size: 12px; font-weight: 600; color: #94a3b8; }
+.tt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tt-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid #fae1ed; border-radius: 12px;
+}
+.tt-thumb { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.tt-thumb--text {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff0f6; color: #d93b87; font-size: 12px; font-weight: 700;
+}
+.tt-main { flex: 1; min-width: 0; }
+.tt-name { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
+.tt-link { text-decoration: none; }
+.tt-link:hover { color: #d93b87; text-decoration: underline; }
+.tt-sub { margin: 2px 0 0; font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-empty { margin: 0; font-size: 13px; color: #94a3b8; }
