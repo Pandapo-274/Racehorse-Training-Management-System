@@ -4,6 +4,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +17,7 @@ import racehorse.backend.auth.TokenBlacklist;
 import racehorse.backend.auth.UserRepository;
 import racehorse.backend.notification.Notice;
 import racehorse.backend.notification.NotificationService;
+import racehorse.backend.training.TrainingPlanRepository;
 
 /**
  * UC19 (write half) - the manager creates staff accounts, changes their role,
@@ -56,15 +58,29 @@ public class StaffService {
     private final PasswordEncoder passwordEncoder;
     private final TokenBlacklist blacklist;
     private final NotificationService notifications;
+    private final TrainingPlanRepository planRepository;
 
+    @Autowired
     public StaffService(UserRepository users, StaffRepository staff,
                         PasswordEncoder passwordEncoder, TokenBlacklist blacklist,
-                        NotificationService notifications) {
+                        NotificationService notifications,
+                        TrainingPlanRepository planRepository) {
         this.users = users;
         this.staff = staff;
         this.passwordEncoder = passwordEncoder;
         this.blacklist = blacklist;
         this.notifications = notifications;
+        this.planRepository = planRepository;
+    }
+
+    public StaffService(UserRepository users, StaffRepository staff,
+                        PasswordEncoder passwordEncoder, TokenBlacklist blacklist,
+                        NotificationService notifications) {
+        this(users, staff, passwordEncoder, blacklist, notifications, null);
+    }
+
+    private int countActivePlans(int groomId) {
+        return planRepository != null ? planRepository.countActivePlansByGroom(groomId) : 0;
     }
 
     /**
@@ -316,6 +332,15 @@ public class StaffService {
         if (roleName.equals(target.roleName())) {
             return new StaffUpdate(target, 0);
         }
+        if ("GROOM".equals(target.roleName())) {
+            int activePlans = countActivePlans(userId);
+            if (activePlans >= 1) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Cannot change role of Groom " + target.fullName() + " because they are currently assigned to "
+                                + activePlans + " active training plan" + (activePlans > 1 ? "s." : ".")
+                                + " All assigned training plans must be completed before changing role.");
+            }
+        }
         int roleId = users.findRoleId(roleName)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Role does not exist"));
 
@@ -357,6 +382,17 @@ public class StaffService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Groom account not found"));
         if (!"GROOM".equals(groom.roleName())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Only Groom accounts can be assigned to a Head Trainer");
+        }
+
+        // V40: Không cho phép chuyển hoặc gỡ Head Trainer nếu Groom đang tiếp nhận ít nhất 1 training plan chưa hoàn thành
+        if (!java.util.Objects.equals(groom.trainerId(), trainerId)) {
+            int activePlans = countActivePlans(groomId);
+            if (activePlans >= 1) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Cannot transfer Groom " + groom.fullName() + " to another Head Trainer because they are currently assigned to "
+                                + activePlans + " active training plan" + (activePlans > 1 ? "s." : ".")
+                                + " All assigned training plans must be completed before transferring the groom.");
+            }
         }
 
         if (trainerId != null) {

@@ -32,6 +32,16 @@ export function reviewPlan(planId, { approve, note }) {
 }
 
 /**
+ * PUT /api/training-plans/{id}/owner-feedback: chủ ngựa gửi phản hồi/nhận xét (optional) cho Trainer.
+ */
+export function sendOwnerFeedback(planId, note) {
+  return authFetch(`/api/training-plans/${planId}/owner-feedback`, {
+    method: "PUT",
+    body: JSON.stringify({ note }),
+  });
+}
+
+/**
  * Giáo án đáng hiện nhất của một con ngựa: đang chờ chủ duyệt (cần chủ làm gì
  * đó), rồi đang chạy, tạm dừng, rồi mới nhất.
  */

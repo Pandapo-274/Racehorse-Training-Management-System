@@ -197,7 +197,31 @@ function SessionModal({
   const selectedPlan = plans.find(
     (plan) => String(plan.planId) === String(form.planId),
   );
+  const selectedPhase = phases.find(
+    (phase) => String(phase.phaseId) === String(form.phaseId),
+  );
   const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
+
+  const availableGrooms = useMemo(() => {
+    const list = [...grooms];
+    const ensureGroom = (id, name) => {
+      if (!id) return;
+      const exists = list.some((g) => String(g.userId) === String(id));
+      if (!exists) {
+        list.unshift({
+          userId: Number(id),
+          fullName: name || `Groom #${id}`,
+        });
+      }
+    };
+    if (selectedPlan?.groomId) {
+      ensureGroom(selectedPlan.groomId, selectedPlan.groomName);
+    }
+    if (editingSession?.assignedTo) {
+      ensureGroom(editingSession.assignedTo, editingSession.assignedToName);
+    }
+    return list;
+  }, [grooms, selectedPlan, editingSession]);
 
   return (
     <div
@@ -243,14 +267,21 @@ function SessionModal({
                 <select
                   required
                   value={form.planId}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const chosenPlanId = event.target.value;
+                    const chosenPlan = plans.find(
+                      (p) => String(p.planId) === String(chosenPlanId),
+                    );
                     setForm((old) => ({
                       ...old,
-                      planId: event.target.value,
+                      planId: chosenPlanId,
                       phaseId: "",
                       plannedDistance: "",
-                    }))
-                  }
+                      assignedTo: chosenPlan?.groomId
+                        ? String(chosenPlan.groomId)
+                        : "",
+                    }));
+                  }}
                 >
                   <option value="">Select a training plan</option>
                   {plans.map((plan) => (
@@ -289,6 +320,42 @@ function SessionModal({
                   <small className="schedule-field-hint">
                     No phases were found for this plan.
                   </small>
+                )}
+                {selectedPhase && (
+                  <div className="schedule-phase-info-box">
+                    <div className="schedule-phase-info-header">
+                      <strong>Phase {selectedPhase.phaseNo}: {selectedPhase.phaseName}</strong>
+                      <span>📅 {selectedPhase.startDate} – {selectedPhase.endDate}</span>
+                    </div>
+                    <div className="schedule-phase-info-grid">
+                      <div className="schedule-phase-info-item">
+                        <span>Target Surface</span>
+                        <strong>{selectedPhase.surface || "TURF"}</strong>
+                      </div>
+                      <div className="schedule-phase-info-item">
+                        <span>Sessions / Wk</span>
+                        <strong>{selectedPhase.sessionsPerWeek || "—"}</strong>
+                      </div>
+                      <div className="schedule-phase-info-item">
+                        <span>HR Ceiling</span>
+                        <strong>{selectedPhase.heartRateCeiling ? `${selectedPhase.heartRateCeiling} bpm` : "—"}</strong>
+                      </div>
+                      <div className="schedule-phase-info-item">
+                        <span>Workload</span>
+                        <strong>{selectedPhase.workload || "Normal"}</strong>
+                      </div>
+                      <div className="schedule-phase-info-item">
+                        <span>Min Rest Gap</span>
+                        <strong>{selectedPhase.minGapMinutes || 90}m</strong>
+                      </div>
+                      {selectedPhase.targetVelocity && (
+                        <div className="schedule-phase-info-item">
+                          <span>Target Speed</span>
+                          <strong>{selectedPhase.targetVelocity} m/s</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </label>
 
@@ -336,13 +403,23 @@ function SessionModal({
               }
             >
               <option value="">Select a Groom</option>
-              {grooms.map((groom) => (
-                <option key={groom.userId} value={groom.userId}>
-                  {groom.fullName}
-                </option>
-              ))}
+              {availableGrooms.map((groom) => {
+                const isPlanGroom =
+                  selectedPlan?.groomId &&
+                  String(groom.userId) === String(selectedPlan.groomId);
+                return (
+                  <option key={groom.userId} value={groom.userId}>
+                    {groom.fullName}
+                    {isPlanGroom ? " (Assigned to plan)" : ""}
+                  </option>
+                );
+              })}
             </select>
-            {grooms.length === 0 ? (
+            {selectedPlan?.groomName ? (
+              <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                ✓ Groom in charge of this plan: <strong>{selectedPlan.groomName}</strong> (auto-selected). You can reassign if needed.
+              </small>
+            ) : availableGrooms.length === 0 ? (
               <small className="schedule-field-hint">
                 No active Groom accounts are assigned to your management. Ask the Club Manager to assign Grooms to you.
               </small>
@@ -524,6 +601,12 @@ export default function SchedulePage() {
         const plan = await authFetch(`${PLAN_API}/${form.planId}`);
         if (!cancelled) {
           setPhases(Array.isArray(plan.phases) ? plan.phases : []);
+          if (plan.groomId) {
+            setForm((old) => {
+              if (old.assignedTo) return old;
+              return { ...old, assignedTo: String(plan.groomId) };
+            });
+          }
         }
       } catch (err) {
         if (!cancelled && !handleAuthError(err, navigate)) {
@@ -569,7 +652,16 @@ export default function SchedulePage() {
   const openCreateModal = () => {
     setEditingSession(null);
     setPhases([]);
-    setForm(EMPTY_FORM);
+    const defaultPlan = plans.length === 1 ? plans[0] : null;
+    setForm(
+      defaultPlan
+        ? {
+            ...EMPTY_FORM,
+            planId: String(defaultPlan.planId),
+            assignedTo: defaultPlan.groomId ? String(defaultPlan.groomId) : "",
+          }
+        : EMPTY_FORM,
+    );
     setError("");
     setNotice("");
     setModalOpen(true);

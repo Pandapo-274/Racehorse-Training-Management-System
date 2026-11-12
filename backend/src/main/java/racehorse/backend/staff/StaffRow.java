@@ -36,13 +36,25 @@ public record StaffRow(
         /** V37: Số ngựa đang thuộc quyền quản lý của Head Trainer này. */
         int managedHorseCount,
         /** V37: Hạn mức ngựa tối đa Club Manager cấp cho Head Trainer này. */
-        Integer maxHorses
+        Integer maxHorses,
+        /** V40: Số giáo án huấn luyện đang tiếp nhận (status <> 'COMPLETED') của Groom này. */
+        int activePlanCount
 ) {
+    public StaffRow(
+            int userId, String username, String fullName, String email, String phone,
+            String roleName, String roleLabel, String status, String avatarUrl,
+            LocalDateTime createdAt, int horseCount, Integer trainerId, String trainerName,
+            int groomCount, int managedHorseCount, Integer maxHorses) {
+        this(userId, username, fullName, email, phone, roleName, roleLabel, status,
+                avatarUrl, createdAt, horseCount, trainerId, trainerName, groomCount, managedHorseCount,
+                maxHorses, 0);
+    }
+
     public StaffRow(
             int userId, String username, String fullName, String email, String phone,
             String roleName, String roleLabel, String status, String avatarUrl,
             LocalDateTime createdAt, int horseCount) {
         this(userId, username, fullName, email, phone, roleName, roleLabel, status,
-                avatarUrl, createdAt, horseCount, null, null, 0, 0, null);
+                avatarUrl, createdAt, horseCount, null, null, 0, 0, null, 0);
     }
 }
