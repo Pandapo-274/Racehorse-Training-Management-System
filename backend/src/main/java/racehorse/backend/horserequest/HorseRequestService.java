@@ -148,7 +148,9 @@ public class HorseRequestService {
         }
 
         users.writeAudit(me.userId(), "HORSE_REQUEST_APPROVE", "HORSE_REQUEST",
-                requestId, "SUCCESS", ip);
+                requestId, "SUCCESS", ip, "Registration code " + created.registrationCode()
+                        + (created.stallNo() == null ? "" : ", stall " + created.stallNo())
+                        + (created.trainerName() == null ? "" : ", Head Trainer " + created.trainerName()));
 
         notifications.notifyUser(req.ownerId(), new Notice(
                 "HORSE_REQUEST_APPROVED",
@@ -177,7 +179,7 @@ public class HorseRequestService {
         }
 
         users.writeAudit(me.userId(), "HORSE_REQUEST_REJECT", "HORSE_REQUEST",
-                requestId, "SUCCESS", ip);
+                requestId, "SUCCESS", ip, "Reason: " + note);
 
         notifications.notifyUser(req.ownerId(), new Notice(
                 "HORSE_REQUEST_REJECTED",

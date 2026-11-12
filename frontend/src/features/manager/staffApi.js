@@ -45,18 +45,35 @@ export function setTemporaryPassword(userId, password) {
 /** Staff role codes the manager can move people between (same as STAFF_ROLES in StaffService). */
 export const STAFF_ROLE_CODES = new Set(STAFF_ROLE_OPTIONS.map((o) => o.value));
 
-export function setStaffStatus(userId, status) {
+/** handoverTo: optional account (same role) that takes over the person's open work when they are suspended. */
+export function setStaffStatus(userId, status, handoverTo = null) {
   return authFetch(`/api/staff/${userId}/status`, {
     method: "PUT",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, handoverTo }),
   });
 }
 
-export function changeStaffRole(userId, roleName) {
+export function changeStaffRole(userId, roleName, handoverTo = null) {
   return authFetch(`/api/staff/${userId}/role`, {
     method: "PUT",
-    body: JSON.stringify({ roleName }),
+    body: JSON.stringify({ roleName, handoverTo }),
   });
+}
+
+/**
+ * What a staff member leaves unfinished and who may take it over:
+ * { role, items: [text], candidates: [StaffRow], fallback, note }.
+ */
+export function getOpenWork(userId) {
+  return authFetch(`/api/staff/${userId}/open-work`);
+}
+
+/** Option text for a successor in the hand-over select. */
+export function successorLabel(role, c) {
+  if (role === "HEAD_TRAINER") {
+    return `${c.fullName} (${c.managedHorseCount}/${c.maxHorses ?? 10} horses, ${c.groomCount}/3 grooms)`;
+  }
+  return `${c.fullName} (@${c.username})`;
 }
 
 /** V37: Club Manager gán hoặc gỡ Groom cho một Head Trainer (tối đa 3 Groom / Head Trainer). */
@@ -65,6 +82,11 @@ export function assignStaffTrainer(groomId, trainerId) {
     method: "PUT",
     body: JSON.stringify({ trainerId: trainerId ? Number(trainerId) : null }),
   });
+}
+
+/** Grooms and club horses (at the club) of one Head Trainer: { trainer, grooms, horses }. */
+export function getTrainerTeam(trainerId) {
+  return authFetch(`/api/staff/${trainerId}/team`);
 }
 
 /** V37: Club Manager cập nhật hạn mức số ngựa tối đa cho một Head Trainer. */
@@ -78,7 +100,26 @@ export function updateTrainerMaxHorses(trainerId, maxHorses) {
 export function reassignNotice(fullName, count) {
   if (!count) return "";
   return ` ${fullName} still had ${count} unfinished training ${count === 1 ? "session" : "sessions"}; `
-    + "the head trainers have been asked to reassign them.";
+    + "their Head Trainer has been asked to reassign them.";
+}
+
+/**
+ * What leaving a role (role change or suspension) does to someone's work, said
+ * in the confirm dialog BEFORE the manager clicks, not only afterwards.
+ */
+export function leavingConsequences(row) {
+  if (row.roleName === "HEAD_TRAINER") {
+    const horses = row.managedHorseCount || 0;
+    const grooms = row.groomCount || 0;
+    const parts = [];
+    if (horses) parts.push(`${horses} ${horses === 1 ? "horse loses its" : "horses lose their"} Head Trainer (you then assign a new one in Club records)`);
+    if (grooms) parts.push(`${grooms} ${grooms === 1 ? "groom becomes" : "grooms become"} unassigned`);
+    return parts.length ? ` ${parts.join(" and ")}.` : "";
+  }
+  if (row.roleName === "GROOM") {
+    return " Their unfinished sessions and care tasks stay in their name until their Head Trainer reassigns them.";
+  }
+  return "";
 }
 
 export function groupTitle(group) {

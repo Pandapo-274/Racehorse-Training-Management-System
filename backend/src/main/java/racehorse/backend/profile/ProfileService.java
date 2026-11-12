@@ -73,7 +73,7 @@ public class ProfileService {
             throw emailConflict(); // UNIQUE của DB là chốt chặn cuối khi 2 người đổi cùng lúc
         }
         users.writeAudit(userId, "UPDATE_PROFILE", "APP_USER", userId, "SUCCESS", ip,
-                email.equalsIgnoreCase(account.email()) ? null : "email: " + account.email() + " -> " + email);
+                email.equalsIgnoreCase(account.email()) ? null : "Email: " + account.email() + " → " + email);
         return getProfile(userId);
     }
 

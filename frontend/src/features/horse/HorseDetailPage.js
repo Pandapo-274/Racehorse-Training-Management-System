@@ -19,6 +19,8 @@ import {
   readmitHorse, transferHorseOwner,
 } from "./horseApi";
 import { listStaff } from "../manager/staffApi";
+import { useAppDialog } from "../common/AppDialog";
+import ResultLine, { ok, fail } from "../common/ResultLine";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -145,13 +147,19 @@ function IdentityForm({ horse, onSaved }) {
  * chặn chuyển chủ khi chủ hiện tại còn việc phải duyệt (giáo án, đăng ký giải,
  * yêu cầu rút) - lỗi đó hiện nguyên văn ở đây.
  */
-function OwnershipForm({ horse, onSaved }) {
+/*
+ * result / setResult live in the page, not here: a successful transfer changes
+ * the owner and a re-admit changes the activity, and both remount this card
+ * (its key), which used to wipe the "Transferred ... to ..." line the moment it
+ * appeared.
+ */
+function OwnershipForm({ horse, onSaved, result, setResult }) {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [owners, setOwners] = useState([]);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
   const [stall, setStall] = useState("");
-  const [message, setMessage] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const withdrawn = isWithdrawn(horse);
@@ -170,19 +178,21 @@ function OwnershipForm({ horse, onSaved }) {
     return () => { alive = false; };
   }, [withdrawn, horse.ownerId]);
 
-  const run = async (e, fn, done) => {
-    e.preventDefault();
+  /* Runs fn; on success shows done(updated), on failure failText + the server's reason. */
+  const run = async (fn, done, failText) => {
     setBusy(true);
     setErrors({});
-    setMessage("");
+    setResult(null);
     try {
       const updated = await fn();
       onSaved(updated);
-      setMessage(done(updated));
+      setResult(ok(done(updated)));
+      return true;
     } catch (err) {
-      if (handleAuthError(err, navigate)) return;
+      if (handleAuthError(err, navigate)) return false;
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) setErrors(err.fieldErrors);
-      setMessage(err.message);
+      setResult(fail(`${failText}: ${err.message}`));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -190,10 +200,21 @@ function OwnershipForm({ horse, onSaved }) {
 
   if (withdrawn) {
     if (pedigree) return null;
+    const readmit = async (e) => {
+      e.preventDefault();
+      const s = stall.trim();
+      const done = await run(
+        () => readmitHorse(horse.horseId, s),
+        (h) => `${h.horseName} is back at the club in stall ${h.stallNo}. ${h.ownerName} has been notified. Assign a Head Trainer in Club records.`,
+        `Could not re-admit ${horse.horseName} to stall ${s}`,
+      );
+      if (done) setStall("");
+    };
     return (
       <Card title="Re-admit to the club" hint="The horse comes back with a new stall. Its health status stays as the vet left it.">
-        <form onSubmit={(e) => run(e, () => readmitHorse(horse.horseId, stall), (h) => `${h.horseName} is back in stall ${h.stallNo}.`)} noValidate>
-          <div className="hz-form-grid">
+        {dialog.element}
+        <form onSubmit={readmit} noValidate>
+          <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
             <div className="hz-field">
               <label htmlFor="readmit-stall">Stall</label>
               <input id="readmit-stall" className="hz-mono" maxLength={20} value={stall}
@@ -201,20 +222,38 @@ function OwnershipForm({ horse, onSaved }) {
               {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
             </div>
           </div>
-          {message && <p className="hz-muted hz-note" role="status">{message}</p>}
           <div className="hz-form-footer">
             <button type="submit" className="hz-btn" disabled={busy || !stall.trim()}>{busy ? "Saving…" : "Re-admit"}</button>
           </div>
+          <ResultLine result={result} />
         </form>
       </Card>
     );
   }
 
+  const transfer = async (e) => {
+    e.preventDefault();
+    const target = owners.find((o) => String(o.userId) === String(ownerId));
+    const targetName = target ? `${target.fullName} (@${target.username})` : "the chosen owner";
+    const confirmed = await dialog.confirm({
+      title: `Transfer ${horse.horseName}?`,
+      message: `${horse.horseName} moves from ${horse.ownerName} to ${targetName}. Both owners are told. Reason: ${reason.trim()}`,
+      confirmLabel: "Transfer",
+    });
+    if (!confirmed) return;
+    const done = await run(
+      () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
+      () => `Transferred ${horse.horseName} from ${horse.ownerName} to ${targetName}. Both owners have been notified.`,
+      `Could not transfer ${horse.horseName} to ${targetName}`,
+    );
+    if (done) { setOwnerId(""); setReason(""); }
+  };
+
   return (
     <Card title="Transfer to another owner" hint="For a sale or a gift. The current and the new owner are both told.">
-      <form onSubmit={(e) => run(e, () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
-                                  (h) => `${h.horseName} now belongs to ${h.ownerName}.`)} noValidate>
-        <div className="hz-form-grid">
+      {dialog.element}
+      <form onSubmit={transfer} noValidate>
+        <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <div className="hz-field">
             <label htmlFor="transfer-owner">New owner</label>
             <select id="transfer-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
@@ -230,10 +269,10 @@ function OwnershipForm({ horse, onSaved }) {
             {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
           </div>
         </div>
-        {message && <p className="hz-muted hz-note" role="status">{message}</p>}
         <div className="hz-form-footer">
           <button type="submit" className="hz-btn" disabled={busy || !ownerId || !reason.trim()}>{busy ? "Saving…" : "Transfer"}</button>
         </div>
+        <ResultLine result={result} />
       </form>
     </Card>
   );
@@ -254,6 +293,8 @@ export default function HorseDetailPage() {
   const initialTab = searchParams.get("tab") || "overview";
   const [tab, setTab] = useState(initialTab);
   const [horse, setHorse] = useState(null);
+  const [ownershipResult, setOwnershipResult] = useState(null); // survives the card's remount
+  useEffect(() => { setOwnershipResult(null); }, [id]); // another horse: start clean
   const [error, setError] = useState("");
 
   const [generations, setGenerations] = useState(3);
@@ -455,7 +496,8 @@ export default function HorseDetailPage() {
           </Card>
 
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
-          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
+          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse}
+                                                                  result={ownershipResult} setResult={setOwnershipResult} />}
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} onViewHistory={() => setTab("medical-history")} />}
 
