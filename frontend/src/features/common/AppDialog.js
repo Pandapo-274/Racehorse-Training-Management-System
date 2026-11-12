@@ -12,6 +12,10 @@
 //   ...
 //   return <>{dialog.element} ... </>;
 //
+// Both take items (a list of lines shown under the message) and note (a
+// warning line). prompt() with options [{value, label}] shows a select instead
+// of a text box; an empty value is allowed there (e.g. "Nobody").
+//
 // prompt(): validate() runs before closing; onSubmit() (optional) runs the
 // real request and, if it throws, its message is shown INSIDE the dialog so the
 // user can fix the value instead of starting over. Resolves with the value, or
@@ -26,6 +30,7 @@ function DialogView({ config, onClose }) {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
   const isPrompt = config.kind === "prompt";
+  const isSelect = isPrompt && Array.isArray(config.options);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(null); };
@@ -36,7 +41,7 @@ function DialogView({ config, onClose }) {
   useEffect(() => {
     if (isPrompt && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select();
+      if (inputRef.current.select) inputRef.current.select();
     }
   }, [isPrompt]);
 
@@ -44,7 +49,7 @@ function DialogView({ config, onClose }) {
     e?.preventDefault();
     if (!isPrompt) { onClose(true); return; }
     const v = String(value).trim();
-    const problem = config.validate ? config.validate(v) : (v ? null : "This field is required");
+    const problem = config.validate ? config.validate(v) : (v || isSelect ? null : "This field is required");
     if (problem) { setError(problem); return; }
     if (config.onSubmit) {
       setBusy(true);
@@ -69,10 +74,22 @@ function DialogView({ config, onClose }) {
         </div>
         <h3 id="app-dialog-title" className="app-dialog-title">{config.title}</h3>
         {config.message && <p className="app-dialog-message">{config.message}</p>}
+        {config.items?.length > 0 && (
+          <ul className="app-dialog-list">
+            {config.items.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        )}
+        {config.note && <p className="app-dialog-note">{config.note}</p>}
 
         {isPrompt && (
           <label className="app-dialog-field">
             {config.label && <span>{config.label}</span>}
+            {isSelect ? (
+              <select ref={inputRef} value={value} disabled={busy}
+                      onChange={(e) => { setValue(e.target.value); setError(""); }}>
+                {config.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
             <input
               ref={inputRef}
               type={config.inputType || "text"}
@@ -82,6 +99,7 @@ function DialogView({ config, onClose }) {
               disabled={busy}
               onChange={(e) => { setValue(e.target.value); setError(""); }}
             />
+            )}
             {config.hint && !error && <small className="app-dialog-hint">{config.hint}</small>}
           </label>
         )}

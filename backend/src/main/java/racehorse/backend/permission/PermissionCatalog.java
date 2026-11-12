@@ -44,6 +44,7 @@ final class PermissionCatalog {
             new Entry(ACCOUNTS, "Create staff accounts", "POST /api/staff", NONE),
             new Entry(ACCOUNTS, "Change a staff member's role", "PUT /api/staff/{id}/role", NONE),
             new Entry(ACCOUNTS, "Suspend or activate accounts", "PUT /api/staff/{id}/status", NONE),
+            new Entry(ACCOUNTS, "See a staff member's unfinished work", "GET /api/staff/{id}/open-work", NONE),
             new Entry(ACCOUNTS, "Edit an account's contact details", "PUT /api/staff/{id}", NONE),
             new Entry(ACCOUNTS, "Set a temporary password", "PUT /api/staff/{id}/password", NONE),
             new Entry(ACCOUNTS, "View this permission matrix", "GET /api/permissions", NONE),

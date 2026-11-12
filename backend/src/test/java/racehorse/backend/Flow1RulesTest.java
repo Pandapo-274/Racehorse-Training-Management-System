@@ -242,9 +242,113 @@ class Flow1RulesTest {
         StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
                 mock(TokenBlacklist.class), notifications);
 
-        service.setStatus(5, "SUSPENDED", MANAGER, "ip");
+        when(staff.stopRunningSessions(eq(5), anyString())).thenReturn(1);
+        StaffService.StaffUpdate result = service.setStatus(5, "SUSPENDED", MANAGER, "ip");
         verify(notifications).notifyUser(eq(2), any());
         verify(notifications, never()).notifyRole(eq("HEAD_TRAINER"), any(), any());
+        // The running session cannot wait for a groom who is gone: stopped and sent to review.
+        verify(staff).stopRunningSessions(5, "Stopped: the groom was suspended");
+        assertTrue(result.notice().contains("Stopped 1 running session"), result.notice());
+    }
+
+    @Test
+    void groomWorkCanBeHandedToAGroomOfTheSameTeam() {
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(staff.findRow(5)).thenReturn(Optional.of(groom(5, 2)));
+        when(staff.findRow(6)).thenReturn(Optional.of(groom(6, 2)));
+        when(staff.handOverSessions(5, 6)).thenReturn(2);
+        when(staff.handOverCareTasks(5, 6)).thenReturn(4);
+        StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
+
+        StaffService.StaffUpdate result = service.setStatus(5, "SUSPENDED", 6, MANAGER, "ip");
+        verify(staff).handOverSessions(5, 6);
+        verify(staff).handOverCareTasks(5, 6);
+        verify(notifications).notifyUser(eq(6), any());
+        assertTrue(result.notice().contains("2 sessions and 4 care tasks"), result.notice());
+    }
+
+    @Test
+    void groomWorkCannotGoToAnotherTeam() {
+        StaffRepository staff = mock(StaffRepository.class);
+        when(staff.findRow(5)).thenReturn(Optional.of(groom(5, 2)));
+        when(staff.findRow(6)).thenReturn(Optional.of(groom(6, 3)));
+        StaffService service = staffService(staff, mock(TokenBlacklist.class));
+
+        expect(400, () -> service.setStatus(5, "SUSPENDED", 6, MANAGER, "ip"));
+        verify(staff, never()).updateStatus(anyInt(), anyString());
+    }
+
+    @Test
+    void headTrainerHandOverNeedsRoomForAllTheHorses() {
+        StaffRepository staff = mock(StaffRepository.class);
+        when(staff.findRow(2)).thenReturn(Optional.of(trainer(2, 3, 1)));
+        when(staff.findRow(4)).thenReturn(Optional.of(trainer(4, 8, 1)));   // 8 + 3 > 10
+        StaffService service = staffService(staff, mock(TokenBlacklist.class));
+
+        ApiException ex = expect(409, () -> service.setStatus(2, "SUSPENDED", 4, MANAGER, "ip"));
+        assertTrue(ex.getMessage().contains("8 of 10 horses"), ex.getMessage());
+        verify(staff, never()).updateStatus(anyInt(), anyString());
+    }
+
+    @Test
+    void headTrainerHandOverMovesHorsesAndGroomsTogether() {
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(staff.findRow(2)).thenReturn(Optional.of(trainer(2, 2, 1)));
+        when(staff.findRow(4)).thenReturn(Optional.of(trainer(4, 5, 1)));
+        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("River Song", "Thunder Bay"));
+        when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of(5));
+        when(staff.countSessionsToReviewOfTrainer(2)).thenReturn(3);
+        StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
+
+        StaffService.StaffUpdate result = service.setStatus(2, "SUSPENDED", 4, MANAGER, "ip");
+        verify(staff).moveHorsesToTrainer(2, 4);
+        verify(staff).moveGroomsToTrainer(2, 4);
+        verify(staff, never()).releaseHorsesOfTrainer(anyInt());
+        verify(notifications).notifyUser(eq(4), any());
+        verify(notifications).notifyUser(eq(5), any());
+        assertTrue(result.notice().contains("3 sessions to review"), result.notice());
+    }
+
+    @Test
+    void vetWhoLeavesPutsTakenCasesBackInTheQueue() {
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        UserRepository users = mock(UserRepository.class);
+        when(staff.findRow(3)).thenReturn(Optional.of(staffRow(3, "VETERINARIAN")));
+        when(users.findRoleId("GROOM")).thenReturn(Optional.of(4));
+        when(staff.returnCasesToQueue(3)).thenReturn(2);
+        when(staff.countActiveOfRole("VETERINARIAN", 3)).thenReturn(0);
+        when(staff.countPendingVetCalls()).thenReturn(1);
+        StaffService service = new StaffService(users, staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
+
+        StaffService.StaffUpdate result = service.changeRole(3, "GROOM", MANAGER, "ip");
+        verify(staff).returnCasesToQueue(3);
+        verify(notifications).notifyRole(eq("VETERINARIAN"), any(), any());
+        assertTrue(result.notice().contains("2 incident cases went back to the open queue"), result.notice());
+        assertTrue(result.notice().contains("no other active Veterinarian"), result.notice());
+    }
+
+    @Test
+    void vetCasesCanBeHandedToAnotherVet() {
+        StaffRepository staff = mock(StaffRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(staff.findRow(3)).thenReturn(Optional.of(staffRow(3, "VETERINARIAN")));
+        when(staff.findRow(7)).thenReturn(Optional.of(staffRow(7, "VETERINARIAN")));
+        when(staff.handOverCases(3, 7)).thenReturn(1);
+        when(staff.countActiveOfRole("VETERINARIAN", 3)).thenReturn(1);
+        StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
+
+        StaffService.StaffUpdate result = service.setStatus(3, "SUSPENDED", 7, MANAGER, "ip");
+        verify(staff).handOverCases(3, 7);
+        verify(staff, never()).returnCasesToQueue(anyInt());
+        verify(notifications).notifyUser(eq(7), any());
+        assertTrue(result.notice().contains("Handed 1 incident case to User 7"), result.notice());
     }
 
     // ------------------------------------------------------------ transfer / readmit
@@ -338,6 +442,17 @@ class Flow1RulesTest {
     private static UserRecord user(int id, String role, Instant lockedUntil) {
         return new UserRecord(id, "user" + id, "$2a$hash", "User " + id, "user" + id + "@club.test",
                 "ACTIVE", role, null, false, lockedUntil);
+    }
+
+    private static StaffRow groom(int id, int trainerId) {
+        return new StaffRow(id, "groom" + id, "User " + id, "g" + id + "@club.test", null, "GROOM", "Groom",
+                "ACTIVE", null, LocalDateTime.now(), 0, trainerId, "User " + trainerId, 0, 0, null);
+    }
+
+    /** Head Trainer with this many active horses and grooms, max 10 horses. */
+    private static StaffRow trainer(int id, int horses, int grooms) {
+        return new StaffRow(id, "ht" + id, "User " + id, "t" + id + "@club.test", null, "HEAD_TRAINER", "Head Trainer",
+                "ACTIVE", null, LocalDateTime.now(), 0, null, null, grooms, horses, 10);
     }
 
     private static StaffRow staffRow(int id, String role) {

@@ -45,18 +45,35 @@ export function setTemporaryPassword(userId, password) {
 /** Staff role codes the manager can move people between (same as STAFF_ROLES in StaffService). */
 export const STAFF_ROLE_CODES = new Set(STAFF_ROLE_OPTIONS.map((o) => o.value));
 
-export function setStaffStatus(userId, status) {
+/** handoverTo: optional account (same role) that takes over the person's open work when they are suspended. */
+export function setStaffStatus(userId, status, handoverTo = null) {
   return authFetch(`/api/staff/${userId}/status`, {
     method: "PUT",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, handoverTo }),
   });
 }
 
-export function changeStaffRole(userId, roleName) {
+export function changeStaffRole(userId, roleName, handoverTo = null) {
   return authFetch(`/api/staff/${userId}/role`, {
     method: "PUT",
-    body: JSON.stringify({ roleName }),
+    body: JSON.stringify({ roleName, handoverTo }),
   });
+}
+
+/**
+ * What a staff member leaves unfinished and who may take it over:
+ * { role, items: [text], candidates: [StaffRow], fallback, note }.
+ */
+export function getOpenWork(userId) {
+  return authFetch(`/api/staff/${userId}/open-work`);
+}
+
+/** Option text for a successor in the hand-over select. */
+export function successorLabel(role, c) {
+  if (role === "HEAD_TRAINER") {
+    return `${c.fullName} (${c.managedHorseCount}/${c.maxHorses ?? 10} horses, ${c.groomCount}/3 grooms)`;
+  }
+  return `${c.fullName} (@${c.username})`;
 }
 
 /** V37: Club Manager gán hoặc gỡ Groom cho một Head Trainer (tối đa 3 Groom / Head Trainer). */

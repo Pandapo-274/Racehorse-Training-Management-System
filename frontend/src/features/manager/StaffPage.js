@@ -18,6 +18,7 @@ import { useAppDialog } from "../common/AppDialog";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
   createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses, leavingConsequences,
+  getOpenWork, successorLabel,
   updateStaffContact, setTemporaryPassword,
   reassignNotice, STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES, CREATE_ROLE_OPTIONS,
 } from "./staffApi";
@@ -356,59 +357,112 @@ export default function StaffPage() {
       .finally(() => setSaving(false));
   };
 
+  /**
+   * Confirm that someone leaves their role (suspension or role change). The
+   * dialog lists what they leave unfinished; when someone of the same role can
+   * take it over, the manager picks them in the same dialog. Any error from the
+   * request (e.g. that Head Trainer has no room) is shown inside the dialog.
+   * send(handoverTo) does the request; resolves with its result, or null if cancelled.
+   */
+  const confirmLeaving = async (row, { title, message, confirmLabel, danger }, send) => {
+    let work = null;
+    if (STAFF_ROLE_CODES.has(row.roleName)) {
+      try {
+        work = await getOpenWork(row.userId);
+      } catch (err) {
+        if (handleAuthError(err, navigate)) return null;
+      }
+    }
+    const items = work?.items || [];
+    let result = null;
+    if (items.length > 0 && work.candidates.length > 0) {
+      const picked = await dialog.prompt({
+        title, danger, confirmLabel,
+        message: `${message} Unfinished work:`,
+        items,
+        note: work.note,
+        label: "Hand it over to",
+        options: [
+          { value: "", label: work.fallback },
+          ...work.candidates.map((c) => ({ value: String(c.userId), label: successorLabel(work.role, c) })),
+        ],
+        defaultValue: "",
+        onSubmit: async (v) => { result = await send(v ? Number(v) : null); },
+      });
+      return picked === null ? null : result;
+    }
+    const nobody = items.length > 0 && work.fallback
+      ? `No one of the same role can take it over. ${work.fallback.replace(/^Nobody: /, "").replace(/^./, (c) => c.toUpperCase())}.`
+      : null;
+    const ok = await dialog.confirm({
+      title, danger, confirmLabel,
+      message: work ? (items.length ? `${message} Unfinished work:` : message) : message + leavingConsequences(row),
+      items,
+      note: [nobody, work?.note].filter(Boolean).join(" ") || null,
+    });
+    if (!ok) return null;
+    return send(null);
+  };
+
   const toggleStatus = async (row) => {
     const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    if (next === "SUSPENDED") {
-      const ok = await dialog.confirm({
-        title: `Suspend ${row.fullName}?`,
-        message: row.roleName === "HORSE_OWNER"
-          ? `@${row.username} will be signed out and cannot sign in. Their pending horse registration requests are cancelled, and head trainers are told about approvals on hold.`
-          : `@${row.username} will be signed out and cannot sign in until the account is activated again.`
-            + leavingConsequences(row),
-        confirmLabel: "Suspend",
-        danger: true,
-      });
-      if (!ok) return;
-    }
-    setBusyId(row.userId);
     setNotice("");
-    setStaffStatus(row.userId, next)
-      .then(({ member, sessionsToReassign, notice: extra }) => {
-        setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
-          + reassignNotice(member.fullName, sessionsToReassign)
-          + (extra ? ` ${extra}` : ""));
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+    let done;
+    try {
+      if (next === "SUSPENDED") {
+        done = await confirmLeaving(row, {
+          title: `Suspend ${row.fullName}?`,
+          message: row.roleName === "HORSE_OWNER"
+            ? `@${row.username} will be signed out and cannot sign in. Their pending horse registration requests are cancelled, and head trainers are told about approvals on hold.`
+            : `@${row.username} will be signed out and cannot sign in until the account is activated again.`,
+          confirmLabel: "Suspend",
+          danger: true,
+        }, (handoverTo) => {
+          setBusyId(row.userId);
+          return setStaffStatus(row.userId, next, handoverTo);
+        });
+        if (!done) return;
+      } else {
+        setBusyId(row.userId);
+        done = await setStaffStatus(row.userId, next);
+      }
+      const { member, sessionsToReassign, notice: extra } = done;
+      setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
+        + reassignNotice(member.fullName, sessionsToReassign)
+        + (extra ? ` ${extra}` : ""));
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setNotice(err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const changeRole = async (row, roleName) => {
     if (roleName === row.roleName) return;
     const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
-    const ok = await dialog.confirm({
-      title: `Change role to ${label}?`,
-      message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`
-        + leavingConsequences(row),
-      confirmLabel: "Change role",
-    });
-    if (!ok) return;
-    setBusyId(row.userId);
     setNotice("");
-    changeStaffRole(row.userId, roleName)
-      .then(({ member, sessionsToReassign, notice: extra }) => {
-        setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign)
-          + (extra ? ` ${extra}` : ""));
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+    try {
+      const done = await confirmLeaving(row, {
+        title: `Change role to ${label}?`,
+        message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`,
+        confirmLabel: "Change role",
+      }, (handoverTo) => {
+        setBusyId(row.userId);
+        return changeStaffRole(row.userId, roleName, handoverTo);
+      });
+      if (!done) return;
+      const { member, sessionsToReassign, notice: extra } = done;
+      setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign)
+        + (extra ? ` ${extra}` : ""));
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setNotice(err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleAssignTrainer = (row, trainerIdStr) => {
