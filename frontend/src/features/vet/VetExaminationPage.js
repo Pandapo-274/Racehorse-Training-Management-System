@@ -658,9 +658,9 @@ function ExaminationForm({ horseId, reportId }) {
           type="button"
           className="vx-btn vx-btn--ghost"
           style={{ fontSize: "13px", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px", color: "#b32569", borderColor: "#f3c2db" }}
-          onClick={() => window.open(`/veterinarian/horses/${horseId}?tab=medical-history`, "_blank")}
+          onClick={() => window.open(`/veterinarian/prescriptions/history/${horseId}`, "_blank")}
         >
-          📋 View Medical & Treatment History ↗
+          📋 View Lifetime Prescriptions & History ↗
         </button>
       </div>
       <VetError error={error} />

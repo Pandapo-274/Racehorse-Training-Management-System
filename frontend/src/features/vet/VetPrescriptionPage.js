@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
-import { healthApplies } from "../horse/horseApi";
+import { healthApplies, toStatus } from "../horse/horseApi";
+import HorsePhoto from "../horse/HorsePhoto";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
 import {
   listActiveTreatments,
@@ -72,6 +73,7 @@ export default function VetPrescriptionPage() {
 
   const [tab, setTab] = useState("prescriptions");
   const [active, setActive] = useState(null);
+  const [horses, setHorses] = useState(null);
   const [expenses, setExpenses] = useState(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
@@ -82,6 +84,24 @@ export default function VetPrescriptionPage() {
   const [ending, setEnding] = useState(null);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [notice, setNotice] = useState("");
+
+  // Load horses directory
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listHorses(ctrl.signal)
+      .then((list) =>
+        setHorses(
+          (list || [])
+            .filter(healthApplies)
+            .sort((a, b) => a.horseName.localeCompare(b.horseName))
+        )
+      )
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (handleAuthError(err, navigate)) return;
+      });
+    return () => ctrl.abort();
+  }, [navigate]);
 
   // Load active treatments
   useEffect(() => {
@@ -150,6 +170,20 @@ export default function VetPrescriptionPage() {
     return groups;
   }, [active, query]);
 
+  const horseRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!horses) return [];
+    if (!q) return horses;
+    return horses.filter(
+      (h) =>
+        (h.horseName && h.horseName.toLowerCase().includes(q)) ||
+        (h.registrationCode && h.registrationCode.toLowerCase().includes(q)) ||
+        (h.ownerName && h.ownerName.toLowerCase().includes(q)) ||
+        (h.ownerFullName && h.ownerFullName.toLowerCase().includes(q)) ||
+        (h.stallNo && String(h.stallNo).toLowerCase().includes(q))
+    );
+  }, [horses, query]);
+
   const expenseRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (expenses || []).filter(
@@ -203,6 +237,15 @@ export default function VetPrescriptionPage() {
           onClick={() => setTab("prescriptions")}
         >
           Prescriptions ({prescriptionGroups ? prescriptionGroups.length : 0})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="vx-tab-btn"
+          aria-selected={tab === "directory"}
+          onClick={() => setTab("directory")}
+        >
+          Horse Medical Directory ({horses ? horses.length : "..."})
         </button>
         <button
           type="button"
@@ -276,13 +319,22 @@ export default function VetPrescriptionPage() {
                       <td>{formatDate(p.startDate)}</td>
                       <td>{p.endDate ? formatDate(p.endDate) : "until review"}</td>
                       <td style={{ textAlign: "right" }}>
-                        <div className="vc-cell-actions" style={{ justifyContent: "flex-end" }}>
+                        <div className="vc-cell-actions" style={{ justifyContent: "flex-end", gap: "8px" }}>
                           <button
                             type="button"
                             className="vc-btn"
                             onClick={() => setSelectedPrescription(p)}
                           >
                             Details
+                          </button>
+                          <button
+                            type="button"
+                            className="vc-btn"
+                            style={{ color: "#b32569", borderColor: "#f3c2db" }}
+                            onClick={() => navigate(`/veterinarian/prescriptions/history/${p.horseId}`)}
+                            title="View complete prescription history"
+                          >
+                            History →
                           </button>
                         </div>
                       </td>
@@ -354,6 +406,74 @@ export default function VetPrescriptionPage() {
         </VetCard>
       )}
 
+      {tab === "directory" && (
+        <VetCard
+          title="Horse Prescription Directory"
+          hint={`Select any horse to view its complete lifetime prescription history and medical treatments (${horseRows.length} horses)`}
+          tone="gold"
+          actions={
+            <button
+              type="button"
+              className="examine-button"
+              onClick={() => {
+                setNotice("");
+                setPrescribing(true);
+              }}
+            >
+              New prescription
+            </button>
+          }
+        >
+          {!horses ? (
+            <VetState title="Loading horses directory…" />
+          ) : horseRows.length === 0 ? (
+            <div className="vet-inline-state">No horses found matching "{query}".</div>
+          ) : (
+            <div className="vc-horse-grid">
+              {horseRows.map((h) => {
+                const hStatus = h.status ? toStatus(h.status) : null;
+                return (
+                  <div
+                    key={h.horseId}
+                    className="vc-horse-card"
+                    onClick={() => navigate(`/veterinarian/prescriptions/history/${h.horseId}`)}
+                  >
+                    <div className="vc-horse-card-header">
+                      <HorsePhoto horse={h} className="vc-horse-card-avatar" />
+                      <div className="vc-horse-card-info">
+                        <div className="vc-horse-card-title">{h.horseName}</div>
+                        <div className="vc-horse-card-code">
+                          {h.registrationCode} · Stall {h.stallNo || "—"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="vc-horse-card-owner">
+                      👤 Owner: <strong>{h.ownerName || h.ownerFullName || "Tracen Bloodstock"}</strong>
+                    </div>
+
+                    <div className="vc-horse-card-footer">
+                      {hStatus ? (
+                        <span className={`vc-pill vc-pill--${hStatus.tone || "green"}`}>
+                          {hStatus.label}
+                        </span>
+                      ) : (
+                        <span className="vc-muted" style={{ fontSize: "12px" }}>
+                          {h.breed || "Thoroughbred"}
+                        </span>
+                      )}
+                      <span className="vc-card-action-btn">
+                        View History →
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </VetCard>
+      )}
+
       {history && (
         <HistoryCard
           key={`${history.horseId}-${reload}`}
@@ -366,6 +486,7 @@ export default function VetPrescriptionPage() {
         <PrescriptionDetailModal
           prescription={selectedPrescription}
           onClose={() => setSelectedPrescription(null)}
+          onViewHistory={(id) => navigate(`/veterinarian/prescriptions/history/${id}`)}
         />
       )}
 
@@ -382,7 +503,7 @@ export default function VetPrescriptionPage() {
 
 /* ---------- chi tiết đơn thuốc ---------- */
 
-function PrescriptionDetailModal({ prescription, onClose }) {
+function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
   if (!prescription) return null;
   return (
     <div className="vet-modal-backdrop" onClick={onClose}>
@@ -430,7 +551,20 @@ function PrescriptionDetailModal({ prescription, onClose }) {
             </table>
           </div>
         </div>
-        <div className="vet-modal-footer">
+        <div className="vet-modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {onViewHistory && (
+            <button
+              type="button"
+              className="vc-btn"
+              style={{ color: "#b32569", borderColor: "#f3c2db" }}
+              onClick={() => {
+                onClose();
+                onViewHistory(prescription.horseId);
+              }}
+            >
+              📋 View Lifetime Prescriptions for {prescription.horseName} →
+            </button>
+          )}
           <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose}>
             Close
           </button>

@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 12, 2026` at `08:18` by `Pandapo274`
+### Last Commited: `Nov 12, 2026` at `16:30` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,13 @@ npm start
 
 ## Changelogs
 > #### `Nov 12, 2026`
+- `[16:30]` `Pandapo274` -
+Horse Prescription History Directory & Dedicated Timeline Page:
+- Sidebar Layout Fix: Resolved vertical collision and overflow between sidebar navigation items and Sign Out / Profile card by adding flex-shrink: 0, padding-top, and scrollable container across vet and horse stylesheets.
+- Horse Medical & Prescription Directory: Added dedicated horse directory cards with Horse Avatar, Horse Name, and Owner Name ("Owner: ...") on Vet Prescriptions page.
+- Dedicated Horse Prescription History Page: Created `/veterinarian/prescriptions/history/:horseId` as a dedicated full page (not a popup) with Back button, Horse Profile Hero banner, summary statistics, search filter, and lifetime timeline filter presets (All Time, Last 30 Days, Last 90 Days, Last 180 Days, Last 1 Year, Custom Date Range).
+- Examination & Modal Links: Updated Examination and Prescription Details modals to directly navigate to the dedicated lifetime history page in English.
+
 - `[08:18]` `Pandapo274` -
 Vet UX & Business Refinements:
 - Vet Calls: Priority sorting by urgency (HIGH > MEDIUM > LOW) for pending advice queue.

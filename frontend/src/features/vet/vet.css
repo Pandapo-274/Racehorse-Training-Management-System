@@ -40,7 +40,7 @@
 }
 
 .vet-brand {
-  height: 92px;
+  height: 84px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -50,8 +50,8 @@
 }
 
 .vet-brand img {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
 }
 
@@ -76,9 +76,9 @@
   align-items: center;
   gap: 7px;
   align-self: flex-start;
-  margin: 22px 0 14px 12px;
+  margin: 14px 0 10px 12px;
   padding: 0 28px 0 14px;
-  height: 32px;
+  height: 30px;
   background: linear-gradient(90deg, #f55fa9, #e43e8c);
   box-shadow: 0 0 0 1px #c9317a;
   font-family: var(--font-heading);
@@ -95,12 +95,21 @@
 .vet-nav {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  padding-right: 2px;
 }
 
 .vet-nav-item {
   position: relative;
-  height: 46px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -108,7 +117,7 @@
   border: 0;
   background: transparent;
   color: #a2abca;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -135,7 +144,10 @@
 .vet-nav-item.active::before {
   content: "";
   position: absolute;
-  inset: 0 -2px;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  right: -2px;
   z-index: -1;
   background: linear-gradient(90deg, #e8408f, #d3347c);
   transform: skewX(-14deg);
@@ -146,6 +158,8 @@
 
 .vet-sidebar-bottom {
   margin-top: auto;
+  flex-shrink: 0;
+  padding-top: 8px;
 }
 
 .vet-signout {
