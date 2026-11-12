@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
@@ -59,6 +59,21 @@ function RoleRoute({ roles, children }) {
   return children;
 }
 
+function HorseRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  const user = getUser();
+  const search = location.search || "";
+  if (!user) return <Navigate to="/login" replace />;
+  const role = user.role;
+  let base = "/manager/horses";
+  if (role === "HEAD_TRAINER") base = "/trainer/horses";
+  else if (role === "VETERINARIAN") base = "/veterinarian/horses";
+  else if (role === "GROOM") base = "/groom/horses";
+  else if (role === "HORSE_OWNER") base = "/horse-owner/horses";
+  return <Navigate to={`${base}/${id}${search}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -116,6 +131,7 @@ export default function App() {
         <Route path="/horse-owner" element={<HorseOwnerDashboard />} />
 
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
+        <Route path="/horses/:id" element={<RoleRoute roles={EVERY_ROLE}><HorseRedirect /></RoleRoute>} />
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
       
 

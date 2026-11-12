@@ -80,6 +80,7 @@ export default function VetPrescriptionPage() {
   const [history, setHistory] = useState(null);
   const [prescribing, setPrescribing] = useState(false);
   const [ending, setEnding] = useState(null);
+  const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [notice, setNotice] = useState("");
 
   // Load active treatments
@@ -109,15 +110,44 @@ export default function VetPrescriptionPage() {
     return () => ctrl.abort();
   }, [tab, navigate, reload]);
 
-  const rows = useMemo(() => {
+  const prescriptionGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (active || []).filter(
-      (t) =>
-        !q ||
-        t.horseName.toLowerCase().includes(q) ||
-        String(t.medicineName || "").toLowerCase().includes(q) ||
-        String(t.instruction || "").toLowerCase().includes(q)
-    );
+    const map = new Map();
+    (active || []).forEach((t) => {
+      const key = `${t.horseId}_${t.recordId || "norec"}_${t.startDate}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          prescriptionKey: key,
+          horseId: t.horseId,
+          horseName: t.horseName,
+          recordId: t.recordId,
+          startDate: t.startDate,
+          endDate: t.endDate,
+          items: [],
+        });
+      }
+      const grp = map.get(key);
+      grp.items.push(t);
+      if (t.endDate && (!grp.endDate || t.endDate > grp.endDate)) {
+        grp.endDate = t.endDate;
+      }
+    });
+
+    let groups = Array.from(map.values());
+
+    if (q) {
+      groups = groups.filter((g) => {
+        if (g.horseName.toLowerCase().includes(q)) return true;
+        return g.items.some(
+          (t) =>
+            String(t.medicineName || "").toLowerCase().includes(q) ||
+            String(t.instruction || "").toLowerCase().includes(q) ||
+            String(t.dosage || "").toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return groups;
   }, [active, query]);
 
   const expenseRows = useMemo(() => {
@@ -172,7 +202,7 @@ export default function VetPrescriptionPage() {
           aria-selected={tab === "prescriptions"}
           onClick={() => setTab("prescriptions")}
         >
-          Prescriptions ({active ? active.length : 0})
+          Prescriptions ({prescriptionGroups ? prescriptionGroups.length : 0})
         </button>
         <button
           type="button"
@@ -190,7 +220,7 @@ export default function VetPrescriptionPage() {
       {tab === "prescriptions" && active && (
         <VetCard
           title="Active prescriptions"
-          hint={`${plural(rows.length, "treatment")} active or scheduled`}
+          hint={`${plural(prescriptionGroups.length, "prescription")} active or scheduled`}
           tone="green"
           actions={
             <div className="vc-actions">
@@ -207,7 +237,7 @@ export default function VetPrescriptionPage() {
             </div>
           }
         >
-          {rows.length === 0 ? (
+          {prescriptionGroups.length === 0 ? (
             <div className="vet-inline-state">
               {query
                 ? "No prescriptions match your search."
@@ -219,41 +249,40 @@ export default function VetPrescriptionPage() {
                 <thead>
                   <tr>
                     <th>Horse</th>
-                    <th>Treatment</th>
-                    <th>Dose</th>
-                    <th>Period</th>
-                    <th aria-label="Actions" />
+                    <th>Start date</th>
+                    <th>End date</th>
+                    <th aria-label="Actions" style={{ textAlign: "right" }} />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((t) => (
-                    <tr key={t.treatmentId}>
+                  {prescriptionGroups.map((p) => (
+                    <tr key={p.prescriptionKey}>
                       <td>
-                        <span className="vc-name">{t.horseName}</span>
+                        <span className="vc-name">{p.horseName}</span>
+                        <span
+                          className="vx-pill"
+                          style={{
+                            marginLeft: "10px",
+                            fontSize: "12px",
+                            padding: "2px 8px",
+                            background: "#f1f5f9",
+                            color: "#475569",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {p.items.length} {p.items.length === 1 ? "medicine" : "medicines"}
+                        </span>
                       </td>
-                      <td>
-                        <strong>{treatmentTitle(t)}</strong>
-                        {t.medicineName && t.instruction && (
-                          <span className="vc-sub vc-instruction">{t.instruction}</span>
-                        )}
-                      </td>
-                      <td>{dose(t)}</td>
-                      <td>{period(t)}</td>
-                      <td>
-                        <div className="vc-cell-actions">
+                      <td>{formatDate(p.startDate)}</td>
+                      <td>{p.endDate ? formatDate(p.endDate) : "until review"}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <div className="vc-cell-actions" style={{ justifyContent: "flex-end" }}>
                           <button
                             type="button"
                             className="vc-btn"
-                            onClick={() => setHistory({ horseId: t.horseId, horseName: t.horseName })}
+                            onClick={() => setSelectedPrescription(p)}
                           >
-                            History
-                          </button>
-                          <button
-                            type="button"
-                            className="vc-btn vc-btn--danger"
-                            onClick={() => setEnding(t)}
-                          >
-                            End today
+                            Details
                           </button>
                         </div>
                       </td>
@@ -333,6 +362,13 @@ export default function VetPrescriptionPage() {
         />
       )}
 
+      {selectedPrescription && (
+        <PrescriptionDetailModal
+          prescription={selectedPrescription}
+          onClose={() => setSelectedPrescription(null)}
+        />
+      )}
+
       {prescribing && (
         <PrescribeDialog onClose={() => setPrescribing(false)} onDone={handleSaved} />
       )}
@@ -341,6 +377,66 @@ export default function VetPrescriptionPage() {
         <EndDialog treatment={ending} onClose={() => setEnding(null)} onDone={handleSaved} />
       )}
     </VetShell>
+  );
+}
+
+/* ---------- chi tiết đơn thuốc ---------- */
+
+function PrescriptionDetailModal({ prescription, onClose }) {
+  if (!prescription) return null;
+  return (
+    <div className="vet-modal-backdrop" onClick={onClose}>
+      <div
+        className="vet-modal-card vc-dialog-wide"
+        style={{ maxWidth: "780px" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="vet-modal-header">
+          <div>
+            <h3 style={{ margin: 0 }}>Prescription Details · {prescription.horseName}</h3>
+            <small style={{ color: "#64748b" }}>
+              {prescription.recordId ? `Examination #${prescription.recordId}` : "Medical Record"} ·{" "}
+              {formatDate(prescription.startDate)} →{" "}
+              {prescription.endDate ? formatDate(prescription.endDate) : "until review"}
+            </small>
+          </div>
+          <button type="button" className="vet-modal-close" onClick={onClose}>
+            &times;
+          </button>
+        </div>
+        <div className="vet-modal-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+          <div className="vc-table-wrap">
+            <table className="vc-table">
+              <thead>
+                <tr>
+                  <th>Medicine</th>
+                  <th>Dosage</th>
+                  <th>Period</th>
+                  <th>Instruction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prescription.items.map((m, idx) => (
+                  <tr key={m.treatmentId || idx}>
+                    <td>
+                      <strong>{m.medicineName || "Prescription item"}</strong>
+                    </td>
+                    <td>{dose(m)}</td>
+                    <td>{period(m)}</td>
+                    <td>{m.instruction || "As directed"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="vet-modal-footer">
+          <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -504,6 +600,9 @@ function PrescribeDialog({ onClose, onDone }) {
 
   // Danh sách thuốc đã thêm vào đơn (Selected medicines)
   const [selectedMeds, setSelectedMeds] = useState([]);
+
+  // Ghi chú đơn thuốc (tuỳ chọn - ghi chú hoặc thuốc ngoài kho)
+  const [prescriptionNote, setPrescriptionNote] = useState("");
 
   // Thời gian áp dụng
   const [startDate, setStartDate] = useState(todayInputValue());
@@ -676,10 +775,11 @@ function PrescribeDialog({ onClose, onDone }) {
     if (!horseId) problems.push("Choose a horse.");
     else if (!recordId) problems.push("Choose the examination this prescription belongs to.");
 
-    if (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim()) {
-      problems.push("Add at least 1 medicine to the prescription.");
+    if (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim() && !prescriptionNote.trim()) {
+      problems.push("Add at least 1 medicine or enter a prescription note.");
     }
     if (!startDate) problems.push("Enter the start date.");
+    else if (startDate < todayInputValue()) problems.push("The start date cannot be in the past.");
     if (startDate && endDate && endDate < startDate) {
       problems.push("The end date must be on or after the start date.");
     }
@@ -705,6 +805,26 @@ function PrescribeDialog({ onClose, onDone }) {
         frequency: frequency.trim() || "Twice daily",
         instruction: instruction.trim() || null,
       });
+    }
+
+    if (finalMeds.length === 0 && prescriptionNote.trim()) {
+      finalMeds.push({
+        supplyId: null,
+        name: "Special Prescription Note / Non-inventory",
+        unit: "unit",
+        unitPrice: 0,
+        quantity: 1,
+        dosage: "As noted",
+        frequency: frequency.trim() || "Once daily",
+        instruction: prescriptionNote.trim(),
+      });
+    } else if (finalMeds.length > 0 && prescriptionNote.trim()) {
+      finalMeds = finalMeds.map((m) => ({
+        ...m,
+        instruction: m.instruction
+          ? `${m.instruction} (Note: ${prescriptionNote.trim()})`
+          : `Note: ${prescriptionNote.trim()}`,
+      }));
     }
 
     // Ràng buộc tồn kho: Kiểm tra tất cả thuốc trước khi gửi yêu cầu lên server
@@ -983,6 +1103,7 @@ function PrescribeDialog({ onClose, onDone }) {
               type="date"
               className="vx-input"
               value={startDate}
+              min={todayInputValue()}
               onChange={(e) => setStartDate(e.target.value)}
             />
           </label>
@@ -1005,15 +1126,36 @@ function PrescribeDialog({ onClose, onDone }) {
             : "Leave the end date empty if the treatment runs until the next review."}
         </p>
 
+        {/* 5. Ghi chú đơn thuốc (tuỳ chọn - dành cho thuốc chưa có trong kho) */}
+        <div className="vx-form-field" style={{ marginTop: "14px" }}>
+          <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+            Note (optional)
+          </label>
+          <textarea
+            className="vx-input vx-textarea"
+            rows={3}
+            style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
+            value={prescriptionNote}
+            onChange={(e) => setPrescriptionNote(e.target.value)}
+            placeholder="Special instructions or medications requested that are currently not in stock..."
+          />
+        </div>
+
         {/* Actions */}
         <div className="vx-actions" style={{ marginTop: "20px" }}>
           <button
             type="button"
             className="vx-btn vx-btn--green"
-            disabled={busy || !recordId || (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim())}
+            disabled={
+              busy ||
+              !recordId ||
+              (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim() && !prescriptionNote.trim())
+            }
             onClick={submit}
           >
-            {busy ? "Saving…" : `Save prescription (${selectedMeds.length || (chosenMedKey || customMed ? 1 : 0)} medicines)`}
+            {busy
+              ? "Saving…"
+              : `Save prescription (${selectedMeds.length || (chosenMedKey || customMed || prescriptionNote.trim() ? 1 : 0)} items)`}
           </button>
           <button type="button" className="vx-btn vx-btn--ghost" disabled={busy} onClick={onClose}>
             Cancel

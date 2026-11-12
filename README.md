@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 11, 2026` at `21:25` by `Pandapo274`
+### Last Commited: `Nov 12, 2026` at `08:18` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,16 @@ npm start
 ```
 
 ## Changelogs
+> #### `Nov 12, 2026`
+- `[08:18]` `Pandapo274` -
+Vet UX & Business Refinements:
+- Vet Calls: Priority sorting by urgency (HIGH > MEDIUM > LOW) for pending advice queue.
+- Examination & Prescription: Restrict start date / exam date to current date and future (no past dates allowed), defaulting to today.
+- Medical History Link: Resolved role navigation redirecting to login; updated link to English "View Medical & Treatment History".
+- Sidebar Synchronization: Unified left navigation styling, heights, fonts, and active ribbon shape across Horse and Vet shells.
+- Training Lock UX: Replaced redundant emergency/no-lock buttons with unified Lock level selection (Full / No heavy work / None) and 2 action buttons (External Referral & Confirm).
+- Grouped Prescriptions & Notes: Grouped active prescription items into single multi-medicine orders with "Details" modal (dosage, period, instruction), removed "End today", and added optional prescription note for non-inventory medicines.
+
 > #### `Nov 11, 2026`
 - `[21:25]` `Pandapo274` -
 Horse Medical History Timeline & Treatment Records:

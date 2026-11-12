@@ -15,7 +15,6 @@ import {
   createInjury,
   issueLock,
   releaseLock,
-  LOCK_LEVELS,
   SEVERITIES,
   lockLevelLabel,
   todayInputValue,
@@ -199,6 +198,12 @@ function Field({ label, full, children }) {
 }
 
 
+const LOCK_SELECTION_OPTIONS = [
+  { value: "FULL", label: "Full lock", hint: "No training at all" },
+  { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
+  { value: "NONE", label: "No lock", hint: "Normal training permitted" },
+];
+
 function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, submitting }) {
   const [hospitalName, setHospitalName] = useState("");
   const [referralReason, setReferralReason] = useState(diagnosisDefault || report?.symptoms || "");
@@ -209,7 +214,7 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!hospitalName.trim() || !referralReason.trim()) {
-      setError("Vui lòng điền đầy đủ tên bệnh viện và lý do chuyển viện.");
+      setError("Please provide both the hospital name and the referral reason.");
       return;
     }
     setError("");
@@ -227,22 +232,22 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
     <div className="vet-modal-backdrop" onClick={onClose}>
       <div className="vet-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="vet-modal-header">
-          <h3>Chuyển viện ngoài (External Referral) · {horse.horseName}</h3>
+          <h3>External Hospital Referral · {horse.horseName}</h3>
           <button type="button" className="vet-modal-close" onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="vet-modal-body">
             {error && <p className="waiting-error" style={{ margin: 0 }}>{error}</p>}
             <div className="vx-banner vx-banner--warn" style={{ margin: 0 }}>
-              <strong>Quy trình chuyển viện khẩn cấp:</strong>
+              <strong>Emergency Referral Protocol:</strong>
               <span>
-                Ngựa sẽ được chuyển sang trạng thái <strong>INJURED</strong>, tự động kích hoạt <strong>FULL Training Lock</strong> (khoá toàn bộ luyện tập), và cảnh báo các cuộc đua đã đăng ký. Hệ thống sẽ gửi thông báo khẩn cấp tới Chủ ngựa và Huấn luyện viên trưởng.
+                The horse will be updated to <strong>INJURED</strong> status, automatically issuing a <strong>FULL Training Lock</strong> (stopping all training workouts), and alerting scheduled races. Emergency notifications will be sent to the Horse Owner and Head Trainer.
               </span>
             </div>
 
             <div className="vx-form-field">
               <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Bệnh viện tiếp nhận (Equine Hospital) <span style={{ color: "#e43e8c" }}>*</span>:
+                Receiving Hospital (Equine Hospital) <span style={{ color: "#e43e8c" }}>*</span>:
               </label>
               <input
                 type="text"
@@ -250,7 +255,7 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
                 style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
                 value={hospitalName}
                 onChange={(e) => setHospitalName(e.target.value)}
-                placeholder="Ví dụ: Bệnh viện Phẫu thuật Thú y Tuyến trên / Hanoi Equine Surgery Center"
+                placeholder="e.g. Equine Referral Surgery Hospital / SG Veterinary Center"
                 required
               />
             </div>
@@ -258,7 +263,7 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <div className="vx-form-field">
                 <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                  Mức độ khẩn cấp:
+                  Urgency Level:
                 </label>
                 <select
                   className="vx-input"
@@ -266,14 +271,14 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
                   value={urgency}
                   onChange={(e) => setUrgency(e.target.value)}
                 >
-                  <option value="HIGH">HIGH (Cấp bách)</option>
-                  <option value="CRITICAL">CRITICAL (Cấp cứu đe doạ tính mạng)</option>
+                  <option value="HIGH">HIGH (Urgent)</option>
+                  <option value="CRITICAL">CRITICAL (Life-threatening emergency)</option>
                 </select>
               </div>
 
               <div className="vx-form-field">
                 <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                  Ngày dự kiến về CLB:
+                  Expected Return Date:
                 </label>
                 <input
                   type="date"
@@ -288,7 +293,7 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
 
             <div className="vx-form-field">
               <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Lý do chuyển viện & Chẩn đoán sơ bộ <span style={{ color: "#e43e8c" }}>*</span>:
+                Referral Reason & Initial Diagnosis <span style={{ color: "#e43e8c" }}>*</span>:
               </label>
               <textarea
                 className="vx-input vx-textarea"
@@ -296,17 +301,17 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
                 style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
                 value={referralReason}
                 onChange={(e) => setReferralReason(e.target.value)}
-                placeholder="Gãy xương hốc chậu phức tạp, xoắn ruột / colic cấp cần phẫu thuật ngoại khoa, chấn thương mắt nặng..."
+                placeholder="Complex bone fracture, acute colic requiring surgical intervention, severe ophthalmic trauma..."
                 required
               />
             </div>
           </div>
           <div className="vet-modal-footer">
             <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose} disabled={submitting}>
-              Huỷ
+              Cancel
             </button>
             <button type="submit" className="vx-btn vx-btn--danger" disabled={submitting}>
-              {submitting ? "Đang xử lý..." : "Xác nhận chuyển viện ngoài"}
+              {submitting ? "Processing…" : "Confirm External Referral"}
             </button>
           </div>
         </form>
@@ -421,8 +426,8 @@ function ExaminationForm({ horseId, reportId }) {
 
     if (!examDate) {
       problems.push("Choose the exam date.");
-    } else if (examDate > todayInputValue()) {
-      problems.push("The exam date cannot be in the future.");
+    } else if (examDate < todayInputValue()) {
+      problems.push("The exam date cannot be in the past.");
     }
 
     if (!diagnosis.trim()) {
@@ -653,9 +658,9 @@ function ExaminationForm({ horseId, reportId }) {
           type="button"
           className="vx-btn vx-btn--ghost"
           style={{ fontSize: "13px", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px", color: "#b32569", borderColor: "#f3c2db" }}
-          onClick={() => window.open(`/horses/${horseId}?tab=medical-history`, "_blank")}
+          onClick={() => window.open(`/veterinarian/horses/${horseId}?tab=medical-history`, "_blank")}
         >
-          📋 Tra cứu lịch sử bệnh án & điều trị (Medical History) ↗
+          📋 View Medical & Treatment History ↗
         </button>
       </div>
       <VetError error={error} />
@@ -758,7 +763,7 @@ function ExaminationForm({ horseId, reportId }) {
                   type="date"
                   className="vx-input"
                   value={examDate}
-                  max={todayInputValue()}
+                  min={todayInputValue()}
                   onChange={(e) => setExamDate(e.target.value)}
                 />
               </Field>
@@ -874,7 +879,7 @@ function ExaminationForm({ horseId, reportId }) {
                     value={lockLevel}
                     onChange={(e) => setLockLevel(e.target.value)}
                   >
-                    {LOCK_LEVELS.map((l) => (
+                    {LOCK_SELECTION_OPTIONS.map((l) => (
                       <option key={l.value} value={l.value}>
                         {l.label} — {l.hint}
                       </option>
@@ -897,34 +902,21 @@ function ExaminationForm({ horseId, reportId }) {
             <div className="vx-actions">
               <button
                 type="button"
-                className="vx-btn vx-btn--danger"
-                disabled={busy || !!activeLock}
-                onClick={() => submit(true)}
-              >
-                {submitting === "lock"
-                  ? "Saving…"
-                  : "Issue emergency lock"}
-              </button>
-
-              <button
-                type="button"
                 className="vx-btn"
                 style={{ background: "#c9317a", color: "#fff", borderColor: "#c9317a" }}
                 disabled={busy}
                 onClick={() => setShowReferralModal(true)}
               >
-                Chuyển viện ngoài (External Referral)
+                External Referral
               </button>
 
               <button
                 type="button"
-                className="vx-btn vx-btn--ghost"
+                className="vx-btn vx-btn--danger"
                 disabled={busy}
-                onClick={() => submit(false)}
+                onClick={() => submit(lockLevel !== "NONE")}
               >
-                {submitting === "save"
-                  ? "Saving…"
-                  : "Save without lock"}
+                {submitting ? "Saving…" : "Confirm"}
               </button>
             </div>
           </VetCard>

@@ -74,7 +74,14 @@ function VetCallQueue() {
     };
   }, [navigate, reload]);
 
-  const pending = (calls || []).filter((c) => c.status === "PENDING");
+  const urgencyWeight = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+  const pending = (calls || [])
+    .filter((c) => c.status === "PENDING")
+    .sort((a, b) => {
+      const weightDiff = (urgencyWeight[b.urgency] || 0) - (urgencyWeight[a.urgency] || 0);
+      if (weightDiff !== 0) return weightDiff;
+      return new Date(b.calledAt || 0) - new Date(a.calledAt || 0);
+    });
   const answered = (calls || []).filter((c) => c.status === "ANSWERED");
 
   return (
