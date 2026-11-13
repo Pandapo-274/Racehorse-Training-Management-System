@@ -9,10 +9,13 @@ import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Chỉ nói chuyện với DB, không chứa logic nghiệp vụ. */
 @Repository
 public class TrainingPlanRepository {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final JdbcClient jdbc;
 
@@ -20,18 +23,42 @@ public class TrainingPlanRepository {
         this.jdbc = jdbc;
     }
 
+    public record PendingUpdatePayload(Integer groomId, String groomName, String planName,
+                                       List<TrainingPlanRequest.PhaseRequest> phases) {}
+
+    public record OverduePendingPlan(int planId, int horseId, String horseName,
+                                     String planName, int createdBy) {}
+
     private static final String SELECT_PLAN = """
             SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.groom_id, gr.full_name AS groom_name,
                    tp.plan_name, tp.start_date, tp.end_date,
                    tp.status, tp.created_by, u.full_name AS created_by_name, tp.created_at,
-                   tp.owner_note, tp.owner_reviewed_at
+                   tp.owner_note, tp.owner_reviewed_at,
+                   tp.pending_update_status, tp.pending_update_at, tp.pending_update_json
             FROM TRAINING_PLAN tp
             JOIN HORSE h    ON h.horse_id = tp.horse_id
             JOIN APP_USER u ON u.user_id  = tp.created_by
             LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
             """;
 
+    private static TrainingPlanResponse.PendingUpdate parsePendingUpdate(
+            String status, LocalDateTime at, String json) {
+        if (!"PENDING".equals(status) || json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            PendingUpdatePayload payload = JSON.readValue(json, PendingUpdatePayload.class);
+            return new TrainingPlanResponse.PendingUpdate(
+                    status, at, payload.groomId(), payload.groomName(), payload.planName(), payload.phases());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private static TrainingPlanResponse mapPlan(ResultSet rs, int rowNum) throws SQLException {
+        String pendingStatus = rs.getString("pending_update_status");
+        LocalDateTime pendingAt = rs.getObject("pending_update_at", LocalDateTime.class);
+        String pendingJson = rs.getString("pending_update_json");
         return new TrainingPlanResponse(
                 rs.getInt("plan_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
                 rs.getObject("groom_id", Integer.class), rs.getString("groom_name"),
@@ -39,7 +66,9 @@ public class TrainingPlanRepository {
                 rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class),
                 rs.getString("status"), rs.getInt("created_by"), rs.getString("created_by_name"),
                 rs.getObject("created_at", LocalDateTime.class),
-                rs.getString("owner_note"), rs.getObject("owner_reviewed_at", LocalDateTime.class), List.of());
+                rs.getString("owner_note"), rs.getObject("owner_reviewed_at", LocalDateTime.class),
+                List.of(),
+                parsePendingUpdate(pendingStatus, pendingAt, pendingJson));
     }
 
     /** Trả giáo án kèm đầy đủ giai đoạn. */
@@ -83,7 +112,8 @@ public class TrainingPlanRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.groom_id, gr.full_name AS groom_name,
                        tp.plan_name, tp.start_date, tp.end_date, tp.status, tp.owner_note,
-                       (SELECT COUNT(*) FROM PLAN_PHASE p WHERE p.plan_id = tp.plan_id) AS phase_count
+                       (SELECT COUNT(*) FROM PLAN_PHASE p WHERE p.plan_id = tp.plan_id) AS phase_count,
+                       CASE WHEN tp.pending_update_status = 'PENDING' THEN 1 ELSE 0 END AS has_pending_update
                 FROM TRAINING_PLAN tp
                 JOIN HORSE h ON h.horse_id = tp.horse_id
                 LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
@@ -105,7 +135,8 @@ public class TrainingPlanRepository {
                         rs.getString("plan_name"),
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class),
-                        rs.getString("status"), rs.getInt("phase_count"), rs.getString("owner_note")))
+                        rs.getString("status"), rs.getInt("phase_count"), rs.getString("owner_note"),
+                        rs.getInt("has_pending_update") == 1))
                 .list();
     }
 
@@ -405,5 +436,47 @@ public class TrainingPlanRepository {
                 .param("horseId", horseId)
                 .param("excludeId", excludeId)
                 .query(Integer.class).single() > 0;
+    }
+
+    public int savePendingUpdate(int planId, PendingUpdatePayload payload) {
+        String json = JSON.writeValueAsString(payload);
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN
+                SET pending_update_status = 'PENDING',
+                    pending_update_at = SYSUTCDATETIME(),
+                    pending_update_json = :json
+                WHERE plan_id = :id
+                """)
+                .param("json", json)
+                .param("id", planId)
+                .update();
+    }
+
+    public int clearPendingUpdate(int planId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN
+                SET pending_update_status = NULL,
+                    pending_update_at = NULL,
+                    pending_update_json = NULL
+                WHERE plan_id = :id AND pending_update_status = 'PENDING'
+                """)
+                .param("id", planId)
+                .update();
+    }
+
+    public List<OverduePendingPlan> findOverduePendingUpdates(LocalDateTime cutoffUtc) {
+        return jdbc.sql("""
+                SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.created_by
+                FROM TRAINING_PLAN tp
+                JOIN HORSE h ON h.horse_id = tp.horse_id
+                WHERE tp.pending_update_status = 'PENDING'
+                  AND tp.pending_update_at < :cutoff
+                """)
+                .param("cutoff", cutoffUtc)
+                .query((rs, n) -> new OverduePendingPlan(
+                        rs.getInt("plan_id"), rs.getInt("horse_id"),
+                        rs.getString("horse_name"), rs.getString("plan_name"),
+                        rs.getInt("created_by")))
+                .list();
     }
 }

@@ -14,7 +14,7 @@ import {
 import { toEvaluation } from "./horseOwnerApi";
 import {
   formatMetres, getPlan, isCurrentPhase, listMyPlans, listMySessions, pickPlan, reviewPlan,
-  sendOwnerFeedback, toPlanStatus, toSessionStatus, todayIso,
+  reviewPlanUpdate, sendOwnerFeedback, toPlanStatus, toSessionStatus, todayIso,
 } from "./ownerTrainingApi";
 import "./owner-training.css";
 
@@ -172,12 +172,104 @@ function PlanCard({ plan, detail, today, onReviewed }) {
           })}
         </ol>
       )}
+      {detail?.pendingUpdate && (
+        <PendingUpdateReviewBox
+          planId={plan.planId}
+          pendingUpdate={detail.pendingUpdate}
+          onReviewed={onReviewed}
+        />
+      )}
       {plan.status === "PENDING_APPROVAL" ? (
         <ApprovalBox plan={plan} onReviewed={onReviewed} />
       ) : (
         <OwnerFeedbackBox plan={plan} onFeedbackSent={onReviewed} />
       )}
     </Card>
+  );
+}
+
+function PendingUpdateReviewBox({ planId, pendingUpdate, onReviewed }) {
+  const navigate = useNavigate();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (approve) => {
+    setError("");
+    setBusy(true);
+    try {
+      await reviewPlanUpdate(planId, { approve, note: note.trim() || null });
+      setNote("");
+      onReviewed();
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="ot-approval"
+      style={{
+        marginTop: "12px",
+        padding: "12px",
+        borderRadius: "10px",
+        background: "#fffbeb",
+        border: "1px solid #f59e0b",
+      }}
+    >
+      <div style={{ fontWeight: 700, color: "#92400e", marginBottom: "6px" }}>
+        Pending plan update — awaiting your approval
+      </div>
+      <p style={{ margin: "0 0 8px", fontSize: "0.88rem", color: "#78350f" }}>
+        The current plan remains in effect until you approve. If not reviewed within 2 days, this update is automatically declined.
+      </p>
+      <div style={{ fontSize: "0.88rem", marginBottom: "8px", color: "#1e293b" }}>
+        {pendingUpdate.planName && (
+          <div><strong>Proposed name:</strong> {pendingUpdate.planName}</div>
+        )}
+        {pendingUpdate.groomName && (
+          <div><strong>Proposed groom:</strong> {pendingUpdate.groomName}</div>
+        )}
+        {Array.isArray(pendingUpdate.phases) && pendingUpdate.phases.length > 0 && (
+          <div style={{ marginTop: "6px" }}>
+            <strong>Proposed phases ({pendingUpdate.phases.length}):</strong>
+            <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+              {pendingUpdate.phases.map((ph, idx) => (
+                <li key={idx}>
+                  Phase {idx + 1}: {ph.phaseName} ({formatDate(ph.startDate)} – {formatDate(ph.endDate)})
+                  {ph.distance ? ` · ${formatMetres(ph.distance)}` : ""}
+                  {ph.targetVelocity ? ` · ${ph.targetVelocity} m/s` : ""}
+                  {ph.heartRateCeiling ? ` · max ${ph.heartRateCeiling} bpm` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "8px" }}>
+        Note to Head Trainer (optional)
+        <input
+          type="text"
+          maxLength={500}
+          value={note}
+          disabled={busy}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional note or reason for rejecting"
+          style={{ width: "100%", marginTop: "4px" }}
+        />
+      </label>
+      {error && <p className="ot-approval__err" role="alert">{error}</p>}
+      <div className="ot-approval__actions" style={{ display: "flex", gap: "8px" }}>
+        <button type="button" className="hz-btn hz-btn--primary" disabled={busy} onClick={() => submit(true)}>
+          {busy ? "Saving…" : "Approve update"}
+        </button>
+        <button type="button" className="hz-btn" disabled={busy} onClick={() => submit(false)}>
+          Reject update
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -367,6 +459,7 @@ export default function OwnerTrainingPage() {
     [mine, trialOnly]);
   const horse = horses?.find((h) => h.horseId === horseId);
   const waiting = useMemo(() => plans.filter((p) => p.status === "PENDING_APPROVAL"), [plans]);
+  const waitingUpdates = useMemo(() => plans.filter((p) => p.hasPendingUpdate), [plans]);
 
   return (
     <HorseShell
@@ -408,6 +501,12 @@ export default function OwnerTrainingPage() {
             <p className="ot-note ot-note--attention" role="status">
               {waiting.length === 1 ? "1 training plan is" : `${waiting.length} training plans are`} waiting
               for your approval: {waiting.map((p) => p.horseName).join(", ")}.
+            </p>
+          )}
+          {waitingUpdates.length > 0 && (
+            <p className="ot-note ot-note--attention" role="status">
+              {waitingUpdates.length === 1 ? "1 training plan update is" : `${waitingUpdates.length} training plan updates are`} waiting
+              for your approval: {waitingUpdates.map((p) => p.horseName).join(", ")}.
             </p>
           )}
 

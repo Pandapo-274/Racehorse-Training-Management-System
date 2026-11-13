@@ -22,7 +22,7 @@ public class SessionService {
     private static final Set<String> STATUSES =
             Set.of("SCHEDULED", "RUNNING", "COMPLETED", "STOPPED_EARLY", "CANCELLED");
 
-    private static final Set<String> EVALUATABLE = Set.of("RUNNING", "COMPLETED", "STOPPED_EARLY");
+    private static final Set<String> EVALUATABLE = Set.of("COMPLETED", "STOPPED_EARLY");
 
     /** V37: Hạn tối đa 2 ngày (48 giờ) kể từ lúc buổi tập kết thúc để Head Trainer gửi review. */
     public static final int REVIEW_DEADLINE_HOURS = 48;
@@ -122,10 +122,12 @@ public class SessionService {
         }
 
         if (!EVALUATABLE.contains(current.status())) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "CANCELLED".equals(current.status())
-                            ? "This session was cancelled, it cannot be evaluated"
-                            : "Session has not started yet, it cannot be evaluated");
+            String message = switch (current.status()) {
+                case "CANCELLED" -> "This session was cancelled, it cannot be evaluated";
+                case "RUNNING" -> "Session is still running; finish or stop it before reviewing";
+                default -> "Session has not started yet, it cannot be evaluated";
+            };
+            throw new ApiException(HttpStatus.CONFLICT, message);
         }
         if (req.peakHeartRate() != null && req.avgHeartRate() != null && req.peakHeartRate() < req.avgHeartRate()) {
             throw fieldError("peakHeartRate", "Peak heart rate cannot be lower than average heart rate");
@@ -223,7 +225,7 @@ public class SessionService {
                                             + s.horseName() + " metrics from Groom: Peak HR " + hrText
                                             + ", Peak Speed " + speedText + ". Moved to Archive for Head Trainer review.",
                                     Notice.TRAINING_SESSION, s.sessionId())));
-                    notifications.notifyRole("HEAD_TRAINER", null, new Notice(
+                    notifications.notifyHorseTrainer(s.horseId(), null, new Notice(
                             "SESSION_REVIEW_ARCHIVED",
                             "Overdue session review moved to Archive",
                             "Session #" + s.sessionId() + " for " + s.horseName()

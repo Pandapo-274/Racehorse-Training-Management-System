@@ -46,13 +46,14 @@ public class AlertRepository {
 
     public Optional<SessionContext> findSessionContext(int sessionId) {
         return jdbc.sql("""
-                SELECT s.session_id, s.assigned_to, s.status, p.heart_rate_ceiling
+                SELECT s.session_id, s.assigned_to, s.status, p.heart_rate_ceiling, s.horse_id, s.velocity_ceiling
                 FROM TRAINING_SESSION s JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
                 WHERE s.session_id = :id
                 """)
                 .param("id", sessionId)
                 .query((rs, i) -> new SessionContext(rs.getInt("session_id"), rs.getInt("assigned_to"),
-                        rs.getString("status"), rs.getObject("heart_rate_ceiling", Integer.class)))
+                        rs.getString("status"), rs.getObject("heart_rate_ceiling", Integer.class),
+                        rs.getInt("horse_id"), rs.getBigDecimal("velocity_ceiling")))
                 .optional();
     }
 

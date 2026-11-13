@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > ### `Nov 13, 2026`
+- `[21:37]` `DevilJack` - Update training flow business rule
 - `[19:33]` `DevilJack422` - Update training flow frontend
 - `[18:25]` `DevilJack422` - Fix some issues in training flow
 - `[11:50]` `Pandapo274` -

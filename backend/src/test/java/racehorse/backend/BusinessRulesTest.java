@@ -984,7 +984,7 @@ class BusinessRulesTest {
         assertEquals(1, finished);
         verify(repo).autoFinishOverdueRunning(12);
         verify(users).writeAudit(null, "TRAINING_SESSION_AUTO_FINISH", "TRAINING_SESSION", 12, "SUCCESS", null);
-        verify(notifications).notifyRole(eq("HEAD_TRAINER"), any(),
+        verify(notifications).notifyHorseTrainer(eq(100), eq(null),
                 argThat(n -> "TRAINING_SESSION_AUTO_FINISHED".equals(n.type()) && n.message().contains("review within 48 hours")));
     }
 
@@ -1946,5 +1946,140 @@ class BusinessRulesTest {
 
         expect(ApiException.class, 409, () -> service.delete(1, TRAINER, "ip"));
         verify(care, never()).deleteOpenTask(anyInt());
+    }
+
+    @Test
+    void runningSessionCannotBeEvaluated() {
+        SessionRepository repo = mock(SessionRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(evaluated("RUNNING")));
+        SessionService service = new SessionService(repo, mock(UserRepository.class));
+
+        ApiException ex = expect(ApiException.class, 409, () -> service.evaluate(TRAINER, 1, evaluation("COMPLETED"), "ip"));
+        assertTrue(ex.getMessage().contains("still running"), ex.getMessage());
+        verify(repo, never()).saveEvaluation(anyInt(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void sessionVelocityCeilingTriggersAlertAndNotifiesHorseTrainer() {
+        AlertRepository alerts = mock(AlertRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(alerts.findSessionContext(1)).thenReturn(Optional.of(
+                new SessionContext(1, 5, "RUNNING", 180, 100, new BigDecimal("14.0"))));
+        when(alerts.latestOpenSeverity(1, "VELOCITY", 60)).thenReturn(Optional.empty());
+        when(alerts.insertAlert(eq(1), eq("VELOCITY"), eq(new BigDecimal("14.0")), eq(new BigDecimal("16.0")), eq("HIGH")))
+                .thenReturn(42);
+
+        AlertService service = new AlertService(alerts, mock(UserRepository.class), notifications,
+                mock(IncidentService.class), new BigDecimal("18.0"));
+        VitalsResult res = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("16.0")));
+
+        assertTrue(res.alertRaised());
+        assertEquals("VELOCITY", res.metricType());
+        assertEquals("HIGH", res.severity());
+        verify(notifications).notifyHorseTrainer(eq(100), eq(GROOM),
+                argThat(n -> "THRESHOLD_ALERT_HIGH".equals(n.type()) && n.message().contains("14.0 m/s")));
+        verify(notifications, never()).notifyRole(eq("HEAD_TRAINER"), any(), any());
+    }
+
+    @Test
+    void updatingActivePlanStoresPendingUpdateWithoutOverwritingOldPlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+
+        HorseResponse horse = new HorseResponse(100, 7, "Owner", null, null, "Horse 100", "TM-100",
+                "TB", "COLT", TODAY.minusYears(4), "Bay", null, "A-100", "ELIGIBLE", LocalDateTime.now(), null,
+                "ACADEMY", null, "ACTIVE", null, 2, "Trainer 2");
+        TrainingPlanResponse active = new TrainingPlanResponse(
+                10, 100, "Horse 100", 5, "Groom 5", "Old Plan", TODAY, TODAY.plusDays(14),
+                "ACTIVE", 2, "Trainer 2", LocalDateTime.now(), null, null,
+                List.of(new TrainingPlanResponse.Phase(1, 1, "Phase 1", 1000, "MEDIUM", "TURF",
+                        3, 180, TODAY, TODAY.plusDays(14), 90, new BigDecimal("12.0"))));
+        when(plans.findById(10)).thenReturn(Optional.of(active));
+        when(plans.findPhases(10)).thenReturn(active.phases());
+        when(horses.findById(100)).thenReturn(Optional.of(horse));
+
+        TrainingPlanService service = new TrainingPlanService(plans, horses, vitals, users, notifications);
+        TrainingPlanRequest.Update req = new TrainingPlanRequest.Update(
+                5, "New Plan Name",
+                List.of(new TrainingPlanRequest.PhaseRequest(
+                        1, "Phase 1 Updated", 1200, "HARD", "DIRT", 4, 185, 90,
+                        new BigDecimal("14.5"), TODAY, TODAY.plusDays(14))));
+
+        service.update(10, req, TRAINER, "ip");
+
+        verify(plans).savePendingUpdate(eq(10), any());
+        verify(plans, never()).updatePlanGroomAndName(anyInt(), any(), any());
+        verify(plans, never()).updatePhase(anyInt(), anyInt(), anyInt(), any());
+        verify(notifications).notifyUser(eq(7), argThat(n -> "TRAINING_PLAN_UPDATE_PENDING".equals(n.type())));
+    }
+
+    @Test
+    void ownerApprovingAndRejectingPendingPlanUpdateNotifiesTrainer() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+
+        HorseResponse horse = new HorseResponse(100, 7, "Owner", null, null, "Horse 100", "TM-100",
+                "TB", "COLT", TODAY.minusYears(4), "Bay", null, "A-100", "ELIGIBLE", LocalDateTime.now(), null,
+                "ACADEMY", null, "ACTIVE", null, 2, "Trainer 2");
+        List<TrainingPlanRequest.PhaseRequest> proposedPhases = List.of(
+                new TrainingPlanRequest.PhaseRequest(1, "Phase 1 Updated", 1200, "HARD", "DIRT",
+                        4, 185, 90, new BigDecimal("14.5"), TODAY, TODAY.plusDays(14)));
+        TrainingPlanResponse.PendingUpdate pending = new TrainingPlanResponse.PendingUpdate(
+                "PENDING", LocalDateTime.now(), 5, "Groom 5", "New Plan Name", proposedPhases);
+        TrainingPlanResponse activeWithPending = new TrainingPlanResponse(
+                10, 100, "Horse 100", 5, "Groom 5", "Old Plan", TODAY, TODAY.plusDays(14),
+                "ACTIVE", 2, "Trainer 2", LocalDateTime.now(), null, null,
+                List.of(new TrainingPlanResponse.Phase(1, 1, "Phase 1", 1000, "MEDIUM", "TURF",
+                        3, 180, TODAY, TODAY.plusDays(14), 90, new BigDecimal("12.0"))),
+                pending);
+
+        when(plans.findById(10)).thenReturn(Optional.of(activeWithPending));
+        when(plans.findPhases(10)).thenReturn(activeWithPending.phases());
+        when(horses.findById(100)).thenReturn(Optional.of(horse));
+
+        TrainingPlanService service = new TrainingPlanService(plans, horses, vitals, users, notifications);
+
+        service.reviewPendingUpdate(10, true, "Looks good", OWNER, "ip");
+        verify(plans).updatePlanGroomAndName(10, 5, "New Plan Name");
+        verify(plans).updatePhase(eq(1), eq(10), eq(1), any());
+        verify(plans).clearPendingUpdate(10);
+        verify(notifications).notifyUser(eq(2), argThat(n -> "TRAINING_PLAN_UPDATE_APPROVED".equals(n.type())));
+
+        org.mockito.Mockito.reset(plans, notifications);
+        when(plans.findById(10)).thenReturn(Optional.of(activeWithPending));
+        when(horses.findById(100)).thenReturn(Optional.of(horse));
+
+        service.reviewPendingUpdate(10, false, "Too intense", OWNER, "ip");
+        verify(plans, never()).updatePlanGroomAndName(anyInt(), any(), any());
+        verify(plans).clearPendingUpdate(10);
+        verify(notifications).notifyUser(eq(2), argThat(n ->
+                "TRAINING_PLAN_UPDATE_REJECTED".equals(n.type()) && n.message().contains("Too intense")));
+    }
+
+    @Test
+    void overduePendingPlanUpdateIsAutoRejectedAfterTwoDays() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+
+        when(plans.findOverduePendingUpdates(any())).thenReturn(List.of(
+                new TrainingPlanRepository.OverduePendingPlan(10, 100, "Horse 100", "Old Plan", 2)));
+        when(plans.clearPendingUpdate(10)).thenReturn(1);
+
+        TrainingPlanService service = new TrainingPlanService(
+                plans, mock(HorseRepository.class), mock(HorseVitalsRepository.class), users, notifications);
+        int expired = service.expireOverduePendingUpdates();
+
+        assertEquals(1, expired);
+        verify(plans).clearPendingUpdate(10);
+        verify(users).writeAudit(null, "TRAINING_PLAN_UPDATE_AUTO_REJECTED", "TRAINING_PLAN", 10, "SUCCESS", null);
+        verify(notifications).notifyUser(eq(2), argThat(n ->
+                "TRAINING_PLAN_UPDATE_REJECTED".equals(n.type()) && n.message().contains("2 days")));
     }
 }

@@ -177,7 +177,7 @@ public class VetCallService {
         calls.linkReport(call.callId(), reportId);
 
         HorseResponse horse = horses.findById(call.horseId()).orElseThrow();
-        notifications.notifyHorseWatchers(horse.ownerId(), vet, new Notice("VET_EMERGENCY_STOP",
+        notifications.notifyHorseWatchers(horse.horseId(), horse.ownerId(), vet, new Notice("VET_EMERGENCY_STOP",
                 "Emergency stop: " + horse.horseName(),
                 clip(horse.horseName() + " was stopped at training and is being taken for a veterinary exam. "
                         + "Training is paused until the exam is done.", 500),

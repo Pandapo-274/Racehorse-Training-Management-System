@@ -74,6 +74,7 @@ public class MissedTaskJob {
         try {
             trainingSessionService.processOverdueSessions();
             sessionService.processOverdueReviews();
+            plans.expireOverduePendingUpdates();
         } catch (RuntimeException e) {
             log.error("Periodic training check failed", e);
         }

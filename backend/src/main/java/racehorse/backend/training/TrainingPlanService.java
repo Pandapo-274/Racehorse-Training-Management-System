@@ -1,6 +1,8 @@
 package racehorse.backend.training;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +39,7 @@ public class TrainingPlanService {
             "COMPLETED", Set.of());
 
     private static final Set<String> DELETABLE = Set.of("DRAFT", "PENDING_APPROVAL", "APPROVED");
+    private static final Set<String> UPDATE_REQUIRES_APPROVAL = Set.of("APPROVED", "ACTIVE", "PAUSED");
 
     private final TrainingPlanRepository planRepository;
     private final HorseRepository horseRepository;
@@ -154,6 +157,9 @@ public class TrainingPlanService {
         for (int i = 0; i < r.phases().size(); i++) {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
+            if (p.targetVelocity() == null) {
+                errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            }
             if (p.endDate().isBefore(p.startDate())) {
                 errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
             }
@@ -171,11 +177,7 @@ public class TrainingPlanService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
 
-        // 3. Cập nhật Groom và tên giáo án
-        planRepository.updatePlanGroomAndName(planId, r.groomId(), r.planName());
-
-        // 4. Cập nhật các Phase:
-        // 4a. Thu thập ID các phase hiện có và phase được giữ lại
+        // Kiểm tra trước việc xóa phase có vướng buổi tập đã tạo không
         List<TrainingPlanResponse.Phase> currentPhases = planRepository.findPhases(planId);
         Set<Integer> keptPhaseIds = new HashSet<>();
         for (TrainingPlanRequest.PhaseRequest p : r.phases()) {
@@ -183,8 +185,62 @@ public class TrainingPlanService {
                 keptPhaseIds.add(p.phaseId());
             }
         }
+        for (TrainingPlanResponse.Phase cp : currentPhases) {
+            if (!keptPhaseIds.contains(cp.phaseId())) {
+                int sessions = planRepository.countSessionsInPhase(cp.phaseId());
+                if (sessions > 0) {
+                    throw new ApiException(HttpStatus.CONFLICT,
+                            "Cannot remove Phase \"" + cp.phaseName() + "\" because " + sessions
+                                    + " session(s) are already linked to it. You can adjust its settings instead.");
+                }
+            }
+        }
 
-        // 4b. Xóa những Phase không còn trong danh sách (kiểm tra không vướng FK buổi tập đã tạo)
+        String targetPlanName = (r.planName() != null && !r.planName().isBlank()) ? r.planName().trim() : existing.planName();
+
+        // Nếu plan đã được duyệt / đang chạy / tạm dừng: lưu bản cập nhật chờ chủ ngựa duyệt, giữ nguyên plan cũ.
+        if (UPDATE_REQUIRES_APPROVAL.contains(existing.status())) {
+            String groomName = existing.groomName();
+            if (r.groomId() != null && staffRepository != null) {
+                groomName = staffRepository.findRow(r.groomId()).map(StaffRow::fullName).orElse(groomName);
+            }
+            planRepository.savePendingUpdate(planId,
+                    new TrainingPlanRepository.PendingUpdatePayload(r.groomId(), groomName, targetPlanName, r.phases()));
+            userRepository.writeAudit(user.userId(), "TRAINING_PLAN_UPDATE_PENDING", "TRAINING_PLAN", planId, "SUCCESS", ip);
+            notifications.notifyUser(horse.ownerId(), new Notice(
+                    "TRAINING_PLAN_UPDATE_PENDING",
+                    "Training plan update needs your approval",
+                    horse.horseName() + ": Head Trainer proposed updates to \"" + targetPlanName
+                            + "\". The current plan remains active until you approve (auto-declined after 2 days if not reviewed).",
+                    Notice.TRAINING_PLAN, planId));
+            return getOrThrow(planId);
+        }
+
+        applyPlanChanges(planId, currentPhases, r.groomId(), targetPlanName, r.phases());
+
+        userRepository.writeAudit(user.userId(), "TRAINING_PLAN_UPDATE", "TRAINING_PLAN", planId, "SUCCESS", ip);
+
+        // Gửi thông báo đến chủ ngựa để xem xét lại (DRAFT / PENDING_APPROVAL)
+        notifications.notifyUser(horse.ownerId(), new Notice(
+                "TRAINING_PLAN_UPDATED",
+                "Training plan updated - Review needed",
+                horse.horseName() + ": Head Trainer updated plan \"" + targetPlanName
+                        + "\". Please review the phases and groom assignment.",
+                Notice.TRAINING_PLAN, planId));
+
+        return getOrThrow(planId);
+    }
+
+    private void applyPlanChanges(int planId, List<TrainingPlanResponse.Phase> currentPhases,
+                                  Integer groomId, String planName, List<TrainingPlanRequest.PhaseRequest> phases) {
+        planRepository.updatePlanGroomAndName(planId, groomId, planName);
+
+        Set<Integer> keptPhaseIds = new HashSet<>();
+        for (TrainingPlanRequest.PhaseRequest p : phases) {
+            if (p.phaseId() != null) {
+                keptPhaseIds.add(p.phaseId());
+            }
+        }
         for (TrainingPlanResponse.Phase cp : currentPhases) {
             if (!keptPhaseIds.contains(cp.phaseId())) {
                 int sessions = planRepository.countSessionsInPhase(cp.phaseId());
@@ -197,41 +253,16 @@ public class TrainingPlanService {
             }
         }
 
-        // 4c. Đổi tạm phase_no sang số âm để tránh xung đột UNIQUE (plan_id, phase_no) khi đánh số lại
         planRepository.preparePhasesForReorder(planId);
 
-        // 4d. Cập nhật các phase được giữ lại hoặc chèn phase mới
         int phaseNo = 1;
-        for (TrainingPlanRequest.PhaseRequest p : r.phases()) {
+        for (TrainingPlanRequest.PhaseRequest p : phases) {
             if (p.phaseId() != null && currentPhases.stream().anyMatch(cp -> cp.phaseId() == p.phaseId())) {
                 planRepository.updatePhase(p.phaseId(), planId, phaseNo++, p);
             } else {
                 planRepository.insertPhase(planId, phaseNo++, p);
             }
         }
-
-        userRepository.writeAudit(user.userId(), "TRAINING_PLAN_UPDATE", "TRAINING_PLAN", planId, "SUCCESS", ip);
-
-        // 5. Gửi thông báo đến chủ ngựa để xem xét lại
-        String targetPlanName = (r.planName() != null && !r.planName().isBlank()) ? r.planName().trim() : existing.planName();
-        notifications.notifyUser(horse.ownerId(), new Notice(
-                "TRAINING_PLAN_UPDATED",
-                "Training plan updated - Review needed",
-                horse.horseName() + ": Head Trainer updated plan \"" + targetPlanName
-                        + "\". Please review the phases and groom assignment.",
-                Notice.TRAINING_PLAN, planId));
-
-        // 6. Nếu giáo án đang ACTIVE và groom được đổi mới, gửi thông báo cho Groom được giao
-        if ("ACTIVE".equals(existing.status()) && r.groomId() != null && !r.groomId().equals(existing.groomId())) {
-            notifications.notifyUser(r.groomId(), new Notice(
-                    "TRAINING_PLAN_ACTIVATED",
-                    "Assigned to active training plan",
-                    horse.horseName() + ": You have been assigned as the Groom for active training plan \""
-                            + targetPlanName + "\".",
-                    Notice.TRAINING_PLAN, planId));
-        }
-
-        return getOrThrow(planId);
     }
 
     /**
@@ -340,11 +371,89 @@ public class TrainingPlanService {
         return getOrThrow(planId);
     }
 
+    /**
+     * Chủ ngựa duyệt hoặc từ chối bản cập nhật giáo án đang chờ (V45).
+     * Khi chưa duyệt hoặc bị từ chối, toàn bộ thông tin cũ của giáo án được giữ nguyên.
+     */
+    @Transactional
+    public TrainingPlanResponse reviewPendingUpdate(int planId, boolean approve, String note,
+                                                    AuthenticatedUser owner, String ip) {
+        expireOverduePendingUpdates();
+        TrainingPlanResponse plan = get(planId, owner);
+        TrainingPlanResponse.PendingUpdate pending = plan.pendingUpdate();
+        if (pending == null || !"PENDING".equals(pending.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "No pending plan update awaiting your approval");
+        }
+        String trimmed = note == null || note.isBlank() ? null : note.trim();
+
+        if (approve) {
+            List<TrainingPlanResponse.Phase> currentPhases = planRepository.findPhases(planId);
+            String targetName = (pending.planName() != null && !pending.planName().isBlank())
+                    ? pending.planName().trim() : plan.planName();
+            applyPlanChanges(planId, currentPhases, pending.groomId(), targetName, pending.phases());
+            planRepository.clearPendingUpdate(planId);
+            userRepository.writeAudit(owner.userId(), "TRAINING_PLAN_UPDATE_APPROVED",
+                    "TRAINING_PLAN", planId, "SUCCESS", ip);
+            notifications.notifyUser(plan.createdBy(), new Notice(
+                    "TRAINING_PLAN_UPDATE_APPROVED",
+                    "Training plan update approved",
+                    plan.horseName() + ": the owner approved your updates to \"" + targetName
+                            + "\". The updated plan is now in effect for future sessions.",
+                    Notice.TRAINING_PLAN, planId));
+            if ("ACTIVE".equals(plan.status()) && pending.groomId() != null
+                    && !pending.groomId().equals(plan.groomId())) {
+                notifications.notifyUser(pending.groomId(), new Notice(
+                        "TRAINING_PLAN_ACTIVATED",
+                        "Assigned to active training plan",
+                        plan.horseName() + ": You have been assigned as the Groom for active training plan \""
+                                + targetName + "\".",
+                        Notice.TRAINING_PLAN, planId));
+            }
+        } else {
+            planRepository.clearPendingUpdate(planId);
+            userRepository.writeAudit(owner.userId(), "TRAINING_PLAN_UPDATE_REJECTED",
+                    "TRAINING_PLAN", planId, "SUCCESS", ip, trimmed);
+            notifications.notifyUser(plan.createdBy(), new Notice(
+                    "TRAINING_PLAN_UPDATE_REJECTED",
+                    "Training plan update rejected",
+                    clip(plan.horseName() + ": the owner rejected your proposed updates to \""
+                            + plan.planName() + "\". The previous plan remains unchanged."
+                            + (trimmed == null ? "" : " Reason: " + trimmed), 500),
+                    Notice.TRAINING_PLAN, planId));
+        }
+        return getOrThrow(planId);
+    }
+
+    /**
+     * Tự động từ chối các bản cập nhật giáo án quá 2 ngày (48 giờ) mà chủ ngựa chưa duyệt.
+     */
+    @Transactional
+    public int expireOverduePendingUpdates() {
+        LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minusDays(2);
+        List<TrainingPlanRepository.OverduePendingPlan> overdue = planRepository.findOverduePendingUpdates(cutoff);
+        int expired = 0;
+        for (TrainingPlanRepository.OverduePendingPlan p : overdue) {
+            if (planRepository.clearPendingUpdate(p.planId()) == 1) {
+                userRepository.writeAudit(null, "TRAINING_PLAN_UPDATE_AUTO_REJECTED",
+                        "TRAINING_PLAN", p.planId(), "SUCCESS", null);
+                notifications.notifyUser(p.createdBy(), new Notice(
+                        "TRAINING_PLAN_UPDATE_REJECTED",
+                        "Training plan update auto-rejected",
+                        p.horseName() + ": your proposed updates to \"" + p.planName()
+                                + "\" were not reviewed by the owner within 2 days and were automatically declined. The previous plan remains unchanged.",
+                        Notice.TRAINING_PLAN, p.planId()));
+                expired++;
+            }
+        }
+        return expired;
+    }
+
     private static String clip(String s, int max) {
         return s.length() <= max ? s : s.substring(0, max - 3) + "...";
     }
 
     public TrainingPlanResponse get(int planId, AuthenticatedUser user) {
+        expireOverduePendingUpdates();
         TrainingPlanResponse plan = getOrThrow(planId);
         if ("HORSE_OWNER".equals(user.role())) {
             HorseResponse horse = horseRepository.findById(plan.horseId())
@@ -364,6 +473,7 @@ public class TrainingPlanService {
 
     public List<TrainingPlanResponse.Summary> list(Integer horseId, String status,
                                                    AuthenticatedUser user) {
+        expireOverduePendingUpdates();
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
         List<TrainingPlanResponse.Summary> all = planRepository.findSummaries(horseId, status, ownerId);
         // V37: Head Trainer chỉ thấy giáo án của những ngựa Club Manager giao cho mình.
@@ -510,6 +620,9 @@ public class TrainingPlanService {
         for (int i = 0; i < r.phases().size(); i++) {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
+            if (p.targetVelocity() == null) {
+                errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            }
             if (p.endDate().isBefore(p.startDate())) {
                 errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
             }

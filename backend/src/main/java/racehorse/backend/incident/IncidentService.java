@@ -118,7 +118,7 @@ public class IncidentService {
                     Text.clip(s.horseName() + " (" + urgency + "): " + symptoms, 500),
                     Notice.VET_CALL, callId));
         }
-        notifications.notifyHorseWatchers(s.ownerId(), user, new Notice(
+        notifications.notifyHorseWatchers(s.horseId(), s.ownerId(), user, new Notice(
                 "TRAINING_SESSION_STOPPED", "Training session stopped",
                 Text.clip(s.horseName() + " was stopped during training: " + symptoms + ".", 500),
                 Notice.TRAINING_SESSION, sessionId));
@@ -194,7 +194,7 @@ public class IncidentService {
                         + why, 500),
                 Notice.HORSE, r.horseId());
         notifications.notifyRole("VETERINARIAN", trainer, notice);
-        notifications.notifyHorseWatchers(r.ownerId(), trainer, notice);
+        notifications.notifyHorseWatchers(r.horseId(), r.ownerId(), trainer, notice);
         if (r.reporterId() != trainer.userId()) {
             notifications.notifyUser(r.reporterId(), notice);
         }
@@ -273,7 +273,7 @@ public class IncidentService {
             }
 
             // Thông báo cho người theo dõi ngựa (Owner, Head Trainer) & người báo cáo
-            notifications.notifyHorseWatchers(r.ownerId(), user, new Notice(
+            notifications.notifyHorseWatchers(r.horseId(), r.ownerId(), user, new Notice(
                     "INCIDENT_HANDOVER_INFO", "Veterinarian reassigned",
                     Text.clip("Case of " + r.horseName() + " was assigned to Dr. " + targetVet.fullName() + " by " + actorName + ".", 500),
                     Notice.HORSE, r.horseId()));
@@ -296,7 +296,7 @@ public class IncidentService {
                     Text.clip(r.horseName() + " was returned to queue by " + actorName + ". Notes: " + notes, 500),
                     Notice.HORSE, r.horseId()));
 
-            notifications.notifyHorseWatchers(r.ownerId(), user, new Notice(
+            notifications.notifyHorseWatchers(r.horseId(), r.ownerId(), user, new Notice(
                     "INCIDENT_HANDOVER_INFO", "Veterinarian handover",
                     Text.clip("Case of " + r.horseName() + " was returned to the veterinary queue for reassignment.", 500),
                     Notice.HORSE, r.horseId()));

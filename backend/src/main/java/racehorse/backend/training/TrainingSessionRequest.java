@@ -1,7 +1,10 @@
 package racehorse.backend.training;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -21,10 +24,19 @@ public record TrainingSessionRequest(
         @NotNull(message = "Planned duration is required")
         @Min(value = 15, message = "Duration must be at least 15 minutes")
         @Max(value = 720, message = "Duration cannot exceed 12 hours (720 minutes)")
-        Integer plannedDuration
+        Integer plannedDuration,
+        @DecimalMin(value = "1.0", message = "Max allowed speed must be between 1 and 30 m/s")
+        @DecimalMax(value = "30.0", message = "Max allowed speed must be between 1 and 30 m/s")
+        BigDecimal velocityCeiling
 ) {
     public TrainingSessionRequest(Integer phaseId, Integer assignedTo,
                                   LocalDateTime sessionDate, Integer plannedDistance) {
-        this(phaseId, assignedTo, sessionDate, plannedDistance, 60);
+        this(phaseId, assignedTo, sessionDate, plannedDistance, 60, null);
+    }
+
+    public TrainingSessionRequest(Integer phaseId, Integer assignedTo,
+                                  LocalDateTime sessionDate, Integer plannedDistance,
+                                  Integer plannedDuration) {
+        this(phaseId, assignedTo, sessionDate, plannedDistance, plannedDuration, null);
     }
 }

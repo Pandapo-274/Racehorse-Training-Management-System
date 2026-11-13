@@ -75,6 +75,17 @@ public class TrainingPlanController {
         return service.ownerReview(id, request.approve(), request.note(), user, http.getRemoteAddr());
     }
 
+    /** Chủ ngựa duyệt hoặc từ chối bản cập nhật giáo án đang chờ. */
+    @PutMapping("/{id}/update-review")
+    @RequireRole({"HORSE_OWNER"})
+    public TrainingPlanResponse reviewPendingUpdate(
+            @PathVariable int id,
+            @Valid @RequestBody TrainingPlanRequest.OwnerReview request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.reviewPendingUpdate(id, request.approve(), request.note(), user, http.getRemoteAddr());
+    }
+
     /** Chủ ngựa gửi phản hồi/nhận xét (optional) cho giáo án. */
     @PutMapping("/{id}/owner-feedback")
     @RequireRole({"HORSE_OWNER"})

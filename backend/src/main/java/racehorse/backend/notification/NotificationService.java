@@ -49,17 +49,38 @@ public class NotificationService {
     }
 
     /**
-     * Chủ ngựa và mọi Head Trainer, trừ người vừa làm việc đó.
-     *
-     * Những việc đổi được con ngựa có tập hay không (khoá tập, mở khoá, đổi
-     * tình trạng sức khoẻ) đều báo cho đúng hai nhóm này: Head Trainer là
-     * người xếp lịch, chủ ngựa là người có quyền biết ngựa mình ra sao.
+     * Chỉ gửi thông báo cho Head Trainer đang trực tiếp quản lý ngựa này (trừ khi chính họ là actor).
+     * Nếu ngựa chưa được gán Head Trainer thì không gửi tràn lan sang các trainer khác.
      */
+    public int notifyHorseTrainer(int horseId, AuthenticatedUser actor, Notice notice) {
+        Integer trainerId = notifications.findHorseTrainerId(horseId).orElse(null);
+        if (trainerId == null || (actor != null && trainerId == actor.userId())) {
+            return 0;
+        }
+        notifications.insertForUser(trainerId, notice);
+        return 1;
+    }
+
+    /**
+     * Chủ ngựa và Head Trainer quản lý ngựa đó (nếu xác định được từ horseId hoặc target HORSE),
+     * trừ người vừa làm việc đó.
+     */
+    public void notifyHorseWatchers(int horseId, int ownerId, AuthenticatedUser actor, Notice notice) {
+        if (actor == null || ownerId != actor.userId()) {
+            notifications.insertForUser(ownerId, notice);
+        }
+        notifyHorseTrainer(horseId, actor, notice);
+    }
+
     public void notifyHorseWatchers(int ownerId, AuthenticatedUser actor, Notice notice) {
         if (actor == null || ownerId != actor.userId()) {
             notifications.insertForUser(ownerId, notice);
         }
-        notifyRole("HEAD_TRAINER", actor, notice);
+        if (Notice.HORSE.equals(notice.targetEntity()) && notice.targetId() != null) {
+            notifyHorseTrainer(notice.targetId(), actor, notice);
+        } else {
+            notifyRole("HEAD_TRAINER", actor, notice);
+        }
     }
 
     /* ------------------------------------------------------------------ *

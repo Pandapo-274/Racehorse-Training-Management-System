@@ -18,6 +18,7 @@ const EMPTY_FORM = {
   sessionDate: "",
   plannedDistance: "",
   plannedDuration: "60",
+  velocityCeiling: "",
 };
 
 function dateKey(date) {
@@ -283,6 +284,7 @@ function SessionModal({
                       planId: chosenPlanId,
                       phaseId: "",
                       plannedDistance: "",
+                      velocityCeiling: "",
                       assignedTo: chosenPlan?.groomId
                         ? String(chosenPlan.groomId)
                         : "",
@@ -312,6 +314,7 @@ function SessionModal({
                       ...old,
                       phaseId: event.target.value,
                       plannedDistance: phase?.distance ?? "",
+                      velocityCeiling: phase?.targetVelocity != null ? String(phase.targetVelocity) : "",
                     }))
                   }}
                 >
@@ -469,6 +472,29 @@ function SessionModal({
               </small>
             )}
           </label>
+
+          {!editingSession && (
+            <label>
+              Max allowed speed (m/s)
+              <input
+                type="number"
+                min="1"
+                max="30"
+                step="0.1"
+                value={form.velocityCeiling}
+                onChange={(event) =>
+                  setForm((old) => ({
+                    ...old,
+                    velocityCeiling: event.target.value,
+                  }))
+                }
+                placeholder={selectedPhase?.targetVelocity ? `Default: ${selectedPhase.targetVelocity} m/s` : "e.g. 16.5"}
+              />
+              <small className="schedule-field-hint">
+                Speed readings exceeding this limit trigger a danger alert (same as heart rate ceiling).
+              </small>
+            </label>
+          )}
 
           <div className="schedule-form-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             {editingSession && (
@@ -737,6 +763,7 @@ export default function SchedulePage() {
             ? Number(form.plannedDistance || selectedPhase?.distance)
             : null,
           plannedDuration,
+          velocityCeiling: form.velocityCeiling !== "" ? Number(form.velocityCeiling) : (selectedPhase?.targetVelocity != null ? Number(selectedPhase.targetVelocity) : null),
         };
 
         await authFetch(SESSION_API, {

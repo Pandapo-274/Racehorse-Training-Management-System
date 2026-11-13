@@ -49,7 +49,8 @@ public record TrainingPlanRequest(
             /* Khoảng nghỉ tối thiểu giữa hai buổi của ngựa trong giai đoạn này. Bỏ trống = 90 phút. */
             @Min(value = 15, message = "Rest between sessions must be between 15 and 720 minutes")
             @Max(value = 720, message = "Rest between sessions must be between 15 and 720 minutes") Integer minGapMinutes,
-            /* Tốc độ mục tiêu (m/s): điểm Speed so với mục tiêu này thay vì 18 m/s. */
+            /* Tốc độ mục tiêu (m/s): bắt buộc nhập khi tạo/cập nhật giáo án. */
+            @NotNull(message = "Target speed is required")
             @DecimalMin(value = "1.0", message = "Target speed must be between 1 and 25 m/s")
             @DecimalMax(value = "25.0", message = "Target speed must be between 1 and 25 m/s") BigDecimal targetVelocity,
             @NotNull(message = "Phase start date is required") LocalDate startDate,

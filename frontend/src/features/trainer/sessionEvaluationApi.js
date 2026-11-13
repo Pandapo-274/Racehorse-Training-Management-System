@@ -17,9 +17,13 @@ export function updateTrialRun(sessionId, { trialRun, videoUrl }) {
   });
 }
 
-/** Buổi chưa từng chạy: không có gì để đánh giá hay quay video. */
+/** Buổi chưa hoàn thành hoặc chưa từng chạy: không thể đánh giá. */
 export function hasNotRun(status) {
-  return status === "SCHEDULED" || status === "CANCELLED";
+  return status !== "COMPLETED" && status !== "STOPPED_EARLY";
+}
+
+export function isReviewable(status) {
+  return status === "COMPLETED" || status === "STOPPED_EARLY";
 }
 
 export function evaluateSession(sessionId, payload) {

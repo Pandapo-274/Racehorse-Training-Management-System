@@ -129,7 +129,7 @@ public class RaceService {
         }
         users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
         String fee = chargeEntryFee(e, race, user, ip);
-        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+        notifications.notifyHorseTrainer(e.horseId(), user, new Notice(
                 "RACE_APPROVED", "Race entry approved",
                 "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName()
                         + (fee == null ? "." : " (entry fee " + fee + " charged)."),
@@ -203,7 +203,7 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, "This entry has just been changed by the head trainer");
         }
         users.writeAudit(user.userId(), "RACE_OWNER_REJECT", "RACE_REGISTRATION", id, "SUCCESS", ip, reason);
-        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+        notifications.notifyHorseTrainer(e.horseId(), user, new Notice(
                 "RACE_REJECTED", "Race entry declined",
                 "Owner " + e.ownerName() + " declined " + e.horseName() + " for " + e.raceName()
                         + (reason == null || reason.isBlank() ? "." : ": " + reason.trim()),

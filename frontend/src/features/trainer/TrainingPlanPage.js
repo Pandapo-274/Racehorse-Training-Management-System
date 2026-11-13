@@ -732,6 +732,22 @@ export default function TrainingPlanPage() {
                             <span className={`training-status-pill ${statusClass(plan.status)}`}>
                               {PLAN_STATUS_LABEL[plan.status] || plan.status}
                             </span>
+                            {plan.hasPendingUpdate && (
+                              <div
+                                style={{
+                                  marginTop: 4,
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  color: "#92400e",
+                                  background: "#fef3c7",
+                                  borderRadius: 999,
+                                  padding: "2px 8px",
+                                  display: "inline-block",
+                                }}
+                              >
+                                Update pending owner approval
+                              </div>
+                            )}
                           </td>
                           <td>
                             <div className="saved-plan-actions">
@@ -1117,12 +1133,13 @@ export default function TrainingPlanPage() {
                             />
                           </label>
                           <label className="training-field">
-                            Target speed (m/s)
+                            Target speed (m/s) *
                             <input
                               type="number"
                               min="1"
                               max="25"
                               step="0.1"
+                              required
                               value={phase.targetVelocity ?? ""}
                               onChange={(e) =>
                                 updatePhase(
@@ -1131,7 +1148,7 @@ export default function TrainingPlanPage() {
                                   e.target.value,
                                 )
                               }
-                              placeholder="Optional, e.g. 10"
+                              placeholder="e.g. 10"
                             />
                           </label>
                           <label className="training-field">
@@ -1287,6 +1304,27 @@ export default function TrainingPlanPage() {
                         </button>
                       </div>
                     </div>
+                    {viewingPlan.pendingUpdate && (
+                      <div
+                        style={{
+                          marginBottom: 12,
+                          padding: "10px 14px",
+                          borderRadius: 10,
+                          background: "#fffbeb",
+                          border: "1px solid #f59e0b",
+                          color: "#92400e",
+                          fontSize: "0.86rem",
+                        }}
+                      >
+                        <strong>Update pending owner approval:</strong> Proposed changes (
+                        {viewingPlan.pendingUpdate.planName || viewingPlan.planName}
+                        {viewingPlan.pendingUpdate.groomName
+                          ? `, groom ${viewingPlan.pendingUpdate.groomName}`
+                          : ""}
+                        , {viewingPlan.pendingUpdate.phases?.length || 0} phase(s)) are waiting for the owner.
+                        The current plan remains active until approved (auto-declined after 2 days).
+                      </div>
+                    )}
                     {viewingPlan.ownerNote && (
                       <div className="plan-modal-owner-feedback">
                         <div className="plan-modal-owner-feedback-title">

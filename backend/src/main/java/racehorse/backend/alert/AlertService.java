@@ -79,14 +79,15 @@ public class AlertService {
         if (hr != null) {
             heart = (ceiling == null || hr <= ceiling)
                     ? new VitalsResult(hr, ceiling, false, null, null)
-                    : raise(me, sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
+                    : raise(me, ctx.horseId(), sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
                             "High heart-rate alert", hr + " bpm, ceiling is " + ceiling + " bpm");
         }
-        if (req.velocity() != null && req.velocity().compareTo(velocityMax) > 0) {
+        BigDecimal speedLimit = ctx.velocityCeiling() != null ? ctx.velocityCeiling() : velocityMax;
+        if (req.velocity() != null && req.velocity().compareTo(speedLimit) > 0) {
             int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
-            VitalsResult speed = raise(me, sessionId, effectiveHr, ceiling, VELOCITY, velocityMax, req.velocity(),
+            VitalsResult speed = raise(me, ctx.horseId(), sessionId, effectiveHr, ceiling, VELOCITY, speedLimit, req.velocity(),
                     "High speed alert", req.velocity().toPlainString() + " m/s, limit is "
-                            + velocityMax.toPlainString() + " m/s");
+                            + speedLimit.toPlainString() + " m/s");
             if (heart == null || !heart.alertRaised()) {
                 return speed;
             }
@@ -98,7 +99,7 @@ public class AlertService {
      * Tạo một cảnh báo vượt ngưỡng (nhịp tim hoặc vận tốc), cùng một luật cho cả hai:
      * mức độ theo % vượt, trong DEDUPE_SECONDS chỉ báo lại khi mức độ tăng.
      */
-    private VitalsResult raise(AuthenticatedUser me, int sessionId, int hr, Integer ceiling, String metric,
+    private VitalsResult raise(AuthenticatedUser me, int horseId, int sessionId, int hr, Integer ceiling, String metric,
                                BigDecimal limit, BigDecimal actual, String title, String detail) {
         String severity = severityFor(actual.doubleValue(), limit.doubleValue());
         Optional<String> open = alerts.latestOpenSeverity(sessionId, metric, DEDUPE_SECONDS);
@@ -117,7 +118,11 @@ public class AlertService {
         if ("HIGH".equals(severity)) {
             Notice notice = new Notice("THRESHOLD_ALERT_HIGH", title,
                     "Session #" + sessionId + ": " + detail + ".", Notice.THRESHOLD_ALERT, alertId);
-            notifications.notifyRole("HEAD_TRAINER", me, notice);
+            if (horseId > 0) {
+                notifications.notifyHorseTrainer(horseId, me, notice);
+            } else {
+                notifications.notifyRole("HEAD_TRAINER", me, notice);
+            }
             notifications.notifyRole("VETERINARIAN", me, notice);
         }
         return new VitalsResult(hr, ceiling, true, severity, alertId, metric, msg);

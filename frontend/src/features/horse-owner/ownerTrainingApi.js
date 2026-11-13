@@ -32,6 +32,16 @@ export function reviewPlan(planId, { approve, note }) {
 }
 
 /**
+ * PUT /api/training-plans/{id}/update-review: chủ ngựa duyệt hoặc từ chối bản cập nhật giáo án.
+ */
+export function reviewPlanUpdate(planId, { approve, note }) {
+  return authFetch(`/api/training-plans/${planId}/update-review`, {
+    method: "PUT",
+    body: JSON.stringify({ approve, note: note || null }),
+  });
+}
+
+/**
  * PUT /api/training-plans/{id}/owner-feedback: chủ ngựa gửi phản hồi/nhận xét (optional) cho Trainer.
  */
 export function sendOwnerFeedback(planId, note) {

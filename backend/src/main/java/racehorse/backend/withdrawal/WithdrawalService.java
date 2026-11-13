@@ -205,7 +205,7 @@ public class WithdrawalService {
                         + (note == null ? "" : " " + note),
                 Notice.HORSE, horseId));
 
-        notifications.notifyRole("HEAD_TRAINER", me, new Notice(
+        notifications.notifyHorseTrainer(horseId, me, new Notice(
                 "HORSE_WITHDRAWN",
                 "Horse withdrawn from the club",
                 horse.horseName() + " has left the club. "

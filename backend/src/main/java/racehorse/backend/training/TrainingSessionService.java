@@ -1,5 +1,6 @@
 package racehorse.backend.training;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -122,6 +123,12 @@ public class TrainingSessionService {
         }
         int duration = r.plannedDuration() != null ? r.plannedDuration() : DEFAULT_DURATION_MINUTES;
 
+        BigDecimal velocityCeiling = r.velocityCeiling() != null ? r.velocityCeiling() : ctx.targetVelocity();
+        if (velocityCeiling != null && (velocityCeiling.compareTo(BigDecimal.ONE) < 0
+                || velocityCeiling.compareTo(new BigDecimal("30.0")) > 0)) {
+            errors.put("velocityCeiling", "Max allowed speed must be between 1 and 30 m/s");
+        }
+
         validateGroomAssignee(r.assignedTo(), user, errors);
         validateSessionTimeAndDuration(r.sessionDate(), duration, ctx, true, errors);
 
@@ -133,6 +140,9 @@ public class TrainingSessionService {
         int id = repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
         if (duration != DEFAULT_DURATION_MINUTES) {
             repository.updatePlannedDuration(id, duration);
+        }
+        if (velocityCeiling != null) {
+            repository.updateVelocityCeiling(id, velocityCeiling);
         }
         userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_ASSIGN", "TRAINING_SESSION", id, "SUCCESS", ip);
 
@@ -270,7 +280,7 @@ public class TrainingSessionService {
             }
             userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_STOP_EARLY", "TRAINING_SESSION", sessionId,
                     "SUCCESS", ip, reasonLabel);
-            notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+            notifications.notifyHorseTrainer(s.horseId(), user, new Notice(
                     "TRAINING_SESSION_FINISHED",
                     "Training session ended early",
                     s.horseName() + " ended the session of " + s.sessionDate().format(WHEN)
@@ -285,7 +295,7 @@ public class TrainingSessionService {
         }
         userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_FINISH", "TRAINING_SESSION", sessionId,
                 "SUCCESS", ip);
-        notifications.notifyRole("HEAD_TRAINER", user, new Notice(
+        notifications.notifyHorseTrainer(s.horseId(), user, new Notice(
                 "TRAINING_SESSION_FINISHED",
                 "Training session finished",
                 s.horseName() + " finished the session of " + s.sessionDate().format(WHEN)
@@ -307,7 +317,7 @@ public class TrainingSessionService {
             if (repository.autoFinishOverdueRunning(s.sessionId()) == 1) {
                 userRepository.writeAudit(null, "TRAINING_SESSION_AUTO_FINISH", "TRAINING_SESSION",
                         s.sessionId(), "SUCCESS", null);
-                notifications.notifyRole("HEAD_TRAINER", null, new Notice(
+                notifications.notifyHorseTrainer(s.horseId(), null, new Notice(
                         "TRAINING_SESSION_AUTO_FINISHED",
                         "Training session auto-completed on time limit",
                         s.horseName() + "'s session on " + s.sessionDate().format(WHEN)

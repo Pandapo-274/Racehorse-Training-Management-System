@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -44,6 +45,21 @@ public class NotificationRepository {
                 .param("entity", n.targetEntity())
                 .param("targetId", n.targetId())
                 .update();
+    }
+
+    /** Tìm Head Trainer đang phụ trách ngựa này (nếu có và đang ACTIVE). */
+    public Optional<Integer> findHorseTrainerId(int horseId) {
+        return jdbc.sql("""
+                SELECT h.trainer_id
+                FROM HORSE h
+                JOIN APP_USER u ON u.user_id = h.trainer_id
+                WHERE h.horse_id = :horseId
+                  AND h.trainer_id IS NOT NULL
+                  AND u.status = 'ACTIVE'
+                """)
+                .param("horseId", horseId)
+                .query(Integer.class)
+                .optional();
     }
 
     /**

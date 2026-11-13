@@ -115,7 +115,7 @@ public class ExternalReferralService {
                 horse.horseName() + " has been referred to " + req.hospitalName() + " (" + req.urgency()
                         + ") by Dr. " + vetName + ". Training has been locked.",
                 Notice.HORSE, horse.horseId());
-        notifications.notifyRole("HEAD_TRAINER", vet, staffNotice);
+        notifications.notifyHorseTrainer(horse.horseId(), vet, staffNotice);
         notifications.notifyRole("VETERINARIAN", vet, staffNotice);
 
         users.writeAudit(vet.userId(), "EXTERNAL_REFERRAL", "EXTERNAL_REFERRAL", referralId, "SUCCESS", ip,
@@ -153,7 +153,7 @@ public class ExternalReferralService {
                         + req.dischargeNotes() + ". Attending vet: Dr. " + vetName + ".",
                 Notice.HORSE, ref.horseId());
         notifications.notifyUser(ref.ownerId(), dischargeNotice);
-        notifications.notifyRole("HEAD_TRAINER", vet, dischargeNotice);
+        notifications.notifyHorseTrainer(ref.horseId(), vet, dischargeNotice);
         notifications.notifyRole("VETERINARIAN", vet, dischargeNotice);
 
         users.writeAudit(vet.userId(), "EXTERNAL_DISCHARGE", "EXTERNAL_REFERRAL", referralId, "SUCCESS", ip,

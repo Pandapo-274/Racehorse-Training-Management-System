@@ -20,7 +20,11 @@ public class TrainingSessionRepository {
     }
 
     public record PhaseContext(int phaseId, int planId, String planStatus, int horseId,
-            Integer distance, LocalDate startDate, LocalDate endDate) {
+            Integer distance, BigDecimal targetVelocity, LocalDate startDate, LocalDate endDate) {
+        public PhaseContext(int phaseId, int planId, String planStatus, int horseId,
+                Integer distance, LocalDate startDate, LocalDate endDate) {
+            this(phaseId, planId, planStatus, horseId, distance, null, startDate, endDate);
+        }
     }
 
     public record GroomOption(
@@ -31,7 +35,7 @@ public class TrainingSessionRepository {
     public Optional<PhaseContext> findPhaseContext(int phaseId) {
         return jdbc.sql("""
                 SELECT ph.phase_id, ph.plan_id, tp.status AS plan_status, tp.horse_id,
-                       ph.distance, ph.start_date, ph.end_date
+                       ph.distance, ph.target_velocity, ph.start_date, ph.end_date
                 FROM PLAN_PHASE ph JOIN TRAINING_PLAN tp ON tp.plan_id = ph.plan_id
                 WHERE ph.phase_id = :id
                 """)
@@ -39,6 +43,7 @@ public class TrainingSessionRepository {
                 .query((rs, n) -> new PhaseContext(
                         rs.getInt("phase_id"), rs.getInt("plan_id"), rs.getString("plan_status"),
                         rs.getInt("horse_id"), rs.getObject("distance", Integer.class),
+                        rs.getBigDecimal("target_velocity"),
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class)))
                 .optional();
@@ -81,7 +86,8 @@ public class TrainingSessionRepository {
                    s.remarks, s.status, ph.heart_rate_ceiling,
                    (SELECT COUNT(*) FROM THRESHOLD_ALERT a WHERE a.session_id = s.session_id) AS alert_count,
                    s.is_trial_run, s.video_url,
-                   s.planned_duration, s.started_at, s.ended_at, s.early_stop_reason, s.review_status
+                   s.planned_duration, s.started_at, s.ended_at, s.early_stop_reason, s.review_status,
+                   s.velocity_ceiling
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
             JOIN HORSE h       ON h.horse_id  = s.horse_id
@@ -108,7 +114,8 @@ public class TrainingSessionRepository {
                 rs.getObject("started_at", LocalDateTime.class),
                 rs.getObject("ended_at", LocalDateTime.class),
                 rs.getString("early_stop_reason"),
-                rs.getString("review_status"));
+                rs.getString("review_status"),
+                rs.getBigDecimal("velocity_ceiling"));
     }
 
     public Optional<TrainingSessionResponse> findById(int sessionId) {
@@ -159,6 +166,17 @@ public class TrainingSessionRepository {
                 .param("planned", plannedDistance)
                 .query(Integer.class)
                 .single();
+    }
+
+    public int updateVelocityCeiling(int sessionId, BigDecimal velocityCeiling) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET velocity_ceiling = :ceiling
+                WHERE session_id = :id
+                """)
+                .param("ceiling", velocityCeiling)
+                .param("id", sessionId)
+                .update();
     }
 
     public int updatePlannedDuration(int sessionId, int plannedDuration) {
