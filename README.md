@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 13, 2026` at `11:10` by `Pandapo274`
+### Last Commited: `Nov 13, 2026` at `11:50` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -47,6 +47,12 @@ npm start
 ## Changelogs
 > ### `Nov 13, 2026`
 - `[18:25]` `DevilJack422` - Fix some issues in training flow
+- `[11:50]` `Pandapo274` -
+UI Synchronization & Global Typography Fixes:
+- Header Action Stabilization: Eliminated layout shifting of top-right header action buttons/chips (`Racing age`, `Injured`, `Update health status`, `Recovery`, `Back`) during tab transitions or timeline filter changes by enforcing global `scrollbar-gutter: stable` and `overflow-y: scroll`, ensuring constant viewport width regardless of content height. Also stabilized header layout with `white-space: nowrap` on `.hz-header-actions` and synchronized button ordering between `HorseListPage` and `HorseDetailPage`.
+- Global Font Unification: Standardized base font family (`Be Vietnam Pro`) and root font size (`14px`) across all pages, shells, and form elements (`button, input, select, textarea { font-family: inherit }`). Resolved sidebar and page typography discrepancy between `Vet calls` and `Horses` tabs.
+- Full English Localization for Medical History: Translated all filters, stats cards, timeline events, and incident/treatment reports in `HorseMedicalHistoryTab` to professional clinical English.
+
 - `[11:22]` `tqt195` - Fix layout on narrow screens (laptop 1366px, or a big screen at 125-150% zoom) and Flow 4 supplies: `Supplies` table no longer pushes the Actions / Last change column out of the card (amount and minimum in one `In stock` column, buttons wrap, Actions column sticks to the right); bring back `Count` (Groom counts feed and tools, Vet and Manager count everything); the supply `Edit` form now keeps the unit price (it used to wipe it); `Restock` no longer offers Unit / Area fields the backend ignored; `Races` keeps `Record result` visible with a sticky action column (shared class `hz-sticky-end`); owner dashboard `Training stats` no longer cut off between 1100 and 1225px. Add `docs/FLOW4_DEMO_SCRIPT.md` (Flow 4 demo script, test checklist, known issues) and `backend/dev/seed_flow4_demo.sql` (history / current / future data for the Flow 4 demo, safe to re-run)
 - `[11:10]` `Pandapo274` -
 System-Wide Sign Out Button Synchronization:

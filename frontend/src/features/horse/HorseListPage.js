@@ -370,10 +370,21 @@ export default function HorseListPage() {
 
                           {isVet && !pedigree && !isWithdrawn(h) && (
                             <>
+                              <button
+                                type="button"
+                                className="hz-btn hz-btn--ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/veterinarian/examination/${h.horseId}`);
+                                }}
+                              >
+                                Update health status
+                              </button>
                               {h.status !== "ELIGIBLE" && (
                                 <button
                                   type="button"
                                   className="hz-btn hz-btn--ghost"
+                                  style={{ marginLeft: 8 }}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     navigate(`/veterinarian/recovery/${h.horseId}`);
@@ -382,17 +393,6 @@ export default function HorseListPage() {
                                   Recovery
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                className="hz-btn hz-btn--ghost"
-                                style={{ marginLeft: 8 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/veterinarian/examination/${h.horseId}`);
-                                }}
-                              >
-                                Update status
-                              </button>
                             </>
                           )}
                         </td>

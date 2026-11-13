@@ -34,7 +34,15 @@
     Arial,
     sans-serif
   );
+  font-size: 14px;
   box-sizing: border-box;
+}
+
+.owner-page button,
+.owner-page input,
+.owner-page select,
+.owner-page textarea {
+  font-family: inherit;
 }
 
 .owner-page *,

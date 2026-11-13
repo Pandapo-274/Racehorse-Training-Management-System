@@ -1,7 +1,7 @@
 // src/features/horse/HorseMedicalHistoryTab.js
-// Toàn bộ lịch sử y tế, bệnh án, điều trị, chấn thương, khóa tập và chuyển viện của ngựa.
-// Hỗ trợ thanh lọc thời gian (All, 30 ngày, 3 tháng, 6 tháng, 1 năm, tùy chọn khoảng ngày),
-// lọc theo loại sự kiện và tìm kiếm theo từ khóa.
+// Lifetime medical records, treatment plans, injuries, training locks, and referrals for a horse.
+// Supports timeframe filtering (All, 30 days, 3 months, 6 months, 1 year, custom range),
+// event category filtering, and keyword search.
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -18,29 +18,29 @@ import { formatDate, formatDateTime } from "./horseApi";
 import "./horse-health.css";
 
 const EVENT_TYPE_OPTIONS = [
-  { value: "ALL", label: "Tất cả sự kiện (All)" },
-  { value: "EXAM", label: "Khám bệnh & Chẩn đoán (Exams)" },
-  { value: "INJURY", label: "Chấn thương & Phục hồi (Injuries)" },
-  { value: "TREATMENT", label: "Đơn thuốc & Điều trị (Treatments)" },
-  { value: "LOCK", label: "Lệnh khoá / Mở tập (Locks)" },
-  { value: "REFERRAL", label: "Chuyển viện ngoài (Referrals)" },
-  { value: "INCIDENT", label: "Sự cố sân tập (Incidents)" },
+  { value: "ALL", label: "All Events" },
+  { value: "EXAM", label: "Examinations & Diagnoses" },
+  { value: "INJURY", label: "Injuries & Recovery" },
+  { value: "TREATMENT", label: "Prescriptions & Treatments" },
+  { value: "LOCK", label: "Training Locks" },
+  { value: "REFERRAL", label: "External Referrals" },
+  { value: "INCIDENT", label: "Track Incidents" },
 ];
 
 const TIME_PRESETS = [
-  { value: "all", label: "Toàn bộ (All Time)" },
-  { value: "30d", label: "30 ngày gần đây" },
-  { value: "90d", label: "3 tháng qua" },
-  { value: "180d", label: "6 tháng qua" },
-  { value: "365d", label: "1 năm qua" },
-  { value: "custom", label: "Tùy chọn ngày..." },
+  { value: "all", label: "All Time" },
+  { value: "30d", label: "Last 30 Days" },
+  { value: "90d", label: "Last 90 Days" },
+  { value: "180d", label: "Last 180 Days" },
+  { value: "365d", label: "Last 1 Year" },
+  { value: "custom", label: "Custom Range…" },
 ];
 
 const SEVERITY_LABEL = {
-  GRADE_1: "Grade 1 (Nhẹ)",
-  GRADE_2: "Grade 2 (Trung bình)",
-  GRADE_3: "Grade 3 (Nặng)",
-  GRADE_4: "Grade 4 (Đặc biệt nghiêm trọng)",
+  GRADE_1: "Grade 1 (Mild)",
+  GRADE_2: "Grade 2 (Moderate)",
+  GRADE_3: "Grade 3 (Severe)",
+  GRADE_4: "Grade 4 (Critical)",
 };
 
 export default function HorseMedicalHistoryTab({ horse, user }) {
@@ -74,7 +74,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
       .then(([examsRes, injuriesRes, locksRes, rxRes, referralsRes, incidentsRes]) => {
         const unified = [];
 
-        // 1. Hồ sơ khám bệnh (Medical records / Exams)
+        // 1. Clinical Examination Records
         if (examsRes.status === "fulfilled" && Array.isArray(examsRes.value)) {
           examsRes.value.forEach((r) => {
             const date = new Date(r.examDate || r.createdAt);
@@ -82,12 +82,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `exam-${r.recordId}`,
               type: "EXAM",
               date,
-              categoryLabel: r.recordType || "Khám bệnh",
-              title: r.diagnosis ? `Chẩn đoán: ${r.diagnosis}` : "Khám lâm sàng tổng quát",
+              categoryLabel: r.recordType || "Examination",
+              title: r.diagnosis ? `Diagnosis: ${r.diagnosis}` : "General Clinical Examination",
               tone: "blue",
-              actorName: r.vetName ? `BS. ${r.vetName}` : "Bác sĩ thú y",
-              actorRole: "Bác sĩ khám",
-              status: r.healthStatus ? statusLabel(r.healthStatus) : "Đã hoàn thành",
+              actorName: r.vetName ? `Dr. ${r.vetName}` : "Attending Veterinarian",
+              actorRole: "Attending Vet",
+              status: r.healthStatus ? statusLabel(r.healthStatus) : "Completed",
               searchableText: `${r.diagnosis || ""} ${r.notes || ""} ${r.vetName || ""}`,
               details: {
                 diagnosis: r.diagnosis || "—",
@@ -101,7 +101,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 2. Chấn thương (Injuries)
+        // 2. Injuries & Recovery
         if (injuriesRes.status === "fulfilled" && Array.isArray(injuriesRes.value)) {
           injuriesRes.value.forEach((i) => {
             const date = new Date(i.markedAt);
@@ -110,12 +110,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `injury-${i.injuryId}`,
               type: "INJURY",
               date,
-              categoryLabel: "Chấn thương",
-              title: `Tổn thương: ${i.bodyLocation}`,
+              categoryLabel: "Injury",
+              title: `Lesion: ${i.bodyLocation}`,
               tone: isRecovered ? "green" : "red",
-              actorName: isRecovered ? `Đã hồi phục (${formatDate(i.recoveredAt)})` : "Đang điều trị",
-              actorRole: "Trạng thái",
-              status: isRecovered ? "Đã lành bệnh" : "Đang dưỡng thương",
+              actorName: isRecovered ? `Recovered (${formatDate(i.recoveredAt)})` : "Under Treatment",
+              actorRole: "Status",
+              status: isRecovered ? "Healed / Recovered" : "Active Injury",
               searchableText: `${i.bodyLocation} ${i.severity}`,
               details: {
                 bodyLocation: i.bodyLocation,
@@ -128,7 +128,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 3. Đơn thuốc (Treatments / Prescriptions)
+        // 3. Treatments & Prescriptions
         if (rxRes.status === "fulfilled" && Array.isArray(rxRes.value)) {
           rxRes.value.forEach((t) => {
             const date = new Date(t.startDate);
@@ -137,12 +137,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `treatment-${t.treatmentId}`,
               type: "TREATMENT",
               date,
-              categoryLabel: "Đơn thuốc",
-              title: `Thuốc: ${t.medicineName}`,
+              categoryLabel: "Prescription",
+              title: `Medicine: ${t.medicineName}`,
               tone: "purple",
-              actorName: `Liều: ${t.dosage || "—"} (${t.frequency || "—"})`,
-              actorRole: "Chỉ định",
-              status: isEnded ? "Đã hoàn thành đợt" : "Đang sử dụng",
+              actorName: `Dosage: ${t.dosage || "—"} (${t.frequency || "—"})`,
+              actorRole: "Regimen",
+              status: isEnded ? "Completed Course" : "Active",
               searchableText: `${t.medicineName} ${t.dosage || ""} ${t.instruction || ""}`,
               details: {
                 medicineName: t.medicineName,
@@ -157,7 +157,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 4. Lệnh khoá tập (Training Locks)
+        // 4. Training Locks
         if (locksRes.status === "fulfilled" && Array.isArray(locksRes.value)) {
           locksRes.value.forEach((l) => {
             const date = new Date(l.issuedAt);
@@ -166,12 +166,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `lock-${l.lockId}`,
               type: "LOCK",
               date,
-              categoryLabel: "Khoá luyện tập",
-              title: `Lệnh khoá: ${lockLevelLabel(l.lockLevel)}`,
+              categoryLabel: "Training Lock",
+              title: `Lock Level: ${lockLevelLabel(l.lockLevel)}`,
               tone: isActive ? "red" : "amber",
-              actorName: l.issuedByName || "Quản lý / HLV / Vet",
-              actorRole: "Người ra lệnh",
-              status: isActive ? "Đang hiệu lực (Khoá)" : "Đã mở khoá",
+              actorName: l.issuedByName || "Manager / Trainer / Vet",
+              actorRole: "Issued By",
+              status: isActive ? "Active Lock" : "Released",
               searchableText: `${l.reason || ""} ${l.lockLevel} ${l.issuedByName || ""} ${l.releasedByName || ""}`,
               details: {
                 lockLevel: l.lockLevel,
@@ -186,7 +186,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 5. Chuyển viện ngoài (External Referrals)
+        // 5. External Referrals
         if (referralsRes.status === "fulfilled" && Array.isArray(referralsRes.value)) {
           referralsRes.value.forEach((ref) => {
             const date = new Date(ref.referredAt);
@@ -195,12 +195,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `ref-${ref.referralId}`,
               type: "REFERRAL",
               date,
-              categoryLabel: "Chuyển viện ngoài",
-              title: `Chuyển viện: ${ref.hospitalName}`,
+              categoryLabel: "External Referral",
+              title: `Hospital: ${ref.hospitalName}`,
               tone: "pink",
-              actorName: ref.referredByName ? `BS. ${ref.referredByName}` : "Bác sĩ chỉ định",
-              actorRole: "Người chỉ định",
-              status: isHospitalized ? "Đang nằm viện" : "Đã xuất viện về CLB",
+              actorName: ref.referredByName ? `Dr. ${ref.referredByName}` : "Attending Vet",
+              actorRole: "Referring Vet",
+              status: isHospitalized ? "Hospitalized" : "Discharged to Club",
               searchableText: `${ref.hospitalName} ${ref.referralReason} ${ref.dischargeNotes || ""}`,
               details: {
                 hospitalName: ref.hospitalName,
@@ -216,7 +216,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 6. Sự cố sân tập (Incident reports)
+        // 6. Track Incidents
         if (incidentsRes.status === "fulfilled" && Array.isArray(incidentsRes.value)) {
           incidentsRes.value.forEach((inc) => {
             const date = new Date(inc.reportedAt);
@@ -224,11 +224,11 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               id: `inc-${inc.reportId}`,
               type: "INCIDENT",
               date,
-              categoryLabel: "Sự cố tập luyện",
-              title: `Báo cáo: ${inc.symptoms}`,
+              categoryLabel: "Track Incident",
+              title: `Report: ${inc.symptoms}`,
               tone: inc.urgency === "HIGH" ? "urgent" : "amber",
-              actorName: inc.reporterName || "Nài ngựa (Groom)",
-              actorRole: "Người báo cáo",
+              actorName: inc.reporterName || "Groom",
+              actorRole: "Reported By",
               status: inc.status,
               searchableText: `${inc.symptoms} ${inc.description || ""} ${inc.reporterName || ""} ${inc.handoverByName || ""}`,
               details: {
@@ -247,20 +247,20 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // Sắp xếp sự kiện mới nhất lên trước
+        // Sort chronological descending (most recent first)
         unified.sort((a, b) => b.date - a.date);
         setEvents(unified);
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
-        setError(err.message || "Không thể tải lịch sử y tế của ngựa.");
+        setError(err.message || "Failed to load horse medical history.");
       })
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
   }, [horse.horseId]);
 
-  // Bộ lọc thời gian
+  // Date range calculation
   const { minDate, maxDate } = useMemo(() => {
     const now = new Date();
     let min = null;
@@ -280,7 +280,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
     return { minDate: min, maxDate: max };
   }, [timePreset, customFrom, customTo]);
 
-  // Lọc danh sách sự kiện theo các tiêu chí
+  // Filter events
   const filteredEvents = useMemo(() => {
     return events.filter((e) => {
       if (minDate && e.date < minDate) return false;
@@ -301,7 +301,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
     });
   }, [events, minDate, maxDate, typeFilter, searchQuery]);
 
-  // Thống kê nhanh trong khoảng thời gian đã lọc
+  // Quick summary counts
   const stats = useMemo(() => {
     const total = filteredEvents.length;
     let exams = 0;
@@ -324,7 +324,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
   if (loading) {
     return (
       <div className="hz-card" style={{ padding: "36px", textAlign: "center" }}>
-        <p className="hh-muted">Đang tải toàn bộ hồ sơ bệnh án và lịch sử điều trị của {horse.horseName}…</p>
+        <p className="hh-muted">Loading lifetime medical records and treatment history for {horse.horseName}…</p>
       </div>
     );
   }
@@ -339,15 +339,15 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
 
   return (
     <div className="mh-container">
-      {/* 1. THANH BỘ LỌC THỜI GIAN & TÌM KIẾM */}
+      {/* 1. TIMELINE & KEYWORD FILTERS */}
       <div className="mh-filter-card">
         <div className="mh-filter-header">
           <div>
             <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 800 }}>
-              Lịch sử Y tế & Hồ sơ Chữa trị · {horse.horseName}
+              Medical History & Treatment Records · {horse.horseName}
             </h3>
             <p style={{ margin: 0, fontSize: "13px", color: "#69728f" }}>
-              Nhật ký append-only ghi nhận mọi ca khám, chấn thương, đơn thuốc, lệnh khoá và chuyển viện ngoài.
+              Append-only clinical audit log recording all examinations, confirmed injuries, treatments, training locks, and external referrals.
             </p>
           </div>
 
@@ -356,17 +356,17 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               type="text"
               className="vx-input"
               style={{ width: "240px", padding: "6px 12px", fontSize: "13px" }}
-              placeholder="Tìm theo triệu chứng, thuốc, bác sĩ…"
+              placeholder="Search by symptoms, medicine, vet…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Mốc thời gian nhanh */}
+        {/* Quick timeframe segments */}
         <div className="mh-filter-controls">
           <div className="mh-time-bar">
-            <span className="mh-filter-label">Thời gian:</span>
+            <span className="mh-filter-label">Timeline:</span>
             <div className="mh-segments" role="group">
               {TIME_PRESETS.map((p) => (
                 <button
@@ -381,9 +381,9 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
             </div>
           </div>
 
-          {/* Loại sự kiện */}
+          {/* Event type filter */}
           <div className="mh-type-bar">
-            <span className="mh-filter-label">Phân loại:</span>
+            <span className="mh-filter-label">Category:</span>
             <select
               className="vx-input"
               value={typeFilter}
@@ -399,12 +399,12 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           </div>
         </div>
 
-        {/* Khoảng ngày tùy chọn (chỉ hiện khi chọn Custom) */}
+        {/* Custom date range row */}
         {timePreset === "custom" && (
           <div className="mh-custom-row">
-            <span className="mh-filter-label">Chọn khoảng ngày:</span>
+            <span className="mh-filter-label">Select Date Range:</span>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <label style={{ fontSize: "12.5px", color: "#69728f" }}>Từ ngày:</label>
+              <label style={{ fontSize: "12.5px", color: "#69728f" }}>From:</label>
               <input
                 type="date"
                 className="vx-input"
@@ -412,7 +412,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
-              <label style={{ fontSize: "12.5px", color: "#69728f" }}>Đến ngày:</label>
+              <label style={{ fontSize: "12.5px", color: "#69728f" }}>To:</label>
               <input
                 type="date"
                 className="vx-input"
@@ -430,7 +430,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                     setCustomTo("");
                   }}
                 >
-                  Xoá chọn ngày
+                  Clear Range
                 </button>
               )}
             </div>
@@ -438,55 +438,55 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
         )}
       </div>
 
-      {/* 2. THẺ THỐNG KÊ TỔNG QUAN TRONG KHOẢNG THỜI GIAN */}
+      {/* 2. STATS SUMMARY BOXES */}
       <div className="mh-stats-grid">
         <div className="mh-stat-box">
           <span className="mh-stat-num">{stats.total}</span>
-          <span className="mh-stat-title">Tổng sự kiện</span>
+          <span className="mh-stat-title">Total Events</span>
         </div>
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#3074f6" }}>{stats.exams}</span>
-          <span className="mh-stat-title">Lần khám & Chẩn đoán</span>
+          <span className="mh-stat-title">Examinations & Diagnoses</span>
         </div>
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#e43e8c" }}>{stats.injuries}</span>
-          <span className="mh-stat-title">Chấn thương ghi nhận</span>
+          <span className="mh-stat-title">Confirmed Injuries</span>
         </div>
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#8a4af3" }}>{stats.treatments}</span>
-          <span className="mh-stat-title">Đơn thuốc điều trị</span>
+          <span className="mh-stat-title">Treatments & Prescriptions</span>
         </div>
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#ff9800" }}>{stats.locks}</span>
-          <span className="mh-stat-title">Lệnh khoá tập</span>
+          <span className="mh-stat-title">Training Locks</span>
         </div>
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#f55fa9" }}>{stats.referrals}</span>
-          <span className="mh-stat-title">Chuyển viện ngoài</span>
+          <span className="mh-stat-title">External Referrals</span>
         </div>
       </div>
 
-      {/* 3. DÒNG THỜI GIAN CHI TIẾT (TIMELINE) */}
+      {/* 3. TIMELINE */}
       {filteredEvents.length === 0 ? (
         <div className="hz-card" style={{ padding: "40px", textAlign: "center" }}>
           <p className="hh-muted">
-            Không tìm thấy hồ sơ điều trị nào phù hợp với bộ lọc thời gian hoặc từ khóa tìm kiếm.
+            No medical or treatment records found matching the selected timeframe or search criteria.
           </p>
         </div>
       ) : (
         <div className="mh-timeline">
           {filteredEvents.map((evt) => (
             <div key={evt.id} className={`mh-item tone-${evt.tone}`}>
-              {/* Cột mốc thời gian */}
+              {/* Date stamp */}
               <div className="mh-stamp">
                 <span className="mh-stamp-date">{formatDate(evt.date)}</span>
                 <span className="mh-stamp-time">{formatDateTime(evt.date).split(" ")[1] || ""}</span>
               </div>
 
-              {/* Điểm nối timeline */}
+              {/* Timeline dot */}
               <div className="mh-line-dot" />
 
-              {/* Nội dung chi tiết sự kiện */}
+              {/* Card content */}
               <div className="mh-card">
                 <div className="mh-card-top">
                   <div className="mh-title-wrap">
@@ -502,35 +502,35 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   <span>{evt.actorRole}: <strong>{evt.actorName}</strong></span>
                 </div>
 
-                {/* Nội dung cụ thể từng loại */}
+                {/* Event specific details */}
                 <div className="mh-details-block">
                   {evt.type === "EXAM" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Chẩn đoán:</span>
+                        <span>Diagnosis:</span>
                         <strong>{evt.details.diagnosis}</strong>
                       </div>
                       {evt.details.healthStatus && (
                         <div>
-                          <span>Trạng thái sau khám:</span>
+                          <span>Post-Exam Status:</span>
                           <strong>{statusLabel(evt.details.healthStatus)}</strong>
                         </div>
                       )}
                       {evt.details.expectedRestDays && (
                         <div>
-                          <span>Nghỉ ngơi chỉ định:</span>
-                          <strong>{evt.details.expectedRestDays} ngày</strong>
+                          <span>Prescribed Rest:</span>
+                          <strong>{evt.details.expectedRestDays} days</strong>
                         </div>
                       )}
                       {evt.details.weight && (
                         <div>
-                          <span>Cân nặng lúc khám:</span>
+                          <span>Weight at Exam:</span>
                           <strong>{evt.details.weight} kg</strong>
                         </div>
                       )}
                       {isVet && evt.details.notes && (
                         <div style={{ gridColumn: "1 / -1" }}>
-                          <span>Ghi chú chuyên môn:</span>
+                          <span>Clinical Notes:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.notes}</p>
                         </div>
                       )}
@@ -540,20 +540,20 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   {evt.type === "INJURY" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Vị trí cơ thể:</span>
+                        <span>Body Location:</span>
                         <strong>{evt.details.bodyLocation}</strong>
                       </div>
                       <div>
-                        <span>Mức độ nghiêm trọng:</span>
+                        <span>Severity:</span>
                         <strong>{evt.details.severity}</strong>
                       </div>
                       <div>
-                        <span>Toạ độ giải phẫu:</span>
+                        <span>Coordinates:</span>
                         <strong>{evt.details.coordinate}</strong>
                       </div>
                       {evt.details.isRecovered && evt.details.recoveredAt && (
                         <div>
-                          <span>Ngày hồi phục:</span>
+                          <span>Recovery Date:</span>
                           <strong style={{ color: "#2e7d32" }}>{formatDateTime(evt.details.recoveredAt)}</strong>
                         </div>
                       )}
@@ -563,22 +563,22 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   {evt.type === "TREATMENT" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Liều lượng:</span>
-                        <strong>{evt.details.dosage || "Theo đơn"}</strong>
+                        <span>Dosage:</span>
+                        <strong>{evt.details.dosage || "As prescribed"}</strong>
                       </div>
                       <div>
-                        <span>Tần suất dùng:</span>
-                        <strong>{evt.details.frequency || "Hàng ngày"}</strong>
+                        <span>Frequency:</span>
+                        <strong>{evt.details.frequency || "Daily"}</strong>
                       </div>
                       <div>
-                        <span>Liệu trình:</span>
+                        <span>Regimen:</span>
                         <strong>
-                          {formatDate(evt.details.startDate)} → {evt.details.endDate ? formatDate(evt.details.endDate) : "Liên tục"}
+                          {formatDate(evt.details.startDate)} → {evt.details.endDate ? formatDate(evt.details.endDate) : "Ongoing"}
                         </strong>
                       </div>
                       {evt.details.instruction && (
                         <div style={{ gridColumn: "1 / -1" }}>
-                          <span>Hướng dẫn cho nài ngựa/bác sĩ:</span>
+                          <span>Instructions:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.instruction}</p>
                         </div>
                       )}
@@ -588,18 +588,18 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   {evt.type === "LOCK" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Mức độ khoá:</span>
+                        <span>Lock Level:</span>
                         <strong>{lockLevelLabel(evt.details.lockLevel)}</strong>
                       </div>
                       <div>
-                        <span>Lý do ra lệnh:</span>
+                        <span>Reason:</span>
                         <strong>{evt.details.reason}</strong>
                       </div>
                       {!evt.details.isActive && evt.details.releasedByName && (
                         <div style={{ gridColumn: "1 / -1" }}>
-                          <span>Gỡ khoá bởi:</span>
+                          <span>Released By:</span>
                           <strong>
-                            {evt.details.releasedByName} (lúc {formatDateTime(evt.details.releasedAt)})
+                            {evt.details.releasedByName} (at {formatDateTime(evt.details.releasedAt)})
                           </strong>
                         </div>
                       )}
@@ -609,27 +609,27 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   {evt.type === "REFERRAL" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Bệnh viện tiếp nhận:</span>
+                        <span>Receiving Hospital:</span>
                         <strong style={{ color: "#b32569" }}>{evt.details.hospitalName}</strong>
                       </div>
                       <div>
-                        <span>Mức khẩn cấp:</span>
+                        <span>Urgency:</span>
                         <strong>{evt.details.urgency}</strong>
                       </div>
                       <div>
-                        <span>Dự kiến về CLB:</span>
-                        <strong>{evt.details.expectedReturn ? formatDate(evt.details.expectedReturn) : "Chưa ấn định"}</strong>
+                        <span>Estimated Return:</span>
+                        <strong>{evt.details.expectedReturn ? formatDate(evt.details.expectedReturn) : "TBD"}</strong>
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
-                        <span>Lý do chuyển viện:</span>
+                        <span>Referral Reason:</span>
                         <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.referralReason}</p>
                       </div>
                       {!evt.details.isHospitalized && evt.details.dischargeNotes && (
                         <div style={{ gridColumn: "1 / -1", background: "#f8f9fc", padding: "8px 12px", borderRadius: "8px" }}>
-                          <span style={{ fontWeight: 700, color: "#1976d2" }}>Biên bản tiếp nhận xuất viện:</span>
+                          <span style={{ fontWeight: 700, color: "#1976d2" }}>Discharge & Return Summary:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.dischargeNotes}</p>
                           <small style={{ color: "#8e96b1", display: "block", marginTop: "4px" }}>
-                            Đón về ngày {formatDate(evt.details.dischargedAt)} bởi Dr. {evt.details.dischargedByName}
+                            Readmitted on {formatDate(evt.details.dischargedAt)} by Dr. {evt.details.dischargedByName}
                           </small>
                         </div>
                       )}
@@ -639,26 +639,26 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                   {evt.type === "INCIDENT" && (
                     <div className="mh-fact-grid">
                       <div>
-                        <span>Mức độ khẩn:</span>
+                        <span>Urgency:</span>
                         <strong>{evt.details.urgency}</strong>
                       </div>
                       {evt.details.sessionId && (
                         <div>
-                          <span>Buổi tập:</span>
-                          <strong>Buổi tập #{evt.details.sessionId} (Dừng sớm)</strong>
+                          <span>Training Session:</span>
+                          <strong>Session #{evt.details.sessionId} (Aborted)</strong>
                         </div>
                       )}
                       {evt.details.handoverByName && (
                         <div style={{ gridColumn: "1 / -1", background: "#fff5f9", padding: "8px 12px", borderRadius: "8px", border: "1px solid #f8cce1" }}>
-                          <span style={{ fontWeight: 700, color: "#b32569" }}>Nhật ký bàn giao ca y tế:</span>
+                          <span style={{ fontWeight: 700, color: "#b32569" }}>Clinical Handover Log:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>
-                            Bàn giao bởi Dr. {evt.details.handoverByName}: {evt.details.handoverNotes}
+                            Handed over by Dr. {evt.details.handoverByName}: {evt.details.handoverNotes}
                           </p>
                         </div>
                       )}
                       {evt.details.dismissedByName && (
                         <div style={{ gridColumn: "1 / -1", background: "#f5f5f5", padding: "8px 12px", borderRadius: "8px" }}>
-                          <span>Huỷ bởi HLV trưởng {evt.details.dismissedByName}:</span>
+                          <span>Dismissed by Head Trainer {evt.details.dismissedByName}:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.dismissReason}</p>
                         </div>
                       )}
