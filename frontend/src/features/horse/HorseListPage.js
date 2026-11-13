@@ -1,4 +1,4 @@
-﻿// src/features/horse/HorseListPage.js
+// src/features/horse/HorseListPage.js
 // UC7 - Horse Management, màn danh sách.
 //
 // Lọc và tìm kiếm làm ở trình duyệt, không gọi lại API: GET /api/horses trả về
@@ -106,14 +106,6 @@ export default function HorseListPage() {
     return c;
   }, [horses]);
 
-  // Không còn nút "Add a horse": ngựa vào hệ thống qua yêu cầu đăng ký của chủ ngựa
-  // và Club Manager duyệt. Manager/Trainer chỉ xem; trang duyệt nằm ở menu bên trái.
-  const actions = isOwner ? (
-    <button type="button" className="hz-btn" onClick={() => navigate("/horse-owner/request")}>
-      Request a horse registration
-    </button>
-  ) : null;
-
   return (
     <HorseShell
       title="Horses"
@@ -124,7 +116,7 @@ export default function HorseListPage() {
           ? "The horses assigned to your management"
           : "Every horse registered at the club"
       }
-      actions={actions}
+      actions={null}
     >
       {error && (
         <StateBlock kind="error" title={error} onRetry={() => load()}>
@@ -144,6 +136,16 @@ export default function HorseListPage() {
           }
           actions={
             <div className="hz-filters">
+              {isOwner && (
+                <button
+                  type="button"
+                  className="hz-btn"
+                  style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                  onClick={() => navigate("/horse-owner/request")}
+                >
+                  + Request a horse registration
+                </button>
+              )}
               <input
                 className="hz-search"
                 type="search"

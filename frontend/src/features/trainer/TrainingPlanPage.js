@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
@@ -689,8 +689,8 @@ export default function TrainingPlanPage() {
                         <th>Horse</th>
                         <th>Assigned Groom</th>
                         <th>Period</th>
-                        <th>Phases</th>
-                        <th>Status</th>
+                        <th style={{ textAlign: "center" }}>Phases</th>
+                        <th style={{ textAlign: "center" }}>Status</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -700,7 +700,7 @@ export default function TrainingPlanPage() {
                           <td>
                             <div className="plan-cell-main">
                               <strong>{plan.planName}</strong>
-                              <small>Plan #{plan.planId}</small>
+                              <span className="plan-cell-id">Plan #{plan.planId}</span>
                               {plan.status === "DRAFT" && plan.ownerNote && (
                                 <p className="saved-plan-owner-note" style={{ marginTop: 4 }}>
                                   Owner rejected: {plan.ownerNote}
@@ -719,16 +719,16 @@ export default function TrainingPlanPage() {
                             )}
                           </td>
                           <td>
-                            <span className="plan-period-text">
+                            <span className="plan-period-box">
                               {dateLabel(plan.startDate)} – {dateLabel(plan.endDate)}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ textAlign: "center" }}>
                             <span className="plan-phase-count">
                               {plan.phaseCount} phase{plan.phaseCount === 1 ? "" : "s"}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ textAlign: "center" }}>
                             <span className={`training-status-pill ${statusClass(plan.status)}`}>
                               {PLAN_STATUS_LABEL[plan.status] || plan.status}
                             </span>

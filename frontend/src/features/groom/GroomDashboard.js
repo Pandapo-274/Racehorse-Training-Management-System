@@ -1,4 +1,4 @@
-﻿import { useSignOutModal } from "../auth/SignOutModal";
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";

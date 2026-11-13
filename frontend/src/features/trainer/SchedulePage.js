@@ -1,4 +1,4 @@
-﻿import { useSignOutModal } from "../auth/SignOutModal";
+import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
@@ -728,6 +728,7 @@ export default function SchedulePage() {
         });
         setNotice("Schedule updated successfully.");
       } else {
+        const selectedPhase = phases.find((p) => String(p.phaseId) === String(form.phaseId));
         const body = {
           phaseId: Number(form.phaseId),
           assignedTo: Number(form.assignedTo),

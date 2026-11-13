@@ -4,7 +4,7 @@ import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError } from "../auth/authService";
-import { evaluateSession, fetchSessions, hasNotRun, updateTrialRun } from "./sessionEvaluationApi";
+import { evaluateSession, fetchSessions, hasNotRun } from "./sessionEvaluationApi";
 import "./trainer.css";
 import "./schedule.css";
 import "./session-evaluation.css";
@@ -257,33 +257,6 @@ export default function SessionEvaluationPage() {
             <p>Record workout results within the 48-hour review window or finalize archived auto-reviews.</p>
           </div>
           <div className="trainer-header-actions">
-            {archivedCount > 0 && (
-              <button
-                type="button"
-                className="session-review-refresh"
-                style={{
-                  background: "#fef3c7",
-                  color: "#92400e",
-                  borderColor: "#f59e0b",
-                  fontWeight: 700,
-                }}
-                onClick={() => setFilter("ARCHIVED")}
-              >
-                🗄️ Archive ({archivedCount})
-              </button>
-            )}
-            <button
-              type="button"
-              className="session-review-refresh"
-              onClick={() => {
-                setLoading(true);
-                loadSessions();
-              }}
-              disabled={loading}
-            >
-              Refresh
-            </button>
-
             <ProfileCircle className="trainer-profile" />
           </div>
         </header>
@@ -302,7 +275,7 @@ export default function SessionEvaluationPage() {
               </div>
               <select aria-label="Filter sessions" value={filter} onChange={(event) => setFilter(event.target.value)}>
                 <option value="NEEDS_REVIEW">Pending review (within 48h)</option>
-                <option value="ARCHIVED">Archive (Overdue &gt;48h auto-reported)</option>
+                <option value="ARCHIVED">Archive ({archivedCount})</option>
                 <option value="REVIEWED">Official review completed</option>
                 <option value="ALL">All sessions</option>
                 <option value="POOR">Poor</option>
