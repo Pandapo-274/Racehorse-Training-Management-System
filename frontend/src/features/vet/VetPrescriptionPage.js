@@ -913,8 +913,24 @@ function PrescribeDialog({ onClose, onDone }) {
 
   const eligibleRecords = useMemo(() => {
     if (!records) return [];
-    if (showAllExams) return records;
-    return records.filter(isExamUntreated);
+    const sourceList = showAllExams ? records : records.filter(isExamUntreated);
+
+    // Không cho lặp lại nhiều examination Relapse: chỉ giữ tối đa 1 bản ghi Relapse mới nhất
+    const result = [];
+    let seenRelapse = false;
+    for (const r of sourceList) {
+      const isRelapse = (r.diagnosis || "").toLowerCase().includes("relapse");
+      if (isRelapse) {
+        if (!seenRelapse) {
+          seenRelapse = true;
+          result.push(r);
+        }
+        // Bỏ qua các lần lặp lại relapse cũ
+      } else {
+        result.push(r);
+      }
+    }
+    return result;
   }, [records, showAllExams, isExamUntreated]);
 
   useEffect(() => {
