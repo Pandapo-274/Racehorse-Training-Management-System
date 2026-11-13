@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 13, 2026` at `10:52` by `Pandapo274`
+### Last Commited: `Nov 13, 2026` at `11:10` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,10 @@ npm start
 
 ## Changelogs
 > ### `Nov 13, 2026`
+- `[11:10]` `Pandapo274` -
+System-Wide Sign Out Button Synchronization:
+- Unified the Sign Out button and bottom profile card across all 5 user roles (Club Manager, Head Trainer, Veterinarian, Groom, Horse Owner) with identical SVG logout icon, font styling (15px / 600 weight), dimensions (44px height), padding (0 16px), gap (10px), and hover transitions to match the horse shell navigation.
+
 - `[10:52]` `Pandapo274` -
 UI Synchronization & Navigation Refinements:
 - Prescription History Back Navigation: Shortened button label to "← Back" and directed navigation to the "Horse Medical Directory" tab (?tab=directory) instead of the default active prescriptions tab.
