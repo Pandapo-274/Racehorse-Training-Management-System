@@ -319,10 +319,22 @@ export default function LiveSessionMonitorPage() {
     setError("");
     try {
       const results = await Promise.all([
-        fetchAlerts({ openOnly: !includeHistory, limit: includeHistory ? 100 : 50, signal }),
-        fetchRunningSessions(signal),
-        listVetCalls({ limit: 10, signal }),
-        fetchPendingIncidents(signal),
+        fetchAlerts({ openOnly: !includeHistory, limit: includeHistory ? 100 : 50, signal }).catch((err) => {
+          console.warn("fetchAlerts fallback:", err);
+          return [];
+        }),
+        fetchRunningSessions(signal).catch((err) => {
+          console.warn("fetchRunningSessions fallback:", err);
+          return [];
+        }),
+        listVetCalls({ limit: 10, signal }).catch((err) => {
+          console.warn("listVetCalls fallback:", err);
+          return [];
+        }),
+        fetchPendingIncidents(signal).catch((err) => {
+          console.warn("fetchPendingIncidents fallback:", err);
+          return [];
+        }),
       ]);
       const nextAlerts = results[0] || [];
       setVetCalls(results[2] || []);
@@ -352,10 +364,10 @@ export default function LiveSessionMonitorPage() {
       setRefreshing(true);
       try {
         const [newAlerts, runningSessions, calls, pendingIncidents] = await Promise.all([
-          fetchAlerts({ afterId: latestAlertId.current, openOnly: true, limit: 100 }),
-          fetchRunningSessions(),
-          listVetCalls({ limit: 10 }),
-          fetchPendingIncidents(),
+          fetchAlerts({ afterId: latestAlertId.current, openOnly: true, limit: 100 }).catch(() => []),
+          fetchRunningSessions().catch(() => []),
+          listVetCalls({ limit: 10 }).catch(() => []),
+          fetchPendingIncidents().catch(() => []),
         ]);
         if (cancelled) return;
         if (newAlerts?.length) {

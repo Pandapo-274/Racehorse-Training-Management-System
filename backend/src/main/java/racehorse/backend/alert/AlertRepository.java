@@ -56,11 +56,15 @@ public class AlertRepository {
                 .optional();
     }
 
-    /** Cập nhật đỉnh nhịp tim của ca tập (chỉ nâng lên, không bao giờ hạ xuống). */
+    /** Cập nhật nhịp tim đo được: tính trung bình cộng (avg_heart_rate) và cập nhật đỉnh (peak_heart_rate). */
     public void updatePeakHeartRate(int sessionId, int heartRate) {
         jdbc.sql("""
-                UPDATE TRAINING_SESSION SET peak_heart_rate = :hr
-                WHERE session_id = :id AND (peak_heart_rate IS NULL OR peak_heart_rate < :hr)
+                UPDATE TRAINING_SESSION
+                SET hr_reading_count = ISNULL(hr_reading_count, 0) + 1,
+                    hr_reading_sum = ISNULL(hr_reading_sum, 0) + :hr,
+                    avg_heart_rate = (ISNULL(hr_reading_sum, 0) + :hr) / (ISNULL(hr_reading_count, 0) + 1),
+                    peak_heart_rate = CASE WHEN peak_heart_rate IS NULL OR peak_heart_rate < :hr THEN :hr ELSE peak_heart_rate END
+                WHERE session_id = :id
                 """)
                 .param("hr", heartRate)
                 .param("id", sessionId)

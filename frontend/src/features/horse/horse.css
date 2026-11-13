@@ -291,19 +291,47 @@
 @media (max-width: 1100px) { .hz-form-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 680px)  { .hz-form-grid { grid-template-columns: 1fr; } }
 
-.hz-field { display: grid; gap: 5px; }
+/* Cấu trúc phân bổ linh hoạt cho ô Trainer Allocation để không bị tràn text */
+.hz-allocation-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.hz-allocation-grid .hz-field:nth-child(1) {
+  flex: 0 0 140px;
+}
+.hz-allocation-grid .hz-field:nth-child(2) {
+  flex: 0 0 100px;
+}
+.hz-allocation-grid .hz-field:nth-child(3) {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.hz-field { display: grid; gap: 5px; min-width: 0; }
 .hz-field label { font: 700 11px var(--font-body); color: var(--text-600); }
 .hz-field input,
-.hz-field select {
+.hz-field select,
+.hz-field textarea {
   width: 100%; padding: 9px 13px;
   border: 1px solid var(--line); border-radius: 10px;
   background: var(--field-bg); color: var(--text-900);
   font: 400 12.5px var(--font-body);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.hz-field textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.45;
 }
 .hz-field input:focus,
-.hz-field select:focus { outline: 2px solid var(--pink-300); outline-offset: 1px; }
+.hz-field select:focus,
+.hz-field textarea:focus { outline: 2px solid var(--pink-300); outline-offset: 1px; }
 .hz-field input[aria-invalid="true"],
-.hz-field select[aria-invalid="true"] { border-color: var(--danger); }
+.hz-field select[aria-invalid="true"],
+.hz-field textarea[aria-invalid="true"] { border-color: var(--danger); }
 .hz-field__error { margin: 0; font-size: 11px; color: var(--danger); }
 .hz-field__hint { margin: 0; font-size: 10.5px; color: var(--text-400); }
 

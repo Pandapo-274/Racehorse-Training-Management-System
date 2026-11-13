@@ -96,7 +96,7 @@ function IdentityForm({ horse, onSaved }) {
   return (
     <Card title="Club records & Trainer allocation" hint="Only the club manager can change these">
       <form onSubmit={save} noValidate>
-        <div className="hz-form-grid">
+        <div className="hz-form-grid hz-allocation-grid">
           <div className="hz-field">
             <label htmlFor="identity-code">Registration code</label>
             <input id="identity-code" className="hz-mono" maxLength={30} value={code}

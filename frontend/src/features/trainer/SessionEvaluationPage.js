@@ -123,74 +123,9 @@ function emptyForm(session) {
     evaluation: session?.evaluation || "GOOD",
     remarks: session?.remarks || "",
     status: session?.status === "STOPPED_EARLY" ? "STOPPED_EARLY" : "COMPLETED",
+    trialRun: !!session?.trialRun,
+    videoUrl: session?.videoUrl || "",
   };
-}
-
-function TrialRunCard({ session, onSaved }) {
-  const navigate = useNavigate();
-  const [trialRun, setTrialRun] = useState(!!session.trialRun);
-  const [videoUrl, setVideoUrl] = useState(session.videoUrl || "");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const save = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setMessage("");
-    setError("");
-    try {
-      const result = await updateTrialRun(session.sessionId, {
-        trialRun,
-        videoUrl: trialRun ? videoUrl.trim() : "",
-      });
-      onSaved(result);
-      if (!trialRun) setVideoUrl("");
-      setMessage(result.videoUrl
-        ? "Saved. The owner has been told a trial run video is available."
-        : "Saved.");
-    } catch (err) {
-      if (!handleAuthError(err, navigate)) setError(err.fieldErrors?.videoUrl || err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form className="session-review-form trial-run-form" onSubmit={save}>
-      <div className="trial-run-head">
-        <strong>Trial run</strong>
-        <small>Mark a timed trial and attach its recording for the owner.</small>
-      </div>
-      <label className="trial-run-check">
-        <input type="checkbox" checked={trialRun} onChange={(e) => setTrialRun(e.target.checked)} />
-        This session was a trial run
-      </label>
-      {trialRun && (
-        <label>
-          Video link (YouTube, Google Drive…)
-          <input
-            type="url"
-            value={videoUrl}
-            maxLength={500}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://"
-          />
-        </label>
-      )}
-      {session.videoUrl && (
-        <a className="trial-run-link" href={session.videoUrl} target="_blank" rel="noopener noreferrer">
-          Open the current video
-        </a>
-      )}
-      {error && <p className="trial-run-error" role="alert">{error}</p>}
-      {message && <p className="trial-run-ok" role="status">{message}</p>}
-      <div className="session-review-form-footer">
-        <span>Only http(s) links are accepted. The file itself is not uploaded here.</span>
-        <button type="submit" disabled={saving}>{saving ? "Saving…" : "Save trial run"}</button>
-      </div>
-    </form>
-  );
 }
 
 export default function SessionEvaluationPage() {
@@ -282,15 +217,17 @@ export default function SessionEvaluationPage() {
     setError("");
     setNotice("");
     const payload = {
-      actualDistance: Number(form.actualDistance),
-      durationMinutes: Number(form.durationMinutes),
-      avgHeartRate: Number(form.avgHeartRate),
-      peakHeartRate: Number(form.peakHeartRate),
+      actualDistance: form.actualDistance !== "" ? Number(form.actualDistance) : (selectedSession.actualDistance ?? selectedSession.plannedDistance ?? 0),
+      durationMinutes: form.durationMinutes !== "" ? Number(form.durationMinutes) : (selectedSession.durationMinutes ?? selectedSession.plannedDuration ?? 60),
+      avgHeartRate: form.avgHeartRate !== "" ? Number(form.avgHeartRate) : null,
+      peakHeartRate: form.peakHeartRate !== "" ? Number(form.peakHeartRate) : null,
       recoveryHeartRate: form.recoveryHeartRate === "" ? null : Number(form.recoveryHeartRate),
       peakVelocity: form.peakVelocity === "" ? null : Number(form.peakVelocity),
       evaluation: form.evaluation,
       remarks: form.remarks.trim() || null,
       status: form.status,
+      trialRun: form.trialRun,
+      videoUrl: form.trialRun ? (form.videoUrl.trim() || null) : null,
     };
     try {
       const updated = await evaluateSession(selectedSession.sessionId, payload);
@@ -522,81 +459,72 @@ export default function SessionEvaluationPage() {
                       </span>
                     </div>
                     <h3>Actual results</h3>
+                    <p style={{ margin: "-4px 0 10px", fontSize: "12px", color: "#64748b" }}>
+                      Recorded during training session by Groom (Read-only)
+                    </p>
                     <div className="session-review-fields">
                       <label>
                         Actual distance (m)
                         <input
                           name="actualDistance"
-                          type="number"
-                          min="0"
-                          max="100000"
-                          step="1"
-                          value={form.actualDistance}
-                          onChange={updateField}
-                          required
+                          type="text"
+                          readOnly
+                          value={form.actualDistance !== "" ? `${Number(form.actualDistance).toLocaleString()} m` : "—"}
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                       <label>
                         Duration (minutes)
                         <input
                           name="durationMinutes"
-                          type="number"
-                          min="1"
-                          max="720"
-                          step="1"
-                          value={form.durationMinutes}
-                          onChange={updateField}
-                          required
+                          type="text"
+                          readOnly
+                          value={form.durationMinutes !== "" ? `${form.durationMinutes} min` : "—"}
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                       <label>
                         Average heart rate (bpm)
                         <input
                           name="avgHeartRate"
-                          type="number"
-                          min="20"
-                          max="300"
-                          step="1"
-                          value={form.avgHeartRate}
-                          onChange={updateField}
-                          required
+                          type="text"
+                          readOnly
+                          value={form.avgHeartRate !== "" ? `${form.avgHeartRate} bpm` : "—"}
+                          placeholder="—"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                       <label>
                         Peak heart rate (bpm)
                         <input
                           name="peakHeartRate"
-                          type="number"
-                          min="20"
-                          max="300"
-                          step="1"
-                          value={form.peakHeartRate}
-                          onChange={updateField}
-                          required
+                          type="text"
+                          readOnly
+                          value={form.peakHeartRate !== "" ? `${form.peakHeartRate} bpm` : "—"}
+                          placeholder="—"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                       <label>
                         Recovery heart rate (bpm)
                         <input
                           name="recoveryHeartRate"
-                          type="number"
-                          min="20"
-                          max="300"
-                          step="1"
-                          value={form.recoveryHeartRate}
-                          onChange={updateField}
+                          type="text"
+                          readOnly
+                          value={form.recoveryHeartRate !== "" ? `${form.recoveryHeartRate} bpm` : "—"}
+                          placeholder="—"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                       <label>
                         Peak velocity (m/s)
                         <input
                           name="peakVelocity"
-                          type="number"
-                          min="0"
-                          max="99.99"
-                          step="0.01"
-                          value={form.peakVelocity}
-                          onChange={updateField}
+                          type="text"
+                          readOnly
+                          value={form.peakVelocity !== "" ? `${form.peakVelocity} m/s` : "—"}
+                          placeholder="—"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />
                       </label>
                     </div>
@@ -621,6 +549,41 @@ export default function SessionEvaluationPage() {
                         </select>
                       </label>
                     </div>
+
+                    <div style={{ margin: "16px 0", padding: "14px 16px", background: "#fdf8fb", border: "1px solid #f2dee8", borderRadius: "10px" }}>
+                      <strong style={{ fontSize: 13, display: "block", marginBottom: 6, color: "#1e1b4b" }}>Trial run</strong>
+                      <label className="trial-run-check" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          name="trialRun"
+                          checked={form.trialRun}
+                          onChange={(e) => setForm((old) => ({ ...old, trialRun: e.target.checked }))}
+                        />
+                        This session was a trial run
+                      </label>
+                      {form.trialRun && (
+                        <div style={{ marginTop: 10 }}>
+                          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+                            Video link (YouTube, Google Drive…)
+                            <input
+                              type="url"
+                              name="videoUrl"
+                              value={form.videoUrl}
+                              maxLength={500}
+                              onChange={(e) => setForm((old) => ({ ...old, videoUrl: e.target.value }))}
+                              placeholder="https://"
+                              style={{ width: "100%", marginTop: 4, padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}
+                            />
+                          </label>
+                        </div>
+                      )}
+                      {form.videoUrl && (
+                        <a className="trial-run-link" href={form.videoUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 6, fontSize: 12, color: "#d93b87" }}>
+                          Open current video link ↗
+                        </a>
+                      )}
+                    </div>
+
                     <label className="session-review-remarks">
                       Trainer remarks
                       <textarea
@@ -651,17 +614,6 @@ export default function SessionEvaluationPage() {
                       </button>
                     </div>
                   </form>
-                )}
-                {!hasNotRun(selectedSession.status) && (
-                  <TrialRunCard
-                    key={selectedSession.sessionId}
-                    session={selectedSession}
-                    onSaved={(result) =>
-                      setSessions((current) => current.map((item) =>
-                        item.sessionId === result.sessionId
-                          ? { ...item, trialRun: result.trialRun, videoUrl: result.videoUrl }
-                          : item))}
-                  />
                 )}
               </>
             )}

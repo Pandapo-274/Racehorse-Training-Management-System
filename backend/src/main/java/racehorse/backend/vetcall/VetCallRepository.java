@@ -27,8 +27,8 @@ public class VetCallRepository {
             LEFT JOIN THRESHOLD_ALERT a ON a.alert_id = c.alert_id
             JOIN TRAINING_SESSION s ON s.session_id = c.session_id
             JOIN HORSE h            ON h.horse_id   = c.horse_id
-            JOIN APP_USER g         ON g.user_id    = s.assigned_to
-            JOIN APP_USER cu        ON cu.user_id   = c.called_by
+            LEFT JOIN APP_USER g    ON g.user_id    = s.assigned_to
+            LEFT JOIN APP_USER cu   ON cu.user_id   = c.called_by
             LEFT JOIN APP_USER vu   ON vu.user_id   = c.answered_by
             """;
 

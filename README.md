@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > ### `Nov 13, 2026`
+- `[18:25]` `DevilJack422` - Fix some issues in training flow
 - `[11:22]` `tqt195` - Fix layout on narrow screens (laptop 1366px, or a big screen at 125-150% zoom) and Flow 4 supplies: `Supplies` table no longer pushes the Actions / Last change column out of the card (amount and minimum in one `In stock` column, buttons wrap, Actions column sticks to the right); bring back `Count` (Groom counts feed and tools, Vet and Manager count everything); the supply `Edit` form now keeps the unit price (it used to wipe it); `Restock` no longer offers Unit / Area fields the backend ignored; `Races` keeps `Record result` visible with a sticky action column (shared class `hz-sticky-end`); owner dashboard `Training stats` no longer cut off between 1100 and 1225px. Add `docs/FLOW4_DEMO_SCRIPT.md` (Flow 4 demo script, test checklist, known issues) and `backend/dev/seed_flow4_demo.sql` (history / current / future data for the Flow 4 demo, safe to re-run)
 - `[11:10]` `Pandapo274` -
 System-Wide Sign Out Button Synchronization:

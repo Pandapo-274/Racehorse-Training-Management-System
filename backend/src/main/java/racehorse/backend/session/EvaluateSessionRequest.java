@@ -22,12 +22,10 @@ public record EvaluateSessionRequest(
         @Max(value = 600, message = "Duration must be at most 600 minutes")
         Integer durationMinutes,
 
-        @NotNull(message = "Average heart rate is required")
         @Min(value = 20, message = "Heart rate must be between 20 and 300")
         @Max(value = 300, message = "Heart rate must be between 20 and 300")
         Integer avgHeartRate,
 
-        @NotNull(message = "Peak heart rate is required")
         @Min(value = 20, message = "Heart rate must be between 20 and 300")
         @Max(value = 300, message = "Heart rate must be between 20 and 300")
         Integer peakHeartRate,
@@ -48,5 +46,18 @@ public record EvaluateSessionRequest(
         String remarks,
 
         @Pattern(regexp = "COMPLETED|STOPPED_EARLY", message = "Status must be COMPLETED or STOPPED_EARLY")
-        String status
-) {}
+        String status,
+
+        Boolean trialRun,
+
+        @Size(max = 500, message = "Video URL must be at most 500 characters")
+        String videoUrl
+) {
+    public EvaluateSessionRequest(
+            Integer actualDistance, Integer durationMinutes, Integer avgHeartRate,
+            Integer peakHeartRate, Integer recoveryHeartRate, BigDecimal peakVelocity,
+            String evaluation, String remarks, String status) {
+        this(actualDistance, durationMinutes, avgHeartRate, peakHeartRate, recoveryHeartRate, peakVelocity,
+                evaluation, remarks, status, null, null);
+    }
+}

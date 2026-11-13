@@ -335,6 +335,10 @@ function SessionModal({
                     </div>
                     <div className="schedule-phase-info-grid">
                       <div className="schedule-phase-info-item">
+                        <span>Planned Distance</span>
+                        <strong>{selectedPhase.distance ? `${Number(selectedPhase.distance).toLocaleString()} m` : "—"}</strong>
+                      </div>
+                      <div className="schedule-phase-info-item">
                         <span>Target Surface</span>
                         <strong>{selectedPhase.surface || "TURF"}</strong>
                       </div>
@@ -363,27 +367,6 @@ function SessionModal({
                     </div>
                   </div>
                 )}
-              </label>
-
-              <label>
-                Planned distance (meters, max 5,000)
-                <input
-                  type="number"
-                  min="1"
-                  max="5000"
-                  step="1"
-                  value={form.plannedDistance}
-                  onChange={(event) =>
-                    setForm((old) => ({
-                      ...old,
-                      plannedDistance: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. 1200 (max 5,000m)"
-                />
-                <small className="schedule-field-hint">
-                  Target distance in meters for this session (maximum 5,000m).
-                </small>
               </label>
             </>
           )}
@@ -749,8 +732,8 @@ export default function SchedulePage() {
           phaseId: Number(form.phaseId),
           assignedTo: Number(form.assignedTo),
           sessionDate,
-          plannedDistance: form.plannedDistance
-            ? Number(form.plannedDistance)
+          plannedDistance: (form.plannedDistance || selectedPhase?.distance)
+            ? Number(form.plannedDistance || selectedPhase?.distance)
             : null,
           plannedDuration,
         };

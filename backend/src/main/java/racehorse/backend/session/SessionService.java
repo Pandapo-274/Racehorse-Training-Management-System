@@ -127,11 +127,17 @@ public class SessionService {
                             ? "This session was cancelled, it cannot be evaluated"
                             : "Session has not started yet, it cannot be evaluated");
         }
-        if (req.peakHeartRate() < req.avgHeartRate()) {
+        if (req.peakHeartRate() != null && req.avgHeartRate() != null && req.peakHeartRate() < req.avgHeartRate()) {
             throw fieldError("peakHeartRate", "Peak heart rate cannot be lower than average heart rate");
         }
-        if (req.recoveryHeartRate() != null && req.recoveryHeartRate() > req.peakHeartRate()) {
+        if (req.recoveryHeartRate() != null && req.peakHeartRate() != null && req.recoveryHeartRate() > req.peakHeartRate()) {
             throw fieldError("recoveryHeartRate", "Recovery heart rate cannot be higher than peak heart rate");
+        }
+        if (Boolean.TRUE.equals(req.trialRun()) && req.videoUrl() != null && !req.videoUrl().isBlank()) {
+            String url = req.videoUrl().trim();
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                throw fieldError("videoUrl", "Video URL must start with http:// or https://");
+            }
         }
 
         if ("STOPPED_EARLY".equals(current.status()) && "COMPLETED".equals(req.status())) {

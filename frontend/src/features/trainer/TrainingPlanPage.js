@@ -581,19 +581,7 @@ export default function TrainingPlanPage() {
             </p>
           </div>
           <div className="trainer-header-actions">
-            {!isCreating ? (
-              <button
-                type="button"
-                className="training-create-btn"
-                onClick={() => {
-                  setError("");
-                  setNotice("");
-                  setIsCreating(true);
-                }}
-              >
-                + Create new plan
-              </button>
-            ) : (
+            {isCreating && (
               <button
                 type="button"
                 className="training-back-btn-top"
@@ -605,9 +593,6 @@ export default function TrainingPlanPage() {
                 ← Back to plans list
               </button>
             )}
-            <span className="training-plan-target">
-              Target: Tracen Cup · 22 Nov 2026
-            </span>
             <ProfileCircle className="trainer-profile" />
           </div>
         </header>
@@ -646,7 +631,7 @@ export default function TrainingPlanPage() {
 
           {!isCreating ? (
             <section className="trainer-card plans-overview-card">
-              <div className="plans-overview-header">
+              <div className="plans-overview-head">
                 <div className="trainer-card-title" style={{ marginBottom: 0 }}>
                   <span className="trainer-diamond" />
                   <div>
@@ -656,18 +641,30 @@ export default function TrainingPlanPage() {
                     </p>
                   </div>
                 </div>
-                <div className="training-plan-filter">
-                  {["ALL", ...Object.keys(PLAN_STATUS_LABEL)].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={filter === s ? "selected" : ""}
-                      onClick={() => setFilter(s)}
-                    >
-                      {s === "ALL" ? `All (${plans.length})` : PLAN_STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className="training-create-btn"
+                  onClick={() => {
+                    setError("");
+                    setNotice("");
+                    setIsCreating(true);
+                  }}
+                >
+                  + Create new plan
+                </button>
+              </div>
+
+              <div className="training-plan-filter" style={{ marginBottom: 16 }}>
+                {["ALL", ...Object.keys(PLAN_STATUS_LABEL)].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={filter === s ? "selected" : ""}
+                    onClick={() => setFilter(s)}
+                  >
+                    {s === "ALL" ? `All (${plans.length})` : PLAN_STATUS_LABEL[s]}
+                  </button>
+                ))}
               </div>
 
               {loading ? (

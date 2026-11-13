@@ -107,6 +107,8 @@ public class SessionRepository {
                 SET actual_distance = :ad, duration_minutes = :dm, avg_heart_rate = :avg,
                     peak_heart_rate = :peak, recovery_heart_rate = :rec, peak_velocity = :vel,
                     evaluation = :ev, remarks = :rm, evaluated_by = :by, status = :st,
+                    is_trial_run = CASE WHEN :trialRun IS NOT NULL THEN :trialRun ELSE is_trial_run END,
+                    video_url = CASE WHEN :trialRun = 1 THEN :videoUrl WHEN :trialRun = 0 THEN NULL ELSE video_url END,
                     review_status = 'REVIEWED',
                     ended_at = ISNULL(ended_at, SYSUTCDATETIME())
                 WHERE session_id = :id AND status = :expected
@@ -119,6 +121,8 @@ public class SessionRepository {
                 .param("vel", r.peakVelocity())
                 .param("ev", r.evaluation())
                 .param("rm", r.remarks() == null || r.remarks().isBlank() ? null : r.remarks().trim())
+                .param("trialRun", r.trialRun())
+                .param("videoUrl", r.videoUrl() == null || r.videoUrl().isBlank() ? null : r.videoUrl().trim())
                 .param("by", evaluatorId)
                 .param("st", finalStatus)
                 .param("expected", expectedStatus)
