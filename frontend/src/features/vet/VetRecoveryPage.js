@@ -97,6 +97,15 @@ function RecoveryView({ horseId }) {
   const [ratingDialog, setRatingDialog] = useState(false);
   const [relapseDialog, setRelapseDialog] = useState(false);
   const [result, setResult] = useState(null);
+  const [sessionsExpanded, setSessionsExpanded] = useState(false);
+  const [expandedSessionIds, setExpandedSessionIds] = useState({});
+
+  const toggleSession = (id) => {
+    setExpandedSessionIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -359,51 +368,172 @@ function RecoveryView({ horseId }) {
       </VetCard>
 
       {(stage === 2 || stage === 3 || (recoverySessions && recoverySessions.length > 0)) && (
-        <VetCard title="Recovery training sessions & Groom vitals" tone="yellow">
+        <VetCard
+          title={`Recovery training sessions & Groom vitals${recoverySessions?.length ? ` (${recoverySessions.length})` : ""}`}
+          tone="yellow"
+          actions={
+            recoverySessions && recoverySessions.length > 0 ? (
+              <button
+                type="button"
+                className="vx-btn vx-btn--ghost"
+                onClick={() => setSessionsExpanded((prev) => !prev)}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  borderRadius: "8px",
+                  border: "1px solid #d1d5db",
+                  backgroundColor: "#ffffff",
+                  color: "#1f2937",
+                }}
+              >
+                {sessionsExpanded ? "Collapse ▲" : `Expand details (${recoverySessions.length}) ▼`}
+              </button>
+            ) : null
+          }
+        >
           {(!recoverySessions || recoverySessions.length === 0) ? (
             <p className="vx-meta" style={{ margin: 0 }}>
               No recovery training sessions recorded yet. The Head Trainer and Groom schedule rehabilitation sessions based on your Light work protocol and will submit measured vitals for recovery rating.
             </p>
+          ) : !sessionsExpanded ? (
+            <div
+              onClick={() => setSessionsExpanded(true)}
+              style={{
+                cursor: "pointer",
+                padding: "12px 16px",
+                backgroundColor: "#f8fafc",
+                borderRadius: "8px",
+                border: "1px dashed #cbd5e1",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                color: "#334155",
+                fontSize: "13px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "16px" }}>📋</span>
+                <span>
+                  <strong>{recoverySessions.length} recovery workouts</strong> recorded by Groom &amp; reviewed by Head Trainer
+                  {recoverySessions[0]?.sessionDate && ` (Latest: ${formatShortDate(recoverySessions[0].sessionDate)})`}.
+                </span>
+              </div>
+              <span style={{ color: "#0284c7", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
+                Click to open details ▼
+              </span>
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-                Rehabilitation workouts completed by Groom and reviewed by Head Trainer:
-              </p>
-              {recoverySessions.map((s) => (
-                <div
-                  key={s.sessionId}
-                  style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "8px",
-                    padding: "10px 14px",
-                    fontSize: "13px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <strong>Session #{s.sessionId} · {formatShortDate(s.sessionDate)}</strong>
-                    <span className="vx-pill vx-pill--green" style={{ textTransform: "uppercase", fontSize: "11px" }}>
-                      {s.status}
-                    </span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", color: "#334155" }}>
-                    <span><strong>Distance:</strong> {s.actualDistance ?? s.plannedDistance ?? "—"} m</span>
-                    <span><strong>Duration:</strong> {s.durationMinutes ?? s.plannedDuration ?? "—"} min</span>
-                    <span><strong>Avg HR:</strong> {s.avgHeartRate ? `${s.avgHeartRate} bpm` : "—"}</span>
-                    <span><strong>Peak HR:</strong> {s.peakHeartRate ? `${s.peakHeartRate} bpm` : "—"}</span>
-                    <span><strong>Recovery HR:</strong> {s.recoveryHeartRate ? `${s.recoveryHeartRate} bpm` : "—"}</span>
-                    <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} m/s` : "—"}</span>
-                  </div>
-                  {s.remarks && (
-                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#475569", fontStyle: "italic" }}>
-                      Note: {s.remarks}
-                    </p>
-                  )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                  Rehabilitation workouts completed by Groom and reviewed by Head Trainer:
+                </p>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all = {};
+                      recoverySessions.forEach((s) => { all[s.sessionId] = true; });
+                      setExpandedSessionIds(all);
+                    }}
+                    style={{ background: "none", border: "none", color: "#0284c7", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                  >
+                    Expand all
+                  </button>
+                  <span style={{ color: "#cbd5e1" }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSessionIds({})}
+                    style={{ background: "none", border: "none", color: "#64748b", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                  >
+                    Collapse all
+                  </button>
+                  <span style={{ color: "#cbd5e1" }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSessionsExpanded(false)}
+                    style={{ background: "none", border: "none", color: "#dc2626", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                  >
+                    Close section ▲
+                  </button>
                 </div>
-              ))}
+              </div>
+              {recoverySessions.map((s) => {
+                const isOpen = expandedSessionIds[s.sessionId] ?? true;
+                return (
+                  <div
+                    key={s.sessionId}
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      fontSize: "13px",
+                      display: "flex",
+                      flexDirection: "column",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {/* Header bar - click to toggle individual session */}
+                    <div
+                      onClick={() => toggleSession(s.sessionId)}
+                      style={{
+                        padding: "10px 14px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        backgroundColor: isOpen ? "#f8fafc" : "#ffffff",
+                        borderBottom: isOpen ? "1px solid #e2e8f0" : "none",
+                        userSelect: "none",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "12px", color: "#64748b" }}>{isOpen ? "▲" : "▼"}</span>
+                        <strong>Session #{s.sessionId} · {formatShortDate(s.sessionDate)}</strong>
+                        <span style={{ color: "#64748b", fontSize: "12px" }}>
+                          ({s.actualDistance ?? s.plannedDistance ?? "800"}m · {s.durationMinutes ?? s.plannedDuration ?? "30"} min · Avg HR: {s.avgHeartRate ? `${s.avgHeartRate} bpm` : "—"})
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="vx-pill vx-pill--green" style={{ textTransform: "uppercase", fontSize: "11px" }}>
+                          {s.status}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "#0284c7", fontWeight: 500 }}>
+                          {isOpen ? "Collapse" : "Expand"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Collapsible Body */}
+                    {isOpen && (
+                      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: "8px", backgroundColor: "#f8fafc" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", color: "#334155" }}>
+                          <span><strong>Distance:</strong> {s.actualDistance ?? s.plannedDistance ?? "—"} m</span>
+                          <span><strong>Duration:</strong> {s.durationMinutes ?? s.plannedDuration ?? "—"} min</span>
+                          <span><strong>Avg HR:</strong> {s.avgHeartRate ? `${s.avgHeartRate} bpm` : "—"}</span>
+                          <span><strong>Peak HR:</strong> {s.peakHeartRate ? `${s.peakHeartRate} bpm` : "—"}</span>
+                          <span><strong>Recovery HR:</strong> {s.recoveryHeartRate ? `${s.recoveryHeartRate} bpm` : "—"}</span>
+                          <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} m/s` : "—"}</span>
+                        </div>
+                        {s.remarks && (
+                          <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#475569", fontStyle: "italic", borderTop: "1px dashed #e2e8f0", paddingTop: "6px" }}>
+                            <strong>Note:</strong> {s.remarks}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </VetCard>
