@@ -53,6 +53,11 @@ function GroomSidebar() {
 
       <div className="groom-sidebar-bottom">
         <button type="button" className="groom-signout" onClick={requestSignOut}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
           Sign out
         </button>
 
@@ -193,6 +198,8 @@ function SessionPanel({ session, onChanged, navigate }) {
   const isDue = scheduledTimeMs <= currentTime;
   const isEndReached = plannedEndMs > 0 && currentTime >= plannedEndMs;
   const hasReportedBoth = session?.peakHeartRate != null && session?.peakVelocity != null;
+  // Flow 1: asked to stop because the horse lost its Head Trainer - no readings needed first.
+  const canEndEarly = hasReportedBoth || earlyReason === "NO_HEAD_TRAINER";
 
   useEffect(() => {
     setError("");
@@ -288,7 +295,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
   const submitEarlyFinish = async (event) => {
     event.preventDefault();
-    if (!hasReportedBoth) {
+    if (!canEndEarly) {
       setError("You must report both Heart Rate and Speed at least once during the session before ending early.");
       return;
     }
@@ -482,7 +489,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             <strong>End Session Early</strong> — Select the reason for ending before the {session.plannedDuration || 60}-minute duration completes.
           </p>
 
-          {!hasReportedBoth && (
+          {!canEndEarly && (
             <p className="session-error" role="alert" style={{ marginBottom: "10px" }}>
               ⚠️ Cannot end session early yet: You must report both Heart Rate (current: {session.peakHeartRate ?? "none"}) and Speed (current: {session.peakVelocity ?? "none"}) at least once first.
             </p>
@@ -547,7 +554,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             <button
               type="submit"
               className="stop-button"
-              disabled={busy || !hasReportedBoth}
+              disabled={busy || !canEndEarly}
             >
               {busy
                 ? "Processing…"

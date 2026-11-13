@@ -135,7 +135,7 @@ export default function OwnerRacesPage() {
                       <th style={{ width: "16%" }}>Horse</th>
                       <th style={{ width: "20%" }}>Trainer note</th>
                       <th>Owner note</th>
-                      <th style={{ width: "160px", textAlign: "right" }} aria-label="Actions" />
+                      <th className="hz-sticky-end" style={{ width: "160px", textAlign: "right" }} aria-label="Actions" />
                     </tr>
                   </thead>
                   <tbody>
@@ -164,7 +164,7 @@ export default function OwnerRacesPage() {
                             }}
                           />
                         </td>
-                        <td className="hz-row-action">
+                        <td className="hz-row-action hz-sticky-end">
                           <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
                             <button
                               type="button"

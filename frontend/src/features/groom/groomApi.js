@@ -57,6 +57,7 @@ export const EARLY_STOP_REASON_OPTIONS = [
   { value: "WEATHER_CONDITION", label: "Weather / track condition" },
   { value: "EQUIPMENT_ISSUE", label: "Equipment issue" },
   { value: "INJURY", label: "Horse injury / abnormality — Call Vet" },
+  { value: "NO_HEAD_TRAINER", label: "No Head Trainer to supervise (asked by the club)" },
 ];
 
 /** Triệu chứng hay gặp, để Groom chọn nhanh; vẫn sửa tay được. */

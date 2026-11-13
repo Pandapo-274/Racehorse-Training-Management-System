@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 10, 2026` at `08:39` by `tusandthatsall`
+### Last Commited: `Nov 13, 2026` at `11:10` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,17 @@ npm start
 ```
 
 ## Changelogs
+> ### `Nov 13, 2026`
+- `[11:22]` `tqt195` - Fix layout on narrow screens (laptop 1366px, or a big screen at 125-150% zoom) and Flow 4 supplies: `Supplies` table no longer pushes the Actions / Last change column out of the card (amount and minimum in one `In stock` column, buttons wrap, Actions column sticks to the right); bring back `Count` (Groom counts feed and tools, Vet and Manager count everything); the supply `Edit` form now keeps the unit price (it used to wipe it); `Restock` no longer offers Unit / Area fields the backend ignored; `Races` keeps `Record result` visible with a sticky action column (shared class `hz-sticky-end`); owner dashboard `Training stats` no longer cut off between 1100 and 1225px. Add `docs/FLOW4_DEMO_SCRIPT.md` (Flow 4 demo script, test checklist, known issues) and `backend/dev/seed_flow4_demo.sql` (history / current / future data for the Flow 4 demo, safe to re-run)
+- `[11:10]` `Pandapo274` -
+System-Wide Sign Out Button Synchronization:
+- Unified the Sign Out button and bottom profile card across all 5 user roles (Club Manager, Head Trainer, Veterinarian, Groom, Horse Owner) with identical SVG logout icon, font styling (15px / 600 weight), dimensions (44px height), padding (0 16px), gap (10px), and hover transitions to match the horse shell navigation.
+
+- `[10:52]` `Pandapo274` -
+UI Synchronization & Navigation Refinements:
+- Prescription History Back Navigation: Shortened button label to "← Back" and directed navigation to the "Horse Medical Directory" tab (?tab=directory) instead of the default active prescriptions tab.
+- Unified Sign Out Button: Synchronized the Sign out button across all Veterinarian tabs (Herd health, Vet calls, Examination, Recovery, Preventive care, Prescriptions) to identically match the icon, font weight, padding, and layout of Horse, Rations, and Supplies pages.
+
 > ###  `Nov 12, 2026`
 - `[11:32]` `DevilJack422` - Update training flow 
 > ###  `Nov 12, 2026`
