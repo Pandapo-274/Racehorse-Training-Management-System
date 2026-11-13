@@ -283,10 +283,29 @@ public class StaffRepository {
     }
 
     /** Names of the horses a Head Trainer is in charge of (any activity), for the "left without a trainer" notice. */
-    public List<String> horseNamesOfTrainer(int trainerId) {
-        return jdbc.sql("SELECT horse_name FROM HORSE WHERE trainer_id = :id ORDER BY horse_name")
+    /** A session running right now on one of a Head Trainer's horses, and the groom running it. */
+    public record RunningSession(int sessionId, int groomId, String horseName) {}
+
+    public List<RunningSession> runningSessionsOfTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT s.session_id, s.assigned_to, h.horse_name
+                FROM TRAINING_SESSION s JOIN HORSE h ON h.horse_id = s.horse_id
+                WHERE h.trainer_id = :id AND s.status = 'RUNNING'
+                ORDER BY h.horse_name
+                """)
                 .param("id", trainerId)
-                .query(String.class)
+                .query((rs, n) -> new RunningSession(rs.getInt("session_id"), rs.getInt("assigned_to"),
+                        rs.getString("horse_name")))
+                .list();
+    }
+
+    /** A horse in a Head Trainer's charge, with its owner (who is told when the trainer changes). */
+    public record TrainerHorse(int horseId, String horseName, int ownerId) {}
+
+    public List<TrainerHorse> horsesOfTrainer(int trainerId) {
+        return jdbc.sql("SELECT horse_id, horse_name, owner_id FROM HORSE WHERE trainer_id = :id ORDER BY horse_name")
+                .param("id", trainerId)
+                .query((rs, n) -> new TrainerHorse(rs.getInt("horse_id"), rs.getString("horse_name"), rs.getInt("owner_id")))
                 .list();
     }
 

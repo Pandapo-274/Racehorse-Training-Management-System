@@ -46,7 +46,9 @@ public class TrainingSessionService {
             "HORSE_FATIGUED", "Horse fatigued",
             "WEATHER_CONDITION", "Weather or track condition",
             "EQUIPMENT_ISSUE", "Equipment issue",
-            "INJURY", "Horse injury or abnormality"
+            "INJURY", "Horse injury or abnormality",
+            // Flow 1: the horse's Head Trainer was suspended and nobody took over.
+            "NO_HEAD_TRAINER", "No Head Trainer to supervise the session"
     );
 
     /** Buổi còn chiếm chỗ trên lịch. */
@@ -233,12 +235,24 @@ public class TrainingSessionService {
         boolean isEarlyStop = isBeforePlannedEnd || earlyStopRequested;
 
         if (isEarlyStop) {
+            String rawReason = (req != null && req.earlyStopReason() != null) ? req.earlyStopReason().trim() : "";
+            // Flow 1: the groom was asked to stop because the horse lost its Head Trainer.
+            // Only true when the horse really has none; then no readings are needed first,
+            // the point is to stop a session nobody supervises.
+            boolean noTrainer = "NO_HEAD_TRAINER".equalsIgnoreCase(rawReason);
+            if (noTrainer) {
+                HorseResponse horse = horseRepository.findById(s.horseId()).orElse(null);
+                if (horse != null && horse.trainerId() != null) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            s.horseName() + " has a Head Trainer (" + horse.trainerName() + "). Choose another reason",
+                            Map.of("earlyStopReason", "This horse has a Head Trainer"));
+                }
+            }
             // V37: Chỉ được kết thúc sớm khi Groom đã báo cáo cả 2 chỉ số Heart Rate và Speed ít nhất 1 lần
-            if (s.peakHeartRate() == null || s.peakVelocity() == null) {
+            if (!noTrainer && (s.peakHeartRate() == null || s.peakVelocity() == null)) {
                 throw new ApiException(HttpStatus.CONFLICT,
                         "You must report both heart rate and speed at least once during the session before ending it early");
             }
-            String rawReason = (req != null && req.earlyStopReason() != null) ? req.earlyStopReason().trim() : "";
             if (rawReason.isEmpty()) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Please select a reason for ending the session early",
                         Map.of("earlyStopReason", "Select a reason for early termination"));

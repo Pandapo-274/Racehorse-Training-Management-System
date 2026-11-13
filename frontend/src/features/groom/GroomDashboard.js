@@ -183,6 +183,8 @@ function SessionPanel({ session, onChanged, navigate }) {
   const isDue = scheduledTimeMs <= currentTime;
   const isEndReached = plannedEndMs > 0 && currentTime >= plannedEndMs;
   const hasReportedBoth = session?.peakHeartRate != null && session?.peakVelocity != null;
+  // Flow 1: asked to stop because the horse lost its Head Trainer - no readings needed first.
+  const canEndEarly = hasReportedBoth || earlyReason === "NO_HEAD_TRAINER";
 
   useEffect(() => {
     setError("");
@@ -266,7 +268,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
   const submitEarlyFinish = async (event) => {
     event.preventDefault();
-    if (!hasReportedBoth) {
+    if (!canEndEarly) {
       setError("You must report both Heart Rate and Speed at least once during the session before ending early.");
       return;
     }
@@ -446,7 +448,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             <strong>End Session Early</strong> — Select the reason for ending before the {session.plannedDuration || 60}-minute duration completes.
           </p>
 
-          {!hasReportedBoth && (
+          {!canEndEarly && (
             <p className="session-error" role="alert" style={{ marginBottom: "10px" }}>
               ⚠️ Cannot end session early yet: You must report both Heart Rate (current: {session.peakHeartRate ?? "none"}) and Speed (current: {session.peakVelocity ?? "none"}) at least once first.
             </p>
@@ -511,7 +513,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             <button
               type="submit"
               className="stop-button"
-              disabled={busy || !hasReportedBoth}
+              disabled={busy || !canEndEarly}
             >
               {busy
                 ? "Processing…"

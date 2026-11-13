@@ -363,8 +363,10 @@ export default function StaffPage() {
    * take it over, the manager picks them in the same dialog. Any error from the
    * request (e.g. that Head Trainer has no room) is shown inside the dialog.
    * send(handoverTo) does the request; resolves with its result, or null if cancelled.
+   * requireSuccessor (role change): "Nobody" is not offered; with nobody able to
+   * take the work over, the dialog only explains what to do first.
    */
-  const confirmLeaving = async (row, { title, message, confirmLabel, danger }, send) => {
+  const confirmLeaving = async (row, { title, message, confirmLabel, danger, requireSuccessor }, send) => {
     let work = null;
     if (STAFF_ROLE_CODES.has(row.roleName)) {
       try {
@@ -375,6 +377,16 @@ export default function StaffPage() {
     }
     const items = work?.items || [];
     let result = null;
+    if (requireSuccessor && items.length > 0 && work.candidates.length === 0) {
+      await dialog.confirm({
+        title: "The role cannot change yet",
+        message: `${row.fullName} still has unfinished work:`,
+        items,
+        note: work.noCandidate,
+        confirmLabel: "OK",
+      });
+      return null;
+    }
     if (items.length > 0 && work.candidates.length > 0) {
       const picked = await dialog.prompt({
         title, danger, confirmLabel,
@@ -383,10 +395,11 @@ export default function StaffPage() {
         note: work.note,
         label: "Hand it over to",
         options: [
-          { value: "", label: work.fallback },
+          { value: "", label: requireSuccessor ? "Choose who takes over…" : work.fallback },
           ...work.candidates.map((c) => ({ value: String(c.userId), label: successorLabel(work.role, c) })),
         ],
         defaultValue: "",
+        validate: requireSuccessor ? (v) => (v ? null : "Choose who takes over the work") : undefined,
         onSubmit: async (v) => { result = await send(v ? Number(v) : null); },
       });
       return picked === null ? null : result;
@@ -448,6 +461,7 @@ export default function StaffPage() {
         title: `Change role to ${label}?`,
         message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`,
         confirmLabel: "Change role",
+        requireSuccessor: true,
       }, (handoverTo) => {
         setBusyId(row.userId);
         return changeStaffRole(row.userId, roleName, handoverTo);

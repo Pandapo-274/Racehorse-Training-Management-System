@@ -333,6 +333,20 @@ public class StaffService {
         }
         int roleId = users.findRoleId(roleName)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Role does not exist"));
+        // A role change is planned, so the work must go to someone: no "Nobody" here
+        // (a suspension can still leave it to the Head Trainer / the queue).
+        OpenWork work = openWork(userId);
+        if (!work.items().isEmpty()) {
+            if (work.noCandidate() != null) {
+                throw new ApiException(HttpStatus.CONFLICT, work.noCandidate(),
+                        Map.of("handoverTo", "Nobody can take over the work yet"));
+            }
+            if (handoverTo == null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST,
+                        "Choose who takes over " + target.fullName() + "'s work before changing the role",
+                        Map.of("handoverTo", "Choose who takes over the work"));
+            }
+        }
         StaffRow successor = checkSuccessor(target, handoverTo);
 
         staff.updateRole(userId, roleId);
@@ -469,8 +483,20 @@ public class StaffService {
      *  candidates who may take it over (same role, room for it)
      *  fallback   what happens if nobody is chosen
      *  note       a warning (e.g. no other vet left), or null
+     *  noCandidate when there is work but nobody can take it over: why, and what
+     *              to do first. A role change is refused then (a suspension is not).
      */
-    public record OpenWork(String role, List<String> items, List<StaffRow> candidates, String fallback, String note) {}
+    public record OpenWork(String role, List<String> items, List<StaffRow> candidates, String fallback, String note,
+                           String noCandidate) {
+        OpenWork(String role, List<String> items, List<StaffRow> candidates, String fallback, String note) {
+            this(role, items, candidates, fallback, note, null);
+        }
+
+        OpenWork withNoCandidate(String why) {
+            return items.isEmpty() || !candidates.isEmpty() ? this
+                    : new OpenWork(role, items, candidates, fallback, note, why);
+        }
+    }
 
     public OpenWork openWork(int userId) {
         StaffRow p = staff.findRow(userId)
@@ -486,17 +512,22 @@ public class StaffService {
                 if (tasks > 0) items.add(plural(tasks, "open care task") + " (feeding, stall cleaning...)");
                 return new OpenWork(p.roleName(), items,
                         staff.handoverCandidates("GROOM", userId, p.trainerId()),
-                        "Nobody: the work stays in their name and their Head Trainer reassigns it", null);
+                        "Nobody: the work stays in their name and their Head Trainer reassigns it", null)
+                        .withNoCandidate(p.trainerId() == null
+                                ? "No other active groom can take over " + p.fullName() + "'s work. Create or activate a groom first, or suspend " + p.fullName() + " instead."
+                                : "No other active groom on " + p.trainerName() + "'s team can take over " + p.fullName()
+                                        + "'s work. Assign another groom to that team first, or suspend " + p.fullName() + " instead.");
             }
             case "HEAD_TRAINER" -> {
-                int horses = staff.horseNamesOfTrainer(userId).size();
+                int horses = staff.horsesOfTrainer(userId).size();
                 int grooms = staff.groomIdsOfTrainer(userId).size();
                 int running = staff.countRunningSessionsOfTrainer(userId);
                 int reviews = staff.countSessionsToReviewOfTrainer(userId);
                 int plans = staff.countOpenPlansOfTrainer(userId);
                 if (horses > 0) items.add(plural(horses, "horse") + " in their charge");
                 if (grooms > 0) items.add(plural(grooms, "groom") + " on their team");
-                if (running > 0) items.add(plural(running, "session") + " running now on their horses (the grooms can finish them)");
+                if (running > 0) items.add(plural(running, "session") + " running now on their horses"
+                        + " (if nobody takes over, their grooms are told to stop them)");
                 if (reviews > 0) items.add(plural(reviews, "session") + " waiting for their review");
                 if (plans > 0) items.add(plural(plans, "open training plan"));
                 List<StaffRow> room = staff.handoverCandidates("HEAD_TRAINER", userId, null).stream()
@@ -504,7 +535,10 @@ public class StaffService {
                         .toList();
                 return new OpenWork(p.roleName(), items, room,
                         "Nobody: the horses and grooms wait until you give them to a Head Trainer",
-                        items.isEmpty() ? null : "Only Head Trainers with room for all of it are listed.");
+                        items.isEmpty() ? null : "Only Head Trainers with room for all of it are listed.")
+                        .withNoCandidate("No other Head Trainer has room for " + plural(p.managedHorseCount(), "horse")
+                                + " and " + plural(p.groomCount(), "groom") + ". Raise a Head Trainer's limit or move some horses first, or suspend "
+                                + p.fullName() + " instead.");
             }
             case "VETERINARIAN" -> {
                 int cases = staff.countCasesOfVet(userId);
@@ -513,7 +547,9 @@ public class StaffService {
                 return new OpenWork(p.roleName(), items,
                         staff.handoverCandidates("VETERINARIAN", userId, null),
                         "Nobody: the cases go back to the open queue for every vet",
-                        otherVets == 0 ? "There is no other active Veterinarian: incident cases and vet calls will have nobody to answer them." : null);
+                        otherVets == 0 ? "There is no other active Veterinarian: incident cases and vet calls will have nobody to answer them." : null)
+                        .withNoCandidate("No other active Veterinarian can take over " + p.fullName()
+                                + "'s cases. Create or activate a Veterinarian first, or suspend " + p.fullName() + " instead.");
             }
             default -> {
                 return new OpenWork(p.roleName(), items, List.of(), null, null);
@@ -713,7 +749,8 @@ public class StaffService {
      *    team; reviews and plans wait until the manager assigns a new trainer.
      */
     private String headTrainerLeaves(StaffRow trainer, StaffRow successor, AuthenticatedUser actor, String reason) {
-        List<String> horses = staff.horseNamesOfTrainer(trainer.userId());
+        List<StaffRepository.TrainerHorse> theirHorses = staff.horsesOfTrainer(trainer.userId());
+        List<String> horses = theirHorses.stream().map(StaffRepository.TrainerHorse::horseName).toList();
         List<Integer> grooms = staff.groomIdsOfTrainer(trainer.userId());
         int reviews = staff.countSessionsToReviewOfTrainer(trainer.userId());
         int plans = staff.countOpenPlansOfTrainer(trainer.userId());
@@ -735,6 +772,9 @@ public class StaffService {
             if (plans > 0) mine.append(" ").append(plural(plans, "training plan")).append(" are now yours.");
             notifications.notifyUser(successor.userId(), new Notice("WORK_HANDED_OVER",
                     "Horses and grooms handed over to you", mine.toString(), null, null));
+            tellOwners(theirHorses, "Head trainer assigned to your horse",
+                    names -> names + " " + (names.contains(",") ? "are" : "is") + " now managed by Head Trainer "
+                            + successor.fullName() + " (" + trainer.fullName() + " " + reason + ").");
             return "Handed " + plural(horses.size(), "horse") + " and " + plural(grooms.size(), "groom")
                     + " to " + successor.fullName()
                     + (reviews + plans > 0 ? ", with " + plural(reviews, "session") + " to review and "
@@ -742,7 +782,21 @@ public class StaffService {
                     + ".";
         }
 
+        // Nobody takes over: a session running now has no Head Trainer to watch its
+        // alerts or review it, so its groom is asked to end it, with the reason
+        // NO_HEAD_TRAINER (no readings needed first). Read before the horses are released.
+        List<StaffRepository.RunningSession> running = staff.runningSessionsOfTrainer(trainer.userId());
+        for (StaffRepository.RunningSession s : running) {
+            notifications.notifyUser(s.groomId(), new Notice("SESSION_STOP_REQUESTED", "Stop this training session now",
+                    s.horseName() + ": please end this session now (End session early, reason \"No Head Trainer to supervise\"). Head Trainer "
+                            + trainer.fullName() + " " + reason + ", so nobody can watch this session's alerts or review it"
+                            + " until the club assigns a new Head Trainer.",
+                    Notice.TRAINING_SESSION, s.sessionId()));
+        }
         if (!horses.isEmpty()) staff.releaseHorsesOfTrainer(trainer.userId());
+        tellOwners(theirHorses, "Head trainer removed from your horse",
+                names -> names + " " + (names.contains(",") ? "no longer have" : "no longer has") + " a Head Trainer: "
+                        + trainer.fullName() + " " + reason + ". The club will assign a new one.");
         if (!grooms.isEmpty()) staff.detachGroomsFromTrainer(trainer.userId());
         for (Integer groomId : grooms) {
             notifications.notifyUser(groomId, new Notice("TRAINER_LEFT", "Your Head Trainer changed",
@@ -764,7 +818,31 @@ public class StaffService {
             sb.append(' ').append(plural(reviews, "session")).append(" to review and ")
               .append(plural(plans, "open plan")).append(" wait for the new Head Trainer.");
         }
+        if (!running.isEmpty()) {
+            sb.append(" Asked the grooms to stop ").append(plural(running.size(), "running session")).append(" (")
+              .append(running.stream().map(StaffRepository.RunningSession::horseName)
+                      .collect(java.util.stream.Collectors.joining(", ")))
+              .append(").");
+        }
         return sb.toString();
+    }
+
+    /**
+     * Each owner hears once about their own horses, the same notice as when the
+     * manager changes a horse's trainer by hand (HORSE_TRAINER_CHANGED).
+     */
+    private void tellOwners(List<StaffRepository.TrainerHorse> horses, String title,
+                            java.util.function.Function<String, String> text) {
+        java.util.Map<Integer, List<StaffRepository.TrainerHorse>> byOwner = new java.util.LinkedHashMap<>();
+        for (StaffRepository.TrainerHorse h : horses) {
+            byOwner.computeIfAbsent(h.ownerId(), k -> new ArrayList<>()).add(h);
+        }
+        byOwner.forEach((ownerId, own) -> {
+            String names = own.stream().map(StaffRepository.TrainerHorse::horseName)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            notifications.notifyUser(ownerId, new Notice("HORSE_TRAINER_CHANGED", title, text.apply(names),
+                    own.size() == 1 ? Notice.HORSE : null, own.size() == 1 ? own.get(0).horseId() : null));
+        });
     }
 
     private ApiException conflict(Map<String, String> errors) {

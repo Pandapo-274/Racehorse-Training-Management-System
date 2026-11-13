@@ -520,6 +520,38 @@ class BusinessRulesTest {
     }
 
     @Test
+    void groomAskedToStopBecauseTheHorseHasNoHeadTrainerNeedsNoReadings() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        // Running for 10 minutes, nothing reported yet; the horse's Head Trainer was suspended.
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, LocalDateTime.now().minusMinutes(10), "RUNNING", 1600)));
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(repo.markStoppedEarly(eq(1), any())).thenReturn(1);
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class), horses,
+                mock(HorseVitalsRepository.class));
+
+        service.finish(1, new FinishSessionRequest(true, "NO_HEAD_TRAINER"), GROOM, "ip");
+        verify(repo).markStoppedEarly(1, "No Head Trainer to supervise the session");
+    }
+
+    @Test
+    void noHeadTrainerReasonIsRefusedWhenTheHorseHasOne() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, LocalDateTime.now().minusMinutes(10), "RUNNING", 1600)));
+        when(horses.findById(100)).thenReturn(Optional.of(new HorseResponse(100, 7, "Owner", null, null, "Horse 100", "TM-100",
+                "TB", "COLT", TODAY.minusYears(4), "Bay", null, "A-100", "ELIGIBLE", LocalDateTime.now(), null,
+                "ACADEMY", null, "ACTIVE", null, 2, "Trainer 2")));
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class), horses,
+                mock(HorseVitalsRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400,
+                () -> service.finish(1, new FinishSessionRequest(true, "NO_HEAD_TRAINER"), GROOM, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("earlyStopReason"), ex.getFieldErrors().toString());
+        verify(repo, never()).markStoppedEarly(anyInt(), any());
+    }
+
+    @Test
     void groomCannotEndSessionEarlyWithoutReportingBothHeartRateAndSpeed() {
         TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
         // Mới có peakHeartRate = 165, chưa có peakVelocity (null)

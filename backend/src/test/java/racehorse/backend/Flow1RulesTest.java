@@ -198,35 +198,50 @@ class Flow1RulesTest {
     // ------------------------------------------------------------ leaving a role
 
     @Test
-    void headTrainerWhoChangesRoleReleasesHorsesAndGrooms() {
+    void roleChangeNeedsSomeoneToTakeOverTheWork() {
         UserRepository users = mock(UserRepository.class);
         StaffRepository staff = mock(StaffRepository.class);
-        NotificationService notifications = mock(NotificationService.class);
-        when(staff.findRow(2)).thenReturn(Optional.of(staffRow(2, "HEAD_TRAINER")));
+        when(staff.findRow(2)).thenReturn(Optional.of(trainer(2, 2, 1)));
         when(users.findRoleId("VETERINARIAN")).thenReturn(Optional.of(3));
-        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("River Song", "Thunder Bay"));
+        when(staff.horsesOfTrainer(2)).thenReturn(java.util.List.of(
+                new StaffRepository.TrainerHorse(30, "River Song", 7), new StaffRepository.TrainerHorse(31, "Thunder Bay", 7)));
         when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of(5));
         StaffService service = new StaffService(users, staff, mock(PasswordEncoder.class), mock(TokenBlacklist.class),
-                notifications);
+                mock(NotificationService.class));
 
-        StaffService.StaffUpdate result = service.changeRole(2, "VETERINARIAN", MANAGER, "ip");
-        verify(staff).releaseHorsesOfTrainer(2);
-        verify(staff).detachGroomsFromTrainer(2);
-        verify(notifications).notifyUser(eq(5), any());
-        assertTrue(result.notice().contains("River Song, Thunder Bay"), result.notice());
+        // No other Head Trainer at all: the role cannot change yet (a suspension still could).
+        ApiException none = expect(409, () -> service.changeRole(2, "VETERINARIAN", MANAGER, "ip"));
+        assertTrue(none.getMessage().contains("No other Head Trainer has room"), none.getMessage());
+
+        // Someone has room, but nobody was chosen: "Nobody" is not an option for a role change.
+        when(staff.handoverCandidates("HEAD_TRAINER", 2, null)).thenReturn(java.util.List.of(trainer(4, 3, 1)));
+        ApiException unchosen = expect(400, () -> service.changeRole(2, "VETERINARIAN", MANAGER, "ip"));
+        assertTrue(unchosen.getFieldErrors().containsKey("handoverTo"), unchosen.getFieldErrors().toString());
+        verify(staff, never()).updateRole(anyInt(), anyInt());
     }
 
     @Test
     void suspendedHeadTrainerReleasesHorsesToo() {
         StaffRepository staff = mock(StaffRepository.class);
         when(staff.findRow(2)).thenReturn(Optional.of(staffRow(2, "HEAD_TRAINER")));
-        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("Golden Hour"));
+        when(staff.horsesOfTrainer(2)).thenReturn(java.util.List.of(new StaffRepository.TrainerHorse(30, "Golden Hour", 7)));
         when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of());
-        StaffService service = staffService(staff, mock(TokenBlacklist.class));
+        when(staff.runningSessionsOfTrainer(2)).thenReturn(java.util.List.of(new StaffRepository.RunningSession(40, 5, "Golden Hour")));
+        NotificationService notifications = mock(NotificationService.class);
+        StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
+                mock(TokenBlacklist.class), notifications);
 
         StaffService.StaffUpdate result = service.setStatus(2, "SUSPENDED", MANAGER, "ip");
         verify(staff).releaseHorsesOfTrainer(2);
         assertTrue(result.notice().contains("Golden Hour"), result.notice());
+        // The owner hears that Golden Hour has no Head Trainer now.
+        verify(notifications).notifyUser(eq(7), org.mockito.ArgumentMatchers.argThat(
+                n -> "HORSE_TRAINER_CHANGED".equals(n.type()) && n.message().contains("Golden Hour")));
+        // Nobody supervises Golden Hour's running session now: its groom is asked to end it.
+        verify(notifications).notifyUser(eq(5), org.mockito.ArgumentMatchers.argThat(
+                n -> "SESSION_STOP_REQUESTED".equals(n.type()) && Integer.valueOf(40).equals(n.targetId())
+                        && n.message().contains("No Head Trainer to supervise")));
+        assertTrue(result.notice().contains("Asked the grooms to stop 1 running session (Golden Hour)"), result.notice());
     }
 
     @Test
@@ -298,7 +313,8 @@ class Flow1RulesTest {
         NotificationService notifications = mock(NotificationService.class);
         when(staff.findRow(2)).thenReturn(Optional.of(trainer(2, 2, 1)));
         when(staff.findRow(4)).thenReturn(Optional.of(trainer(4, 5, 1)));
-        when(staff.horseNamesOfTrainer(2)).thenReturn(java.util.List.of("River Song", "Thunder Bay"));
+        when(staff.horsesOfTrainer(2)).thenReturn(java.util.List.of(
+                new StaffRepository.TrainerHorse(30, "River Song", 7), new StaffRepository.TrainerHorse(31, "Thunder Bay", 8)));
         when(staff.groomIdsOfTrainer(2)).thenReturn(java.util.List.of(5));
         when(staff.countSessionsToReviewOfTrainer(2)).thenReturn(3);
         StaffService service = new StaffService(mock(UserRepository.class), staff, mock(PasswordEncoder.class),
@@ -310,6 +326,9 @@ class Flow1RulesTest {
         verify(staff, never()).releaseHorsesOfTrainer(anyInt());
         verify(notifications).notifyUser(eq(4), any());
         verify(notifications).notifyUser(eq(5), any());
+        // Each owner is told who trains their horse now.
+        verify(notifications).notifyUser(eq(7), org.mockito.ArgumentMatchers.argThat(n -> n.message().contains("River Song")));
+        verify(notifications).notifyUser(eq(8), org.mockito.ArgumentMatchers.argThat(n -> n.message().contains("Thunder Bay")));
         assertTrue(result.notice().contains("3 sessions to review"), result.notice());
     }
 
