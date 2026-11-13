@@ -1,0 +1,124 @@
+.confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: confirmFadeIn 0.2s ease-out;
+}
+
+.confirm-modal-card {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+  width: 90%;
+  max-width: 420px;
+  padding: 30px 26px 24px;
+  text-align: center;
+  animation: confirmSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #fae1ed;
+  box-sizing: border-box;
+}
+
+.confirm-modal-icon {
+  width: 56px;
+  height: 56px;
+  background: #fff0f6;
+  color: #d93b87;
+  font-size: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  border: 1px solid #ffd6e7;
+}
+
+.confirm-modal-icon--danger {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.confirm-modal-title {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.confirm-modal-message {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-modal-btn {
+  flex: 1;
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.confirm-modal-btn--cancel {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.confirm-modal-btn--cancel:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.confirm-modal-btn--primary {
+  background: linear-gradient(135deg, #e43e8c, #d93b87);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(217, 59, 135, 0.3);
+}
+
+.confirm-modal-btn--primary:hover {
+  background: linear-gradient(135deg, #d3307b, #c22974);
+  box-shadow: 0 6px 16px rgba(217, 59, 135, 0.4);
+}
+
+.confirm-modal-btn--danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.confirm-modal-btn--danger:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirmSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

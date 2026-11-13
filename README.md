@@ -45,7 +45,8 @@ npm start
 ```
 
 ## Changelogs
-> #### `Nov 12, 2026`
+> ###  `Nov 12, 2026`
+- `[23:56]` `DevilJack422` - Update training flow 
 - `[16:30]` `Pandapo274` -
 Horse Prescription History Directory & Dedicated Timeline Page:
 - Sidebar Layout Fix: Resolved vertical collision and overflow between sidebar navigation items and Sign Out / Profile card by adding flex-shrink: 0, padding-top, and scrollable container across vet and horse stylesheets.

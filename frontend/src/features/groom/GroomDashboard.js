@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import "./groom.css";
+import ConfirmModal from "../common/ConfirmModal";
 import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
@@ -162,6 +163,15 @@ function SessionPanel({ session, onChanged, navigate }) {
   const [stop, setStop] = useState({ symptoms: "", description: "", urgency: "HIGH" });
   const [stopResult, setStopResult] = useState(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    confirmTone: "primary",
+    icon: "♞",
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (session?.status !== "SCHEDULED" && session?.status !== "RUNNING") return undefined;
@@ -233,14 +243,18 @@ function SessionPanel({ session, onChanged, navigate }) {
 
   const submitVitals = async (event) => {
     event.preventDefault();
-    const hr = Number(heartRate);
-    if (!Number.isInteger(hr) || hr < 20 || hr > 300) {
+    const hr = heartRate === "" ? null : Number(heartRate);
+    if (hr !== null && (!Number.isInteger(hr) || hr < 20 || hr > 300)) {
       setError("Heart rate must be a whole number between 20 and 300.");
       return;
     }
     const v = velocity === "" ? null : Number(velocity);
     if (v != null && (!Number.isFinite(v) || v < 0 || v > 99.99)) {
       setError("Speed must be between 0 and 99.99 m/s.");
+      return;
+    }
+    if (hr === null && v === null) {
+      setError("Please provide at least Heart rate or Speed.");
       return;
     }
     const result = await run(() => sendVitals(session.sessionId, { heartRate: hr, velocity: v }));
@@ -257,11 +271,19 @@ function SessionPanel({ session, onChanged, navigate }) {
       setEarlyOpen(true);
       return;
     }
-    if (!window.confirm(`Finish the session with ${session.horseName}? You cannot send readings after this.`)) {
-      return;
-    }
-    const updated = await run(() => finishSession(session.sessionId, { earlyStop: false }));
-    if (updated) onChanged(updated);
+    setConfirmConfig({
+      isOpen: true,
+      title: "Finish Training Session",
+      message: `Finish the session with ${session.horseName}? You cannot send readings after this.`,
+      confirmText: "Finish Session",
+      confirmTone: "primary",
+      icon: "🏁",
+      onConfirm: async () => {
+        setConfirmConfig((c) => ({ ...c, isOpen: false }));
+        const updated = await run(() => finishSession(session.sessionId, { earlyStop: false }));
+        if (updated) onChanged(updated);
+      },
+    });
   };
 
   const submitEarlyFinish = async (event) => {
@@ -275,41 +297,54 @@ function SessionPanel({ session, onChanged, navigate }) {
         setError("Describe the injury/symptoms so the veterinarian knows what to check.");
         return;
       }
-      const confirmed = window.confirm(
-        `Confirm early termination due to INJURY for ${session.horseName} and call the Veterinarian immediately?`
-      );
-      if (!confirmed) return;
-      const result = await run(() =>
-        stopSession(session.sessionId, {
-          symptoms: stop.symptoms.trim(),
-          description: stop.description.trim(),
-          urgency: stop.urgency,
-        })
-      );
-      if (result) {
-        setStopResult(result.report);
-        setEarlyOpen(false);
-        onChanged(null);
-      }
+      setConfirmConfig({
+        isOpen: true,
+        title: "Emergency Injury Stop",
+        message: `Confirm early termination due to INJURY for ${session.horseName}? A high-urgency Vet Call will be created immediately.`,
+        confirmText: "Confirm & Call Vet",
+        confirmTone: "danger",
+        icon: "🚨",
+        onConfirm: async () => {
+          setConfirmConfig((c) => ({ ...c, isOpen: false }));
+          const result = await run(() =>
+            stopSession(session.sessionId, {
+              symptoms: stop.symptoms.trim(),
+              description: stop.description.trim(),
+              urgency: stop.urgency,
+            })
+          );
+          if (result) {
+            setStopResult(result.report);
+            setEarlyOpen(false);
+            onChanged(null);
+          }
+        },
+      });
       return;
     }
 
     const reasonLabel = EARLY_STOP_REASON_OPTIONS.find((o) => o.value === earlyReason)?.label || earlyReason;
-    const confirmed = window.confirm(
-      `Are you sure you want to end the session with ${session.horseName} early?\nReason: ${reasonLabel}`
-    );
-    if (!confirmed) return;
-
-    const updated = await run(() =>
-      finishSession(session.sessionId, {
-        earlyStop: true,
-        earlyStopReason: earlyReason,
-      })
-    );
-    if (updated) {
-      setEarlyOpen(false);
-      onChanged(updated);
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: "End Session Early",
+      message: `Are you sure you want to end the session with ${session.horseName} early?\nReason: ${reasonLabel}`,
+      confirmText: "End Session Early",
+      confirmTone: "danger",
+      icon: "⏱️",
+      onConfirm: async () => {
+        setConfirmConfig((c) => ({ ...c, isOpen: false }));
+        const updated = await run(() =>
+          finishSession(session.sessionId, {
+            earlyStop: true,
+            earlyStopReason: earlyReason,
+          })
+        );
+        if (updated) {
+          setEarlyOpen(false);
+          onChanged(updated);
+        }
+      },
+    });
   };
 
   return (
@@ -386,7 +421,8 @@ function SessionPanel({ session, onChanged, navigate }) {
             Heart rate (bpm)
             <input
               type="number" inputMode="numeric" min="20" max="300"
-              value={heartRate} onChange={(e) => setHeartRate(e.target.value)} required
+              placeholder="e.g. 150 (Optional)"
+              value={heartRate} onChange={(e) => setHeartRate(e.target.value)}
             />
           </label>
           <label>
@@ -394,10 +430,10 @@ function SessionPanel({ session, onChanged, navigate }) {
             <input
               type="number" inputMode="decimal" min="0" max="99.99" step="0.01"
               value={velocity} onChange={(e) => setVelocity(e.target.value)}
-              placeholder="Required >= 1x for early stop"
+              placeholder="e.g. 14.5"
             />
           </label>
-          <button type="submit" className="start-session" disabled={busy || heartRate === ""}>
+          <button type="submit" className="start-session" disabled={busy || (heartRate === "" && velocity === "")}>
             {busy ? "Sending…" : "Send reading"}
           </button>
         </form>
@@ -538,7 +574,9 @@ function SessionPanel({ session, onChanged, navigate }) {
             ? `Alert sent to the head trainer: ${lastReading.message || `${lastReading.heartRate} bpm is over the ${lastReading.heartRateCeiling} bpm ceiling`} (${toSeverityLabel(lastReading.severity)} severity).`
             : lastReading.severity
               ? `${lastReading.message || `${lastReading.heartRate} bpm is still over the ceiling`}. The head trainer has already been alerted.`
-              : `Recorded ${lastReading.heartRate} bpm.`}
+              : lastReading.heartRate != null
+                ? `Recorded ${lastReading.heartRate} bpm${lastReading.velocity != null ? ` at ${lastReading.velocity} m/s` : ""}.`
+                : `Recorded speed ${lastReading.velocity} m/s.`}
         </p>
       )}
 
@@ -559,6 +597,17 @@ function SessionPanel({ session, onChanged, navigate }) {
       )}
 
       {error && <p className="session-error" role="alert">{error}</p>}
+
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        confirmTone={confirmConfig.confirmTone}
+        icon={confirmConfig.icon}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((c) => ({ ...c, isOpen: false }))}
+      />
     </div>
   );
 }
