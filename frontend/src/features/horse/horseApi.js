@@ -45,6 +45,23 @@ export function listParentCandidates(signal, horseId) {
   return authFetch(`${API}/parent-candidates${q}`, { signal });
 }
 
+/** CLUB_MANAGER only (V41): correct the sire / dam on record, with a reason. */
+export function correctHorseParents(id, { sireId, damId, reason }) {
+  return authFetch(`${API}/${id}/parents`, {
+    method: "PUT",
+    body: JSON.stringify({
+      sireId: sireId ? Number(sireId) : null,
+      damId: damId ? Number(damId) : null,
+      reason: reason.trim(),
+    }),
+  });
+}
+
+/** Option text for a sire / dam select. */
+export function parentLabel(h) {
+  return `${h.horseName} · ${h.registrationCode}${h.recordType === "PEDIGREE" ? " · pedigree" : ""}`;
+}
+
 /** Chỉ CLUB_MANAGER: chuyển ngựa sang chủ khác. */
 export function transferHorseOwner(id, ownerId, reason) {
   return authFetch(`${API}/${id}/owner`, {

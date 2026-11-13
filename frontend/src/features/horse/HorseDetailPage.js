@@ -17,6 +17,7 @@ import {
   canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity, listActiveTrainers,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
   readmitHorse, transferHorseOwner,
+  listParentCandidates, correctHorseParents, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
 import { listStaff } from "../manager/staffApi";
 import { useAppDialog } from "../common/AppDialog";
@@ -278,6 +279,95 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
   );
 }
 
+/**
+ * Club Manager (V41): correct the sire / dam on record when the papers show
+ * otherwise. The owner can only add a parent that is still unknown, so this is
+ * the one place a parent on record changes. A reason is required; it goes into
+ * the audit log and to the owner.
+ */
+function ParentsForm({ horse, onSaved }) {
+  const navigate = useNavigate();
+  const [herd, setHerd] = useState([]);
+  const [sireId, setSireId] = useState(horse.sireId ? String(horse.sireId) : "");
+  const [damId, setDamId] = useState(horse.damId ? String(horse.damId) : "");
+  const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    setSireId(horse.sireId ? String(horse.sireId) : "");
+    setDamId(horse.damId ? String(horse.damId) : "");
+  }, [horse.sireId, horse.damId]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listParentCandidates(ctrl.signal, horse.horseId).then((h) => setHerd(h || [])).catch(() => {});
+    return () => ctrl.abort();
+  }, [horse.horseId]);
+
+  const others = herd.filter((h) => h.horseId !== horse.horseId);
+  const sires = others.filter((h) => SIRE_GENDERS.has(h.horseGender));
+  const dams = others.filter((h) => DAM_GENDERS.has(h.horseGender));
+  const changed = String(horse.sireId ?? "") !== sireId || String(horse.damId ?? "") !== damId;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setResult(null);
+    try {
+      const updated = await correctHorseParents(horse.horseId, { sireId, damId, reason });
+      onSaved(updated);
+      setReason("");
+      setResult(ok(`Parents of ${updated.horseName} corrected. ${updated.ownerName} has been notified.`));
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      if (err.fieldErrors) setErrors(err.fieldErrors);
+      setResult(fail(`Could not correct the parents of ${horse.horseName}: ${err.message}`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Parents" hint="From the horse's papers. Correct them when the papers show otherwise: the owner is told and the reason is logged.">
+      <form onSubmit={submit} noValidate>
+        <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <div className="hz-field">
+            <label htmlFor="correct-sire">Sire</label>
+            <select id="correct-sire" value={sireId} onChange={(e) => setSireId(e.target.value)}>
+              <option value="">Unknown</option>
+              {sires.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+            </select>
+            {errors.sireId && <p className="hz-field__error">{errors.sireId}</p>}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="correct-dam">Dam</label>
+            <select id="correct-dam" value={damId} onChange={(e) => setDamId(e.target.value)}>
+              <option value="">Unknown</option>
+              {dams.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+            </select>
+            {errors.damId && <p className="hz-field__error">{errors.damId}</p>}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="correct-reason">Reason</label>
+            <input id="correct-reason" maxLength={200} value={reason} placeholder="What the papers show"
+                   onChange={(e) => setReason(e.target.value)} />
+            {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
+          </div>
+        </div>
+        <div className="hz-form-footer">
+          <button type="submit" className="hz-btn" disabled={busy || !changed || !reason.trim()}>
+            {busy ? "Saving…" : "Correct parents"}
+          </button>
+        </div>
+        <ResultLine result={result} />
+      </form>
+    </Card>
+  );
+}
+
 export default function HorseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -498,6 +588,7 @@ export default function HorseDetailPage() {
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
           {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse}
                                                                   result={ownershipResult} setResult={setOwnershipResult} />}
+          {user?.role === "CLUB_MANAGER" && <ParentsForm horse={horse} onSaved={setHorse} />}
 
           {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} onViewHistory={() => setTab("medical-history")} />}
 
@@ -535,7 +626,7 @@ export default function HorseDetailPage() {
           ) : !pedigree.sire && !pedigree.dam ? (
             <StateBlock title="No parents on record">
               {mayEdit
-                ? "Name a sire or a dam in the edit form to start building the pedigree."
+                ? "Add the sire and dam from the horse's papers in the edit form to start the pedigree."
                 : "Nobody has recorded this horse's parents yet."}
             </StateBlock>
           ) : (

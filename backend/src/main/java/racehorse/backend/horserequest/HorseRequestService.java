@@ -54,9 +54,14 @@ public class HorseRequestService {
                     Map.of("dateOfBirth", ageProblem));
         }
 
+        // The same rules as on the horse itself: right sex, born 2+ years before,
+        // and a pedigree record or one of this owner's own horses.
+        horseService.checkDeclaredParents(raw.sireId(), raw.damId(), raw.dateOfBirth(), me.userId());
+
         SubmitRequest clean = new SubmitRequest(
                 name, blankToNull(raw.breed()), blankToNull(raw.horseGender()),
-                raw.dateOfBirth(), blankToNull(raw.color()), blankToNull(raw.note()), type);
+                raw.dateOfBirth(), blankToNull(raw.color()), blankToNull(raw.note()), type,
+                raw.sireId(), raw.damId());
 
         int id = requests.insert(me.userId(), clean);
         users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
@@ -122,7 +127,7 @@ public class HorseRequestService {
 
         racehorse.backend.horse.HorseRequest newHorse = new racehorse.backend.horse.HorseRequest(
                 req.ownerId(),
-                null, null,
+                req.sireId(), req.damId(),   // V41: parents from the papers, checked again by create()
                 req.horseName(),
                 code.toUpperCase(Locale.ROOT),
                 req.breed(),
@@ -150,7 +155,9 @@ public class HorseRequestService {
         users.writeAudit(me.userId(), "HORSE_REQUEST_APPROVE", "HORSE_REQUEST",
                 requestId, "SUCCESS", ip, "Registration code " + created.registrationCode()
                         + (created.stallNo() == null ? "" : ", stall " + created.stallNo())
-                        + (created.trainerName() == null ? "" : ", Head Trainer " + created.trainerName()));
+                        + (created.trainerName() == null ? "" : ", Head Trainer " + created.trainerName())
+                        + (req.sireName() == null ? "" : ", sire " + req.sireName())
+                        + (req.damName() == null ? "" : ", dam " + req.damName()));
 
         notifications.notifyUser(req.ownerId(), new Notice(
                 "HORSE_REQUEST_APPROVED",

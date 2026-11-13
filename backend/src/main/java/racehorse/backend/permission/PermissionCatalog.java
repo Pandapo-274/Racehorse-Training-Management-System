@@ -56,6 +56,7 @@ final class PermissionCatalog {
             new Entry(HORSES, "View a horse's vitals", "GET /api/horses/{id}/vitals", OWNER),
             new Entry(HORSES, "Edit horse details", "PUT /api/horses/{id}", OWNER),
             new Entry(HORSES, "Choose a sire or dam", "GET /api/horses/parent-candidates", OWNER),
+            new Entry(HORSES, "Correct a horse's parents", "PUT /api/horses/{id}/parents", NONE),
             new Entry(HORSES, "Transfer a horse to another owner", "PUT /api/horses/{id}/owner", NONE),
             new Entry(HORSES, "Re-admit a withdrawn horse", "PUT /api/horses/{id}/readmit", NONE),
             new Entry(HORSES, "Upload a horse photo", "POST /api/horses/{id}/photo", OWNER),

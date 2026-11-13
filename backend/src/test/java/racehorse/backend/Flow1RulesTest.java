@@ -432,6 +432,104 @@ class Flow1RulesTest {
         assertEquals("Choose a pedigree record or one of your own horses", ex.getFieldErrors().get("sireId"));
     }
 
+    // ------------------------------------------------------------ parents are a fact (V41)
+
+    @Test
+    void ownerCannotChangeAParentAlreadyOnRecord() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        LocalDate foalDob = LocalDate.now().minusYears(3);
+        when(horses.findById(10)).thenReturn(Optional.of(withParents(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob), 20, null)));
+        when(horses.findById(21)).thenReturn(Optional.of(horse(21, 9, "PEDIGREE", "ACTIVE", "STALLION", foalDob.minusYears(9))));
+        when(vitals.findLatestSession(10)).thenReturn(Optional.empty());
+
+        HorseService service = new HorseService(horses, vitals, mock(UserRepository.class));
+        ApiException ex = expect(400, () -> service.updateByOwner(10,
+                new HorseUpdateRequest("Horse 10", "TB", "COLT", foalDob, "Bay", 21, null), OWNER_7, "ip"));
+        assertTrue(ex.getFieldErrors().get("sireId").contains("already on record"), ex.getFieldErrors().toString());
+        verify(horses, never()).updateBasics(anyInt(), any());
+    }
+
+    @Test
+    void ownerCannotRemoveAParentAlreadyOnRecordEither() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        LocalDate foalDob = LocalDate.now().minusYears(3);
+        when(horses.findById(10)).thenReturn(Optional.of(withParents(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob), null, 30)));
+        when(vitals.findLatestSession(10)).thenReturn(Optional.empty());
+
+        HorseService service = new HorseService(horses, vitals, mock(UserRepository.class));
+        ApiException ex = expect(400, () -> service.updateByOwner(10,
+                new HorseUpdateRequest("Horse 10", "TB", "COLT", foalDob, "Bay", null, null), OWNER_7, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("damId"), ex.getFieldErrors().toString());
+    }
+
+    @Test
+    void ownerCanDeclareAParentThatIsStillUnknown() {
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseVitalsRepository vitals = mock(HorseVitalsRepository.class);
+        LocalDate foalDob = LocalDate.now().minusYears(3);
+        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob)));
+        when(horses.findById(21)).thenReturn(Optional.of(horse(21, 9, "PEDIGREE", "ACTIVE", "STALLION", foalDob.minusYears(9))));
+        when(vitals.findLatestSession(10)).thenReturn(Optional.of(mock(racehorse.backend.horse.HorseVitalsResponse.LatestSession.class)));
+
+        HorseService service = new HorseService(horses, vitals, mock(UserRepository.class));
+        // Even a horse that has trained: declaring an unknown parent is not changing its sex or age.
+        service.updateByOwner(10, new HorseUpdateRequest("Horse 10", "TB", "COLT", foalDob, "Bay", 21, null), OWNER_7, "ip");
+        verify(horses).updateBasics(eq(10), any());
+    }
+
+    @Test
+    void parentsOnARegistrationRequestFollowTheSameRules() {
+        HorseRepository horses = mock(HorseRepository.class);
+        LocalDate foalDob = LocalDate.now().minusYears(2);
+        // #20: owner 9's club stallion - real, but not Lan's to declare.
+        when(horses.findById(20)).thenReturn(Optional.of(horse(20, 9, "ACADEMY", "ACTIVE", "STALLION", foalDob.minusYears(8))));
+        // #31: a pedigree mare born only one year before the foal.
+        when(horses.findById(31)).thenReturn(Optional.of(horse(31, 9, "PEDIGREE", "ACTIVE", "MARE", foalDob.minusYears(1))));
+
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+        ApiException ex = expect(400, () -> service.checkDeclaredParents(20, 31, foalDob, 7));
+        assertEquals("Choose a pedigree record or one of your own horses", ex.getFieldErrors().get("sireId"));
+        assertTrue(ex.getFieldErrors().get("damId").contains("at least 2 years"), ex.getFieldErrors().toString());
+    }
+
+    @Test
+    void clubCorrectsParentsWithAReasonThatIsAuditedAndSentToTheOwner() {
+        HorseRepository horses = mock(HorseRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        LocalDate foalDob = LocalDate.now().minusYears(3);
+        when(horses.findById(10)).thenReturn(Optional.of(withParents(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob), 20, null)));
+        when(horses.findById(20)).thenReturn(Optional.of(horse(20, 9, "PEDIGREE", "ACTIVE", "STALLION", foalDob.minusYears(9))));
+        // #21 belongs to another owner: the club may still name it, it is what the papers say.
+        when(horses.findById(21)).thenReturn(Optional.of(horse(21, 9, "ACADEMY", "ACTIVE", "STALLION", foalDob.minusYears(7))));
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), users, notifications);
+
+        expect(400, () -> service.correctParents(10, 21, null, "  ", MANAGER, "ip"));
+        verify(horses, never()).updateParents(anyInt(), any(), any());
+
+        service.correctParents(10, 21, null, "Papers from the breeder", MANAGER, "ip");
+        verify(horses).updateParents(10, 21, null);
+        verify(users).writeAudit(eq(1), eq("HORSE_PARENTS_CORRECT"), eq("HORSE"), eq(10), eq("SUCCESS"), eq("ip"),
+                eq("Sire: Horse 20 → Horse 21. Reason: Papers from the breeder"));
+        verify(notifications).notifyUser(eq(7), any());
+    }
+
+    @Test
+    void onlyTheClubManagerCorrectsParents() {
+        HorseService service = new HorseService(mock(HorseRepository.class), mock(HorseVitalsRepository.class),
+                mock(UserRepository.class));
+        expect(403, () -> service.correctParents(10, 21, null, "papers", OWNER_7, "ip"));
+    }
+
+    private static HorseResponse withParents(HorseResponse h, Integer sireId, Integer damId) {
+        return new HorseResponse(h.horseId(), h.ownerId(), h.ownerName(), sireId, damId, h.horseName(),
+                h.registrationCode(), h.breed(), h.horseGender(), h.dateOfBirth(), h.color(), h.weight(),
+                h.stallNo(), h.status(), h.createdAt(), h.updatedAt(), h.recordType(), h.photoUrl(),
+                h.activityStatus(), h.withdrawnAt());
+    }
+
     // ------------------------------------------------------------ helpers
 
     private static StaffService staffService(StaffRepository staff, TokenBlacklist blacklist) {

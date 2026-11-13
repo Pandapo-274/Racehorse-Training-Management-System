@@ -238,6 +238,18 @@ public class HorseRepository {
                 .update();
     }
 
+    /** V41: the club manager corrects the parents on record (HorseService.correctParents). */
+    public int updateParents(int horseId, Integer sireId, Integer damId) {
+        return jdbc.sql("""
+                UPDATE HORSE SET sire_id = :sireId, dam_id = :damId, updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id
+                """)
+                .param("id", horseId)
+                .param("sireId", sireId)
+                .param("damId", damId)
+                .update();
+    }
+
     /** Mã đăng ký và số chuồng, chỉ Club Manager đổi (HorseService.updateIdentity). */
     public int updateIdentity(int horseId, String registrationCode, String stallNo) {
         return jdbc.sql("""

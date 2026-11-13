@@ -18,6 +18,9 @@ export function submitRequest(form) {
       color: form.color.trim() || null,
       note: form.note.trim() || null,
       recordType: form.recordType || "ACADEMY",
+      // V41: parents from the horse's papers (optional)
+      sireId: form.sireId ? Number(form.sireId) : null,
+      damId: form.damId ? Number(form.damId) : null,
     }),
   });
 }

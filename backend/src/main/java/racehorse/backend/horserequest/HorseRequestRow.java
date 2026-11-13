@@ -17,5 +17,8 @@ public record HorseRequestRow(
         String status, LocalDateTime createdAt,
         Integer reviewedBy, String reviewerName, LocalDateTime reviewedAt, String reviewNote,
         /** Chỉ có khi đã duyệt: id con ngựa được tạo ra từ yêu cầu này. */
-        Integer horseId
+        Integer horseId,
+        /** V41: parents declared with the request (null = not given). */
+        Integer sireId, String sireName,
+        Integer damId, String damName
 ) {}

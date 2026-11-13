@@ -207,20 +207,21 @@ public class HorseService {
         Map<String, String> errors = new HashMap<>();
         checkParent(request.sireId(), "sireId", "Sire", SIRE_GENDERS, horseId, request.dateOfBirth(), errors);
         checkParent(request.damId(), "damId", "Dam", DAM_GENDERS, horseId, request.dateOfBirth(), errors);
-        // A NEW parent must be a pedigree record or one of the owner's own horses;
-        // the parent already on the record is kept even if it is someone else's.
+        // V41: parents are a fact from the horse's papers. One already on record is
+        // locked for the owner (the club corrects it, with a reason); one still
+        // unknown may be declared, from a pedigree record or the owner's own horses.
+        checkParentLocked(current.sireId(), request.sireId(), "sireId", "sire", errors);
+        checkParentLocked(current.damId(), request.damId(), "damId", "dam", errors);
         checkParentReachable(request.sireId(), current.sireId(), "sireId", user.userId(), errors);
         checkParentReachable(request.damId(), current.damId(), "damId", user.userId(), errors);
 
         boolean pedigreeChanged = !java.util.Objects.equals(current.horseGender(), request.horseGender())
-                || !java.util.Objects.equals(current.dateOfBirth(), request.dateOfBirth())
-                || !java.util.Objects.equals(current.sireId(), request.sireId())
-                || !java.util.Objects.equals(current.damId(), request.damId());
+                || !java.util.Objects.equals(current.dateOfBirth(), request.dateOfBirth());
         if (pedigreeChanged) {
             boolean hasOffspring = horseRepository.hasOffspring(horseId);
             boolean hasTrained = vitalsRepository.findLatestSession(horseId).isPresent();
             if (hasOffspring || hasTrained) {
-                errors.put("horseGender", "Sex, date of birth and parents are locked because "
+                errors.put("horseGender", "Sex and date of birth are locked because "
                         + current.horseName() + (hasOffspring ? " is already a parent of another horse"
                                                               : " already has training sessions")
                         + ". Ask the club to correct them");
@@ -240,6 +241,86 @@ public class HorseService {
         userRepository.writeAudit(user.userId(), "HORSE_UPDATE", "HORSE", horseId, "SUCCESS", ip,
                 changes(current, request));
         return getOrThrow(horseId);
+    }
+
+    /**
+     * V41: parents declared on a registration request get the same checks as on
+     * the horse itself: they exist, have the right sex, were born 2+ years before
+     * (when the foal's date of birth is known), are not the same horse, and are a
+     * pedigree record or one of this owner's own horses.
+     */
+    public void checkDeclaredParents(Integer sireId, Integer damId, java.time.LocalDate dob, int ownerId) {
+        Map<String, String> errors = new HashMap<>();
+        checkParent(sireId, "sireId", "Sire", SIRE_GENDERS, 0, dob, errors);
+        checkParent(damId, "damId", "Dam", DAM_GENDERS, 0, dob, errors);
+        checkParentReachable(sireId, null, "sireId", ownerId, errors);
+        checkParentReachable(damId, null, "damId", ownerId, errors);
+        if (sireId != null && sireId.equals(damId)) {
+            errors.put("damId", "Sire and dam cannot be the same horse");
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
+        }
+    }
+
+    /**
+     * V41: the club manager corrects the parents on record, e.g. after checking
+     * the papers. Any horse can be named (a parent may belong to another owner),
+     * but the biological checks still apply. A reason is required; it goes into
+     * the audit log and to the owner.
+     */
+    @Transactional
+    public HorseResponse correctParents(int horseId, Integer sireId, Integer damId, String reason,
+                                        AuthenticatedUser user, String ip) {
+        if (user != null && !"CLUB_MANAGER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the club manager can correct a horse's parents");
+        }
+        HorseResponse current = getOrThrow(horseId);
+        String why = blankToNull(reason);
+
+        Map<String, String> errors = new HashMap<>();
+        if (why == null) errors.put("reason", "Say why the parents are corrected (for example, what the papers show)");
+        checkParent(sireId, "sireId", "Sire", SIRE_GENDERS, horseId, current.dateOfBirth(), errors);
+        checkParent(damId, "damId", "Dam", DAM_GENDERS, horseId, current.dateOfBirth(), errors);
+        if (sireId != null && sireId.equals(damId)) {
+            errors.put("damId", "Sire and dam cannot be the same horse");
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
+        }
+        if (java.util.Objects.equals(current.sireId(), sireId) && java.util.Objects.equals(current.damId(), damId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "These are already the parents on record");
+        }
+
+        horseRepository.updateParents(horseId, sireId, damId);
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (!java.util.Objects.equals(current.sireId(), sireId)) {
+            parts.add("Sire: " + parentName(current.sireId()) + " → " + parentName(sireId));
+        }
+        if (!java.util.Objects.equals(current.damId(), damId)) {
+            parts.add("Dam: " + parentName(current.damId()) + " → " + parentName(damId));
+        }
+        String detail = String.join(". ", parts) + ". Reason: " + why;
+        userRepository.writeAudit(user == null ? null : user.userId(), "HORSE_PARENTS_CORRECT", "HORSE", horseId,
+                "SUCCESS", ip, detail);
+        if (notifications != null) {
+            notifications.notifyUser(current.ownerId(), new Notice("HORSE_PARENTS_CORRECTED",
+                    "Parents corrected by the club", current.horseName() + ": " + detail, Notice.HORSE, horseId));
+        }
+        return getOrThrow(horseId);
+    }
+
+    private String parentName(Integer id) {
+        if (id == null) return "unknown";
+        return horseRepository.findById(id).map(HorseResponse::horseName).orElse("#" + id);
+    }
+
+    /** V41: a parent already on record cannot be changed or removed by the owner. */
+    private static void checkParentLocked(Integer onRecord, Integer requested, String field, String word,
+                                          Map<String, String> errors) {
+        if (onRecord != null && !onRecord.equals(requested)) {
+            errors.put(field, "The " + word + " is already on record from the horse's papers. Ask the club to correct it");
+        }
     }
 
     public HorseResponse get(int horseId, AuthenticatedUser user) {
