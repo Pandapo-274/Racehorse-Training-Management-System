@@ -263,14 +263,14 @@ export default function VetHorsePrescriptionHistoryPage() {
         </VetState>
       )}
 
-      {/* Back to Prescriptions button */}
+      {/* Back button */}
       <div>
         <button
           type="button"
           className="vc-back-btn"
-          onClick={() => navigate("/veterinarian/prescriptions")}
+          onClick={() => navigate("/veterinarian/prescriptions?tab=directory")}
         >
-          ← Back to Prescriptions
+          ← Back
         </button>
       </div>
 

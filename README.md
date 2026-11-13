@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 10, 2026` at `08:39` by `tusandthatsall`
+### Last Commited: `Nov 13, 2026` at `10:52` by `Pandapo274`
 
 ## Information
 > ### Version: `-`
@@ -45,6 +45,12 @@ npm start
 ```
 
 ## Changelogs
+> ### `Nov 13, 2026`
+- `[10:52]` `Pandapo274` -
+UI Synchronization & Navigation Refinements:
+- Prescription History Back Navigation: Shortened button label to "← Back" and directed navigation to the "Horse Medical Directory" tab (?tab=directory) instead of the default active prescriptions tab.
+- Unified Sign Out Button: Synchronized the Sign out button across all Veterinarian tabs (Herd health, Vet calls, Examination, Recovery, Preventive care, Prescriptions) to identically match the icon, font weight, padding, and layout of Horse, Rations, and Supplies pages.
+
 > ###  `Nov 12, 2026`
 - `[23:56]` `DevilJack422` - Update training flow 
 - `[08:39]` `tusandthatsall` -

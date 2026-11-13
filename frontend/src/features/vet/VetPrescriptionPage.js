@@ -2,7 +2,7 @@
 // Màn Prescriptions: đơn thuốc và thống kê chi phí y tế trên toàn đàn.
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import { healthApplies, toStatus } from "../horse/horseApi";
 import HorsePhoto from "../horse/HorsePhoto";
@@ -70,8 +70,42 @@ const COMMON_MEDICINES = [
 
 export default function VetPrescriptionPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [tab, setTab] = useState("prescriptions");
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get("tab");
+    if (t === "directory" || t === "medical" || t === "horse-medical") return "directory";
+    if (t === "expenses") return "expenses";
+    return "prescriptions";
+  });
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "directory" || t === "medical" || t === "horse-medical") {
+      setTab("directory");
+    } else if (t === "expenses") {
+      setTab("expenses");
+    } else if (t === "prescriptions") {
+      setTab("prescriptions");
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (nextTab) => {
+    setTab(nextTab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (nextTab === "prescriptions") {
+          next.delete("tab");
+        } else {
+          next.set("tab", nextTab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
   const [active, setActive] = useState(null);
   const [horses, setHorses] = useState(null);
   const [expenses, setExpenses] = useState(null);
@@ -234,7 +268,7 @@ export default function VetPrescriptionPage() {
           role="tab"
           className="vx-tab-btn"
           aria-selected={tab === "prescriptions"}
-          onClick={() => setTab("prescriptions")}
+          onClick={() => handleTabChange("prescriptions")}
         >
           Prescriptions ({prescriptionGroups ? prescriptionGroups.length : 0})
         </button>
@@ -243,7 +277,7 @@ export default function VetPrescriptionPage() {
           role="tab"
           className="vx-tab-btn"
           aria-selected={tab === "directory"}
-          onClick={() => setTab("directory")}
+          onClick={() => handleTabChange("directory")}
         >
           Horse Medical Directory ({horses ? horses.length : "..."})
         </button>
@@ -252,7 +286,7 @@ export default function VetPrescriptionPage() {
           role="tab"
           className="vx-tab-btn"
           aria-selected={tab === "expenses"}
-          onClick={() => setTab("expenses")}
+          onClick={() => handleTabChange("expenses")}
         >
           Medical Expenses ({expenses ? expenses.length : "..."})
         </button>
