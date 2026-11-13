@@ -51,9 +51,7 @@ public class StaffRepository {
                     WHERE g.trainer_id = u.user_id AND gr.role_name = 'GROOM' AND g.status = 'ACTIVE') AS groom_count,
                    (SELECT COUNT(*) FROM HORSE mh
                     WHERE mh.trainer_id = u.user_id AND mh.activity_status = 'ACTIVE') AS managed_horse_count,
-                   u.max_horses,
-                   (SELECT COUNT(*) FROM TRAINING_PLAN tp
-                    WHERE tp.groom_id = u.user_id AND tp.status <> 'COMPLETED') AS active_plan_count
+                   u.max_horses
             FROM APP_USER u
             JOIN ROLE r ON r.role_id = u.role_id
             LEFT JOIN APP_USER tr ON tr.user_id = u.trainer_id
@@ -76,8 +74,7 @@ public class StaffRepository {
                 rs.getString("trainer_name"),
                 rs.getInt("groom_count"),
                 rs.getInt("managed_horse_count"),
-                rs.getObject("max_horses", Integer.class),
-                rs.getInt("active_plan_count"));
+                rs.getObject("max_horses", Integer.class));
     }
 
     /**

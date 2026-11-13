@@ -5,7 +5,7 @@
 // Lập giáo án và xếp lịch là việc của Head Trainer; chủ ngựa chỉ có một việc
 // ở đây: duyệt hoặc từ chối giáo án trước khi nó được kích hoạt (V34).
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import {
@@ -14,7 +14,7 @@ import {
 import { toEvaluation } from "./horseOwnerApi";
 import {
   formatMetres, getPlan, isCurrentPhase, listMyPlans, listMySessions, pickPlan, reviewPlan,
-  sendOwnerFeedback, toPlanStatus, toSessionStatus, todayIso,
+  toPlanStatus, toSessionStatus, todayIso,
 } from "./ownerTrainingApi";
 import "./owner-training.css";
 
@@ -67,70 +67,6 @@ function ApprovalBox({ plan, onReviewed }) {
   );
 }
 
-function OwnerFeedbackBox({ plan, onFeedbackSent }) {
-  const navigate = useNavigate();
-  const [feedback, setFeedback] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const handleSend = async () => {
-    if (!feedback.trim()) {
-      setError("Please enter your feedback before sending.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setSuccess("");
-    try {
-      await sendOwnerFeedback(plan.planId, feedback.trim());
-      setSuccess("Your feedback has been sent to the Head Trainer!");
-      setFeedback("");
-      if (onFeedbackSent) onFeedbackSent();
-    } catch (err) {
-      if (handleAuthError(err, navigate)) return;
-      setError(Object.values(err.fieldErrors || {})[0] || err.message || "Failed to send feedback.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="ot-feedback-box" style={{ marginTop: 16, borderTop: "1px solid #f1e5ed", paddingTop: 14 }}>
-      <strong style={{ fontSize: 13, color: "#1e1b4b", display: "block", marginBottom: 6 }}>
-        💬 Feedback / Adjustment Request for Head Trainer (Optional)
-      </strong>
-      {plan.ownerNote && (
-        <p style={{ fontSize: 12.5, color: "#475569", background: "#f8fafc", padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 10 }}>
-          Latest note: <em>"{plan.ownerNote}"</em>
-        </p>
-      )}
-      <div className="hz-field">
-        <textarea
-          rows={2}
-          maxLength={500}
-          value={feedback}
-          onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Send feedback or requests to the head trainer (e.g. Training load seems appropriate, or please reduce distance next week)..."
-        />
-      </div>
-      {error && <p className="hz-form-error" role="alert">{error}</p>}
-      {success && <p style={{ color: "#166534", fontSize: 12.5, fontWeight: 600, margin: "4px 0" }}>✓ {success}</p>}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-        <button
-          type="button"
-          className="hz-btn hz-btn--ghost"
-          style={{ fontSize: 12.5, padding: "6px 14px" }}
-          disabled={busy || !feedback.trim()}
-          onClick={handleSend}
-        >
-          {busy ? "Sending…" : "Send Feedback"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function PlanCard({ plan, detail, today, onReviewed }) {
   if (!plan) {
     return (
@@ -172,11 +108,7 @@ function PlanCard({ plan, detail, today, onReviewed }) {
           })}
         </ol>
       )}
-      {plan.status === "PENDING_APPROVAL" ? (
-        <ApprovalBox plan={plan} onReviewed={onReviewed} />
-      ) : (
-        <OwnerFeedbackBox plan={plan} onFeedbackSent={onReviewed} />
-      )}
+      {plan.status === "PENDING_APPROVAL" && <ApprovalBox plan={plan} onReviewed={onReviewed} />}
     </Card>
   );
 }
@@ -273,11 +205,6 @@ function LogEntry({ s }) {
 
 export default function OwnerTrainingPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const querySessionId = searchParams.get("sessionId");
-  const queryPlanId = searchParams.get("planId");
-  const queryHorseId = searchParams.get("horseId");
-
   const [horses, setHorses] = useState(null);
   const [plans, setPlans] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -298,39 +225,7 @@ export default function OwnerTrainingPage() {
         setHorses(trainable);
         setPlans(p || []);
         setSessions(s || []);
-
-        let targetHorseId = null;
-        if (querySessionId && s) {
-          const matchedSession = s.find((item) => String(item.sessionId) === String(querySessionId));
-          if (matchedSession) {
-            targetHorseId = matchedSession.horseId;
-          }
-        }
-        if (!targetHorseId && queryPlanId && p) {
-          const matchedPlan = p.find((item) => String(item.planId) === String(queryPlanId));
-          if (matchedPlan) {
-            targetHorseId = matchedPlan.horseId;
-          }
-        }
-        if (!targetHorseId && queryHorseId) {
-          targetHorseId = Number(queryHorseId);
-        }
-
-        setHorseId((cur) => {
-          if (targetHorseId && trainable.some((x) => x.horseId === targetHorseId)) {
-            return targetHorseId;
-          }
-          return trainable.some((x) => x.horseId === cur) ? cur : trainable[0]?.horseId ?? null;
-        });
-
-        if (querySessionId) {
-          setTimeout(() => {
-            const logEl = document.getElementById("training-log-section");
-            if (logEl) {
-              logEl.scrollIntoView({ behavior: "smooth" });
-            }
-          }, 350);
-        }
+        setHorseId((cur) => (trainable.some((x) => x.horseId === cur) ? cur : trainable[0]?.horseId ?? null));
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
@@ -338,7 +233,7 @@ export default function OwnerTrainingPage() {
         setError(err.message);
       });
     return () => ctrl.abort();
-  }, [navigate, reloadKey, querySessionId, queryPlanId, queryHorseId]);
+  }, [navigate, reloadKey]);
 
   const plan = useMemo(() => pickPlan(plans, horseId), [plans, horseId]);
 
@@ -421,26 +316,24 @@ export default function OwnerTrainingPage() {
             <UpcomingCard sessions={upcoming} />
           </div>
 
-          <div id="training-log-section">
-            <Card
-              title="Training log"
-              hint={`${log.length} ${log.length === 1 ? "session" : "sessions"} · newest first`}
-              actions={
-                <label className="ot-filter">
-                  <input type="checkbox" checked={trialOnly} onChange={(e) => setTrialOnly(e.target.checked)} />
-                  Trial runs only
-                </label>
-              }
-            >
-              {log.length === 0 ? (
-                <p className="hz-empty">
-                  {trialOnly ? "No trial runs yet." : "No sessions have taken place yet."}
-                </p>
-              ) : (
-                <ul className="ot-log">{log.map((s) => <LogEntry key={s.sessionId} s={s} />)}</ul>
-              )}
-            </Card>
-          </div>
+          <Card
+            title="Training log"
+            hint={`${log.length} ${log.length === 1 ? "session" : "sessions"} · newest first`}
+            actions={
+              <label className="ot-filter">
+                <input type="checkbox" checked={trialOnly} onChange={(e) => setTrialOnly(e.target.checked)} />
+                Trial runs only
+              </label>
+            }
+          >
+            {log.length === 0 ? (
+              <p className="hz-empty">
+                {trialOnly ? "No trial runs yet." : "No sessions have taken place yet."}
+              </p>
+            ) : (
+              <ul className="ot-log">{log.map((s) => <LogEntry key={s.sessionId} s={s} />)}</ul>
+            )}
+          </Card>
         </>
       )}
     </HorseShell>

@@ -52,21 +52,12 @@ public class TrainingSessionRepository {
                 .param("id", userId).query(Integer.class).single() > 0;
     }
 
-    /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không, hoặc là Groom phụ trách giáo án của Trainer. */
+    /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không. */
     public boolean isGroomOfTrainer(int groomId, int trainerId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
                 WHERE u.user_id = :groomId AND r.role_name = 'GROOM'
-                  AND u.status = 'ACTIVE'
-                  AND (
-                      u.trainer_id = :trainerId
-                      OR EXISTS (
-                          SELECT 1 FROM TRAINING_PLAN tp
-                          JOIN HORSE h ON h.horse_id = tp.horse_id
-                          WHERE tp.groom_id = u.user_id
-                            AND (tp.created_by = :trainerId OR h.trainer_id = :trainerId)
-                      )
-                  )
+                  AND u.status = 'ACTIVE' AND u.trainer_id = :trainerId
                 """)
                 .param("groomId", groomId)
                 .param("trainerId", trainerId)
@@ -341,23 +332,15 @@ public class TrainingSessionRepository {
                 .list();
     }
 
-    /** V37: Chỉ lấy các Groom đang ACTIVE được Club Manager gán cho Head Trainer này, hoặc phụ trách giáo án của Trainer. */
+    /** V37: Chỉ lấy các Groom đang ACTIVE được Club Manager gán cho Head Trainer này. */
     public List<GroomOption> findActiveGroomsByTrainer(int trainerId) {
         return jdbc.sql("""
-                SELECT DISTINCT u.user_id, u.full_name
+                SELECT u.user_id, u.full_name
                 FROM APP_USER u
                 JOIN ROLE r ON r.role_id = u.role_id
                 WHERE r.role_name = 'GROOM'
                   AND u.status = 'ACTIVE'
-                  AND (
-                      u.trainer_id = :trainerId
-                      OR EXISTS (
-                          SELECT 1 FROM TRAINING_PLAN tp
-                          JOIN HORSE h ON h.horse_id = tp.horse_id
-                          WHERE tp.groom_id = u.user_id
-                            AND (tp.created_by = :trainerId OR h.trainer_id = :trainerId)
-                      )
-                  )
+                  AND u.trainer_id = :trainerId
                 ORDER BY u.full_name
                 """)
                 .param("trainerId", trainerId)

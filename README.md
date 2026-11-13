@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 12, 2026` at `16:30` by `Pandapo274`
+### Last Commited: `Nov 10, 2026` at `08:39` by `tusandthatsall`
 
 ## Information
 > ### Version: `-`
@@ -47,47 +47,6 @@ npm start
 ## Changelogs
 > ###  `Nov 12, 2026`
 - `[23:56]` `DevilJack422` - Update training flow 
-- `[16:30]` `Pandapo274` -
-Horse Prescription History Directory & Dedicated Timeline Page:
-- Sidebar Layout Fix: Resolved vertical collision and overflow between sidebar navigation items and Sign Out / Profile card by adding flex-shrink: 0, padding-top, and scrollable container across vet and horse stylesheets.
-- Horse Medical & Prescription Directory: Added dedicated horse directory cards with Horse Avatar, Horse Name, and Owner Name ("Owner: ...") on Vet Prescriptions page.
-- Dedicated Horse Prescription History Page: Created `/veterinarian/prescriptions/history/:horseId` as a dedicated full page (not a popup) with Back button, Horse Profile Hero banner, summary statistics, search filter, and lifetime timeline filter presets (All Time, Last 30 Days, Last 90 Days, Last 180 Days, Last 1 Year, Custom Date Range).
-- Examination & Modal Links: Updated Examination and Prescription Details modals to directly navigate to the dedicated lifetime history page in English.
-
-- `[08:18]` `Pandapo274` -
-Vet UX & Business Refinements:
-- Vet Calls: Priority sorting by urgency (HIGH > MEDIUM > LOW) for pending advice queue.
-- Examination & Prescription: Restrict start date / exam date to current date and future (no past dates allowed), defaulting to today.
-- Medical History Link: Resolved role navigation redirecting to login; updated link to English "View Medical & Treatment History".
-- Sidebar Synchronization: Unified left navigation styling, heights, fonts, and active ribbon shape across Horse and Vet shells.
-- Training Lock UX: Replaced redundant emergency/no-lock buttons with unified Lock level selection (Full / No heavy work / None) and 2 action buttons (External Referral & Confirm).
-- Grouped Prescriptions & Notes: Grouped active prescription items into single multi-medicine orders with "Details" modal (dosage, period, instruction), removed "End today", and added optional prescription note for non-inventory medicines.
-
-> #### `Nov 11, 2026`
-- `[21:25]` `Pandapo274` -
-Horse Medical History Timeline & Treatment Records:
-- Thêm Tab "Medical History (Bệnh sử & Lịch sử Điều trị)" toàn diện trên trang chi tiết ngựa (HorseDetailPage).
-- Tích hợp thanh bộ lọc thời gian đa năng: Toàn bộ (All Time), 30 ngày gần đây, 3 tháng qua, 6 tháng qua, 1 năm qua hoặc Tùy chọn khoảng ngày (Custom Date Range: Từ ngày - Đến ngày).
-- Tích hợp bộ lọc theo phân loại sự kiện (Khám bệnh, Chấn thương, Đơn thuốc, Khóa tập, Chuyển viện ngoài, Sự cố tập luyện) và ô tìm kiếm từ khóa.
-- Thẻ thống kê KPI tổng quan số lượng các ca khám, chấn thương, đơn thuốc, chuyển viện trong khoảng thời gian đã chọn.
-- Dòng thời gian Timeline trực quan hiển thị đầy đủ chi tiết chẩn đoán, vết thương, toa thuốc điều trị, lệnh khoá và biên bản đón ngựa từ viện ngoài.
-- Nút liên kết tra cứu lịch sử bệnh án nhanh từ trang khám của Bác sĩ (VetExaminationPage) và từ khối sức khỏe hiện tại (HorseHealthPanel).
-
-- `[17:10]` `Pandapo274` -
-Veterinary Flow Enhancements (Shift Handover & External Referral):
-- V40 Flyway migration: Add handover fields (handover_by, handover_at, handover_notes) to INCIDENT_REPORT; add EXTERNAL_REFERRAL table; update NOTIFICATION target constraints.
-- Phần 2: Cơ chế bàn giao ca trực y tế (Vet Shift Handover & Case Reassignment) khi bác sĩ vắng mặt/nghỉ phép:
-  - Cho phép bàn giao ca hoặc tiếp quản ca trực (hoặc chuyển về hàng đợi chung PENDING) kèm ghi chú bắt buộc (handover notes).
-  - Tự động thông báo cho bác sĩ tiếp nhận, Head Trainer và Groom.
-  - UI tại Vet Dashboard hỗ trợ nút Handover / Take over và modal bàn giao chi tiết.
-- Phần 3 Mục 4: Quy trình chuyển viện ngoài (External Hospital Referral) khi ca bệnh vượt quá khả năng CLB:
-  - Bác sĩ phát lệnh chuyển viện ngoài tới bệnh viện thú y tuyến trên kèm lý do, mức độ khẩn cấp, ngày dự kiến về.
-  - Tự động chuyển trạng thái ngựa sang INJURED, kích hoạt FULL Training Lock, cảnh báo các cuộc đua đã đăng ký.
-  - Bắn thông báo khẩn cấp tới Chủ ngựa và Huấn luyện viên trưởng.
-  - Hỗ trợ quy trình tiếp nhận xuất viện (Discharge/Return) kèm đánh giá sau điều trị để chuyển sang giai đoạn phục hồi tại CLB.
-a  - UI modal chuyển viện tại Vet Examination và bảng theo dõi ngựa tại viện ngoài trên Vet Dashboard.
-
-> #### `Nov 10, 2026`
 - `[08:39]` `tusandthatsall` -
 Accounts
 - V39 (APP_USER columns, no new table): sign-in locks for 15 minutes after

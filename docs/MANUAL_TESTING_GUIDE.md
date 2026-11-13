@@ -15,15 +15,7 @@ Tài liệu này cung cấp kịch bản kiểm thử từng bước (Step-by-st
 | **HEAD_TRAINER** | `thang.nd` | Nguyễn Đức Thắng | HLV trưởng 1: quản lý ngựa được giao, lên lịch tập, review session |
 | **HEAD_TRAINER** | `lam.tb` | Trần Bảo Lâm | HLV trưởng 2: dùng để test tính cô lập (chỉ thấy ngựa của mình) |
 | **GROOM** | `binh.lv` | Lê Văn Bình | Groom trực tiếp thực hiện buổi tập, nhập vitals, kết thúc sớm/gọi vet |
-| **GROOM** | `nam.tq` | Trương Quang Nam | Groom 2: kiểm thử phân bổ và giới hạn 3 groom / trainer |
-| **GROOM** | `hieu.lm` | Lê Minh Hiếu | Groom 3: kiểm thử phân bổ và giới hạn 3 groom / trainer |
-| **GROOM** | `phuc.nd` | Nguyễn Đình Phúc | Groom 4: kiểm thử phân công huấn luyện & nhận giáo án |
-| **GROOM** | `dat.pt` | Phan Tiến Đạt | Groom 5: kiểm thử nhận tối đa 2 training plans |
-| **GROOM** | `long.vh` | Vũ Hoàng Long | Groom 6: kiểm thử chăm sóc và buổi tập |
-| **GROOM** | `hung.tv` | Trần Văn Hùng | Groom 7: kiểm thử chặn chuyển trainer khi có plan active |
-| **GROOM** | `tri.nm` | Ngô Minh Trí | Groom 8: kiểm thử thực hiện buổi tập và nhập vitals |
-| **GROOM** | `khoa.da` | Đặng Anh Khoa | Groom 9: kiểm thử phân bổ huấn luyện viên |
-| **GROOM** | `thanh.bm` | Bùi Minh Thành | Groom 10: kiểm thử phân bổ huấn luyện viên |
+| **GROOM** | `nam.tq` | Trương Quang Nam | Groom thứ 2: dùng test giới hạn tối đa 3 groom/trainer & trùng lịch |
 | **VETERINARIAN** | `ha.pt` | Phạm Thu Hà | Bác sĩ thú y: nhận và xử lý Vet Calls từ Groom/Trainer |
 | **HORSE_OWNER** | `anh.dq` | Đặng Quốc Anh | Chủ ngựa: nhận thông báo phân trainer, xem kết quả session |
 

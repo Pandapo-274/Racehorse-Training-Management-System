@@ -79,16 +79,9 @@ function MemberRow({
           </span>
         )}
         {row.roleName === "GROOM" && (
-          <>
-            <span className="st-horses">
-              Trainer: {row.trainerName || "Unassigned"}
-            </span>
-            {row.activePlanCount > 0 && (
-              <span className="st-horses" style={{ color: "#d97706", fontWeight: 600 }}>
-                📋 {row.activePlanCount} active plan{row.activePlanCount > 1 ? "s" : ""}
-              </span>
-            )}
-          </>
+          <span className="st-horses">
+            Trainer: {row.trainerName || "Unassigned"}
+          </span>
         )}
         <StatusChip tone={statusTone(row.status)} label={statusLabel(row.status)} />
       </div>
@@ -183,26 +176,25 @@ function RoleGroup({
       {shown.length === 0 ? (
         <p className="hz-empty">{emptyText}</p>
       ) : (
-        <div className="st-table-wrap">
-          <ul className="st-list">
-            {shown.map((row) => (
-              <MemberRow
-                key={row.userId}
-                row={row}
-                activeTrainers={activeTrainers}
-                canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
-                canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
-                onToggleStatus={onToggleStatus}
-                onChangeRole={onChangeRole}
-                onEdit={onEdit}
-                onResetPassword={onResetPassword}
-                onAssignTrainer={onAssignTrainer}
-                onUpdateMaxHorses={onUpdateMaxHorses}
-                busy={busyId === row.userId}
-              />
-            ))}
-          </ul>
-        </div>
+        <ul className="st-list">
+          {shown.map((row) => (
+            <MemberRow
+              key={row.userId}
+              row={row}
+              activeTrainers={activeTrainers}
+              canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
+              canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
+              onToggleStatus={onToggleStatus}
+              onChangeRole={onChangeRole}
+              onEdit={onEdit}
+              onResetPassword={onResetPassword}
+              onAssignTrainer={onAssignTrainer}
+              onUpdateMaxHorses={onUpdateMaxHorses}
+              onShowTeam={onShowTeam}
+              busy={busyId === row.userId}
+            />
+          ))}
+        </ul>
       )}
     </Card>
   );
@@ -476,12 +468,6 @@ export default function StaffPage() {
   const handleAssignTrainer = (row, trainerIdStr) => {
     const nextTrainerId = trainerIdStr ? Number(trainerIdStr) : null;
     if ((row.trainerId ?? null) === nextTrainerId) return;
-
-    if (row.activePlanCount > 0) {
-      setNotice(`⚠️ Cannot transfer Groom ${row.fullName}: Currently assigned to ${row.activePlanCount} active training plan(s). All assigned training plans must be completed before transferring the groom.`);
-      return;
-    }
-
     setBusyId(row.userId);
     setNotice("");
     assignStaffTrainer(row.userId, nextTrainerId)
@@ -654,11 +640,7 @@ export default function StaffPage() {
         />
       )}
 
-      {notice && (
-        <p className={`st-notice ${notice.includes("Cannot") || notice.includes("⚠️") ? "st-notice--error" : ""}`} role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <p className="st-notice" role="status">{notice}</p>}
 
       {!error && groups !== null && (
         <>
