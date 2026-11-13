@@ -74,6 +74,23 @@
 .mh-chip--pink { background: #fce4ec; color: #c2185b; }
 .mh-actor-line { font-size: 13px; color: #69728f; }
 .mh-details-block { border-top: 1px solid #f6ecf1; padding-top: 10px; }
-.mh-fact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; font-size: 13.5px; }
-.mh-fact-grid span { color: #7b849f; margin-right: 6px; font-size: 12px; }
+.mh-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 20px;
+  font-size: 13.5px;
+  align-items: baseline;
+}
+.mh-fact-grid span {
+  color: #7b849f;
+  margin-right: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mh-span-full {
+  grid-column: 1 / -1 !important;
+}
+.mh-nowrap {
+  white-space: nowrap !important;
+}
 @media (max-width: 760px) { .mh-timeline { padding-left: 24px; } .mh-timeline::before { left: 8px; } .mh-line-dot { left: 2px; } .mh-stamp { position: static; width: auto; text-align: left; margin-bottom: 6px; } .mh-item { flex-direction: column; } }

@@ -756,7 +756,6 @@ function PrescribeDialog({ onClose, onDone }) {
   const [records, setRecords] = useState(null);
   const [treatments, setTreatments] = useState([]);
   const [injuries, setInjuries] = useState([]);
-  const [showAllExams, setShowAllExams] = useState(false);
   const [recordId, setRecordId] = useState("");
 
   // Catalog: kết hợp thuốc từ DB và 17 loại thuốc chuẩn
@@ -850,7 +849,6 @@ function PrescribeDialog({ onClose, onDone }) {
     setRecords(null);
     setTreatments([]);
     setInjuries([]);
-    setShowAllExams(false);
     setRecordId("");
     if (!horseId) return undefined;
     const ctrl = new AbortController();
@@ -913,7 +911,7 @@ function PrescribeDialog({ onClose, onDone }) {
 
   const eligibleRecords = useMemo(() => {
     if (!records) return [];
-    const sourceList = showAllExams ? records : records.filter(isExamUntreated);
+    const sourceList = records.filter(isExamUntreated);
 
     // Không cho lặp lại nhiều examination Relapse: chỉ giữ tối đa 1 bản ghi Relapse mới nhất
     const result = [];
@@ -931,7 +929,7 @@ function PrescribeDialog({ onClose, onDone }) {
       }
     }
     return result;
-  }, [records, showAllExams, isExamUntreated]);
+  }, [records, isExamUntreated]);
 
   useEffect(() => {
     if (eligibleRecords.length > 0) {
@@ -1024,14 +1022,16 @@ function PrescribeDialog({ onClose, onDone }) {
 
     const problems = [];
     if (!horseId) problems.push("Choose a horse.");
-    else if (!recordId) problems.push("Choose the examination this prescription belongs to.");
+    else if (!recordId || eligibleRecords.length === 0) problems.push("Cannot save prescription: An active, untreated examination is required.");
 
     if (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim() && !prescriptionNote.trim()) {
       problems.push("Add at least 1 medicine or enter a prescription note.");
     }
     if (!startDate) problems.push("Enter the start date.");
     else if (startDate < todayInputValue()) problems.push("The start date cannot be in the past.");
-    if (startDate && endDate && endDate < startDate) {
+    if (!endDate) {
+      problems.push("Enter the end date. An end date is required so the recovery protocol can proceed.");
+    } else if (startDate && endDate < startDate) {
       problems.push("The end date must be on or after the start date.");
     }
     if (problems.length) {
@@ -1159,26 +1159,7 @@ function PrescribeDialog({ onClose, onDone }) {
 
           {horseId && (
             <label className="vx-field vx-field--full">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span>Examination</span>
-                {records && records.length > eligibleRecords.length && (
-                  <button
-                    type="button"
-                    style={{
-                      background: "none",
-                      border: 0,
-                      color: "var(--v-pink)",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                    onClick={() => setShowAllExams((prev) => !prev)}
-                  >
-                    {showAllExams ? "Show untreated only" : `Show all history (${records.length})`}
-                  </button>
-                )}
-              </div>
+              <span>Examination</span>
               <select
                 className="vx-input vc-select"
                 value={recordId}
@@ -1187,16 +1168,12 @@ function PrescribeDialog({ onClose, onDone }) {
               >
                 {!records && <option value="">Loading examinations…</option>}
                 {noRecords && <option value="">No untreated examination on record</option>}
-                {eligibleRecords.map((r) => {
-                  const isUntreated = isExamUntreated(r);
-                  return (
-                    <option key={r.recordId} value={r.recordId}>
-                      {formatDate(r.examDate)} · {r.recordType === "EXAM" ? "Examination" : careTypeLabel(r.recordType)}
-                      {r.diagnosis ? ` · ${r.diagnosis}` : ""}
-                      {showAllExams && !isUntreated ? " [Already treated / Cleared]" : ""}
-                    </option>
-                  );
-                })}
+                {eligibleRecords.map((r) => (
+                  <option key={r.recordId} value={r.recordId}>
+                    {formatDate(r.examDate)} · {r.recordType === "EXAM" ? "Examination" : careTypeLabel(r.recordType)}
+                    {r.diagnosis ? ` · ${r.diagnosis}` : ""}
+                  </option>
+                ))}
               </select>
             </label>
           )}
@@ -1209,37 +1186,11 @@ function PrescribeDialog({ onClose, onDone }) {
                 ? `${horseName} has no examination yet.`
                 : `No untreated examinations on record for ${horseName}.`}
             </strong>
-            <p>
+            <p style={{ margin: "4px 0 0" }}>
               {records.length === 0
-                ? "Log an examination first, then come back to write the prescription."
-                : "All previous examinations have already been treated or marked as recovered."}
+                ? "An active examination is required before creating a prescription."
+                : "All previous examinations have already been treated or marked as recovered. You cannot create a prescription without an active, untreated examination."}
             </p>
-            {records.length > 0 && !showAllExams && (
-              <button
-                type="button"
-                className="vx-link"
-                style={{
-                  background: "none",
-                  border: 0,
-                  padding: 0,
-                  color: "var(--v-pink)",
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  font: "inherit",
-                  marginRight: "14px",
-                }}
-                onClick={() => setShowAllExams(true)}
-              >
-                View all previous examinations ({records.length}) →
-              </button>
-            )}
-            <button
-              type="button"
-              className="vx-link"
-              onClick={() => navigate(`/veterinarian/examination/${horseId}`)}
-            >
-              Go to examination →
-            </button>
           </div>
         )}
 
@@ -1410,12 +1361,13 @@ function PrescribeDialog({ onClose, onDone }) {
           </label>
 
           <label className="vx-field">
-            <span>End date (optional)</span>
+            <span>End date <b style={{ color: "var(--v-pink)" }}>*</b></span>
             <input
               type="date"
               className="vx-input"
+              required
               value={endDate}
-              min={startDate || undefined}
+              min={startDate || todayInputValue()}
               onChange={(e) => setEndDate(e.target.value)}
             />
           </label>
@@ -1424,7 +1376,7 @@ function PrescribeDialog({ onClose, onDone }) {
         <p className="vc-hint">
           {endDate
             ? `Treatment runs from ${formatDate(startDate)} to ${formatDate(endDate)}.`
-            : "Leave the end date empty if the treatment runs until the next review."}
+            : "Required: Set an end date so the horse completes treatment and does not get stuck in recovery."}
         </p>
 
         {/* 5. Ghi chú đơn thuốc (tuỳ chọn - dành cho thuốc chưa có trong kho) */}
@@ -1450,6 +1402,9 @@ function PrescribeDialog({ onClose, onDone }) {
             disabled={
               busy ||
               !recordId ||
+              noRecords ||
+              !startDate ||
+              !endDate ||
               (selectedMeds.length === 0 && !chosenMedKey && !customMed.trim() && !prescriptionNote.trim())
             }
             onClick={submit}
