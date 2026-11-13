@@ -158,3 +158,7 @@
   min-width: 150px;
   max-width: 240px;
 }
+
+/* .hz-row--active tô nền bán trong suốt; cột thao tác dính (.hz-sticky-end)
+   cần nền đặc để chữ của cột Note không hiện xuyên qua khi cuộn ngang. */
+.hz-row--active td.hz-sticky-end { background: #fef8fb !important; }

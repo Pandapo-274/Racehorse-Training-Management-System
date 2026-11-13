@@ -1352,9 +1352,12 @@ button.owner-stat-card {
   }
 }
 
-/* Hero (ảnh + chỉ số + thanh năng lực) dùng left cứng, chỉ vừa từ 1100px trở lên.
-   Hẹp hơn thì xếp chỉ số và thanh năng lực xuống dưới ảnh. */
-@media (max-width: 1100px) {
+/* Hero (ảnh + chỉ số + thanh năng lực) dùng left cứng. Khối năng lực bắt đầu ở
+   left 730px và cần khoảng 190px (biểu tượng, tên, thanh, số) + 24px lề phải,
+   nên thẻ phải rộng ~945px, tức màn hình từ ~1226px (trừ sidebar và lề).
+   Trước đây ngưỡng là 1100px: ở 1101-1225px (laptop zoom 125%) khối năng lực
+   chỉ còn ~140px và cột số bị cắt. Hẹp hơn 1226px thì xếp xuống dưới ảnh. */
+@media (max-width: 1225px) {
   .horse-overview {
     min-height: 430px;
     height: auto;
@@ -1811,8 +1814,9 @@ a.horse-photo:focus-visible {
    1136px thì đuôi hàng - đúng cột số - rơi ra ngoài và bị .horse-overview
    (overflow: hidden) cắt mất. Ghim cả mép phải để khối co theo thẻ: thanh tự
    ngắn lại, cột số luôn nằm trong khung. Chỉ áp khi khối còn position: absolute
-   (trên 900px); dưới mức đó khối đã chuyển sang relative và tự co. */
-@media (min-width: 901px) {
+   (từ 1226px, xem khối @media max-width 1225px); dưới mức đó khối đã chuyển
+   sang relative, và right: 24px khi đó lại đẩy cả khối lệch trái 24px. */
+@media (min-width: 1226px) {
   .training-stats {
     width: auto;
     right: 24px;

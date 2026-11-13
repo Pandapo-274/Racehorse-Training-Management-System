@@ -220,6 +220,17 @@
 .hz-name { font-weight: 700; }
 .hz-row-action { text-align: right; padding-right: 0; }
 .hz-row-action .hz-btn { padding: 6px 14px; font-size: 11px; }
+/* Cột thao tác dính mép phải. Bảng rộng hơn thẻ (laptop 1366px, zoom 125%)
+   thì cuộn ngang trong .hz-table-wrap, và thanh cuộn nằm tận cuối bảng nên
+   người dùng không biết là còn cột bị che. Gắn lớp này cho <th> và <td> của
+   cột cuối: nút Record result / Edit... luôn nhìn thấy, phần giữa cuộn dưới nó.
+   Nền phải đặc, nếu không chữ của cột khác hiện xuyên qua. */
+.hz-table .hz-sticky-end {
+  position: sticky; right: 0; z-index: 1;
+  background: #fff;
+  padding-left: 12px;
+}
+.hz-row:hover td.hz-sticky-end { background: var(--field-bg); }
 
 .hz-mono { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: .94em; }
 .hz-muted { color: var(--text-600); }

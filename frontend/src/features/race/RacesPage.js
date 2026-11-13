@@ -432,7 +432,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
                 <th>Horses</th>
                 <th>Fee</th>
                 <th>Status</th>
-                {isManager && <th aria-label="Actions" />}
+                {isManager && <th className="hz-sticky-end" aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -452,7 +452,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
                     {r.cancelReason && <p className="hz-note hz-muted">{r.cancelReason}</p>}
                   </td>
                   {isManager && (
-                    <td className="hz-row-action">
+                    <td className="hz-row-action hz-sticky-end">
                       {r.status === "OPEN" && r.raceDate > today && (
                         <button type="button" className="race-link race-link--danger" onClick={() => cancel(r)}>Cancel race</button>
                       )}
@@ -632,7 +632,7 @@ export default function RacesPage() {
                       <th style={{ width: "125px" }}>Result</th>
                       <th style={{ width: "115px" }}>Prize</th>
                       <th>Note</th>
-                      <th style={{ width: "110px", textAlign: "right" }} aria-label="Actions" />
+                      <th className="hz-sticky-end" style={{ width: "110px", textAlign: "right" }} aria-label="Actions" />
                     </tr>
                   </thead>
                   <tbody>
@@ -664,7 +664,7 @@ export default function RacesPage() {
                               {e.scratchReason && <p className="hz-note">Scratched: {e.scratchReason}</p>}
                               {e.note || (e.scratchReason ? null : "—")}
                             </td>
-                            <td className="hz-row-action">
+                            <td className="hz-row-action hz-sticky-end">
                               <RowActions
                                 entry={e}
                                 isTrainer={isTrainer}

@@ -230,9 +230,27 @@
   font-size: 12px;
 }
 
-/* Bảng kho: 8 cột, cột cuối có tới 4 nút. Hẹp quá thì các nút xếp chồng dọc
-   và mỗi hàng cao gần 100px; giữ đủ rộng để nút nằm một hàng, thiếu chỗ thì
-   cuộn ngang trong .hz-table-wrap. */
-.care-stock-table { min-width: 1060px; }
-.care-stock-table .care-btn-group { flex-wrap: nowrap; }
-.care-stock-table .care-btn-pill { white-space: nowrap; }
+/* Bảng kho: 7 cột, cột cuối có tới 5 nút (Manager). Trước đây bảng ép
+   min-width 1060px và giữ nút trên một hàng: ở laptop 1366px hoặc màn hình
+   zoom 125% bảng rộng hơn thẻ, cột Actions (Groom: Last change) bị đẩy ra
+   ngoài, còn thanh cuộn ngang nằm tận cuối bảng nên không ai thấy.
+   Giờ nút xuống dòng trong một cột rộng tối đa ~230px, bảng vừa thẻ từ
+   khoảng 1000px trở lên; hẹp hơn nữa mới cuộn ngang (min-width của .hz-table).
+   Cột Actions dính bên phải để không bao giờ bị cắt mất khi cuộn. */
+.care-stock-table td, .care-stock-table th { vertical-align: middle; }
+.care-stock-cell { white-space: nowrap; }
+.care-stock-cell strong { font-size: 14px; color: var(--text-900); }
+.care-actions-head { text-align: right; }
+.care-stock-table .care-stock-actions {
+  justify-content: flex-end;
+  max-width: 230px;
+  margin-left: auto;
+}
+.care-stock-table .care-stock-actions { gap: 5px; }
+.care-stock-table .care-btn-pill { padding: 4px 10px !important; font-size: 11px !important; }
+.care-stock-table td.hz-row-action,
+.care-stock-table th.care-actions-head {
+  position: sticky; right: 0;
+  background: #fff;
+}
+.care-stock-table tbody tr.care-row--low td.hz-row-action { background: #fff7e3; }
