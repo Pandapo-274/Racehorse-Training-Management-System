@@ -506,30 +506,30 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                 <div className="mh-details-block">
                   {evt.type === "EXAM" && (
                     <div className="mh-fact-grid">
-                      <div>
+                      <div className="mh-span-full">
                         <span>Diagnosis:</span>
                         <strong>{evt.details.diagnosis}</strong>
                       </div>
                       {evt.details.healthStatus && (
-                        <div>
+                        <div className="mh-nowrap">
                           <span>Post-Exam Status:</span>
                           <strong>{statusLabel(evt.details.healthStatus)}</strong>
                         </div>
                       )}
                       {evt.details.expectedRestDays && (
-                        <div>
+                        <div className="mh-nowrap">
                           <span>Prescribed Rest:</span>
                           <strong>{evt.details.expectedRestDays} days</strong>
                         </div>
                       )}
                       {evt.details.weight && (
-                        <div>
+                        <div className="mh-nowrap">
                           <span>Weight at Exam:</span>
                           <strong>{evt.details.weight} kg</strong>
                         </div>
                       )}
                       {isVet && evt.details.notes && (
-                        <div style={{ gridColumn: "1 / -1" }}>
+                        <div className="mh-span-full">
                           <span>Clinical Notes:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.notes}</p>
                         </div>
@@ -539,20 +539,20 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
 
                   {evt.type === "INJURY" && (
                     <div className="mh-fact-grid">
-                      <div>
+                      <div className="mh-span-full">
                         <span>Body Location:</span>
                         <strong>{evt.details.bodyLocation}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Severity:</span>
                         <strong>{evt.details.severity}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Coordinates:</span>
                         <strong>{evt.details.coordinate}</strong>
                       </div>
                       {evt.details.isRecovered && evt.details.recoveredAt && (
-                        <div>
+                        <div className="mh-nowrap">
                           <span>Recovery Date:</span>
                           <strong style={{ color: "#2e7d32" }}>{formatDateTime(evt.details.recoveredAt)}</strong>
                         </div>
@@ -562,22 +562,22 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
 
                   {evt.type === "TREATMENT" && (
                     <div className="mh-fact-grid">
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Dosage:</span>
                         <strong>{evt.details.dosage || "As prescribed"}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Frequency:</span>
                         <strong>{evt.details.frequency || "Daily"}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Regimen:</span>
                         <strong>
                           {formatDate(evt.details.startDate)} → {evt.details.endDate ? formatDate(evt.details.endDate) : "Ongoing"}
                         </strong>
                       </div>
                       {evt.details.instruction && (
-                        <div style={{ gridColumn: "1 / -1" }}>
+                        <div className="mh-span-full">
                           <span>Instructions:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.instruction}</p>
                         </div>
@@ -587,16 +587,16 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
 
                   {evt.type === "LOCK" && (
                     <div className="mh-fact-grid">
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Lock Level:</span>
                         <strong>{lockLevelLabel(evt.details.lockLevel)}</strong>
                       </div>
-                      <div>
+                      <div className="mh-span-full">
                         <span>Reason:</span>
                         <strong>{evt.details.reason}</strong>
                       </div>
                       {!evt.details.isActive && evt.details.releasedByName && (
-                        <div style={{ gridColumn: "1 / -1" }}>
+                        <div className="mh-span-full">
                           <span>Released By:</span>
                           <strong>
                             {evt.details.releasedByName} (at {formatDateTime(evt.details.releasedAt)})
@@ -612,20 +612,20 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                         <span>Receiving Hospital:</span>
                         <strong style={{ color: "#b32569" }}>{evt.details.hospitalName}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Urgency:</span>
                         <strong>{evt.details.urgency}</strong>
                       </div>
-                      <div>
+                      <div className="mh-nowrap">
                         <span>Estimated Return:</span>
                         <strong>{evt.details.expectedReturn ? formatDate(evt.details.expectedReturn) : "TBD"}</strong>
                       </div>
-                      <div style={{ gridColumn: "1 / -1" }}>
+                      <div className="mh-span-full">
                         <span>Referral Reason:</span>
                         <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.referralReason}</p>
                       </div>
                       {!evt.details.isHospitalized && evt.details.dischargeNotes && (
-                        <div style={{ gridColumn: "1 / -1", background: "#f8f9fc", padding: "8px 12px", borderRadius: "8px" }}>
+                        <div className="mh-span-full" style={{ background: "#f8f9fc", padding: "8px 12px", borderRadius: "8px" }}>
                           <span style={{ fontWeight: 700, color: "#1976d2" }}>Discharge & Return Summary:</span>
                           <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.dischargeNotes}</p>
                           <small style={{ color: "#8e96b1", display: "block", marginTop: "4px" }}>
