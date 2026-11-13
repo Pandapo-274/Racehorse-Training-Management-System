@@ -432,40 +432,9 @@ function RecoveryView({ horseId }) {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-                  Rehabilitation workouts completed by Groom and reviewed by Head Trainer:
-                </p>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const all = {};
-                      recoverySessions.forEach((s) => { all[s.sessionId] = true; });
-                      setExpandedSessionIds(all);
-                    }}
-                    style={{ background: "none", border: "none", color: "#0284c7", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
-                  >
-                    Expand all
-                  </button>
-                  <span style={{ color: "#cbd5e1" }}>|</span>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedSessionIds({})}
-                    style={{ background: "none", border: "none", color: "#64748b", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
-                  >
-                    Collapse all
-                  </button>
-                  <span style={{ color: "#cbd5e1" }}>|</span>
-                  <button
-                    type="button"
-                    onClick={() => setSessionsExpanded(false)}
-                    style={{ background: "none", border: "none", color: "#dc2626", fontSize: "12px", cursor: "pointer", textDecoration: "underline", padding: 0 }}
-                  >
-                    Close section ▲
-                  </button>
-                </div>
-              </div>
+              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                Rehabilitation workouts completed by Groom and reviewed by Head Trainer:
+              </p>
               {recoverySessions.map((s) => {
                 const isOpen = expandedSessionIds[s.sessionId] ?? true;
                 return (
