@@ -14,7 +14,9 @@
 }
 
 .vet-page button,
-.vet-page input {
+.vet-page input,
+.vet-page select,
+.vet-page textarea {
   font-family: inherit;
 }
 

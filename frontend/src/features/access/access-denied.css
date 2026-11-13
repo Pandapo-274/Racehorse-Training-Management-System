@@ -14,7 +14,7 @@
   position: relative;
   overflow: hidden;
 
-  font-family: Arial, sans-serif;
+  font-family: var(--font-body);
 }
 
 /* Background shape */
