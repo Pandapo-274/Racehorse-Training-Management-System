@@ -1,7 +1,7 @@
 // src/features/vet/VetPrescriptionPage.js
 // Màn Prescriptions: đơn thuốc và thống kê chi phí y tế trên toàn đàn.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import { healthApplies, toStatus } from "../horse/horseApi";
@@ -11,6 +11,7 @@ import {
   listActiveTreatments,
   listTreatmentsForHorse,
   listMedicalRecords,
+  listInjuries,
   listHorses,
   createTreatment,
   endTreatment,
@@ -753,6 +754,9 @@ function PrescribeDialog({ onClose, onDone }) {
   const [horses, setHorses] = useState(null);
   const [horseId, setHorseId] = useState("");
   const [records, setRecords] = useState(null);
+  const [treatments, setTreatments] = useState([]);
+  const [injuries, setInjuries] = useState([]);
+  const [showAllExams, setShowAllExams] = useState(false);
   const [recordId, setRecordId] = useState("");
 
   // Catalog: kết hợp thuốc từ DB và 17 loại thuốc chuẩn
@@ -841,16 +845,25 @@ function PrescribeDialog({ onClose, onDone }) {
     return () => ctrl.abort();
   }, []);
 
-  // Load medical records khi chọn ngựa
+  // Load medical records, treatments & injuries khi chọn ngựa
   useEffect(() => {
     setRecords(null);
+    setTreatments([]);
+    setInjuries([]);
+    setShowAllExams(false);
     setRecordId("");
     if (!horseId) return undefined;
     const ctrl = new AbortController();
-    listMedicalRecords(horseId, ctrl.signal)
-      .then((list) => {
-        setRecords(list);
-        if (list.length > 0) setRecordId(String(list[0].recordId));
+
+    Promise.all([
+      listMedicalRecords(horseId, ctrl.signal),
+      listTreatmentsForHorse(horseId, ctrl.signal).catch(() => []),
+      listInjuries(horseId, ctrl.signal).catch(() => []),
+    ])
+      .then(([recList, trtList, injList]) => {
+        setRecords(recList);
+        setTreatments(trtList || []);
+        setInjuries(Array.isArray(injList) ? injList : injList?.content || []);
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
@@ -859,6 +872,76 @@ function PrescribeDialog({ onClose, onDone }) {
       });
     return () => ctrl.abort();
   }, [horseId, navigate]);
+
+  const treatedRecordIds = useMemo(() => {
+    return new Set((treatments || []).map((t) => t.recordId).filter(Boolean));
+  }, [treatments]);
+
+  const recoveredRecordIds = useMemo(() => {
+    const recordInjuriesMap = new Map();
+    for (const inj of injuries || []) {
+      if (!inj.recordId) continue;
+      if (!recordInjuriesMap.has(inj.recordId)) recordInjuriesMap.set(inj.recordId, []);
+      recordInjuriesMap.get(inj.recordId).push(inj);
+    }
+    const recovered = new Set();
+    for (const [rId, injs] of recordInjuriesMap.entries()) {
+      if (injs.length > 0 && injs.every((i) => i.status === "RECOVERED" || i.recoveredAt != null)) {
+        recovered.add(rId);
+      }
+    }
+    return recovered;
+  }, [injuries]);
+
+  const isExamUntreated = useCallback((r) => {
+    // 1. Chỉ nhận bản ghi EXAM (loại bỏ FARRIER, VACCINE, DEWORM, CLEARANCE)
+    if (r.recordType && r.recordType !== "EXAM") return false;
+
+    // 2. Loại bỏ các ca đã bình phục / khỏi bệnh / clearance
+    if (r.healthStatus === "ELIGIBLE") return false;
+    const diag = (r.diagnosis || "").toLowerCase();
+    if (diag.startsWith("fitness rating") || diag.startsWith("light work clearance")) return false;
+
+    // 3. Loại bỏ ca đã khỏi (mọi injury đã recovered)
+    if (recoveredRecordIds.has(r.recordId)) return false;
+
+    // 4. Loại bỏ ca đã được kê đơn / điều trị
+    if (treatedRecordIds.has(r.recordId)) return false;
+
+    return true;
+  }, [recoveredRecordIds, treatedRecordIds]);
+
+  const eligibleRecords = useMemo(() => {
+    if (!records) return [];
+    const sourceList = showAllExams ? records : records.filter(isExamUntreated);
+
+    // Không cho lặp lại nhiều examination Relapse: chỉ giữ tối đa 1 bản ghi Relapse mới nhất
+    const result = [];
+    let seenRelapse = false;
+    for (const r of sourceList) {
+      const isRelapse = (r.diagnosis || "").toLowerCase().includes("relapse");
+      if (isRelapse) {
+        if (!seenRelapse) {
+          seenRelapse = true;
+          result.push(r);
+        }
+        // Bỏ qua các lần lặp lại relapse cũ
+      } else {
+        result.push(r);
+      }
+    }
+    return result;
+  }, [records, showAllExams, isExamUntreated]);
+
+  useEffect(() => {
+    if (eligibleRecords.length > 0) {
+      if (!eligibleRecords.some((r) => String(r.recordId) === String(recordId))) {
+        setRecordId(String(eligibleRecords[0].recordId));
+      }
+    } else {
+      setRecordId("");
+    }
+  }, [eligibleRecords, recordId]);
 
   const horseName = horses?.find((h) => String(h.horseId) === horseId)?.horseName;
 
@@ -1045,7 +1128,7 @@ function PrescribeDialog({ onClose, onDone }) {
     }
   };
 
-  const noRecords = records && records.length === 0;
+  const noRecords = records && eligibleRecords.length === 0;
 
   return (
     <div className="vx-overlay" role="dialog" aria-modal="true" aria-labelledby="vc-rx-title">
@@ -1076,7 +1159,26 @@ function PrescribeDialog({ onClose, onDone }) {
 
           {horseId && (
             <label className="vx-field vx-field--full">
-              <span>Examination</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span>Examination</span>
+                {records && records.length > eligibleRecords.length && (
+                  <button
+                    type="button"
+                    style={{
+                      background: "none",
+                      border: 0,
+                      color: "var(--v-pink)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                    onClick={() => setShowAllExams((prev) => !prev)}
+                  >
+                    {showAllExams ? "Show untreated only" : `Show all history (${records.length})`}
+                  </button>
+                )}
+              </div>
               <select
                 className="vx-input vc-select"
                 value={recordId}
@@ -1084,13 +1186,17 @@ function PrescribeDialog({ onClose, onDone }) {
                 onChange={(e) => setRecordId(e.target.value)}
               >
                 {!records && <option value="">Loading examinations…</option>}
-                {noRecords && <option value="">No examination on record</option>}
-                {(records || []).map((r) => (
-                  <option key={r.recordId} value={r.recordId}>
-                    {formatDate(r.examDate)} · {r.recordType === "EXAM" ? "Examination" : careTypeLabel(r.recordType)}
-                    {r.diagnosis ? ` · ${r.diagnosis}` : ""}
-                  </option>
-                ))}
+                {noRecords && <option value="">No untreated examination on record</option>}
+                {eligibleRecords.map((r) => {
+                  const isUntreated = isExamUntreated(r);
+                  return (
+                    <option key={r.recordId} value={r.recordId}>
+                      {formatDate(r.examDate)} · {r.recordType === "EXAM" ? "Examination" : careTypeLabel(r.recordType)}
+                      {r.diagnosis ? ` · ${r.diagnosis}` : ""}
+                      {showAllExams && !isUntreated ? " [Already treated / Cleared]" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </label>
           )}
@@ -1098,8 +1204,35 @@ function PrescribeDialog({ onClose, onDone }) {
 
         {noRecords && (
           <div className="vx-banner vx-banner--warn">
-            <strong>{horseName} has no examination yet.</strong>
-            <p>Log an examination first, then come back to write the prescription.</p>
+            <strong>
+              {records.length === 0
+                ? `${horseName} has no examination yet.`
+                : `No untreated examinations on record for ${horseName}.`}
+            </strong>
+            <p>
+              {records.length === 0
+                ? "Log an examination first, then come back to write the prescription."
+                : "All previous examinations have already been treated or marked as recovered."}
+            </p>
+            {records.length > 0 && !showAllExams && (
+              <button
+                type="button"
+                className="vx-link"
+                style={{
+                  background: "none",
+                  border: 0,
+                  padding: 0,
+                  color: "var(--v-pink)",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  font: "inherit",
+                  marginRight: "14px",
+                }}
+                onClick={() => setShowAllExams(true)}
+              >
+                View all previous examinations ({records.length}) →
+              </button>
+            )}
             <button
               type="button"
               className="vx-link"

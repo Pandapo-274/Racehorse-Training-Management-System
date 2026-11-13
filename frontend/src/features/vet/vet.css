@@ -762,7 +762,7 @@
 .waiting-table {
   width: 100%;
   /* Màn hẹp thì cuộn ngang trong .waiting-table-wrapper, không ép năm cột chồng lên nhau. */
-  min-width: 720px;
+  min-width: 880px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -789,14 +789,12 @@
   border-bottom: 0;
 }
 
-/* Đủ cả năm cột. Trước đây chỉ có ba cột đầu (32 + 48 + 20 = 100%) từ hồi bảng
-   chưa có Priority và Case; với table-layout: fixed hai cột sau còn ~0px nên
-   chip mức khẩn cấp và nút Take case / Examine đè lên nhau. */
-.waiting-table th:nth-child(1), .waiting-table td:nth-child(1) { width: 18%; }
-.waiting-table th:nth-child(2), .waiting-table td:nth-child(2) { width: 30%; }
-.waiting-table th:nth-child(3), .waiting-table td:nth-child(3) { width: 18%; }
-.waiting-table th:nth-child(4), .waiting-table td:nth-child(4) { width: 12%; }
-.waiting-table th:nth-child(5), .waiting-table td:nth-child(5) { width: 22%; }
+/* Đủ cả năm cột: Cột 5 (Case) mở rộng đủ cho "Taken by Dr...", nút Handover và Examine cùng nằm trên một hàng, không bị rớt dòng. */
+.waiting-table th:nth-child(1), .waiting-table td:nth-child(1) { width: 17%; }
+.waiting-table th:nth-child(2), .waiting-table td:nth-child(2) { width: 27%; }
+.waiting-table th:nth-child(3), .waiting-table td:nth-child(3) { width: 16%; }
+.waiting-table th:nth-child(4), .waiting-table td:nth-child(4) { width: 10%; }
+.waiting-table th:nth-child(5), .waiting-table td:nth-child(5) { width: 30%; white-space: nowrap; }
 
 .horse-name {
   font-family: var(--font-heading);
@@ -1485,7 +1483,7 @@ button.stable-box:focus-visible {
 /* ---------- Hàng chờ khám từ báo cáo sự cố ---------- */
 .waiting-status.soon { background: #fff0c9; color: #9c6d00; }
 .waiting-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 500; color: var(--text-600); }
-.waiting-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.waiting-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; white-space: nowrap; }
 .waiting-action {
   padding: 5px 12px; border: 1px solid var(--line); border-radius: 14px;
   background: #fff; color: var(--text-900); font: 700 11px var(--font-body); cursor: pointer;

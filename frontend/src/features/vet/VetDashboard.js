@@ -231,10 +231,13 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
                           </button>
                         ) : (
                           <>
-                            <span className="waiting-sub">Taken by {r.receivedByName}</span>
+                            <span style={{ fontSize: "11px", color: "var(--text-600)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                              Taken by {r.receivedByName}
+                            </span>
                             <button
                               type="button"
                               className="waiting-action"
+                              style={{ whiteSpace: "nowrap", flexShrink: 0 }}
                               title="Bàn giao ca cho bác sĩ khác hoặc tiếp quản ca"
                               onClick={() => onOpenHandover(r)}
                             >
@@ -242,7 +245,12 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
                             </button>
                           </>
                         )}
-                        <button type="button" className="waiting-action waiting-action--main" onClick={() => onExamine(r)}>
+                        <button
+                          type="button"
+                          className="waiting-action waiting-action--main"
+                          style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                          onClick={() => onExamine(r)}
+                        >
                           Examine
                         </button>
                       </div>
