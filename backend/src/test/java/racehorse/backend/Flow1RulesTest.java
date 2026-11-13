@@ -1,5 +1,11 @@
 package racehorse.backend;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,35 +18,29 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Optional;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
-import racehorse.backend.auth.ApiException;
-import racehorse.backend.auth.AuthService;
-import racehorse.backend.auth.AuthenticatedUser;
-import racehorse.backend.auth.JwtService;
-import racehorse.backend.auth.LoginRequest;
-import racehorse.backend.auth.TokenBlacklist;
-import racehorse.backend.auth.UserRecord;
-import racehorse.backend.auth.UserRepository;
-import racehorse.backend.horse.HorseAdminService;
-import racehorse.backend.horse.HorseRepository;
-import racehorse.backend.horse.HorseResponse;
-import racehorse.backend.horse.HorseService;
-import racehorse.backend.horse.HorseUpdateRequest;
-import racehorse.backend.horse.HorseVitalsRepository;
-import racehorse.backend.notification.NotificationService;
-import racehorse.backend.profile.ProfileRepository;
-import racehorse.backend.profile.ProfileService;
-import racehorse.backend.profile.UpdateProfileRequest;
-import racehorse.backend.staff.StaffRepository;
-import racehorse.backend.staff.StaffRow;
-import racehorse.backend.staff.StaffService;
+import racehorse.backend.controller.StaffController;
+import racehorse.backend.dto.HorseResponse;
+import racehorse.backend.dto.HorseUpdateRequest;
+import racehorse.backend.dto.HorseVitalsResponse;
+import racehorse.backend.dto.LoginRequest;
+import racehorse.backend.dto.UpdateProfileRequest;
+import racehorse.backend.entity.StaffRow;
+import racehorse.backend.entity.UserRecord;
+import racehorse.backend.exception.ApiException;
+import racehorse.backend.repository.HorseRepository;
+import racehorse.backend.repository.HorseVitalsRepository;
+import racehorse.backend.repository.ProfileRepository;
+import racehorse.backend.repository.StaffRepository;
+import racehorse.backend.repository.UserRepository;
+import racehorse.backend.security.AuthenticatedUser;
+import racehorse.backend.security.JwtService;
+import racehorse.backend.security.TokenBlacklist;
+import racehorse.backend.service.AuthService;
+import racehorse.backend.service.HorseAdminService;
+import racehorse.backend.service.HorseService;
+import racehorse.backend.service.NotificationService;
+import racehorse.backend.service.ProfileService;
+import racehorse.backend.service.StaffService;
 
 /**
  * Flow 1 - horses and user accounts. One test per business rule added or
@@ -183,7 +183,7 @@ class Flow1RulesTest {
         StaffService service = new StaffService(users, staff, mock(PasswordEncoder.class), mock(TokenBlacklist.class),
                 mock(NotificationService.class));
 
-        service.create(new racehorse.backend.staff.StaffController.CreateRequest(
+        service.create(new racehorse.backend.controller.StaffController.CreateRequest(
                 "desk.owner", "Temp1234", "Desk Owner", "desk.owner@club.test", null, "HORSE_OWNER"), MANAGER, "ip");
         verify(users).setMustChangePassword(40, true);
     }
@@ -191,7 +191,7 @@ class Flow1RulesTest {
     @Test
     void managerCannotCreateAnotherClubManager() {
         StaffService service = staffService(mock(StaffRepository.class), mock(TokenBlacklist.class));
-        expect(400, () -> service.create(new racehorse.backend.staff.StaffController.CreateRequest(
+        expect(400, () -> service.create(new racehorse.backend.controller.StaffController.CreateRequest(
                 "boss2", "Temp1234", "Second Boss", "boss2@club.test", null, "CLUB_MANAGER"), MANAGER, "ip"));
     }
 
@@ -490,7 +490,7 @@ class Flow1RulesTest {
         LocalDate foalDob = LocalDate.now().minusYears(3);
         when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob)));
         when(horses.findById(21)).thenReturn(Optional.of(horse(21, 9, "PEDIGREE", "ACTIVE", "STALLION", foalDob.minusYears(9))));
-        when(vitals.findLatestSession(10)).thenReturn(Optional.of(new racehorse.backend.horse.HorseVitalsResponse.LatestSession(
+        when(vitals.findLatestSession(10)).thenReturn(Optional.of(new racehorse.backend.dto.HorseVitalsResponse.LatestSession(
                 java.time.LocalDateTime.now(), "FINISHED", 120, 160, 90, new java.math.BigDecimal("14.5"), "GOOD", 180)));
 
         HorseService service = new HorseService(horses, vitals, mock(UserRepository.class));

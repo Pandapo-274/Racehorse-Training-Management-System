@@ -1,0 +1,32 @@
+package racehorse.backend.dto;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import racehorse.backend.service.HorseRequestService;
+import racehorse.backend.service.HorseService;
+
+/** Chỉ còn dùng nội bộ: HorseRequestService.approve tạo ngựa qua HorseService.create.
+ *  Không còn endpoint POST /api/horses.
+ *  status KHÔNG nằm ở đây: trạng thái do bác sĩ thú y quyết định (UC14, UC18). */
+public record HorseRequest(
+        @NotNull(message = "Owner is required") Integer ownerId,
+        Integer sireId,
+        Integer damId,
+        @NotBlank(message = "Name is required") @Size(max = 100) String horseName,
+        @NotBlank(message = "Registration code is required") @Size(max = 30) String registrationCode,
+        @Size(max = 50) String breed,
+        @Pattern(regexp = "COLT|FILLY|STALLION|MARE|GELDING",
+                 message = "Sex must be COLT, FILLY, STALLION, MARE or GELDING") String horseGender,
+        @PastOrPresent(message = "Date of birth cannot be in the future") LocalDate dateOfBirth,
+        @Size(max = 50) String color,
+        @DecimalMin(value = "0.0", inclusive = false, message = "Weight must be greater than 0") BigDecimal weight,
+        @Size(max = 20) String stallNo,
+        @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE") String recordType
+) {}

@@ -1,0 +1,294 @@
+package racehorse.backend.repository;
+
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+import racehorse.backend.dto.IncidentReportResponse;
+
+/** Chỉ nói chuyện với DB, không chứa logic nghiệp vụ. */
+@Repository
+public class IncidentRepository {
+
+    /** Những gì cần biết về một buổi tập để quyết định có dừng được không. */
+    public record SessionForStop(int sessionId, int horseId, String horseName, int ownerId,
+                                 int assignedTo, String status,
+                                 Integer peakHeartRate, BigDecimal peakVelocity) {
+        public SessionForStop(int sessionId, int horseId, String horseName, int ownerId,
+                              int assignedTo, String status) {
+            this(sessionId, horseId, horseName, ownerId, assignedTo, status, null, null);
+        }
+    }
+
+    /** Một báo cáo chưa khám xong (PENDING hoặc RECEIVED). */
+    public record OpenReport(int reportId, String urgency, String status) {
+    }
+
+    public record RunningSession(int sessionId, int assignedTo) {
+    }
+
+    public record VetOption(int userId, String fullName, String email) {
+    }
+
+    private static final String SELECT_REPORT = """
+            SELECT r.report_id, r.horse_id, h.horse_name, h.stall_no, h.status AS horse_status, h.owner_id,
+                   r.session_id, r.reporter_id, u.full_name AS reporter_name,
+                   r.symptoms, r.description, r.photo_url, r.urgency, r.reported_at, r.status,
+                   r.received_by, rv.full_name AS receiver_name, r.received_at,
+                   ds.full_name AS dismisser_name, r.dismiss_reason,
+                   r.handover_by, hb.full_name AS handover_by_name, r.handover_at, r.handover_notes
+            FROM INCIDENT_REPORT r
+            JOIN HORSE h     ON h.horse_id = r.horse_id
+            JOIN APP_USER u  ON u.user_id  = r.reporter_id
+            LEFT JOIN APP_USER rv ON rv.user_id = r.received_by
+            LEFT JOIN APP_USER ds ON ds.user_id = r.dismissed_by
+            LEFT JOIN APP_USER hb ON hb.user_id = r.handover_by
+            """;
+
+    static final String OPEN_STATUSES = "('PENDING', 'RECEIVED')";
+
+    private final JdbcClient jdbc;
+
+    public IncidentRepository(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    private static IncidentReportResponse map(ResultSet rs, int rowNum) throws SQLException {
+        LocalDateTime reported = rs.getObject("reported_at", LocalDateTime.class);
+        LocalDateTime received = rs.getObject("received_at", LocalDateTime.class);
+        LocalDateTime handoverAt = rs.getObject("handover_at", LocalDateTime.class);
+        return new IncidentReportResponse(
+                rs.getInt("report_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
+                rs.getString("stall_no"), rs.getString("horse_status"), rs.getInt("owner_id"),
+                rs.getObject("session_id", Integer.class),
+                rs.getInt("reporter_id"), rs.getString("reporter_name"),
+                rs.getString("symptoms"), rs.getString("description"), rs.getString("photo_url"),
+                rs.getString("urgency"),
+                reported == null ? null : reported.toInstant(ZoneOffset.UTC),
+                rs.getString("status"),
+                rs.getObject("received_by", Integer.class), rs.getString("receiver_name"),
+                received == null ? null : received.toInstant(ZoneOffset.UTC),
+                rs.getString("dismisser_name"), rs.getString("dismiss_reason"),
+                rs.getObject("handover_by", Integer.class), rs.getString("handover_by_name"),
+                handoverAt == null ? null : handoverAt.toInstant(ZoneOffset.UTC),
+                rs.getString("handover_notes"));
+    }
+
+    public Optional<SessionForStop> findSessionForStop(int sessionId) {
+        return jdbc.sql("""
+                SELECT s.session_id, s.horse_id, h.horse_name, h.owner_id, s.assigned_to, s.status,
+                       s.peak_heart_rate, s.peak_velocity
+                FROM TRAINING_SESSION s JOIN HORSE h ON h.horse_id = s.horse_id
+                WHERE s.session_id = :id
+                """)
+                .param("id", sessionId)
+                .query((rs, n) -> new SessionForStop(rs.getInt("session_id"), rs.getInt("horse_id"),
+                        rs.getString("horse_name"), rs.getInt("owner_id"), rs.getInt("assigned_to"),
+                        rs.getString("status"),
+                        rs.getObject("peak_heart_rate", Integer.class),
+                        rs.getObject("peak_velocity", BigDecimal.class)))
+                .optional();
+    }
+
+    /**
+     * RUNNING -> STOPPED_EARLY. V37: ghi nhận ended_at, review_status = 'PENDING' và lý do dừng sớm.
+     */
+    public int markStopped(int sessionId) {
+        return markStopped(sessionId, null);
+    }
+
+    public int markStopped(int sessionId, String earlyStopReason) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'STOPPED_EARLY',
+                    ended_at = SYSUTCDATETIME(),
+                    review_status = 'PENDING',
+                    early_stop_reason = COALESCE(:reason, early_stop_reason)
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("id", sessionId)
+                .param("reason", earlyStopReason)
+                .update();
+    }
+
+    public int insertReport(int horseId, int reporterId, int sessionId,
+                            String symptoms, String description, String urgency) {
+        return jdbc.sql("""
+                INSERT INTO INCIDENT_REPORT (horse_id, reporter_id, session_id, symptoms, description, urgency)
+                OUTPUT INSERTED.report_id
+                VALUES (:horseId, :reporterId, :sessionId, :symptoms, :description, :urgency)
+                """)
+                .param("horseId", horseId)
+                .param("reporterId", reporterId)
+                .param("sessionId", sessionId)
+                .param("symptoms", symptoms)
+                .param("description", description)
+                .param("urgency", urgency)
+                .query(Integer.class)
+                .single();
+    }
+
+    public int insertStandaloneReport(int horseId, int reporterId, String symptoms,
+                                      String description, String urgency, String photoUrl) {
+        return jdbc.sql("""
+                INSERT INTO INCIDENT_REPORT (horse_id, reporter_id, symptoms, description, urgency, photo_url)
+                OUTPUT INSERTED.report_id
+                VALUES (:horseId, :reporterId, :symptoms, :description, :urgency, :photo)
+                """)
+                .param("horseId", horseId)
+                .param("reporterId", reporterId)
+                .param("symptoms", symptoms)
+                .param("description", description)
+                .param("urgency", urgency)
+                .param("photo", photoUrl)
+                .query(Integer.class)
+                .single();
+    }
+
+    public Optional<IncidentReportResponse> findById(int reportId) {
+        return jdbc.sql(SELECT_REPORT + " WHERE r.report_id = :id")
+                .param("id", reportId)
+                .query(IncidentRepository::map)
+                .optional();
+    }
+
+    public List<IncidentReportResponse> search(List<String> statuses, Integer horseId, Integer reporterId,
+                                               Integer ownerId, boolean urgentFirst, int limit) {
+        StringBuilder sql = new StringBuilder(SELECT_REPORT).append(" WHERE 1 = 1");
+        Map<String, Object> params = new HashMap<>();
+        if (!statuses.isEmpty()) {
+            sql.append(" AND r.status IN (");
+            for (int i = 0; i < statuses.size(); i++) {
+                sql.append(i == 0 ? ":s" : ", :s").append(i);
+                params.put("s" + i, statuses.get(i));
+            }
+            sql.append(")");
+            if (!statuses.contains("EXAMINED") && !statuses.contains("DISMISSED")) {
+                sql.append(" AND h.activity_status = 'ACTIVE'");
+            }
+        }
+        if (horseId != null) {
+            sql.append(" AND r.horse_id = :horseId");
+            params.put("horseId", horseId);
+        }
+        if (reporterId != null) {
+            sql.append(" AND r.reporter_id = :reporterId");
+            params.put("reporterId", reporterId);
+        }
+        if (ownerId != null) {
+            sql.append(" AND h.owner_id = :ownerId");
+            params.put("ownerId", ownerId);
+        }
+        sql.append(urgentFirst
+                ? " ORDER BY CASE r.urgency WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, r.reported_at ASC"
+                : " ORDER BY r.reported_at DESC");
+        sql.append(" OFFSET 0 ROWS FETCH NEXT ").append(limit).append(" ROWS ONLY");
+        return jdbc.sql(sql.toString()).params(params).query(IncidentRepository::map).list();
+    }
+
+    public Optional<OpenReport> findOpenReport(int horseId) {
+        return jdbc.sql("""
+                SELECT TOP 1 report_id, urgency, status FROM INCIDENT_REPORT
+                WHERE horse_id = :h AND status IN ('PENDING', 'RECEIVED')
+                ORDER BY CASE urgency WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, report_id
+                """)
+                .param("h", horseId)
+                .query((rs, n) -> new OpenReport(rs.getInt("report_id"), rs.getString("urgency"),
+                        rs.getString("status")))
+                .optional();
+    }
+
+    public List<IncidentReportResponse> findOpenByHorse(int horseId) {
+        return jdbc.sql(SELECT_REPORT + " WHERE r.horse_id = :h AND r.status IN " + OPEN_STATUSES
+                        + " ORDER BY r.reported_at, r.report_id")
+                .param("h", horseId)
+                .query(IncidentRepository::map)
+                .list();
+    }
+
+    public List<RunningSession> findRunningSessions(int horseId) {
+        return jdbc.sql("SELECT session_id, assigned_to FROM TRAINING_SESSION WHERE horse_id = :h AND status = 'RUNNING'")
+                .param("h", horseId)
+                .query((rs, n) -> new RunningSession(rs.getInt("session_id"), rs.getInt("assigned_to")))
+                .list();
+    }
+
+    public int markDismissed(int reportId, int trainerId, String reason) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'DISMISSED', dismissed_by = :by, dismissed_at = SYSUTCDATETIME(),
+                    dismiss_reason = :reason
+                WHERE report_id = :id AND status = 'PENDING' AND session_id IS NOT NULL
+                """)
+                .param("by", trainerId)
+                .param("reason", reason)
+                .param("id", reportId)
+                .update();
+    }
+
+    public int markReceived(int reportId, int vetId) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'RECEIVED', received_by = :vet, received_at = SYSUTCDATETIME()
+                WHERE report_id = :id AND status = 'PENDING'
+                """)
+                .param("vet", vetId)
+                .param("id", reportId)
+                .update();
+    }
+
+    public int markHandoverToVet(int reportId, int targetVetId, int handoverById, String notes) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'RECEIVED',
+                    received_by = :targetVetId,
+                    received_at = SYSUTCDATETIME(),
+                    handover_by = :handoverById,
+                    handover_at = SYSUTCDATETIME(),
+                    handover_notes = :notes
+                WHERE report_id = :id AND status IN ('PENDING', 'RECEIVED')
+                """)
+                .param("targetVetId", targetVetId)
+                .param("handoverById", handoverById)
+                .param("notes", notes)
+                .param("id", reportId)
+                .update();
+    }
+
+    public int markHandoverToQueue(int reportId, int handoverById, String notes) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'PENDING',
+                    received_by = NULL,
+                    received_at = NULL,
+                    handover_by = :handoverById,
+                    handover_at = SYSUTCDATETIME(),
+                    handover_notes = :notes
+                WHERE report_id = :id AND status IN ('PENDING', 'RECEIVED')
+                """)
+                .param("handoverById", handoverById)
+                .param("notes", notes)
+                .param("id", reportId)
+                .update();
+    }
+
+    public List<VetOption> findActiveVeterinarians() {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name, u.email
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'VETERINARIAN' AND u.status = 'ACTIVE'
+                ORDER BY u.full_name
+                """)
+                .query((rs, n) -> new VetOption(rs.getInt("user_id"), rs.getString("full_name"), rs.getString("email")))
+                .list();
+    }
+}
