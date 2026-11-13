@@ -85,6 +85,15 @@ function captionOf(stage, open, activeTreatments = [], activeLock = null, lightW
   }
 }
 
+function cleanSessionRemarks(remarks) {
+  if (!remarks) return "";
+  return remarks
+    .replace(/\[Recovery Session\]\s*/gi, "")
+    .replace(/\[SUBMITTED_TO_VET\]\s*/gi, "")
+    .replace(/\[SUBMIT_TO_VET\]\s*/gi, "")
+    .trim();
+}
+
 function RecoveryView({ horseId }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -493,9 +502,9 @@ function RecoveryView({ horseId }) {
                           <span><strong>Recovery HR:</strong> {s.recoveryHeartRate ? `${s.recoveryHeartRate} bpm` : "—"}</span>
                           <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} m/s` : "—"}</span>
                         </div>
-                        {s.remarks && (
+                        {cleanSessionRemarks(s.remarks) && (
                           <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#475569", fontStyle: "italic", borderTop: "1px dashed #e2e8f0", paddingTop: "6px" }}>
-                            <strong>Note:</strong> {s.remarks}
+                            <strong>Note:</strong> {cleanSessionRemarks(s.remarks)}
                           </p>
                         )}
                       </div>
@@ -894,9 +903,9 @@ function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
               <span>Recovery HR: <strong>{latestSession.recoveryHeartRate ? `${latestSession.recoveryHeartRate} bpm` : "—"}</strong></span>
               <span>Speed: <strong>{latestSession.peakVelocity ? `${latestSession.peakVelocity} m/s` : "—"}</strong></span>
             </div>
-            {latestSession.remarks && (
+            {cleanSessionRemarks(latestSession.remarks) && (
               <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#15803d", fontStyle: "italic" }}>
-                Groom/Trainer note: {latestSession.remarks}
+                Groom/Trainer note: {cleanSessionRemarks(latestSession.remarks)}
               </p>
             )}
           </div>
