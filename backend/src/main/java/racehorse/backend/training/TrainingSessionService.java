@@ -80,10 +80,13 @@ public class TrainingSessionService {
         return repository.findActiveGrooms();
     }
 
-    /** V37: Head Trainer chỉ thấy các Groom được Club Manager phân quyền cho mình. */
+    /** V37: Head Trainer chỉ thấy các Groom được Club Manager phân quyền cho mình (hoặc phụ trách giáo án). */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms(AuthenticatedUser user) {
         if (user != null && "HEAD_TRAINER".equals(user.role())) {
-            return repository.findActiveGroomsByTrainer(user.userId());
+            List<TrainingSessionRepository.GroomOption> assigned = repository.findActiveGroomsByTrainer(user.userId());
+            if (!assigned.isEmpty()) {
+                return assigned;
+            }
         }
         return repository.findActiveGrooms();
     }

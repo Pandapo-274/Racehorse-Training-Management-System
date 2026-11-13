@@ -176,25 +176,27 @@ function RoleGroup({
       {shown.length === 0 ? (
         <p className="hz-empty">{emptyText}</p>
       ) : (
-        <ul className="st-list">
-          {shown.map((row) => (
-            <MemberRow
-              key={row.userId}
-              row={row}
-              activeTrainers={activeTrainers}
-              canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
-              canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
-              onToggleStatus={onToggleStatus}
-              onChangeRole={onChangeRole}
-              onEdit={onEdit}
-              onResetPassword={onResetPassword}
-              onAssignTrainer={onAssignTrainer}
-              onUpdateMaxHorses={onUpdateMaxHorses}
-              onShowTeam={onShowTeam}
-              busy={busyId === row.userId}
-            />
-          ))}
-        </ul>
+        <div className="st-table-wrap">
+          <ul className="st-list">
+            {shown.map((row) => (
+              <MemberRow
+                key={row.userId}
+                row={row}
+                activeTrainers={activeTrainers}
+                canToggle={row.roleName !== "CLUB_MANAGER" && row.userId !== myId}
+                canChangeRole={STAFF_ROLE_CODES.has(row.roleName) && row.userId !== myId}
+                onToggleStatus={onToggleStatus}
+                onChangeRole={onChangeRole}
+                onEdit={onEdit}
+                onResetPassword={onResetPassword}
+                onAssignTrainer={onAssignTrainer}
+                onUpdateMaxHorses={onUpdateMaxHorses}
+                onShowTeam={onShowTeam}
+                busy={busyId === row.userId}
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </Card>
   );

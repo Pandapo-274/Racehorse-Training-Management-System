@@ -46,6 +46,8 @@ npm start
 
 ## Changelogs
 > ###  `Nov 12, 2026`
+- `[11:32]` `DevilJack422` - Update training flow 
+> ###  `Nov 12, 2026`
 - `[23:56]` `DevilJack422` - Update training flow 
 - `[08:39]` `tusandthatsall` -
 Accounts

@@ -1,4 +1,4 @@
-// src/features/horse/HorseListPage.js
+﻿// src/features/horse/HorseListPage.js
 // UC7 - Horse Management, màn danh sách.
 //
 // Lọc và tìm kiếm làm ở trình duyệt, không gọi lại API: GET /api/horses trả về
@@ -14,6 +14,7 @@ import {
   toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly, healthApplies,
   isWithdrawn, toActivity, ACTIVITY_OPTIONS,
 } from "./horseApi";
+import { listTrainingPlans } from "../trainer/trainingPlanApi";
 
 export default function HorseListPage() {
   const navigate = useNavigate();
@@ -21,9 +22,11 @@ export default function HorseListPage() {
   const isVet = user?.role === "VETERINARIAN";
   const isOwner = user?.role === "HORSE_OWNER";
   const isManager = user?.role === "CLUB_MANAGER";
+  const isTrainer = user?.role === "HEAD_TRAINER";
   const horseBase = getHorseBasePath(user);
 
   const [horses, setHorses] = useState(null);
+  const [trainerPlans, setTrainerPlans] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   // ?q= cho phép trang khác mở sẵn danh sách đã lọc (vd. ô tìm kiếm trên trang tổng quan của Manager).
@@ -38,8 +41,13 @@ export default function HorseListPage() {
     (signal) => {
       setLoading(true);
       setError("");
-      listHorses(signal)
-        .then(setHorses)
+      const tasks = [listHorses(signal)];
+      if (isTrainer) tasks.push(listTrainingPlans({ signal }).catch(() => []));
+      Promise.all(tasks)
+        .then(([hList, pList]) => {
+          setHorses(hList);
+          if (pList) setTrainerPlans(pList);
+        })
         .catch((err) => {
           if (err.name === "AbortError") return;
           if (handleAuthError(err, navigate)) return;
@@ -47,8 +55,20 @@ export default function HorseListPage() {
         })
         .finally(() => setLoading(false));
     },
-    [navigate]
+    [navigate, isTrainer]
   );
+
+  const plansByHorseId = useMemo(() => {
+    const map = new Map();
+    (trainerPlans || []).forEach((p) => {
+      const cur = map.get(p.horseId);
+      // Ưu tiên hiện giáo án đang hoạt động / chưa kết thúc
+      if (!cur || (!["COMPLETED", "CANCELLED"].includes(p.status) && ["COMPLETED", "CANCELLED"].includes(cur.status))) {
+        map.set(p.horseId, p);
+      }
+    });
+    return map;
+  }, [trainerPlans]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -212,6 +232,7 @@ export default function HorseListPage() {
                     <th>Owner</th>
                     <th>Type</th>
                     <th>Health</th>
+                    {isTrainer && <th>Training Plan</th>}
                     {isManager && <th>Assigned Head Trainer</th>}
                     <th aria-label="Actions" />
                   </tr>
@@ -264,6 +285,32 @@ export default function HorseListPage() {
                             <StatusChip tone={st.tone} label={st.label} title={st.hint} />
                           )}
                         </td>
+                        {isTrainer && (
+                          <td>
+                            {(() => {
+                              const plan = plansByHorseId.get(h.horseId);
+                              if (!plan || ["COMPLETED", "CANCELLED"].includes(plan.status)) {
+                                return <span className="hz-muted" title="No active or pending plan">— No plan</span>;
+                              }
+                              if (plan.status === "ACTIVE") {
+                                return <StatusChip tone="emerald" label="Active Plan" title={plan.planName} />;
+                              }
+                              if (plan.status === "PENDING_APPROVAL") {
+                                return <StatusChip tone="amber" label="Waiting for owner" title={plan.planName} />;
+                              }
+                              if (plan.status === "APPROVED") {
+                                return <StatusChip tone="cyan" label="Approved" title={plan.planName} />;
+                              }
+                              if (plan.status === "DRAFT") {
+                                return <StatusChip tone="slate" label="Draft" title={plan.planName} />;
+                              }
+                              if (plan.status === "PAUSED") {
+                                return <StatusChip tone="amber" label="Paused" title={plan.planName} />;
+                              }
+                              return <StatusChip tone="slate" label={plan.status} title={plan.planName} />;
+                            })()}
+                          </td>
+                        )}
                         {isManager && (
                           <td>
                             {pedigree || isWithdrawn(h) ? (

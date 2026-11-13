@@ -21,17 +21,20 @@ public class TrainingPlanRepository {
     }
 
     private static final String SELECT_PLAN = """
-            SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.start_date, tp.end_date,
+            SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.groom_id, gr.full_name AS groom_name,
+                   tp.plan_name, tp.start_date, tp.end_date,
                    tp.status, tp.created_by, u.full_name AS created_by_name, tp.created_at,
                    tp.owner_note, tp.owner_reviewed_at
             FROM TRAINING_PLAN tp
             JOIN HORSE h    ON h.horse_id = tp.horse_id
             JOIN APP_USER u ON u.user_id  = tp.created_by
+            LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
             """;
 
     private static TrainingPlanResponse mapPlan(ResultSet rs, int rowNum) throws SQLException {
         return new TrainingPlanResponse(
                 rs.getInt("plan_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
+                rs.getObject("groom_id", Integer.class), rs.getString("groom_name"),
                 rs.getString("plan_name"),
                 rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class),
                 rs.getString("status"), rs.getInt("created_by"), rs.getString("created_by_name"),
@@ -78,11 +81,12 @@ public class TrainingPlanRepository {
     public List<TrainingPlanResponse.Summary> findSummaries(Integer horseId, String status,
                                                             Integer ownerId) {
         StringBuilder sql = new StringBuilder("""
-                SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.plan_name, tp.start_date,
-                       tp.end_date, tp.status, tp.owner_note,
+                SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.groom_id, gr.full_name AS groom_name,
+                       tp.plan_name, tp.start_date, tp.end_date, tp.status, tp.owner_note,
                        (SELECT COUNT(*) FROM PLAN_PHASE p WHERE p.plan_id = tp.plan_id) AS phase_count
                 FROM TRAINING_PLAN tp
                 JOIN HORSE h ON h.horse_id = tp.horse_id
+                LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
                 WHERE 1 = 1
                 """);
         if (horseId != null) sql.append(" AND tp.horse_id = :horseId");
@@ -97,6 +101,7 @@ public class TrainingPlanRepository {
 
         return spec.query((rs, n) -> new TrainingPlanResponse.Summary(
                         rs.getInt("plan_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
+                        rs.getObject("groom_id", Integer.class), rs.getString("groom_name"),
                         rs.getString("plan_name"),
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class),
@@ -104,19 +109,70 @@ public class TrainingPlanRepository {
                 .list();
     }
 
-    public int insertPlan(int horseId, int createdBy, String planName, LocalDate startDate, LocalDate endDate) {
+    public int insertPlan(int horseId, int createdBy, Integer groomId, String planName, LocalDate startDate, LocalDate endDate) {
         return jdbc.sql("""
-                INSERT INTO TRAINING_PLAN (horse_id, created_by, plan_name, start_date, end_date)
+                INSERT INTO TRAINING_PLAN (horse_id, created_by, groom_id, plan_name, start_date, end_date)
                 OUTPUT INSERTED.plan_id
-                VALUES (:horseId, :createdBy, :planName, :startDate, :endDate)
+                VALUES (:horseId, :createdBy, :groomId, :planName, :startDate, :endDate)
                 """)
                 .param("horseId", horseId)
                 .param("createdBy", createdBy)
+                .param("groomId", groomId)
                 .param("planName", planName)
                 .param("startDate", startDate)
                 .param("endDate", endDate)
                 .query(Integer.class)
                 .single();
+    }
+
+    public int insertPlan(int horseId, int createdBy, String planName, LocalDate startDate, LocalDate endDate) {
+        return insertPlan(horseId, createdBy, null, planName, startDate, endDate);
+    }
+
+    public int countActivePlansByGroom(int groomId) {
+        try {
+            Integer count = jdbc.sql("SELECT COUNT(*) FROM TRAINING_PLAN WHERE groom_id = :groomId AND status <> 'COMPLETED'")
+                    .param("groomId", groomId)
+                    .query(Integer.class)
+                    .single();
+            return count != null ? count : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public record GroomOption(int userId, String fullName) {}
+
+    public List<GroomOption> findActiveGroomsByTrainer(int trainerId) {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'GROOM'
+                  AND u.status = 'ACTIVE'
+                  AND u.trainer_id = :trainerId
+                ORDER BY u.full_name
+                """)
+                .param("trainerId", trainerId)
+                .query((rs, rowNum) -> new GroomOption(
+                        rs.getInt("user_id"),
+                        rs.getString("full_name")))
+                .list();
+    }
+
+    public List<GroomOption> findAllActiveGrooms() {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'GROOM'
+                  AND u.status = 'ACTIVE'
+                ORDER BY u.full_name
+                """)
+                .query((rs, rowNum) -> new GroomOption(
+                        rs.getInt("user_id"),
+                        rs.getString("full_name")))
+                .list();
     }
 
     public void insertPhase(int planId, int phaseNo, TrainingPlanRequest.PhaseRequest p) {
@@ -139,6 +195,84 @@ public class TrainingPlanRepository {
                 .param("endDate", p.endDate())
                 .param("gap", p.minGapMinutes())
                 .param("targetVelocity", p.targetVelocity())
+                .update();
+    }
+
+    public int updatePlanGroomAndName(int planId, Integer groomId, String planName) {
+        StringBuilder sql = new StringBuilder("UPDATE TRAINING_PLAN SET groom_id = :groomId");
+        if (planName != null && !planName.isBlank()) {
+            sql.append(", plan_name = :planName");
+        }
+        sql.append(" WHERE plan_id = :planId");
+        var spec = jdbc.sql(sql.toString())
+                .param("groomId", groomId)
+                .param("planId", planId);
+        if (planName != null && !planName.isBlank()) {
+            spec = spec.param("planName", planName.trim());
+        }
+        return spec.update();
+    }
+
+    public int updatePhase(int phaseId, int planId, int phaseNo, TrainingPlanRequest.PhaseRequest p) {
+        return jdbc.sql("""
+                UPDATE PLAN_PHASE
+                SET phase_no = :phaseNo,
+                    phase_name = :phaseName,
+                    distance = :distance,
+                    workload = :workload,
+                    surface = :surface,
+                    sessions_per_week = :spw,
+                    heart_rate_ceiling = :ceiling,
+                    start_date = :startDate,
+                    end_date = :endDate,
+                    min_gap_minutes = :gap,
+                    target_velocity = :targetVelocity
+                WHERE phase_id = :phaseId AND plan_id = :planId
+                """)
+                .param("phaseId", phaseId)
+                .param("planId", planId)
+                .param("phaseNo", phaseNo)
+                .param("phaseName", p.phaseName())
+                .param("distance", p.distance())
+                .param("workload", p.workload())
+                .param("surface", p.surface())
+                .param("spw", p.sessionsPerWeek())
+                .param("ceiling", p.heartRateCeiling())
+                .param("startDate", p.startDate())
+                .param("endDate", p.endDate())
+                .param("gap", p.minGapMinutes())
+                .param("targetVelocity", p.targetVelocity())
+                .update();
+    }
+
+    public int countSessionsInPhase(int phaseId) {
+        return jdbc.sql("SELECT COUNT(*) FROM TRAINING_SESSION WHERE phase_id = :phaseId")
+                .param("phaseId", phaseId)
+                .query(Integer.class)
+                .single();
+    }
+
+    public int deletePhase(int phaseId, int planId) {
+        return jdbc.sql("DELETE FROM PLAN_PHASE WHERE phase_id = :phaseId AND plan_id = :planId")
+                .param("phaseId", phaseId)
+                .param("planId", planId)
+                .update();
+    }
+
+    public void preparePhasesForReorder(int planId) {
+        jdbc.sql("UPDATE PLAN_PHASE SET phase_no = -phase_no - 100 WHERE plan_id = :planId")
+                .param("planId", planId)
+                .update();
+    }
+
+    public int recordOwnerFeedback(int planId, String note) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN
+                SET owner_note = :note, owner_reviewed_at = SYSUTCDATETIME()
+                WHERE plan_id = :id
+                """)
+                .param("note", note)
+                .param("id", planId)
                 .update();
     }
 
@@ -254,6 +388,19 @@ public class TrainingPlanRepository {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM TRAINING_PLAN
                 WHERE horse_id = :horseId AND status = 'ACTIVE' AND plan_id <> :excludeId
+                """)
+                .param("horseId", horseId)
+                .param("excludeId", excludeId)
+                .query(Integer.class).single() > 0;
+    }
+
+    /** Kiểm tra xem ngựa đã có giáo án đang mở/chưa hoàn thành (khác COMPLETED và CANCELLED). */
+    public boolean existsOpenPlan(int horseId, int excludeId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM TRAINING_PLAN
+                WHERE horse_id = :horseId
+                  AND status NOT IN ('COMPLETED', 'CANCELLED')
+                  AND plan_id <> :excludeId
                 """)
                 .param("horseId", horseId)
                 .param("excludeId", excludeId)

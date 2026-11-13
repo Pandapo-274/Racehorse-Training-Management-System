@@ -1,4 +1,4 @@
-// src/features/horse-owner/ownerTrainingApi.js
+﻿// src/features/horse-owner/ownerTrainingApi.js
 // Trang "Training" của chủ ngựa: giáo án, lịch tập, nhật ký buổi tập, nhận xét
 // của Head Trainer và video chạy thử.
 //
@@ -28,6 +28,16 @@ export function reviewPlan(planId, { approve, note }) {
   return authFetch(`/api/training-plans/${planId}/owner-review`, {
     method: "PUT",
     body: JSON.stringify({ approve, note: note || null }),
+  });
+}
+
+/**
+ * PUT /api/training-plans/{id}/owner-feedback: chủ ngựa gửi phản hồi/nhận xét (optional) cho Trainer.
+ */
+export function sendOwnerFeedback(planId, note) {
+  return authFetch(`/api/training-plans/${planId}/owner-feedback`, {
+    method: "PUT",
+    body: JSON.stringify({ note }),
   });
 }
 

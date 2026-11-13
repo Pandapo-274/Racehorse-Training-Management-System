@@ -471,7 +471,8 @@ class Flow1RulesTest {
         LocalDate foalDob = LocalDate.now().minusYears(3);
         when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, foalDob)));
         when(horses.findById(21)).thenReturn(Optional.of(horse(21, 9, "PEDIGREE", "ACTIVE", "STALLION", foalDob.minusYears(9))));
-        when(vitals.findLatestSession(10)).thenReturn(Optional.of(mock(racehorse.backend.horse.HorseVitalsResponse.LatestSession.class)));
+        when(vitals.findLatestSession(10)).thenReturn(Optional.of(new racehorse.backend.horse.HorseVitalsResponse.LatestSession(
+                java.time.LocalDateTime.now(), "FINISHED", 120, 160, 90, new java.math.BigDecimal("14.5"), "GOOD", 180)));
 
         HorseService service = new HorseService(horses, vitals, mock(UserRepository.class));
         // Even a horse that has trained: declaring an unknown parent is not changing its sex or age.

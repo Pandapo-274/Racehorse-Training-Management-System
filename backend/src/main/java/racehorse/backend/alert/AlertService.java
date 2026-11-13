@@ -62,26 +62,36 @@ public class AlertService {
             throw new ApiException(HttpStatus.CONFLICT, "Session is not running");
         }
 
-        int hr = req.heartRate();
-        alerts.updatePeakHeartRate(sessionId, hr);
+        if (req.heartRate() == null && req.velocity() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Please provide at least heart rate or speed");
+        }
+
+        Integer hr = req.heartRate();
+        if (hr != null) {
+            alerts.updatePeakHeartRate(sessionId, hr);
+        }
         if (req.velocity() != null) {
             alerts.updatePeakVelocity(sessionId, req.velocity());
         }
 
         Integer ceiling = ctx.heartRateCeiling();
-        VitalsResult heart = (ceiling == null || hr <= ceiling)
-                ? new VitalsResult(hr, ceiling, false, null, null)
-                : raise(me, sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
-                        "High heart-rate alert", hr + " bpm, ceiling is " + ceiling + " bpm");
+        VitalsResult heart = null;
+        if (hr != null) {
+            heart = (ceiling == null || hr <= ceiling)
+                    ? new VitalsResult(hr, ceiling, false, null, null)
+                    : raise(me, sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
+                            "High heart-rate alert", hr + " bpm, ceiling is " + ceiling + " bpm");
+        }
         if (req.velocity() != null && req.velocity().compareTo(velocityMax) > 0) {
-            VitalsResult speed = raise(me, sessionId, hr, ceiling, VELOCITY, velocityMax, req.velocity(),
+            int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
+            VitalsResult speed = raise(me, sessionId, effectiveHr, ceiling, VELOCITY, velocityMax, req.velocity(),
                     "High speed alert", req.velocity().toPlainString() + " m/s, limit is "
                             + velocityMax.toPlainString() + " m/s");
-            if (!heart.alertRaised()) {
+            if (heart == null || !heart.alertRaised()) {
                 return speed;
             }
         }
-        return heart;
+        return heart != null ? heart : new VitalsResult(null, ceiling, false, null, null);
     }
 
     /**

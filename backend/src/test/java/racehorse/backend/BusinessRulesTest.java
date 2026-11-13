@@ -769,7 +769,7 @@ class BusinessRulesTest {
         service.updateMaxHorses(2, 20, MANAGER, "ip");
 
         verify(staffRepo).updateMaxHorses(2, 20);
-        verify(users).writeAudit(eq(1), eq("STAFF_MAX_HORSES:20"), eq("APP_USER"), eq(2), eq("SUCCESS"), eq("ip"));
+        verify(users).writeAudit(eq(1), eq("STAFF_MAX_HORSES:20"), eq("APP_USER"), eq(2), eq("SUCCESS"), eq("ip"), eq("Max horses: 10 → 20"));
     }
 
     @Test

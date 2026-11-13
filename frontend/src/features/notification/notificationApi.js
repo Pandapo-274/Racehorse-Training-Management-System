@@ -1,4 +1,4 @@
-// src/features/notification/notificationApi.js
+﻿// src/features/notification/notificationApi.js
 // Chuông thông báo trên header của cả năm vai trò.
 //
 // Backend chỉ lưu thông báo trỏ tới cái gì (targetEntity + targetId), không
@@ -62,6 +62,7 @@ export function notificationTarget(n, user) {
     case "TRAINING_SESSION":
       if (role === "GROOM") return "/groom";
       if (role === "HEAD_TRAINER") return "/trainer/schedule";
+      if (role === "HORSE_OWNER") return `/horse-owner/training?sessionId=${n.targetId}`;
       return null;
     case "HORSE_WITHDRAWAL":
       if (role === "CLUB_MANAGER") return "/manager/withdrawals";
@@ -75,8 +76,9 @@ export function notificationTarget(n, user) {
       if (role === "HEAD_TRAINER") return "/trainer/live-session#vet-calls";
       return null;
     case "TRAINING_PLAN":
-      // Giáo án chờ chủ duyệt (V34): chủ ngựa duyệt ở trang Training, Head Trainer xem kết quả ở trang giáo án.
-      if (role === "HORSE_OWNER") return "/horse-owner/training";
+      // Giáo án: chủ ngựa duyệt/xem ở trang Training, Groom xem dashboard, Head Trainer xem ở trang giáo án.
+      if (role === "HORSE_OWNER") return `/horse-owner/training?planId=${n.targetId}`;
+      if (role === "GROOM") return "/groom";
       if (role === "HEAD_TRAINER") return "/trainer/training-plans";
       return null;
     default:
