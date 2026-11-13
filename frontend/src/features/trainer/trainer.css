@@ -172,21 +172,27 @@
 .trainer-sidebar-bottom {
   margin-top: auto;
   flex-shrink: 0;
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .trainer-signout {
   width: 100%;
   height: 44px;
   margin-bottom: 12px;
-  padding-left: 18px;
+  padding: 0 16px;
   border: 0;
   border-radius: 10px;
   background: #16203f;
   color: #a2abca;
-  font-size: 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .trainer-signout:hover {
   color: #fff;
@@ -197,7 +203,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 66px;
+  min-height: 60px;
   padding: 0 14px;
   border-radius: 12px;
   background: #16203f;
@@ -207,9 +213,8 @@
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
   background: #ff5f6d;
   color: #fff;
