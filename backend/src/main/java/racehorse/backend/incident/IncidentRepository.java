@@ -33,17 +33,22 @@ public class IncidentRepository {
     public record RunningSession(int sessionId, int assignedTo) {
     }
 
+    public record VetOption(int userId, String fullName, String email) {
+    }
+
     private static final String SELECT_REPORT = """
             SELECT r.report_id, r.horse_id, h.horse_name, h.stall_no, h.status AS horse_status, h.owner_id,
                    r.session_id, r.reporter_id, u.full_name AS reporter_name,
                    r.symptoms, r.description, r.photo_url, r.urgency, r.reported_at, r.status,
                    r.received_by, rv.full_name AS receiver_name, r.received_at,
-                   ds.full_name AS dismisser_name, r.dismiss_reason
+                   ds.full_name AS dismisser_name, r.dismiss_reason,
+                   r.handover_by, hb.full_name AS handover_by_name, r.handover_at, r.handover_notes
             FROM INCIDENT_REPORT r
             JOIN HORSE h     ON h.horse_id = r.horse_id
             JOIN APP_USER u  ON u.user_id  = r.reporter_id
             LEFT JOIN APP_USER rv ON rv.user_id = r.received_by
             LEFT JOIN APP_USER ds ON ds.user_id = r.dismissed_by
+            LEFT JOIN APP_USER hb ON hb.user_id = r.handover_by
             """;
 
     static final String OPEN_STATUSES = "('PENDING', 'RECEIVED')";
@@ -57,6 +62,7 @@ public class IncidentRepository {
     private static IncidentReportResponse map(ResultSet rs, int rowNum) throws SQLException {
         LocalDateTime reported = rs.getObject("reported_at", LocalDateTime.class);
         LocalDateTime received = rs.getObject("received_at", LocalDateTime.class);
+        LocalDateTime handoverAt = rs.getObject("handover_at", LocalDateTime.class);
         return new IncidentReportResponse(
                 rs.getInt("report_id"), rs.getInt("horse_id"), rs.getString("horse_name"),
                 rs.getString("stall_no"), rs.getString("horse_status"), rs.getInt("owner_id"),
@@ -68,7 +74,10 @@ public class IncidentRepository {
                 rs.getString("status"),
                 rs.getObject("received_by", Integer.class), rs.getString("receiver_name"),
                 received == null ? null : received.toInstant(ZoneOffset.UTC),
-                rs.getString("dismisser_name"), rs.getString("dismiss_reason"));
+                rs.getString("dismisser_name"), rs.getString("dismiss_reason"),
+                rs.getObject("handover_by", Integer.class), rs.getString("handover_by_name"),
+                handoverAt == null ? null : handoverAt.toInstant(ZoneOffset.UTC),
+                rs.getString("handover_notes"));
     }
 
     public Optional<SessionForStop> findSessionForStop(int sessionId) {
@@ -232,5 +241,52 @@ public class IncidentRepository {
                 .param("vet", vetId)
                 .param("id", reportId)
                 .update();
+    }
+
+    public int markHandoverToVet(int reportId, int targetVetId, int handoverById, String notes) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'RECEIVED',
+                    received_by = :targetVetId,
+                    received_at = SYSUTCDATETIME(),
+                    handover_by = :handoverById,
+                    handover_at = SYSUTCDATETIME(),
+                    handover_notes = :notes
+                WHERE report_id = :id AND status IN ('PENDING', 'RECEIVED')
+                """)
+                .param("targetVetId", targetVetId)
+                .param("handoverById", handoverById)
+                .param("notes", notes)
+                .param("id", reportId)
+                .update();
+    }
+
+    public int markHandoverToQueue(int reportId, int handoverById, String notes) {
+        return jdbc.sql("""
+                UPDATE INCIDENT_REPORT
+                SET status = 'PENDING',
+                    received_by = NULL,
+                    received_at = NULL,
+                    handover_by = :handoverById,
+                    handover_at = SYSUTCDATETIME(),
+                    handover_notes = :notes
+                WHERE report_id = :id AND status IN ('PENDING', 'RECEIVED')
+                """)
+                .param("handoverById", handoverById)
+                .param("notes", notes)
+                .param("id", reportId)
+                .update();
+    }
+
+    public List<VetOption> findActiveVeterinarians() {
+        return jdbc.sql("""
+                SELECT u.user_id, u.full_name, u.email
+                FROM APP_USER u
+                JOIN ROLE r ON r.role_id = u.role_id
+                WHERE r.role_name = 'VETERINARIAN' AND u.status = 'ACTIVE'
+                ORDER BY u.full_name
+                """)
+                .query((rs, n) -> new VetOption(rs.getInt("user_id"), rs.getString("full_name"), rs.getString("email")))
+                .list();
     }
 }

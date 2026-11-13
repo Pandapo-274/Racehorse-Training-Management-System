@@ -163,3 +163,399 @@
 
 /* Thẻ nằm ngay dưới hàng thẻ đếm hoặc thẻ khác. */
 .vc-section { margin-top: 24px; }
+
+
+/* ---------- Horse Prescription Directory & Card Grid ---------- */
+
+.vc-horse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.vc-horse-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1.5px solid #f2dee8;
+  border-radius: 16px;
+  padding: 16px 18px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.vc-horse-card:hover {
+  transform: translateY(-2px);
+  border-color: #f55fa9;
+  box-shadow: 0 8px 22px rgba(245, 95, 169, 0.12);
+}
+
+.vc-horse-card-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.vc-horse-card-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid #f3d9e6;
+  background: #fdf0f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 800;
+  color: #f55fa9;
+}
+
+.vc-horse-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-horse-card-title {
+  margin: 0 0 2px 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-horse-card-code {
+  font-size: 12px;
+  color: var(--v-muted);
+}
+
+.vc-horse-card-owner {
+  margin-top: 12px;
+  padding: 7px 10px;
+  background: #fdf5f9;
+  border: 1px solid #fae3f0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #2b334f;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vc-horse-card-owner strong {
+  color: #0b1229;
+}
+
+.vc-horse-card-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f5e8ee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vc-card-action-btn {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b32569;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Dedicated History Page Styles ---------- */
+
+.vc-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  border: 1.5px solid #f3d9e6;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #b32569;
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vc-back-btn:hover {
+  background: #fdf0f6;
+  border-color: #f55fa9;
+  transform: translateX(-2px);
+}
+
+.vc-history-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: #ffffff;
+  border: 1.5px solid #f2dee8;
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 4px 18px rgba(22, 32, 63, 0.04);
+  margin-bottom: 22px;
+}
+
+.vc-history-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.vc-history-hero-photo {
+  width: 84px;
+  height: 84px;
+  border-radius: 16px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid #f55fa9;
+  background: #fdf0f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 800;
+  color: #f55fa9;
+}
+
+.vc-history-hero-meta h1 {
+  margin: 0 0 4px 0;
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy-900);
+}
+
+.vc-history-hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--v-muted);
+  align-items: center;
+}
+
+.vc-history-hero-owner {
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--text-900);
+}
+
+.vc-history-hero-owner strong {
+  color: #0b1229;
+}
+
+.vc-history-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.vc-hero-stat-box {
+  background: #fdf4f9;
+  border: 1px solid #f5d4e6;
+  border-radius: 12px;
+  padding: 10px 18px;
+  text-align: center;
+  min-width: 90px;
+}
+
+.vc-hero-stat-value {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy-900);
+}
+
+.vc-hero-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--v-muted);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Time Filter Bar */
+.vc-history-filters {
+  background: #ffffff;
+  border: 1.5px solid #f2dee8;
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vc-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vc-time-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vc-time-presets-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin-right: 4px;
+}
+
+.vc-preset-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1.5px solid #e8d7e2;
+  background: #fdfbfd;
+  color: #4a5472;
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vc-preset-btn:hover {
+  background: #fff;
+  border-color: #f55fa9;
+  color: #b32569;
+}
+
+.vc-preset-btn.active {
+  background: linear-gradient(90deg, #f55fa9, #e43e8c);
+  border-color: #c9317a;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(201, 49, 122, 0.25);
+}
+
+.vc-custom-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-900);
+}
+
+.vc-date-picker {
+  height: 32px;
+  padding: 0 10px;
+  border: 1.5px solid #e8d7e2;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  background: #fff;
+  color: var(--navy-900);
+}
+
+.vc-filter-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+.vc-search-input {
+  flex: 1;
+  min-width: 220px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid #e8d7e2;
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  background: #fff;
+}
+
+.vc-search-input:focus,
+.vc-date-picker:focus {
+  outline: 2px solid var(--pink-500);
+  outline-offset: 1px;
+}
+
+.vc-select-filter {
+  height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid #e8d7e2;
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* History Prescription Card */
+.vc-history-card {
+  background: #ffffff;
+  border: 1.5px solid #efe0e8;
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease;
+}
+
+.vc-history-card:hover {
+  border-color: #f55fa9;
+}
+
+.vc-history-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f6e8ee;
+  margin-bottom: 14px;
+}
+
+.vc-history-card-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy-900);
+}
+
+.vc-history-card-note {
+  margin: 10px 0 14px;
+  padding: 10px 14px;
+  background: #fff9fc;
+  border-left: 3px solid #f55fa9;
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  color: #4a5472;
+}
+
+.vc-history-card-note strong {
+  color: #b32569;
+}

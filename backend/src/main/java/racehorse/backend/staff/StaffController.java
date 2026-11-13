@@ -47,6 +47,13 @@ public class StaffController {
         return repository.findAllGrouped();
     }
 
+    /** Grooms and club horses of one Head Trainer, for the Staff screen's popup. */
+    @GetMapping("/{id}/team")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffService.TrainerTeam team(@PathVariable int id) {
+        return service.trainerTeam(id);
+    }
+
     @PostMapping
     @RequireRole({"CLUB_MANAGER"})
     public ResponseEntity<StaffRow> create(
@@ -64,7 +71,7 @@ public class StaffController {
             @Valid @RequestBody StatusRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return service.setStatus(id, request.status(), user, http.getRemoteAddr());
+        return service.setStatus(id, request.status(), request.handoverTo(), user, http.getRemoteAddr());
     }
 
     @PutMapping("/{id}/role")
@@ -74,7 +81,17 @@ public class StaffController {
             @Valid @RequestBody RoleRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return service.changeRole(id, request.roleName(), user, http.getRemoteAddr());
+        return service.changeRole(id, request.roleName(), request.handoverTo(), user, http.getRemoteAddr());
+    }
+
+    /**
+     * What this person leaves unfinished if suspended / moved to another role, and
+     * who may take it over. The Staff page shows it in the confirm dialog.
+     */
+    @GetMapping("/{id}/open-work")
+    @RequireRole({"CLUB_MANAGER"})
+    public StaffService.OpenWork openWork(@PathVariable int id) {
+        return service.openWork(id);
     }
 
     /** Sửa họ tên, email, số điện thoại (không đổi username, vai trò, mật khẩu). */
@@ -179,12 +196,16 @@ public class StaffController {
 
     public record RoleRequest(
             @NotBlank(message = "Role is required")
-            String roleName) {}
+            String roleName,
+            /** Optional: account (same role) that takes over the open work. */
+            Integer handoverTo) {}
 
     public record StatusRequest(
             @NotBlank(message = "Status is required")
             @Pattern(regexp = "^(ACTIVE|SUSPENDED)$", message = "Status must be ACTIVE or SUSPENDED")
-            String status) {}
+            String status,
+            /** Optional, when suspending: account (same role) that takes over the open work. */
+            Integer handoverTo) {}
 
     public record TrainerAssignRequest(Integer trainerId) {}
 

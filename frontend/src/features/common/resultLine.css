@@ -1,0 +1,13 @@
+.result-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.result-line__icon { font-weight: 700; flex: none; }
+.result-line--ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.result-line--fail { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }

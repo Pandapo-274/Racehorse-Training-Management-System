@@ -36,7 +36,8 @@
 .al-table tr.is-denied td { background: #fff5f7; }
 .al-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .al-code { display: block; margin-top: 2px; font: 500 11px ui-monospace, Consolas, monospace; color: var(--text-400); word-break: break-all; }
-.al-ip { font: 500 12px ui-monospace, Consolas, monospace; color: var(--text-600); }
+
 .al-muted { color: var(--text-400); font-style: italic; }
 .al-more { display: flex; justify-content: center; margin-top: 12px; }
-.al-detail { max-width: 340px; color: var(--text-600) !important; word-break: break-word; }
+.al-desc { min-width: 240px; }
+.al-detail { max-width: 420px; color: var(--text-600) !important; word-break: break-word; }

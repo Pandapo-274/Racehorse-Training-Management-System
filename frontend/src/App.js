@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
 import ManagerDashboard from "./features/manager/ManagerDashboard";
@@ -15,6 +15,7 @@ import VetLockIssuedPage from "./features/vet/VetLockIssuedPage";
 import VetRecoveryPage from "./features/vet/VetRecoveryPage";
 import VetPreventiveCarePage from "./features/vet/VetPreventiveCarePage";
 import VetPrescriptionPage from "./features/vet/VetPrescriptionPage";
+import VetHorsePrescriptionHistoryPage from "./features/vet/VetHorsePrescriptionHistoryPage";
 import VetCallsPage from "./features/vet/VetCallsPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
@@ -57,6 +58,21 @@ function RoleRoute({ roles, children }) {
   }
   if (!roles.includes(user.role)) return <Navigate to="/access-denied" replace />;
   return children;
+}
+
+function HorseRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  const user = getUser();
+  const search = location.search || "";
+  if (!user) return <Navigate to="/login" replace />;
+  const role = user.role;
+  let base = "/manager/horses";
+  if (role === "HEAD_TRAINER") base = "/trainer/horses";
+  else if (role === "VETERINARIAN") base = "/veterinarian/horses";
+  else if (role === "GROOM") base = "/groom/horses";
+  else if (role === "HORSE_OWNER") base = "/horse-owner/horses";
+  return <Navigate to={`${base}/${id}${search}`} replace />;
 }
 
 export default function App() {
@@ -116,6 +132,7 @@ export default function App() {
         <Route path="/horse-owner" element={<HorseOwnerDashboard />} />
 
         {/* UC7 + UC8 - shared horse feature, entered from each role dashboard */}
+        <Route path="/horses/:id" element={<RoleRoute roles={EVERY_ROLE}><HorseRedirect /></RoleRoute>} />
         <Route path="/manager/horses" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseListPage /></RoleRoute>} />
       
 
@@ -140,6 +157,7 @@ export default function App() {
         {/* UC17 - lịch tiêm phòng / tẩy giun / móng, và đơn thuốc đang dùng toàn đàn. */}
         <Route path="/veterinarian/preventive-care" element={<RoleRoute roles={["VETERINARIAN"]}><VetPreventiveCarePage /></RoleRoute>} />
         <Route path="/veterinarian/prescriptions" element={<RoleRoute roles={["VETERINARIAN"]}><VetPrescriptionPage /></RoleRoute>} />
+        <Route path="/veterinarian/prescriptions/history/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetHorsePrescriptionHistoryPage /></RoleRoute>} />
         <Route path="/veterinarian/vet-calls" element={<RoleRoute roles={["VETERINARIAN"]}><VetCallsPage /></RoleRoute>} />
         <Route path="/veterinarian/vet-calls/:callId" element={<RoleRoute roles={["VETERINARIAN"]}><VetCallsPage /></RoleRoute>} />
 

@@ -41,5 +41,13 @@ public record SubmitRequest(
 
         /** ACADEMY (mặc định) hoặc PEDIGREE: chỉ làm hồ sơ cha mẹ / tổ tiên. */
         @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE")
-        String recordType
+        String recordType,
+
+        /**
+         * Sire and dam from the horse's papers (V41), optional: a club pedigree
+         * record or one of the owner's own horses. The club checks them against
+         * the papers when it approves.
+         */
+        Integer sireId,
+        Integer damId
 ) {}

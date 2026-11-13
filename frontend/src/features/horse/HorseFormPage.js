@@ -15,7 +15,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import {
-  listParentCandidates, getHorse, updateHorse, canEditHorse, getHorseBasePath,
+  listParentCandidates, getHorse, updateHorse, canEditHorse, getHorseBasePath, parentLabel,
   GENDER_OPTIONS, toGender, SIRE_GENDERS, DAM_GENDERS, ageProblem, isPedigreeOnly,
   uploadHorsePhoto, removeHorsePhoto, checkHorsePhoto,
 } from "./horseApi";
@@ -214,6 +214,13 @@ export default function HorseFormPage() {
   }
 
   const pedigreeOnly = isPedigreeOnly(horse);
+  // V41: a parent already on record comes from the papers: shown, not editable here.
+  const sireLocked = horse.sireId != null;
+  const damLocked = horse.damId != null;
+  const nameOf = (pid) => {
+    const h = herd.find((x) => String(x.horseId) === String(pid));
+    return h ? parentLabel(h) : `Horse #${pid}`;
+  };
 
   return (
     <HorseShell
@@ -305,26 +312,33 @@ export default function HorseFormPage() {
           </div>
         </Card>
 
-        <Card title="Pedigree" hint="Optional. Choose a club pedigree record or one of your own horses.">
+        <Card title="Parents"
+              hint="From the horse's papers. Add a parent that is still unknown; one already on record can only be corrected by the club.">
           <div className="hz-form-grid">
             <Field id="sireId" label="Sire" error={errors.sireId}
-                   hint={sires.length === 0 ? "No colt or stallion to choose from yet" : undefined}>
-              <select id="sireId" name="sireId" value={form.sireId} onChange={change}>
-                <option value="">Unknown</option>
-                {sires.map((h) => (
-                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}{h.recordType === "PEDIGREE" ? " · pedigree" : ""}</option>
-                ))}
-              </select>
+                   hint={sireLocked ? "On record. Ask the club to correct it."
+                     : sires.length === 0 ? "No colt or stallion to choose from yet" : undefined}>
+              {sireLocked ? (
+                <input id="sireId" value={nameOf(horse.sireId)} disabled readOnly />
+              ) : (
+                <select id="sireId" name="sireId" value={form.sireId} onChange={change}>
+                  <option value="">Unknown</option>
+                  {sires.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+                </select>
+              )}
             </Field>
 
             <Field id="damId" label="Dam" error={errors.damId}
-                   hint={dams.length === 0 ? "No filly or mare to choose from yet" : undefined}>
-              <select id="damId" name="damId" value={form.damId} onChange={change}>
-                <option value="">Unknown</option>
-                {dams.map((h) => (
-                  <option key={h.horseId} value={h.horseId}>{h.horseName} · {h.registrationCode}{h.recordType === "PEDIGREE" ? " · pedigree" : ""}</option>
-                ))}
-              </select>
+                   hint={damLocked ? "On record. Ask the club to correct it."
+                     : dams.length === 0 ? "No filly or mare to choose from yet" : undefined}>
+              {damLocked ? (
+                <input id="damId" value={nameOf(horse.damId)} disabled readOnly />
+              ) : (
+                <select id="damId" name="damId" value={form.damId} onChange={change}>
+                  <option value="">Unknown</option>
+                  {dams.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+                </select>
+              )}
             </Field>
           </div>
         </Card>

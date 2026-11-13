@@ -29,7 +29,10 @@ public final class AuditLog {
             String result,
             String ipAddress,
             /* What changed, e.g. "WON, 100000000 -> PLACED, 40000000". Null for rows before V20. */
-            String detail) {
+            String detail,
+            /* Readable name of what the action was on (account name, horse name, plan name...),
+               looked up when the log is read; null when the target has no name or was deleted. */
+            String targetName) {
     }
 
     /** Ba con số an toàn trong 24 giờ qua, hiện ở đầu trang. */

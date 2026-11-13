@@ -98,6 +98,25 @@ public class HorseController {
         return horseService.updateByOwner(id, request, user, http.getRemoteAddr());
     }
 
+    /** V41: the club manager corrects the sire / dam on record, with a reason. */
+    @PutMapping("/{id}/parents")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseResponse correctParents(
+            @PathVariable int id,
+            @Valid @RequestBody ParentsRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return horseService.correctParents(id, request.sireId(), request.damId(), request.reason(),
+                user, http.getRemoteAddr());
+    }
+
+    public record ParentsRequest(
+            Integer sireId,
+            Integer damId,
+            @jakarta.validation.constraints.NotBlank(message = "Say why the parents are corrected")
+            @jakarta.validation.constraints.Size(max = 200, message = "Reason must be at most 200 characters")
+            String reason) {}
+
     /** Club Manager sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách. */
     @PutMapping("/{id}/identity")
     @RequireRole({"CLUB_MANAGER"})

@@ -26,10 +26,13 @@ public class HorseRequestRepository {
                    q.horse_name, q.breed, q.horse_gender, q.record_type, q.date_of_birth, q.color, q.note,
                    q.status, q.created_at,
                    q.reviewed_by, r.full_name AS reviewer_name, q.reviewed_at, q.review_note,
-                   q.horse_id
+                   q.horse_id,
+                   q.sire_id, s.horse_name AS sire_name, q.dam_id, d.horse_name AS dam_name
             FROM HORSE_REQUEST q
             JOIN APP_USER o ON o.user_id = q.owner_id
             LEFT JOIN APP_USER r ON r.user_id = q.reviewed_by
+            LEFT JOIN HORSE s ON s.horse_id = q.sire_id
+            LEFT JOIN HORSE d ON d.horse_id = q.dam_id
             """;
 
     private static HorseRequestRow map(ResultSet rs, int rowNum) throws SQLException {
@@ -44,7 +47,9 @@ public class HorseRequestRepository {
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getObject("reviewed_by", Integer.class), rs.getString("reviewer_name"),
                 rs.getObject("reviewed_at", LocalDateTime.class), rs.getString("review_note"),
-                rs.getObject("horse_id", Integer.class));
+                rs.getObject("horse_id", Integer.class),
+                rs.getObject("sire_id", Integer.class), rs.getString("sire_name"),
+                rs.getObject("dam_id", Integer.class), rs.getString("dam_name"));
     }
 
     public Optional<HorseRequestRow> findById(int requestId) {
@@ -87,9 +92,9 @@ public class HorseRequestRepository {
     public int insert(int ownerId, SubmitRequest r) {
         return jdbc.sql("""
                 INSERT INTO HORSE_REQUEST (owner_id, horse_name, breed, horse_gender,
-                                           date_of_birth, color, note, record_type)
+                                           date_of_birth, color, note, record_type, sire_id, dam_id)
                 OUTPUT INSERTED.request_id
-                VALUES (:owner, :name, :breed, :gender, :dob, :color, :note, :recordType)
+                VALUES (:owner, :name, :breed, :gender, :dob, :color, :note, :recordType, :sire, :dam)
                 """)
                 .param("owner", ownerId)
                 .param("name", r.horseName())
@@ -99,6 +104,8 @@ public class HorseRequestRepository {
                 .param("color", r.color())
                 .param("note", r.note())
                 .param("recordType", r.recordType())
+                .param("sire", r.sireId())
+                .param("dam", r.damId())
                 .query(Integer.class)
                 .single();
     }

@@ -13,9 +13,12 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import PasswordField from "../password/PasswordField";
+import TrainerTeamDialog from "./TrainerTeamDialog";
+import { useAppDialog } from "../common/AppDialog";
 import {
   listStaff, matchesQuery, initialsOf, statusTone, statusLabel, groupTitle,
-  createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses,
+  createStaff, setStaffStatus, changeStaffRole, assignStaffTrainer, updateTrainerMaxHorses, leavingConsequences,
+  getOpenWork, successorLabel,
   updateStaffContact, setTemporaryPassword,
   reassignNotice, STAFF_ROLE_OPTIONS, STAFF_ROLE_CODES, CREATE_ROLE_OPTIONS,
 } from "./staffApi";
@@ -40,7 +43,7 @@ const EMPTY_FORM = {
 
 function MemberRow({
   row, activeTrainers, canToggle, canChangeRole,
-  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, busy,
+  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam, busy,
 }) {
   return (
     <li className="st-row">
@@ -63,8 +66,16 @@ function MemberRow({
           </span>
         )}
         {row.roleName === "HEAD_TRAINER" && (
-          <span className="st-horses" title="Active Grooms (max 3) & Managed Club Horses">
-            Grooms: {row.groomCount || 0}/3 · Horses: {row.managedHorseCount || 0}/{row.maxHorses ?? 10}
+          <span className="st-horses st-team">
+            <button type="button" className="st-team-link" onClick={() => onShowTeam(row, "grooms")}
+                    title="Show the grooms of this Head Trainer (max 3 active)">
+              Grooms: {row.groomCount || 0}/3
+            </button>
+            ·
+            <button type="button" className="st-team-link" onClick={() => onShowTeam(row, "horses")}
+                    title="Show the club horses this Head Trainer manages">
+              Horses: {row.managedHorseCount || 0}/{row.maxHorses ?? 10}
+            </button>
           </span>
         )}
         {row.roleName === "GROOM" && (
@@ -156,7 +167,7 @@ function MemberRow({
 
 function RoleGroup({
   group, activeTrainers, query, myId, busyId,
-  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword,
+  onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam,
 }) {
   const shown = group.members.filter((m) => matchesQuery(m, query));
   const emptyText = group.members.length === 0
@@ -272,6 +283,7 @@ function AccountPanel({ mode, row, onDone, onCancel }) {
 
 export default function StaffPage() {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [groups, setGroups] = useState(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -285,6 +297,8 @@ export default function StaffPage() {
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState("");
   const [panel, setPanel] = useState(null); // { mode: "edit" | "password", row }
+  const [team, setTeam] = useState(null); // { row, focus: "grooms" | "horses" } -> TrainerTeamDialog
+  const closeTeam = useCallback(() => setTeam(null), []);
 
   const load = useCallback(() => {
     setError("");
@@ -351,45 +365,112 @@ export default function StaffPage() {
       .finally(() => setSaving(false));
   };
 
-  const toggleStatus = (row) => {
-    const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    if (next === "SUSPENDED" && !window.confirm(`Suspend @${row.username}? They will be signed out and cannot log in.`)) {
-      return;
+  /**
+   * Confirm that someone leaves their role (suspension or role change). The
+   * dialog lists what they leave unfinished; when someone of the same role can
+   * take it over, the manager picks them in the same dialog. Any error from the
+   * request (e.g. that Head Trainer has no room) is shown inside the dialog.
+   * send(handoverTo) does the request; resolves with its result, or null if cancelled.
+   */
+  const confirmLeaving = async (row, { title, message, confirmLabel, danger }, send) => {
+    let work = null;
+    if (STAFF_ROLE_CODES.has(row.roleName)) {
+      try {
+        work = await getOpenWork(row.userId);
+      } catch (err) {
+        if (handleAuthError(err, navigate)) return null;
+      }
     }
-    setBusyId(row.userId);
-    setNotice("");
-    setStaffStatus(row.userId, next)
-      .then(({ member, sessionsToReassign, notice: extra }) => {
-        setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
-          + reassignNotice(member.fullName, sessionsToReassign)
-          + (extra ? ` ${extra}` : ""));
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+    const items = work?.items || [];
+    let result = null;
+    if (items.length > 0 && work.candidates.length > 0) {
+      const picked = await dialog.prompt({
+        title, danger, confirmLabel,
+        message: `${message} Unfinished work:`,
+        items,
+        note: work.note,
+        label: "Hand it over to",
+        options: [
+          { value: "", label: work.fallback },
+          ...work.candidates.map((c) => ({ value: String(c.userId), label: successorLabel(work.role, c) })),
+        ],
+        defaultValue: "",
+        onSubmit: async (v) => { result = await send(v ? Number(v) : null); },
+      });
+      return picked === null ? null : result;
+    }
+    const nobody = items.length > 0 && work.fallback
+      ? `No one of the same role can take it over. ${work.fallback.replace(/^Nobody: /, "").replace(/^./, (c) => c.toUpperCase())}.`
+      : null;
+    const ok = await dialog.confirm({
+      title, danger, confirmLabel,
+      message: work ? (items.length ? `${message} Unfinished work:` : message) : message + leavingConsequences(row),
+      items,
+      note: [nobody, work?.note].filter(Boolean).join(" ") || null,
+    });
+    if (!ok) return null;
+    return send(null);
   };
 
-  const changeRole = (row, roleName) => {
+  const toggleStatus = async (row) => {
+    const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+    setNotice("");
+    let done;
+    try {
+      if (next === "SUSPENDED") {
+        done = await confirmLeaving(row, {
+          title: `Suspend ${row.fullName}?`,
+          message: row.roleName === "HORSE_OWNER"
+            ? `@${row.username} will be signed out and cannot sign in. Their pending horse registration requests are cancelled, and head trainers are told about approvals on hold.`
+            : `@${row.username} will be signed out and cannot sign in until the account is activated again.`,
+          confirmLabel: "Suspend",
+          danger: true,
+        }, (handoverTo) => {
+          setBusyId(row.userId);
+          return setStaffStatus(row.userId, next, handoverTo);
+        });
+        if (!done) return;
+      } else {
+        setBusyId(row.userId);
+        done = await setStaffStatus(row.userId, next);
+      }
+      const { member, sessionsToReassign, notice: extra } = done;
+      setNotice(`@${member.username} is now ${next === "ACTIVE" ? "active" : "suspended"}.`
+        + reassignNotice(member.fullName, sessionsToReassign)
+        + (extra ? ` ${extra}` : ""));
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setNotice(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const changeRole = async (row, roleName) => {
     if (roleName === row.roleName) return;
     const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
-    if (!window.confirm(`Change @${row.username} to ${label}? They will be signed out and get the new permissions when they sign in again.`)) {
-      return;
-    }
-    setBusyId(row.userId);
     setNotice("");
-    changeStaffRole(row.userId, roleName)
-      .then(({ member, sessionsToReassign }) => {
-        setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign));
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+    try {
+      const done = await confirmLeaving(row, {
+        title: `Change role to ${label}?`,
+        message: `${row.fullName} (@${row.username}) will be signed out and get the new permissions when they sign in again.`,
+        confirmLabel: "Change role",
+      }, (handoverTo) => {
+        setBusyId(row.userId);
+        return changeStaffRole(row.userId, roleName, handoverTo);
+      });
+      if (!done) return;
+      const { member, sessionsToReassign, notice: extra } = done;
+      setNotice(`@${member.username} is now ${label}.` + reassignNotice(member.fullName, sessionsToReassign)
+        + (extra ? ` ${extra}` : ""));
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setNotice(err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleAssignTrainer = (row, trainerIdStr) => {
@@ -417,29 +498,36 @@ export default function StaffPage() {
       .finally(() => setBusyId(null));
   };
 
-  const handleUpdateMaxHorses = (row) => {
-    const input = window.prompt(
-      `Set maximum horses that Head Trainer ${row.fullName} can manage (currently managing ${row.managedHorseCount || 0}):`,
-      String(row.maxHorses ?? 10),
-    );
-    if (input === null) return;
-    const parsed = Number(input.trim());
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-      setNotice("Max horses must be an integer between 1 and 100.");
-      return;
-    }
-    setBusyId(row.userId);
-    setNotice("");
-    updateTrainerMaxHorses(row.userId, parsed)
-      .then((updated) => {
-        setNotice(`Updated max horse limit for ${updated.fullName} to ${updated.maxHorses}.`);
-        load();
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        setNotice(err.message);
-      })
-      .finally(() => setBusyId(null));
+  const handleUpdateMaxHorses = async (row) => {
+    const managed = row.managedHorseCount || 0;
+    let updated = null;
+    const value = await dialog.prompt({
+      title: "Max horses",
+      message: `How many club horses can ${row.fullName} manage? They manage ${managed} now.`,
+      label: "Maximum horses (1-100)",
+      inputType: "number",
+      min: 1,
+      max: 100,
+      defaultValue: String(row.maxHorses ?? 10),
+      validate: (v) => {
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 1 || n > 100) return "Enter a whole number from 1 to 100";
+        if (n < managed) return `${row.fullName} manages ${managed} horses now. Reassign some horses before going below ${managed}.`;
+        return null;
+      },
+      // The request runs inside the dialog: a refusal from the server is shown there.
+      onSubmit: async (v) => {
+        try {
+          updated = await updateTrainerMaxHorses(row.userId, Number(v));
+        } catch (err) {
+          if (handleAuthError(err, navigate)) return;
+          throw err;
+        }
+      },
+    });
+    if (value === null || !updated) return;
+    setNotice(`${updated.fullName} can now manage up to ${updated.maxHorses} horses.`);
+    load();
   };
 
   return (
@@ -593,10 +681,15 @@ export default function StaffPage() {
               onResetPassword={(row) => { setNotice(""); setPanel({ mode: "password", row }); }}
               onAssignTrainer={handleAssignTrainer}
               onUpdateMaxHorses={handleUpdateMaxHorses}
+              onShowTeam={(row, focus) => setTeam({ row, focus })}
             />
           ))}
         </>
       )}
+    {team && (
+      <TrainerTeamDialog key={team.row.userId} row={team.row} focus={team.focus} onClose={closeTeam} />
+    )}
+    {dialog.element}
     </HorseShell>
   );
 }

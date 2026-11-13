@@ -178,7 +178,7 @@ public class WithdrawalService {
         }
 
         users.writeAudit(me.userId(), "HORSE_WITHDRAWAL_APPROVE", "HORSE_WITHDRAWAL",
-                withdrawalId, "SUCCESS", ip);
+                withdrawalId, "SUCCESS", ip, releasedStall == null ? null : "Stall " + releasedStall + " released");
         users.writeAudit(me.userId(), "HORSE_WITHDRAW", "HORSE", horseId, "SUCCESS", ip);
         if (cancelled > 0) {
             users.writeAudit(me.userId(), "TRAINING_SESSION_CANCEL_BULK", "HORSE", horseId, "SUCCESS", ip);
@@ -232,7 +232,7 @@ public class WithdrawalService {
             throw alreadyHandled();
         }
         users.writeAudit(me.userId(), "HORSE_WITHDRAWAL_REJECT", "HORSE_WITHDRAWAL",
-                withdrawalId, "SUCCESS", ip);
+                withdrawalId, "SUCCESS", ip, "Reason: " + note);
 
         HorseResponse horse = horseOf(row);
         notifications.notifyUser(horse.ownerId(), new Notice(

@@ -8,18 +8,20 @@
 //
 // Cũng chỉ mỗi tên là bắt buộc. Người đang muốn gửi ngựa thường chưa cầm đủ
 // giấy tờ, mà bắt khai đủ thì chặn đúng việc màn hình này sinh ra để mở.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
+import { useAppDialog } from "../common/AppDialog";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
+  listParentCandidates, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
 import { listRequests, submitRequest, cancelRequest, toRequestStatus } from "./horseRequestApi";
 
 const EMPTY = {
   horseName: "", breed: "", horseGender: "", dateOfBirth: "", color: "", note: "",
-  recordType: "ACADEMY",
+  recordType: "ACADEMY", sireId: "", damId: "",
 };
 
 function todayIso() {
@@ -35,6 +37,7 @@ function validate(form) {
   if (form.breed.length > 50) e.breed = "50 characters at most";
   if (form.color.length > 50) e.color = "50 characters at most";
   if (form.note.length > 500) e.note = "500 characters at most";
+  if (form.sireId && form.sireId === form.damId) e.damId = "Sire and dam cannot be the same horse";
   // So sánh theo chuỗi yyyy-mm-dd để khỏi dính múi giờ.
   if (form.dateOfBirth && form.dateOfBirth > todayIso()) {
     e.dateOfBirth = "Date of birth cannot be in the future";
@@ -61,6 +64,7 @@ function Field({ id, label, error, hint, children }) {
 
 export default function HorseRequestPage() {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
@@ -70,6 +74,15 @@ export default function HorseRequestPage() {
   const [loadError, setLoadError] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
   const [listError, setListError] = useState("");
+  // V41: parents come from the papers; candidates = club pedigree records + my own horses.
+  const [herd, setHerd] = useState([]);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listParentCandidates(ctrl.signal).then((h) => setHerd(h || [])).catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+  const sires = useMemo(() => herd.filter((h) => SIRE_GENDERS.has(h.horseGender)), [herd]);
+  const dams = useMemo(() => herd.filter((h) => DAM_GENDERS.has(h.horseGender)), [herd]);
 
   const load = useCallback(
     (signal) => {
@@ -124,7 +137,14 @@ export default function HorseRequestPage() {
   /* Huỷ yêu cầu còn chờ. Hỏi lại một lần trước khi gửi: huỷ xong không mở
      lại được, chỉ gửi yêu cầu mới. */
   const cancel = async (r) => {
-    if (!window.confirm(`Cancel the registration request for ${r.horseName}?`)) return;
+    const ok = await dialog.confirm({
+      title: `Cancel ${r.horseName}?`,
+      message: "The request is withdrawn from the club's queue. You can send it again later from this page.",
+      confirmLabel: "Cancel request",
+      cancelLabel: "Keep it",
+      danger: true,
+    });
+    if (!ok) return;
     setCancellingId(r.requestId);
     setListError("");
     try {
@@ -151,6 +171,8 @@ export default function HorseRequestPage() {
       color: r.color || "",
       note: r.note || "",
       recordType: r.recordType || EMPTY.recordType,
+      sireId: r.sireId ? String(r.sireId) : "",
+      damId: r.damId ? String(r.damId) : "",
     });
     setErrors({});
     setSubmitError("");
@@ -228,6 +250,22 @@ export default function HorseRequestPage() {
             </Field>
           </div>
 
+          <div className="hz-form-grid">
+            <Field id="sireId" label="Sire (father), from the papers" error={errors.sireId}
+                   hint="A club pedigree record or one of your own horses. Leave Unknown if it is not listed.">
+              <select id="sireId" name="sireId" value={form.sireId} onChange={change}>
+                <option value="">Unknown</option>
+                {sires.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+              </select>
+            </Field>
+            <Field id="damId" label="Dam (mother), from the papers" error={errors.damId}>
+              <select id="damId" name="damId" value={form.damId} onChange={change}>
+                <option value="">Unknown</option>
+                {dams.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+              </select>
+            </Field>
+          </div>
+
           <Field
             id="note"
             label="Anything the club should know"
@@ -244,8 +282,9 @@ export default function HorseRequestPage() {
             <strong>What happens next</strong>
             <p>
               The club manager reviews your request and, if approved, assigns the registration
-              code and a stall. Those two cannot be changed afterwards. After approval you can
-              edit the basic details of your own horse (name, sex, colour, pedigree...).
+              code and a stall, and checks the parents against the papers. After approval you can
+              edit the basic details of your own horse (name, colour...) and add a parent that is
+              still unknown. A parent already on record can only be corrected by the club.
             </p>
           </div>
 
@@ -287,6 +326,9 @@ export default function HorseRequestPage() {
                         .filter(Boolean)
                         .join(" · ") || "No other details given"}
                     </p>
+                    {(r.sireName || r.damName) && (
+                      <p>Sire {r.sireName || "unknown"} · Dam {r.damName || "unknown"}</p>
+                    )}
                     <p>Sent {formatDateTime(r.createdAt)}</p>
 
                     {/* Lý do từ chối phải hiện ra. Không có nó thì lần gửi lại
@@ -327,6 +369,7 @@ export default function HorseRequestPage() {
           </>
         )}
       </Card>
+    {dialog.element}
     </HorseShell>
   );
 }

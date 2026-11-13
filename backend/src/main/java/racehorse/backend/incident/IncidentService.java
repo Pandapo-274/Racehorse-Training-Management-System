@@ -165,6 +165,10 @@ public class IncidentService {
         return r;
     }
 
+    public List<IncidentRepository.VetOption> listVeterinarians() {
+        return incidents.findActiveVeterinarians();
+    }
+
     @Transactional
     public IncidentReportResponse dismiss(AuthenticatedUser trainer, int reportId, String reason, String ip) {
         IncidentReportResponse r = incidents.findById(reportId)
@@ -216,6 +220,88 @@ public class IncidentService {
                     Text.clip(vetName + " is handling the report for " + r.horseName() + ".", 500),
                     Notice.HORSE, r.horseId()));
         }
+        return incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "The report was updated but could not be read back"));
+    }
+
+    /**
+     * V40: Bàn giao / tiếp quản ca trực y tế khi bác sĩ nghỉ phép/vắng mặt.
+     */
+    @Transactional
+    public IncidentReportResponse handover(AuthenticatedUser user, int reportId, HandoverIncidentRequest req, String ip) {
+        IncidentReportResponse r = incidents.findById(reportId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Incident report not found"));
+
+        if (!"PENDING".equals(r.status()) && !"RECEIVED".equals(r.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only PENDING or RECEIVED cases can be handed over (currently " + r.status() + ")");
+        }
+
+        boolean isManager = "CLUB_MANAGER".equals(user.role());
+        boolean isCurrentAssignee = r.receivedBy() != null && r.receivedBy().equals(user.userId());
+        boolean isTakeover = req.targetVetId() != null && req.targetVetId().equals(user.userId());
+
+        // Bác sĩ có thể bàn giao ca của mình, tiếp quản ca cho bản thân, hoặc Club Manager điều phối
+        if (!isManager && !isCurrentAssignee && !isTakeover) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "You can only hand over your own case or take over this case yourself");
+        }
+
+        String notes = req.handoverNotes().trim();
+        String actorName = users.findById(user.userId()).map(UserRecord::fullName).orElse("User #" + user.userId());
+
+        if (req.targetVetId() != null) {
+            UserRecord targetVet = users.findById(req.targetVetId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Target veterinarian not found"));
+            if (!"VETERINARIAN".equals(targetVet.role()) || !"ACTIVE".equals(targetVet.status())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Target user must be an active veterinarian");
+            }
+
+            if (incidents.markHandoverToVet(reportId, req.targetVetId(), user.userId(), notes) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT, "The report status was modified by someone else");
+            }
+            users.writeAudit(user.userId(), "INCIDENT_HANDOVER", "INCIDENT_REPORT", reportId, "SUCCESS", ip,
+                    Text.clip("To vet #" + req.targetVetId() + " (" + targetVet.fullName() + "): " + notes, 200));
+
+            // Thông báo cho bác sĩ được giao
+            if (req.targetVetId() != user.userId()) {
+                notifications.notifyUser(req.targetVetId(), new Notice(
+                        "INCIDENT_HANDOVER", "Case handed over to you",
+                        Text.clip("Dr. " + actorName + " handed over case of " + r.horseName() + " to you. Notes: " + notes, 500),
+                        Notice.HORSE, r.horseId()));
+            }
+
+            // Thông báo cho người theo dõi ngựa (Owner, Head Trainer) & người báo cáo
+            notifications.notifyHorseWatchers(r.ownerId(), user, new Notice(
+                    "INCIDENT_HANDOVER_INFO", "Veterinarian reassigned",
+                    Text.clip("Case of " + r.horseName() + " was assigned to Dr. " + targetVet.fullName() + " by " + actorName + ".", 500),
+                    Notice.HORSE, r.horseId()));
+            if (r.reporterId() != user.userId() && r.reporterId() != req.targetVetId()) {
+                notifications.notifyUser(r.reporterId(), new Notice(
+                        "INCIDENT_HANDOVER_INFO", "Veterinarian reassigned",
+                        Text.clip("Case of " + r.horseName() + " was assigned to Dr. " + targetVet.fullName() + ".", 500),
+                        Notice.HORSE, r.horseId()));
+            }
+        } else {
+            // Trả về hàng đợi chung PENDING
+            if (incidents.markHandoverToQueue(reportId, user.userId(), notes) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT, "The report status was modified by someone else");
+            }
+            users.writeAudit(user.userId(), "INCIDENT_HANDOVER_QUEUE", "INCIDENT_REPORT", reportId, "SUCCESS", ip,
+                    Text.clip("Returned to team queue: " + notes, 200));
+
+            notifications.notifyRole("VETERINARIAN", user, new Notice(
+                    "INCIDENT_RETURNED_TO_QUEUE", "Case returned to team queue",
+                    Text.clip(r.horseName() + " was returned to queue by " + actorName + ". Notes: " + notes, 500),
+                    Notice.HORSE, r.horseId()));
+
+            notifications.notifyHorseWatchers(r.ownerId(), user, new Notice(
+                    "INCIDENT_HANDOVER_INFO", "Veterinarian handover",
+                    Text.clip("Case of " + r.horseName() + " was returned to the veterinary queue for reassignment.", 500),
+                    Notice.HORSE, r.horseId()));
+        }
+
         return incidents.findById(reportId)
                 .orElseThrow(() -> new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "The report was updated but could not be read back"));

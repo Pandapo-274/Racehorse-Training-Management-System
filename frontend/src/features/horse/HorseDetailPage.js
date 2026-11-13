@@ -1,6 +1,7 @@
 // src/features/horse/HorseDetailPage.js
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
+import HorseMedicalHistoryTab from "./HorseMedicalHistoryTab";
 
 import { getUser, handleAuthError } from "../auth/authService";
 
@@ -16,11 +17,15 @@ import {
   canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity, listActiveTrainers,
   toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
   readmitHorse, transferHorseOwner,
+  listParentCandidates, correctHorseParents, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
 import { listStaff } from "../manager/staffApi";
+import { useAppDialog } from "../common/AppDialog";
+import ResultLine, { ok, fail } from "../common/ResultLine";
 
 const TABS = [
   { id: "overview", label: "Overview" },
+  { id: "medical-history", label: "Medical History" },
   { id: "pedigree", label: "Pedigree" },
   { id: "vitals", label: "Vitals" },
 ];
@@ -143,13 +148,19 @@ function IdentityForm({ horse, onSaved }) {
  * chặn chuyển chủ khi chủ hiện tại còn việc phải duyệt (giáo án, đăng ký giải,
  * yêu cầu rút) - lỗi đó hiện nguyên văn ở đây.
  */
-function OwnershipForm({ horse, onSaved }) {
+/*
+ * result / setResult live in the page, not here: a successful transfer changes
+ * the owner and a re-admit changes the activity, and both remount this card
+ * (its key), which used to wipe the "Transferred ... to ..." line the moment it
+ * appeared.
+ */
+function OwnershipForm({ horse, onSaved, result, setResult }) {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [owners, setOwners] = useState([]);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
   const [stall, setStall] = useState("");
-  const [message, setMessage] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const withdrawn = isWithdrawn(horse);
@@ -168,19 +179,21 @@ function OwnershipForm({ horse, onSaved }) {
     return () => { alive = false; };
   }, [withdrawn, horse.ownerId]);
 
-  const run = async (e, fn, done) => {
-    e.preventDefault();
+  /* Runs fn; on success shows done(updated), on failure failText + the server's reason. */
+  const run = async (fn, done, failText) => {
     setBusy(true);
     setErrors({});
-    setMessage("");
+    setResult(null);
     try {
       const updated = await fn();
       onSaved(updated);
-      setMessage(done(updated));
+      setResult(ok(done(updated)));
+      return true;
     } catch (err) {
-      if (handleAuthError(err, navigate)) return;
+      if (handleAuthError(err, navigate)) return false;
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) setErrors(err.fieldErrors);
-      setMessage(err.message);
+      setResult(fail(`${failText}: ${err.message}`));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -188,10 +201,21 @@ function OwnershipForm({ horse, onSaved }) {
 
   if (withdrawn) {
     if (pedigree) return null;
+    const readmit = async (e) => {
+      e.preventDefault();
+      const s = stall.trim();
+      const done = await run(
+        () => readmitHorse(horse.horseId, s),
+        (h) => `${h.horseName} is back at the club in stall ${h.stallNo}. ${h.ownerName} has been notified. Assign a Head Trainer in Club records.`,
+        `Could not re-admit ${horse.horseName} to stall ${s}`,
+      );
+      if (done) setStall("");
+    };
     return (
       <Card title="Re-admit to the club" hint="The horse comes back with a new stall. Its health status stays as the vet left it.">
-        <form onSubmit={(e) => run(e, () => readmitHorse(horse.horseId, stall), (h) => `${h.horseName} is back in stall ${h.stallNo}.`)} noValidate>
-          <div className="hz-form-grid">
+        {dialog.element}
+        <form onSubmit={readmit} noValidate>
+          <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
             <div className="hz-field">
               <label htmlFor="readmit-stall">Stall</label>
               <input id="readmit-stall" className="hz-mono" maxLength={20} value={stall}
@@ -199,20 +223,38 @@ function OwnershipForm({ horse, onSaved }) {
               {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
             </div>
           </div>
-          {message && <p className="hz-muted hz-note" role="status">{message}</p>}
           <div className="hz-form-footer">
             <button type="submit" className="hz-btn" disabled={busy || !stall.trim()}>{busy ? "Saving…" : "Re-admit"}</button>
           </div>
+          <ResultLine result={result} />
         </form>
       </Card>
     );
   }
 
+  const transfer = async (e) => {
+    e.preventDefault();
+    const target = owners.find((o) => String(o.userId) === String(ownerId));
+    const targetName = target ? `${target.fullName} (@${target.username})` : "the chosen owner";
+    const confirmed = await dialog.confirm({
+      title: `Transfer ${horse.horseName}?`,
+      message: `${horse.horseName} moves from ${horse.ownerName} to ${targetName}. Both owners are told. Reason: ${reason.trim()}`,
+      confirmLabel: "Transfer",
+    });
+    if (!confirmed) return;
+    const done = await run(
+      () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
+      () => `Transferred ${horse.horseName} from ${horse.ownerName} to ${targetName}. Both owners have been notified.`,
+      `Could not transfer ${horse.horseName} to ${targetName}`,
+    );
+    if (done) { setOwnerId(""); setReason(""); }
+  };
+
   return (
     <Card title="Transfer to another owner" hint="For a sale or a gift. The current and the new owner are both told.">
-      <form onSubmit={(e) => run(e, () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
-                                  (h) => `${h.horseName} now belongs to ${h.ownerName}.`)} noValidate>
-        <div className="hz-form-grid">
+      {dialog.element}
+      <form onSubmit={transfer} noValidate>
+        <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <div className="hz-field">
             <label htmlFor="transfer-owner">New owner</label>
             <select id="transfer-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
@@ -228,10 +270,99 @@ function OwnershipForm({ horse, onSaved }) {
             {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
           </div>
         </div>
-        {message && <p className="hz-muted hz-note" role="status">{message}</p>}
         <div className="hz-form-footer">
           <button type="submit" className="hz-btn" disabled={busy || !ownerId || !reason.trim()}>{busy ? "Saving…" : "Transfer"}</button>
         </div>
+        <ResultLine result={result} />
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * Club Manager (V41): correct the sire / dam on record when the papers show
+ * otherwise. The owner can only add a parent that is still unknown, so this is
+ * the one place a parent on record changes. A reason is required; it goes into
+ * the audit log and to the owner.
+ */
+function ParentsForm({ horse, onSaved }) {
+  const navigate = useNavigate();
+  const [herd, setHerd] = useState([]);
+  const [sireId, setSireId] = useState(horse.sireId ? String(horse.sireId) : "");
+  const [damId, setDamId] = useState(horse.damId ? String(horse.damId) : "");
+  const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    setSireId(horse.sireId ? String(horse.sireId) : "");
+    setDamId(horse.damId ? String(horse.damId) : "");
+  }, [horse.sireId, horse.damId]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listParentCandidates(ctrl.signal, horse.horseId).then((h) => setHerd(h || [])).catch(() => {});
+    return () => ctrl.abort();
+  }, [horse.horseId]);
+
+  const others = herd.filter((h) => h.horseId !== horse.horseId);
+  const sires = others.filter((h) => SIRE_GENDERS.has(h.horseGender));
+  const dams = others.filter((h) => DAM_GENDERS.has(h.horseGender));
+  const changed = String(horse.sireId ?? "") !== sireId || String(horse.damId ?? "") !== damId;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setResult(null);
+    try {
+      const updated = await correctHorseParents(horse.horseId, { sireId, damId, reason });
+      onSaved(updated);
+      setReason("");
+      setResult(ok(`Parents of ${updated.horseName} corrected. ${updated.ownerName} has been notified.`));
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      if (err.fieldErrors) setErrors(err.fieldErrors);
+      setResult(fail(`Could not correct the parents of ${horse.horseName}: ${err.message}`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Parents" hint="From the horse's papers. Correct them when the papers show otherwise: the owner is told and the reason is logged.">
+      <form onSubmit={submit} noValidate>
+        <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <div className="hz-field">
+            <label htmlFor="correct-sire">Sire</label>
+            <select id="correct-sire" value={sireId} onChange={(e) => setSireId(e.target.value)}>
+              <option value="">Unknown</option>
+              {sires.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+            </select>
+            {errors.sireId && <p className="hz-field__error">{errors.sireId}</p>}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="correct-dam">Dam</label>
+            <select id="correct-dam" value={damId} onChange={(e) => setDamId(e.target.value)}>
+              <option value="">Unknown</option>
+              {dams.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
+            </select>
+            {errors.damId && <p className="hz-field__error">{errors.damId}</p>}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="correct-reason">Reason</label>
+            <input id="correct-reason" maxLength={200} value={reason} placeholder="What the papers show"
+                   onChange={(e) => setReason(e.target.value)} />
+            {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
+          </div>
+        </div>
+        <div className="hz-form-footer">
+          <button type="submit" className="hz-btn" disabled={busy || !changed || !reason.trim()}>
+            {busy ? "Saving…" : "Correct parents"}
+          </button>
+        </div>
+        <ResultLine result={result} />
       </form>
     </Card>
   );
@@ -248,8 +379,12 @@ export default function HorseDetailPage() {
   const mayViewVitals = canViewVitals(user);
   const horseBase = getHorseBasePath(user);
 
-  const [tab, setTab] = useState("overview");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "overview";
+  const [tab, setTab] = useState(initialTab);
   const [horse, setHorse] = useState(null);
+  const [ownershipResult, setOwnershipResult] = useState(null); // survives the card's remount
+  useEffect(() => { setOwnershipResult(null); }, [id]); // another horse: start clean
   const [error, setError] = useState("");
 
   const [generations, setGenerations] = useState(3);
@@ -380,7 +515,8 @@ export default function HorseDetailPage() {
       <div className="hz-tabs" role="tablist">
         {TABS.filter((t) =>
           (t.id !== "pedigree" || mayViewPedigree) &&
-          (t.id !== "vitals" || (mayViewVitals && !pedigreeOnly))
+          (t.id !== "vitals" || (mayViewVitals && !pedigreeOnly)) &&
+          (t.id !== "medical-history" || !pedigreeOnly)
         ).map((t) => (
           <button
             key={t.id}
@@ -450,12 +586,18 @@ export default function HorseDetailPage() {
           </Card>
 
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
-          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
+          {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse}
+                                                                  result={ownershipResult} setResult={setOwnershipResult} />}
+          {user?.role === "CLUB_MANAGER" && <ParentsForm horse={horse} onSaved={setHorse} />}
 
-          {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} />}
+          {!pedigreeOnly && <HorseHealthPanel horse={horse} user={user} onViewHistory={() => setTab("medical-history")} />}
 
           <HorseWithdrawalPanel horse={horse} user={user} />
         </div>
+      )}
+
+      {tab === "medical-history" && !pedigreeOnly && (
+        <HorseMedicalHistoryTab horse={horse} user={user} />
       )}
 
       {tab === "pedigree" && (
@@ -484,7 +626,7 @@ export default function HorseDetailPage() {
           ) : !pedigree.sire && !pedigree.dam ? (
             <StateBlock title="No parents on record">
               {mayEdit
-                ? "Name a sire or a dam in the edit form to start building the pedigree."
+                ? "Add the sire and dam from the horse's papers in the edit form to start the pedigree."
                 : "Nobody has recorded this horse's parents yet."}
             </StateBlock>
           ) : (

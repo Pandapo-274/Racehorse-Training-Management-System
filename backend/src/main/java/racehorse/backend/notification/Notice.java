@@ -24,4 +24,8 @@ public record Notice(String type, String title, String message,
     public static final String VET_CALL = "VET_CALL";
     /** Từ V34: giáo án chờ chủ ngựa duyệt, hoặc chủ ngựa vừa duyệt / từ chối. */
     public static final String TRAINING_PLAN = "TRAINING_PLAN";
+    /** Từ V40: ca chuyển viện ngoài cho ngựa cấp cứu / chấn thương nặng. */
+    public static final String EXTERNAL_REFERRAL = "EXTERNAL_REFERRAL";
+    /** Từ V40: báo cáo sự cố y tế hoặc bàn giao ca trực. */
+    public static final String INCIDENT_REPORT = "INCIDENT_REPORT";
 }

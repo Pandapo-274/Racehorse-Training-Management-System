@@ -13,52 +13,64 @@ import { formatDateTime, getHorseBasePath } from "./horseApi";
 import {
   listWithdrawals, approveWithdrawal, rejectWithdrawal, toWithdrawalStatus, plural,
 } from "./withdrawalApi";
+import { useAppDialog } from "../common/AppDialog";
+import ResultLine, { ok, fail } from "../common/ResultLine";
 
 function PendingRow({ row, horseBase, onDone }) {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [note, setNote] = useState("");
-  const [confirming, setConfirming] = useState(false);
   const [noteError, setNoteError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
 
-  const run = async (fn) => {
+  /* On success the row leaves this list, so the page shows the result where it was. */
+  const run = async (fn, okText, failText) => {
     setBusy(true);
-    setError("");
+    setResult(null);
     try {
       await fn();
-      onDone();
+      onDone(ok(okText));
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       if (err.fieldErrors?.note) setNoteError(err.fieldErrors.note);
-      else setError(err.message);
-      setConfirming(false);
+      setResult(fail(`${failText}: ${err.message}`));
     } finally {
       setBusy(false);
     }
   };
 
-  const approve = () => {
+  const approve = async () => {
     setNoteError("");
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-    run(() => approveWithdrawal(row.withdrawalId, note));
+    const confirmed = await dialog.confirm({
+      title: `Approve withdrawal of ${row.horseName}?`,
+      message: `This cannot be undone. It cancels ${plural(row.scheduledSessions, "scheduled session")}, ends `
+        + `${plural(row.openPlans, "training plan")}, removes upcoming stable tasks, scratches upcoming race entries`
+        + `${row.stallNo ? ` and releases stall ${row.stallNo}` : ""}.`,
+      confirmLabel: "Approve withdrawal",
+      danger: true,
+    });
+    if (!confirmed) return;
+    run(() => approveWithdrawal(row.withdrawalId, note),
+        `Approved: ${row.horseName} has left the club${row.stallNo ? ` and stall ${row.stallNo} is free` : ""}. `
+          + `${row.requesterName} has been notified.`,
+        `Could not approve the withdrawal of ${row.horseName}`);
   };
 
   const reject = () => {
-    setConfirming(false);
     if (!note.trim()) {
       setNoteError("A reason is required when rejecting");
       return;
     }
     setNoteError("");
-    run(() => rejectWithdrawal(row.withdrawalId, note));
+    run(() => rejectWithdrawal(row.withdrawalId, note),
+        `Rejected: ${row.horseName} stays at the club. ${row.requesterName} has been told why.`,
+        `Could not reject the withdrawal of ${row.horseName}`);
   };
 
   return (
     <li className="hz-review">
+      {dialog.element}
       <div className="hz-review__info">
         <strong>
           <Link to={`${horseBase}/${row.horseId}`}>{row.horseName}</Link>
@@ -84,28 +96,15 @@ function PendingRow({ row, horseBase, onDone }) {
           {noteError && <p className="hz-field__error">{noteError}</p>}
         </div>
 
-        {confirming && (
-          <p className="hz-field__error" role="alert">
-            This cannot be undone. Click “Confirm withdrawal” to go ahead.
-          </p>
-        )}
-        {error && <p className="hz-form-error" role="alert">{error}</p>}
-
         <div className="hz-form-footer">
           <button type="button" className="hz-btn" disabled={busy} onClick={approve}>
-            {confirming ? "Confirm withdrawal" : "Approve"}
+            {busy ? "Saving…" : "Approve"}
           </button>
-          {confirming ? (
-            <button type="button" className="hz-btn hz-btn--ghost" disabled={busy}
-                    onClick={() => setConfirming(false)}>
-              Back
-            </button>
-          ) : (
-            <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={reject}>
-              Reject
-            </button>
-          )}
+          <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={reject}>
+            Reject
+          </button>
         </div>
+        <ResultLine result={result} />
       </div>
     </li>
   );
@@ -117,6 +116,7 @@ export default function WithdrawalReviewPage() {
   const horseBase = getHorseBasePath(user);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
+  const [results, setResults] = useState([]); // outcomes of rows handled on this visit, newest first
 
   const load = useCallback(
     (signal) => {
@@ -149,12 +149,13 @@ export default function WithdrawalReviewPage() {
       {rows && (
         <>
           <Card title="Waiting for review" hint={`${pending.length} pending`}>
+            {results.map((res, i) => <ResultLine key={i} result={res} />)}
             {pending.length === 0 ? (
               <p className="hz-empty">Nothing is waiting.</p>
             ) : (
               <ul className="hz-list">
                 {pending.map((r) => (
-                  <PendingRow key={r.withdrawalId} row={r} horseBase={horseBase} onDone={() => load()} />
+                  <PendingRow key={r.withdrawalId} row={r} horseBase={horseBase} onDone={(res) => { setResults((list) => [res, ...list]); load(); }} />
                 ))}
               </ul>
             )}

@@ -72,6 +72,15 @@ function PendingRow({ row, trainers, onDone }) {
         </p>
         <p>From {row.ownerName} · sent {formatDateTime(row.createdAt)}</p>
         <p><StatusChip tone={stage.tone} label={stage.label} title={stage.hint} /></p>
+        {/* V41: parents declared by the owner; the club checks them against the papers. */}
+        <p>
+          {row.sireName || row.damName
+            ? <>Sire <strong>{row.sireName || "unknown"}</strong> · Dam <strong>{row.damName || "unknown"}</strong> <span className="hz-muted">(check against the papers)</span></>
+            : <span className="hz-muted">Parents not given</span>}
+        </p>
+        {(errors.sireId || errors.damId) && (
+          <p className="hz-field__error">{[errors.sireId, errors.damId].filter(Boolean).join(" ")}</p>
+        )}
         {row.note && <p className="hz-review__note">“{row.note}”</p>}
         {ageWarning && <p className="hz-field__error">{ageWarning}</p>}
       </div>
