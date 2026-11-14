@@ -1,4 +1,4 @@
-﻿// src/features/horse-owner/OwnerTrainingPage.js
+// src/features/horse-owner/OwnerTrainingPage.js
 // Chủ ngựa xem lịch trình tập luyện, video chạy thử và nhật ký nhận xét của
 // Head Trainer (đúng một mục trong đề bài của Horse Owner).
 //

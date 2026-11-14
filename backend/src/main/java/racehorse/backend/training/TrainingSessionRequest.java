@@ -27,16 +27,17 @@ public record TrainingSessionRequest(
         Integer plannedDuration,
         @DecimalMin(value = "1.0", message = "Max allowed speed must be between 1 and 30 m/s")
         @DecimalMax(value = "30.0", message = "Max allowed speed must be between 1 and 30 m/s")
-        BigDecimal velocityCeiling
+        BigDecimal velocityCeiling,
+        String remarks
 ) {
     public TrainingSessionRequest(Integer phaseId, Integer assignedTo,
                                   LocalDateTime sessionDate, Integer plannedDistance) {
-        this(phaseId, assignedTo, sessionDate, plannedDistance, 60, null);
+        this(phaseId, assignedTo, sessionDate, plannedDistance, 60, null, null);
     }
 
     public TrainingSessionRequest(Integer phaseId, Integer assignedTo,
                                   LocalDateTime sessionDate, Integer plannedDistance,
                                   Integer plannedDuration) {
-        this(phaseId, assignedTo, sessionDate, plannedDistance, plannedDuration, null);
+        this(phaseId, assignedTo, sessionDate, plannedDistance, plannedDuration, null, null);
     }
 }

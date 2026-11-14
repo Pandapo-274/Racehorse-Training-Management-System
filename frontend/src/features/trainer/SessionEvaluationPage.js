@@ -4,10 +4,19 @@ import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import { handleAuthError } from "../auth/authService";
-import { evaluateSession, fetchSessions, hasNotRun } from "./sessionEvaluationApi";
+import { evaluateSession, fetchSessions, hasNotRun, submitRecoveryToVet } from "./sessionEvaluationApi";
 import "./trainer.css";
 import "./schedule.css";
 import "./session-evaluation.css";
+
+function isRecoverySession(session) {
+  if (!session) return false;
+  return Boolean(
+    (session.remarks && session.remarks.includes("[Recovery Session]")) ||
+    (session.phaseName && session.phaseName.toLowerCase().includes("recovery")) ||
+    (session.plannedDistance && session.plannedDistance <= 800 && session.remarks && session.remarks.toLowerCase().includes("recovery"))
+  );
+}
 
 function HorseshoeIcon() {
   return (
@@ -138,6 +147,8 @@ export default function SessionEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [sendingToVet, setSendingToVet] = useState(false);
+  const [sentToVetList, setSentToVetList] = useState([]);
 
   const loadSessions = useCallback(async (signal) => {
     setError("");
@@ -183,12 +194,20 @@ export default function SessionEvaluationPage() {
     [sessions]
   );
 
+  const recoveryCount = useMemo(
+    () => sessions.filter((s) => !hasNotRun(s.status) && isRecoverySession(s)).length,
+    [sessions]
+  );
+
   const visibleSessions = useMemo(
     () =>
       sessions
         .filter((session) => !hasNotRun(session.status))
         .filter((session) => {
           if (filter === "ALL") return true;
+          if (filter === "RECOVERY") {
+            return isRecoverySession(session);
+          }
           if (filter === "NEEDS_REVIEW") {
             return session.reviewStatus === "PENDING" || (!session.evaluation && session.reviewStatus !== "ARCHIVED_AUTO");
           }
@@ -241,6 +260,22 @@ export default function SessionEvaluationPage() {
     }
   };
 
+  const handleSendToVet = async () => {
+    if (!selectedSession) return;
+    setSendingToVet(true);
+    setError("");
+    setNotice("");
+    try {
+      await submitRecoveryToVet(selectedSession.sessionId);
+      setSentToVetList((prev) => [...prev, selectedSession.sessionId]);
+      setNotice(`Session #${selectedSession.sessionId} recovery data successfully submitted to Veterinarian for Rating!`);
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setError(err.message || "Failed to send data to Veterinarian.");
+    } finally {
+      setSendingToVet(false);
+    }
+  };
+
   const { requestSignOut, modalElement } = useSignOutModal(navigate);
 
   return (
@@ -275,6 +310,7 @@ export default function SessionEvaluationPage() {
               </div>
               <select aria-label="Filter sessions" value={filter} onChange={(event) => setFilter(event.target.value)}>
                 <option value="NEEDS_REVIEW">Pending review (within 48h)</option>
+                <option value="RECOVERY">Recovery training ({recoveryCount})</option>
                 <option value="ARCHIVED">Archive ({archivedCount})</option>
                 <option value="REVIEWED">Official review completed</option>
                 <option value="ALL">All sessions</option>
@@ -330,6 +366,24 @@ export default function SessionEvaluationPage() {
                           }}
                         >
                           {badge.text}
+                        </span>
+                      )}
+                      {isRecoverySession(session) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: "4px",
+                            marginLeft: badge ? "6px" : "0",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            backgroundColor: "#ecfdf5",
+                            color: "#059669",
+                            border: "1px solid #a7f3d0",
+                          }}
+                        >
+                          🩺 Recovery
                         </span>
                       )}
                       <span className="session-review-item-bottom">
@@ -408,6 +462,27 @@ export default function SessionEvaluationPage() {
                     }}
                   >
                     <strong>Early stop reason reported by Groom:</strong> {selectedSession.earlyStopReason}
+                  </div>
+                )}
+
+                {isRecoverySession(selectedSession) && (
+                  <div
+                    style={{
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #86efac",
+                      borderRadius: "10px",
+                      padding: "12px 16px",
+                      marginBottom: "16px",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                      🩺 Recovery Training Session (Light Work Protocol)
+                    </strong>
+                    <p style={{ margin: "4px 0 0", color: "#15803d" }}>
+                      This session was scheduled as part of the veterinarian-prescribed rehabilitation plan. Groom vitals are recorded below. After reviewing, click <strong>"Send Data to Veterinarian"</strong> to submit the metrics to the Vet for Recovery Rating.
+                    </p>
                   </div>
                 )}
 
@@ -569,6 +644,30 @@ export default function SessionEvaluationPage() {
                       />
                     </label>
                     <div className="session-review-form-footer">
+                      {isRecoverySession(selectedSession) && (
+                        <button
+                          type="button"
+                          disabled={saving || sendingToVet || sentToVetList.includes(selectedSession.sessionId)}
+                          onClick={handleSendToVet}
+                          style={{
+                            backgroundColor: sentToVetList.includes(selectedSession.sessionId) ? "#64748b" : "#059669",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "8px",
+                            padding: "9px 16px",
+                            fontWeight: 700,
+                            fontSize: "13px",
+                            cursor: sentToVetList.includes(selectedSession.sessionId) ? "default" : "pointer",
+                            marginRight: "auto",
+                          }}
+                        >
+                          {sendingToVet
+                            ? "Sending to Vet…"
+                            : sentToVetList.includes(selectedSession.sessionId)
+                              ? "✓ Data Sent to Vet"
+                              : "🩺 Send Data to Veterinarian"}
+                        </button>
+                      )}
                       <span>
                         {selectedSession.reviewStatus === "ARCHIVED_AUTO"
                           ? "Submitting will finalize this archived session and notify the Horse Owner."

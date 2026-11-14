@@ -1,4 +1,4 @@
-﻿// src/features/notification/notificationApi.js
+// src/features/notification/notificationApi.js
 // Chuông thông báo trên header của cả năm vai trò.
 //
 // Backend chỉ lưu thông báo trỏ tới cái gì (targetEntity + targetId), không
@@ -51,6 +51,10 @@ export function notificationTarget(n, user) {
   }
   if (n?.type === "PREVENTIVE_CARE_DUE") {
     return role === "VETERINARIAN" ? "/veterinarian/preventive-care" : null;
+  }
+  if (n?.type === "RECOVERY_SESSION_SUBMITTED") {
+    if (role === "VETERINARIAN") return `/veterinarian/recovery/${n.targetId}`;
+    if (role === "HEAD_TRAINER") return "/trainer/session-review";
   }
   switch (n?.targetEntity) {
     case "HORSE":

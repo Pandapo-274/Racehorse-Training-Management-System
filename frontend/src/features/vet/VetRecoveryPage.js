@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { handleAuthError } from "../auth/authService";
+import { authFetch, handleAuthError } from "../auth/authService";
 import { formatDateTime } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
 import VetHorsePicker from "./VetHorsePicker";
@@ -107,9 +107,10 @@ function RecoveryView({ horseId }) {
       listLocksForHorse(horseId, ctrl.signal),
       listOpenReportsForHorse(horseId, ctrl.signal),
       listTreatmentsForHorse(horseId, ctrl.signal),
+      authFetch(`/api/sessions?horseId=${horseId}&limit=10`, { signal: ctrl.signal }).catch(() => []),
     ])
-      .then(([horse, injuries, records, locks, reports, treatments]) =>
-        setData({ horse, injuries, records, locks, reports: reports || [], treatments: treatments || [] }))
+      .then(([horse, injuries, records, locks, reports, treatments, sessions]) =>
+        setData({ horse, injuries, records, locks, reports: reports || [], treatments: treatments || [], sessions: sessions || [] }))
       .catch((err) => {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
@@ -184,6 +185,7 @@ function RecoveryView({ horseId }) {
       lightWorkInfo,
       reminders,
       subtitle,
+      recoverySessions: (data.sessions || []).filter((s) => s.status === "COMPLETED" || s.status === "STOPPED_EARLY"),
     };
   }, [data]);
 
@@ -208,7 +210,7 @@ function RecoveryView({ horseId }) {
     );
   }
 
-  const { horse, exams, activeLock, openInjuries, allInjuries, openReports, activeTreatments, stage, reminders, lightWorkInfo } = view;
+  const { horse, exams, activeLock, openInjuries, allInjuries, openReports, activeTreatments, stage, reminders, lightWorkInfo, recoverySessions } = view;
   const hasActiveTreatment = (activeTreatments || []).length > 0;
   const canClear = (horse.status !== "ELIGIBLE" || !!activeLock) && !hasActiveTreatment;
   const today = todayInputValue();
@@ -321,6 +323,57 @@ function RecoveryView({ horseId }) {
         </div>
         <p className="vx-caption">{captionOf(stage, openInjuries, activeTreatments, activeLock, lightWorkInfo)}</p>
       </VetCard>
+
+      {(stage === 2 || stage === 3 || (recoverySessions && recoverySessions.length > 0)) && (
+        <VetCard title="Recovery training sessions & Groom vitals" tone="yellow">
+          {(!recoverySessions || recoverySessions.length === 0) ? (
+            <p className="vx-meta" style={{ margin: 0 }}>
+              No recovery training sessions recorded yet. The Head Trainer and Groom schedule rehabilitation sessions based on your Light work protocol and will submit measured vitals for recovery rating.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                Rehabilitation workouts completed by Groom and reviewed by Head Trainer:
+              </p>
+              {recoverySessions.map((s) => (
+                <div
+                  key={s.sessionId}
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "10px 14px",
+                    fontSize: "13px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>Session #{s.sessionId} · {formatShortDate(s.sessionDate)}</strong>
+                    <span className="vx-pill vx-pill--green" style={{ textTransform: "uppercase", fontSize: "11px" }}>
+                      {s.status}
+                    </span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", color: "#334155" }}>
+                    <span><strong>Distance:</strong> {s.actualDistance ?? s.plannedDistance ?? "—"} m</span>
+                    <span><strong>Duration:</strong> {s.durationMinutes ?? s.plannedDuration ?? "—"} min</span>
+                    <span><strong>Avg HR:</strong> {s.avgHeartRate ? `${s.avgHeartRate} bpm` : "—"}</span>
+                    <span><strong>Peak HR:</strong> {s.peakHeartRate ? `${s.peakHeartRate} bpm` : "—"}</span>
+                    <span><strong>Recovery HR:</strong> {s.recoveryHeartRate ? `${s.recoveryHeartRate} bpm` : "—"}</span>
+                    <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} m/s` : "—"}</span>
+                  </div>
+                  {s.remarks && (
+                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#475569", fontStyle: "italic" }}>
+                      Note: {s.remarks}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </VetCard>
+      )}
 
       <div className="vx-grid vx-grid--recovery">
         <VetCard title="Follow-up history" tone="gold">
@@ -442,6 +495,7 @@ function RecoveryView({ horseId }) {
         <RatingDialog
           horse={horse}
           openInjuries={openInjuries}
+          latestSession={recoverySessions?.[0] || null}
           onClose={() => setRatingDialog(false)}
           onDone={handleActionDone}
         />
@@ -477,6 +531,7 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
   const [findings, setFindings] = useState("Swelling resolved, pain on palpation significantly reduced, sound at walk and easy trot.");
   const [protocol, setProtocol] = useState("Protocol B: Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm");
   const [durationDays, setDurationDays] = useState(5);
+  const [frequency, setFrequency] = useState("Once daily");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -505,11 +560,11 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
         recordType: "EXAM",
         diagnosis: `Light work clearance: ${findings.trim()}`,
         injuryConfirmed: false,
-        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days. Training lock set to Heavy work only (max 800m). ${notes.trim()}`.trim(),
+        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days. Frequency: ${frequency}. Training lock set to Heavy work only (max 800m). ${notes.trim()}`.trim(),
       });
 
       onDone({
-        message: `${horse.horseName} has advanced to Light work. Training lock updated to Heavy work only (max 800m).`,
+        message: `${horse.horseName} has advanced to Light work. Frequency: ${frequency}. Training lock updated to Heavy work only (max 800m).`,
       });
     } catch (err) {
       setError(describeError(err));
@@ -566,9 +621,9 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
             </select>
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: "12px" }}>
             <label className="vx-field">
-              <span>Expected Protocol Duration (Days)</span>
+              <span>Expected Duration (Days)</span>
               <input
                 type="number"
                 min={1}
@@ -579,12 +634,25 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
               />
             </label>
             <label className="vx-field">
+              <span>Frequency</span>
+              <select
+                className="vx-input"
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value)}
+              >
+                <option value="Once daily">Once daily (1 session/day)</option>
+                <option value="Twice daily">Twice daily (2 sessions/day)</option>
+                <option value="Every 2 days">Every 2 days (1 session/2 days)</option>
+                <option value="3 times per week">3 times per week</option>
+              </select>
+            </label>
+            <label className="vx-field">
               <span>Updated Lock Level</span>
               <input
                 type="text"
                 disabled
                 className="vx-input"
-                value="Heavy work only (Light work only)"
+                value="Heavy work only"
                 style={{ background: "#f8f9fa", fontWeight: 700 }}
               />
             </label>
@@ -617,7 +685,7 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
 
 /* ---------- Modal 2: Fitness Rating & Assessment ---------- */
 
-function RatingDialog({ horse, openInjuries, onClose, onDone }) {
+function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
   const [fitnessScore, setFitnessScore] = useState(80);
   const [gaitAssessment, setGaitAssessment] = useState("Grade 0: Completely sound, clean symmetrical trot, no lameness");
   const [cardioResponse, setCardioResponse] = useState("Optimal: HR returns to resting baseline (<100 bpm) within 5 minutes");
@@ -668,6 +736,25 @@ function RatingDialog({ horse, openInjuries, onClose, onDone }) {
         </p>
 
         <VetError error={error} />
+
+        {latestSession && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px" }}>
+            <strong style={{ color: "#166534" }}>Latest Recovery Workout Metrics (Session #{latestSession.sessionId}):</strong>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px", marginTop: "6px", color: "#14532d", fontSize: "12px" }}>
+              <span>Distance: <strong>{latestSession.actualDistance ?? latestSession.plannedDistance ?? "—"} m</strong></span>
+              <span>Duration: <strong>{latestSession.durationMinutes ?? latestSession.plannedDuration ?? "—"} min</strong></span>
+              <span>Avg HR: <strong>{latestSession.avgHeartRate ? `${latestSession.avgHeartRate} bpm` : "—"}</strong></span>
+              <span>Peak HR: <strong>{latestSession.peakHeartRate ? `${latestSession.peakHeartRate} bpm` : "—"}</strong></span>
+              <span>Recovery HR: <strong>{latestSession.recoveryHeartRate ? `${latestSession.recoveryHeartRate} bpm` : "—"}</strong></span>
+              <span>Speed: <strong>{latestSession.peakVelocity ? `${latestSession.peakVelocity} m/s` : "—"}</strong></span>
+            </div>
+            {latestSession.remarks && (
+              <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#15803d", fontStyle: "italic" }}>
+                Groom/Trainer note: {latestSession.remarks}
+              </p>
+            )}
+          </div>
+        )}
 
         <form onSubmit={submit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

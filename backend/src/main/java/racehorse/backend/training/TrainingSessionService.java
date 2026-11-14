@@ -137,7 +137,9 @@ public class TrainingSessionService {
         }
         checkSlot(ctx, r.assignedTo(), r.sessionDate(), duration, 0);
 
-        int id = repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
+        int id = (r.remarks() != null && !r.remarks().isBlank())
+                ? repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned, r.remarks())
+                : repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
         if (duration != DEFAULT_DURATION_MINUTES) {
             repository.updatePlannedDuration(id, duration);
         }

@@ -153,19 +153,24 @@ public class TrainingSessionRepository {
         return spec.query(TrainingSessionRepository::mapSession).list();
     }
 
-    public int insert(int phaseId, int horseId, int assignedTo, LocalDateTime sessionDate, Integer plannedDistance) {
+    public int insert(int phaseId, int horseId, int assignedTo, LocalDateTime sessionDate, Integer plannedDistance, String remarks) {
         return jdbc.sql("""
-                INSERT INTO TRAINING_SESSION (phase_id, horse_id, assigned_to, session_date, planned_distance)
+                INSERT INTO TRAINING_SESSION (phase_id, horse_id, assigned_to, session_date, planned_distance, remarks)
                 OUTPUT INSERTED.session_id
-                VALUES (:phaseId, :horseId, :assignedTo, :sessionDate, :planned)
+                VALUES (:phaseId, :horseId, :assignedTo, :sessionDate, :planned, :remarks)
                 """)
                 .param("phaseId", phaseId)
                 .param("horseId", horseId)
                 .param("assignedTo", assignedTo)
                 .param("sessionDate", sessionDate)
                 .param("planned", plannedDistance)
+                .param("remarks", remarks)
                 .query(Integer.class)
                 .single();
+    }
+
+    public int insert(int phaseId, int horseId, int assignedTo, LocalDateTime sessionDate, Integer plannedDistance) {
+        return insert(phaseId, horseId, assignedTo, sessionDate, plannedDistance, null);
     }
 
     public int updateVelocityCeiling(int sessionId, BigDecimal velocityCeiling) {

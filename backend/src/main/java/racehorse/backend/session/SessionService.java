@@ -178,6 +178,38 @@ public class SessionService {
     }
 
     /**
+     * Head Trainer gửi dữ liệu buổi tập hồi phục sang cho Bác sĩ thú y để chấm điểm phục hồi (Rating).
+     */
+    @Transactional
+    public SessionResponse submitToVet(AuthenticatedUser me, int sessionId, String ip) {
+        if (me != null && !"HEAD_TRAINER".equals(me.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can submit session data to vet");
+        }
+        SessionResponse current = getOrThrow(sessionId);
+        if (me != null && "HEAD_TRAINER".equals(me.role()) && horseRepository != null) {
+            Set<Integer> mine = horseRepository.findHorseIdsByTrainer(me.userId());
+            if (!mine.contains(current.horseId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This session belongs to a horse not assigned to you");
+            }
+        }
+        users.writeAudit(me == null ? null : me.userId(),
+                "RECOVERY_SESSION_SUBMIT_TO_VET", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+
+        String distStr = current.actualDistance() != null ? current.actualDistance() + "m" : "N/A";
+        String hrStr = current.avgHeartRate() != null ? current.avgHeartRate() + " bpm" : (current.peakHeartRate() != null ? current.peakHeartRate() + " bpm" : "N/A");
+        String recoveryHrStr = current.recoveryHeartRate() != null ? current.recoveryHeartRate() + " bpm" : "N/A";
+
+        if (notifications != null) {
+            notifications.notifyRole("VETERINARIAN", me, new Notice(
+                    "RECOVERY_SESSION_SUBMITTED",
+                    "Recovery session vitals submitted",
+                    current.horseName() + " has completed a recovery session #" + sessionId + " (Distance: " + distStr + ", Avg HR: " + hrStr + ", Recovery HR: " + recoveryHrStr + "). Data is ready for Vet rating.",
+                    Notice.HORSE, current.horseId()));
+        }
+        return current;
+    }
+
+    /**
      * V37: Kiểm tra các buổi tập đã kết thúc quá 2 ngày (48 tiếng) mà Head Trainer chưa gửi review:
      *  1. Tự động tổng hợp bản báo cáo sơ bộ về chỉ số của ngựa do Groom báo cáo kèm cảnh báo
      *     đây là review tự động, không phải review từ Head Trainer.

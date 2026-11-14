@@ -1,4 +1,4 @@
-﻿// src/features/horse-owner/ownerTrainingApi.js
+// src/features/horse-owner/ownerTrainingApi.js
 // Trang "Training" của chủ ngựa: giáo án, lịch tập, nhật ký buổi tập, nhận xét
 // của Head Trainer và video chạy thử.
 //

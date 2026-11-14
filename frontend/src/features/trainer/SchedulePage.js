@@ -176,6 +176,12 @@ function SessionCard({ session, onEdit, now }) {
         {due ? "DUE · NOT STARTED" : session.status || "UNKNOWN"}
       </span>
 
+      {session.remarks && session.remarks.includes("[Recovery Session]") && (
+        <span style={{ fontSize: "11px", fontWeight: 700, color: "#059669", backgroundColor: "#ecfdf5", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: "8px", alignSelf: "flex-start", marginTop: "2px" }}>
+          🩺 Recovery
+        </span>
+      )}
+
       {canEdit && (
         <button
           className="schedule-edit-button"
@@ -189,6 +195,109 @@ function SessionCard({ session, onEdit, now }) {
   );
 }
 
+function SessionTypeChoiceModal({ isOpen, onClose, onSelect }) {
+  if (!isOpen) return null;
+  return (
+    <div
+      className="schedule-modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="schedule-modal"
+        role="dialog"
+        aria-modal="true"
+        style={{ maxWidth: 520 }}
+      >
+        <div className="schedule-modal-heading">
+          <div>
+            <span className="schedule-eyebrow">NEW WORKOUT</span>
+            <h2>Select session type</h2>
+            <p>Choose the type of training session you want to schedule.</p>
+          </div>
+          <button
+            type="button"
+            className="schedule-close-button"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginTop: "16px", marginBottom: "8px" }}>
+          <button
+            type="button"
+            style={{
+              padding: "18px 16px",
+              borderRadius: "12px",
+              border: "2px solid #e2e8f0",
+              background: "#fff",
+              cursor: "pointer",
+              textAlign: "left",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#d93b87";
+              e.currentTarget.style.background = "#fdf4f9";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "#e2e8f0";
+              e.currentTarget.style.background = "#fff";
+            }}
+            onClick={() => onSelect("TRAINING")}
+          >
+            <span style={{ fontSize: "28px" }}>🏃</span>
+            <div>
+              <strong style={{ fontSize: "15px", color: "#0f172a", display: "block" }}>Training session</strong>
+              <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block", lineHeight: 1.4 }}>
+                Standard workout for race-fit horses based on active training plan & phase.
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            style={{
+              padding: "18px 16px",
+              borderRadius: "12px",
+              border: "2px solid #e2e8f0",
+              background: "#fff",
+              cursor: "pointer",
+              textAlign: "left",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#059669";
+              e.currentTarget.style.background = "#f0fdf4";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "#e2e8f0";
+              e.currentTarget.style.background = "#fff";
+            }}
+            onClick={() => onSelect("RECOVERY")}
+          >
+            <span style={{ fontSize: "28px" }}>🩺</span>
+            <div>
+              <strong style={{ fontSize: "15px", color: "#059669", display: "block" }}>Recovery session</strong>
+              <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block", lineHeight: 1.4 }}>
+                Rehabilitation light work prescribed by veterinarian (walking, trotting, max 800m).
+              </span>
+            </div>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SessionModal({
   form,
   setForm,
@@ -196,11 +305,13 @@ function SessionModal({
   phases,
   grooms,
   editingSession,
+  isRecovery,
   saving,
   onClose,
   onSubmit,
   onCancel,
 }) {
+  const [recoveryDetails, setRecoveryDetails] = useState(null);
   const selectedPlan = plans.find(
     (plan) => String(plan.planId) === String(form.planId),
   );
@@ -208,6 +319,51 @@ function SessionModal({
     (phase) => String(phase.phaseId) === String(form.phaseId),
   );
   const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
+
+  useEffect(() => {
+    if (!isRecovery || !selectedPlan?.horseId) {
+      setRecoveryDetails(null);
+      return;
+    }
+    let cancelled = false;
+    authFetch(`/api/medical-records?horseId=${selectedPlan.horseId}`)
+      .then((records) => {
+        if (cancelled || !Array.isArray(records)) return;
+        const lw = records.find(
+          (r) =>
+            (r.diagnosis && r.diagnosis.toLowerCase().includes("light work")) ||
+            (r.notes && r.notes.toLowerCase().includes("light work")),
+        );
+        if (lw) {
+          const protoMatch = lw.notes?.match(/protocol:\s*([^.]+)/i) || lw.notes?.match(/protocol\s*[a-c]:\s*([^.]+)/i);
+          const freqMatch = lw.notes?.match(/frequency:\s*([^.]+)/i);
+          const durMatch = lw.notes?.match(/duration:\s*(\d+)/i);
+          setRecoveryDetails({
+            protocol: protoMatch ? protoMatch[0] : (lw.diagnosis || "Controlled walking & light trotting (max 800m)"),
+            frequency: freqMatch ? freqMatch[1].trim() : "Once daily",
+            duration: durMatch ? `${durMatch[1]} days` : "5 days",
+          });
+        } else {
+          setRecoveryDetails({
+            protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
+            frequency: "Once daily",
+            duration: "5 days",
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRecoveryDetails({
+            protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
+            frequency: "Once daily",
+            duration: "5 days",
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRecovery, selectedPlan?.horseId]);
 
   const availableGrooms = useMemo(() => {
     const list = [...grooms];
@@ -245,14 +401,22 @@ function SessionModal({
       >
         <div className="schedule-modal-heading">
           <div>
-            <span className="schedule-eyebrow">TRAINING MANAGEMENT</span>
+            <span className="schedule-eyebrow">
+              {isRecovery ? "RECOVERY & REHABILITATION" : "TRAINING MANAGEMENT"}
+            </span>
             <h2 id="schedule-modal-title">
-              {editingSession ? "Edit schedule" : "Create training session"}
+              {editingSession
+                ? "Edit schedule"
+                : isRecovery
+                  ? "Schedule recovery session"
+                  : "Create training session"}
             </h2>
             <p>
               {editingSession
                 ? "Change the assigned Groom, session time, and planned duration."
-                : "Choose an active plan, a training phase, a Groom managed by you, and session duration."}
+                : isRecovery
+                  ? "Schedule a rehabilitation workout according to the veterinarian's light work protocol."
+                  : "Choose an active plan, a training phase, a Groom managed by you, and session duration."}
             </p>
           </div>
           <button
@@ -267,6 +431,30 @@ function SessionModal({
         </div>
 
         <form className="schedule-form" onSubmit={onSubmit} noValidate>
+          {isRecovery && (
+            <div
+              style={{
+                backgroundColor: "#f0fdf4",
+                border: "1px solid #86efac",
+                borderRadius: "10px",
+                padding: "12px 16px",
+                marginBottom: "16px",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                🩺 Prescribed Rehabilitation Plan (from Veterinarian)
+              </strong>
+              <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px", color: "#15803d", fontSize: "12px" }}>
+                <span>• <strong>Protocol:</strong> {recoveryDetails?.protocol || "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm"}</span>
+                <span>• <strong>Prescribed Frequency:</strong> {recoveryDetails?.frequency || "Once daily (1 session/day)"}</span>
+                <span>• <strong>Expected Duration:</strong> {recoveryDetails?.duration || "5 days"}</span>
+                <span>• <strong>Safety Rule:</strong> Training lock restricts distance to maximum 800m.</span>
+              </div>
+            </div>
+          )}
+
           {!editingSession && (
             <>
               <label>
@@ -371,6 +559,29 @@ function SessionModal({
                   </div>
                 )}
               </label>
+
+              {isRecovery && (
+                <label>
+                  Planned distance (meters)
+                  <input
+                    type="number"
+                    required
+                    min="100"
+                    max="800"
+                    step="50"
+                    value={form.plannedDistance || "800"}
+                    onChange={(event) =>
+                      setForm((old) => ({
+                        ...old,
+                        plannedDistance: event.target.value,
+                      }))
+                    }
+                  />
+                  <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                    ✓ Restricted by Light work training lock: Maximum 800 meters.
+                  </small>
+                </label>
+              )}
             </>
           )}
 
@@ -559,6 +770,8 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [sessionTypeChoiceOpen, setSessionTypeChoiceOpen] = useState(false);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState("");
@@ -665,7 +878,8 @@ export default function SchedulePage() {
     return result;
   }, [sessions, weekDays]);
 
-  const openCreateModal = () => {
+  const openCreateModal = (recovery = false) => {
+    setIsRecoverySession(Boolean(recovery));
     setEditingSession(null);
     setPhases([]);
     const defaultPlan = plans.length === 1 ? plans[0] : null;
@@ -675,8 +889,14 @@ export default function SchedulePage() {
             ...EMPTY_FORM,
             planId: String(defaultPlan.planId),
             assignedTo: defaultPlan.groomId ? String(defaultPlan.groomId) : "",
+            plannedDistance: recovery ? "800" : "",
+            plannedDuration: recovery ? "30" : "60",
           }
-        : EMPTY_FORM,
+        : {
+            ...EMPTY_FORM,
+            plannedDistance: recovery ? "800" : "",
+            plannedDuration: recovery ? "30" : "60",
+          },
     );
     setError("");
     setNotice("");
@@ -684,6 +904,7 @@ export default function SchedulePage() {
   };
 
   const openEditModal = (session) => {
+    setIsRecoverySession(Boolean(session.remarks && session.remarks.includes("[Recovery Session]")));
     setEditingSession(session);
     setPhases([]);
     setForm({
@@ -702,6 +923,7 @@ export default function SchedulePage() {
   const closeModal = () => {
     if (saving) return;
     setModalOpen(false);
+    setIsRecoverySession(false);
     setEditingSession(null);
     setPhases([]);
     setForm(EMPTY_FORM);
@@ -713,6 +935,10 @@ export default function SchedulePage() {
       const dist = Number(form.plannedDistance);
       if (!Number.isFinite(dist) || dist <= 0 || dist > 5000) {
         setError("Planned distance must be between 1 and 5,000 meters (maximum 5,000m).");
+        return;
+      }
+      if (isRecoverySession && dist > 800) {
+        setError("Recovery session distance cannot exceed 800 meters under Light work protocol.");
         return;
       }
     }
@@ -759,18 +985,21 @@ export default function SchedulePage() {
           phaseId: Number(form.phaseId),
           assignedTo: Number(form.assignedTo),
           sessionDate,
-          plannedDistance: (form.plannedDistance || selectedPhase?.distance)
-            ? Number(form.plannedDistance || selectedPhase?.distance)
-            : null,
+          plannedDistance: isRecoverySession
+            ? Math.min(800, Number(form.plannedDistance || 800))
+            : ((form.plannedDistance || selectedPhase?.distance)
+              ? Number(form.plannedDistance || selectedPhase?.distance)
+              : null),
           plannedDuration,
           velocityCeiling: form.velocityCeiling !== "" ? Number(form.velocityCeiling) : (selectedPhase?.targetVelocity != null ? Number(selectedPhase.targetVelocity) : null),
+          remarks: isRecoverySession ? "[Recovery Session] Prescribed light work rehabilitation" : null,
         };
 
         await authFetch(SESSION_API, {
           method: "POST",
           body: JSON.stringify(body),
         });
-        setNotice("Training session created successfully.");
+        setNotice(isRecoverySession ? "Recovery session scheduled successfully." : "Training session created successfully.");
       }
 
       setModalOpen(false);
@@ -855,7 +1084,7 @@ export default function SchedulePage() {
             <button
               type="button"
               className="schedule-button primary"
-              onClick={openCreateModal}
+              onClick={() => setSessionTypeChoiceOpen(true)}
             >
               <span aria-hidden="true">＋</span> New session
             </button>
@@ -967,6 +1196,15 @@ export default function SchedulePage() {
         </section>
       </main>
 
+      <SessionTypeChoiceModal
+        isOpen={sessionTypeChoiceOpen}
+        onClose={() => setSessionTypeChoiceOpen(false)}
+        onSelect={(type) => {
+          setSessionTypeChoiceOpen(false);
+          openCreateModal(type === "RECOVERY");
+        }}
+      />
+
       {modalOpen && (
         <SessionModal
           form={form}
@@ -975,6 +1213,7 @@ export default function SchedulePage() {
           phases={phases}
           grooms={grooms}
           editingSession={editingSession}
+          isRecovery={isRecoverySession}
           saving={saving}
           onClose={closeModal}
           onSubmit={handleSubmit}

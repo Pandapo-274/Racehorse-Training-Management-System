@@ -32,3 +32,9 @@ export function evaluateSession(sessionId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function submitRecoveryToVet(sessionId) {
+  return authFetch(`${API}/${sessionId}/submit-to-vet`, {
+    method: "POST",
+  });
+}

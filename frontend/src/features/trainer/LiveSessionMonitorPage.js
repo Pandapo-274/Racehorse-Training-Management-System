@@ -1,6 +1,6 @@
 import { useSignOutModal } from "../auth/SignOutModal";
 import { parseServerTime } from "../horse/horseApi";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -293,6 +293,15 @@ function VetCallCard({ call }) {
   );
 }
 
+function isRecoverySession(session) {
+  if (!session) return false;
+  return Boolean(
+    (session.remarks && session.remarks.includes("[Recovery Session]")) ||
+    (session.phaseName && session.phaseName.toLowerCase().includes("recovery")) ||
+    (session.plannedDistance && session.plannedDistance <= 800 && session.remarks && session.remarks.toLowerCase().includes("recovery"))
+  );
+}
+
 export default function LiveSessionMonitorPage() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
@@ -309,6 +318,14 @@ export default function LiveSessionMonitorPage() {
   const [vetCalls, setVetCalls] = useState([]);
   const [callingFor, setCallingFor] = useState(null);
   const latestAlertId = useRef(0);
+  const [sessionFilter, setSessionFilter] = useState("ALL");
+  const regularCount = useMemo(() => sessions.filter((s) => !isRecoverySession(s)).length, [sessions]);
+  const recoveryCount = useMemo(() => sessions.filter(isRecoverySession).length, [sessions]);
+  const filteredSessions = useMemo(() => {
+    if (sessionFilter === "REGULAR") return sessions.filter((s) => !isRecoverySession(s));
+    if (sessionFilter === "RECOVERY") return sessions.filter(isRecoverySession);
+    return sessions;
+  }, [sessions, sessionFilter]);
 
   const handleError = useCallback((err) => {
     if (err?.name === "AbortError") return;
@@ -522,19 +539,78 @@ export default function LiveSessionMonitorPage() {
                   <span className="schedule-eyebrow">LIVE TRACKING</span>
                   <h2>Running sessions</h2>
                 </div>
-                <span className="live-count">{sessions.length}</span>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      border: "1px solid",
+                      cursor: "pointer",
+                      backgroundColor: sessionFilter === "ALL" ? "#d93b87" : "#fff",
+                      color: sessionFilter === "ALL" ? "#fff" : "#64748b",
+                      borderColor: sessionFilter === "ALL" ? "#d93b87" : "#cbd5e1",
+                    }}
+                    onClick={() => setSessionFilter("ALL")}
+                  >
+                    All ({sessions.length})
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      border: "1px solid",
+                      cursor: "pointer",
+                      backgroundColor: sessionFilter === "REGULAR" ? "#d93b87" : "#fff",
+                      color: sessionFilter === "REGULAR" ? "#fff" : "#64748b",
+                      borderColor: sessionFilter === "REGULAR" ? "#d93b87" : "#cbd5e1",
+                    }}
+                    onClick={() => setSessionFilter("REGULAR")}
+                  >
+                    Regular ({regularCount})
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      border: "1px solid",
+                      cursor: "pointer",
+                      backgroundColor: sessionFilter === "RECOVERY" ? "#059669" : "#fff",
+                      color: sessionFilter === "RECOVERY" ? "#fff" : "#059669",
+                      borderColor: sessionFilter === "RECOVERY" ? "#059669" : "#a7f3d0",
+                    }}
+                    onClick={() => setSessionFilter("RECOVERY")}
+                  >
+                    🩺 Recovery ({recoveryCount})
+                  </button>
+                </div>
               </div>
               {loading && sessions.length === 0 ? (
                 <p className="live-empty">Loading sessions…</p>
-              ) : sessions.length === 0 ? (
-                <p className="live-empty">No training sessions are running right now.</p>
+              ) : filteredSessions.length === 0 ? (
+                <p className="live-empty">No running sessions match this filter.</p>
               ) : (
                 <div className="live-running-list">
-                  {sessions.map((session) => (
+                  {filteredSessions.map((session) => (
                     <article className="live-running-card" key={session.sessionId}>
                       <div className="live-running-top">
                         <strong>{session.horseName || `Horse #${session.horseId}`}</strong>
-                        <span>RUNNING</span>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                          {isRecoverySession(session) && (
+                            <span style={{ backgroundColor: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0", padding: "1px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
+                              🩺 Recovery
+                            </span>
+                          )}
+                          <span>RUNNING</span>
+                        </div>
                       </div>
                       <p>{session.phaseName || `Phase ${session.phaseNo}`} · Session #{session.sessionId}</p>
                       <div className="live-metrics">

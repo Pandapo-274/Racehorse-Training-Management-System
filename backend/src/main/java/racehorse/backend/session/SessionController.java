@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,14 +28,14 @@ public class SessionController {
 
     /**
      * Màn "Session Evaluation": lọc theo trạng thái (vd. RUNNING, STOPPED_EARLY)
-     * để tìm ca cần chấm.
+     * để tìm ca cần chấm. Bác sĩ thú y đọc được để đánh giá phục hồi (Recovery Rating).
      *
      * HORSE_OWNER đọc được, nhưng service lọc theo owner_id nên chủ ngựa chỉ
      * thấy nhận xét của ngựa mình. Thêm vai trò ở đây mà không lọc dưới kia là
      * cho mọi chủ ngựa đọc nhận xét của cả chuồng.
      */
     @GetMapping
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER", "VETERINARIAN"})
     public List<SessionResponse> list(@RequestParam(value = "status", required = false) String status,
                                       @RequestParam(value = "horseId", required = false) Integer horseId,
                                       @RequestParam(value = "limit", defaultValue = "50") int limit,
@@ -43,7 +44,7 @@ public class SessionController {
     }
 
     @GetMapping("/{id}")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER", "VETERINARIAN"})
     public SessionResponse get(@PathVariable("id") int id,
                                @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me) {
         return service.get(id, me);
@@ -56,5 +57,16 @@ public class SessionController {
                                     @Valid @RequestBody EvaluateSessionRequest request,
                                     HttpServletRequest http) {
         return service.evaluate(me, id, request, http.getRemoteAddr());
+    }
+
+    /**
+     * Head Trainer gửi dữ liệu buổi tập hồi phục sang cho Bác sĩ thú y chấm rating.
+     */
+    @PostMapping("/{id}/submit-to-vet")
+    @RequireRole({"HEAD_TRAINER"})
+    public SessionResponse submitToVet(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me,
+                                       @PathVariable("id") int id,
+                                       HttpServletRequest http) {
+        return service.submitToVet(me, id, http.getRemoteAddr());
     }
 }
