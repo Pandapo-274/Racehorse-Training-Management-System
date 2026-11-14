@@ -39,7 +39,7 @@ import {
   createMedicalRecord,
 } from "./vetApi";
 
-const STAGES = ["Injured", "Treatment", "Light work", "Rating", "Healthy"];
+const STAGES = ["Examine", "Treatment", "Light work", "Rating", "Healthy"];
 
 const REMINDERS = [
   ["VACCINATION", "Vaccination"],
