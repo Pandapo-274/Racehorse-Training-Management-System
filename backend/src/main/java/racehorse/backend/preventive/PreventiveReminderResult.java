@@ -14,5 +14,10 @@ public record PreventiveReminderResult(
         int dueSoon,
         int never,
         int skipped,
-        int vetsNotified
-) {}
+        int vetsNotified,
+        int ownersNotified
+) {
+    public PreventiveReminderResult(int reminded, int overdue, int dueSoon, int never, int skipped, int vetsNotified) {
+        this(reminded, overdue, dueSoon, never, skipped, vetsNotified, 0);
+    }
+}

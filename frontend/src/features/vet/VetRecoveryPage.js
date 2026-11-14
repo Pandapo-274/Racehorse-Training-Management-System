@@ -70,7 +70,7 @@ function captionOf(stage, open, activeTreatments = [], activeLock = null, lightW
     case 3:
       return "Fitness assessment completed. All injuries have healed. Confirm recovery to release the training lock.";
     case 2:
-      return `Light work rehabilitation in progress (${lightWorkInfo || "Stage 2"}). Restricted to light sessions (max 800m, trotting/walking, HR <= 130 bpm). Lock level: ${activeLock?.lockLevel || "HEAVY_WORK_ONLY"}.`;
+      return `Light work rehabilitation in progress (${lightWorkInfo || "Stage 2"}). Restricted to light sessions (max 800m, trotting/walking, HR <= 130 bpm). Lock level: ${activeLock?.lockLevel === "HEAVY_WORK_ONLY" ? "Heavy work only" : (activeLock?.lockLevel || "Heavy work only")}.`;
     case 1:
       if (activeTreatments.length > 0) {
         const medNames = activeTreatments.map((t) => t.medicineName || t.instruction).filter(Boolean).join(", ");
@@ -148,7 +148,8 @@ function RecoveryView({ horseId }) {
       const lwStart = lwExam ? lwExam.examDate : base?.examDate || activeLock?.issuedAt;
       const lwDays = lwStart ? daysSince(lwStart) + 1 : 1;
       const expectedDays = 5;
-      lightWorkInfo = `Light work · Day ${lwDays}/${expectedDays} (Lock: ${activeLock?.lockLevel || "HEAVY_WORK_ONLY"})`;
+      const lockDisplay = activeLock?.lockLevel === "HEAVY_WORK_ONLY" ? "Heavy work only" : (activeLock?.lockLevel || "Heavy work only");
+      lightWorkInfo = `Light work · Day ${lwDays}/${expectedDays} (Lock: ${lockDisplay})`;
     }
 
     const reminders = REMINDERS.map(([type, label]) => {
@@ -383,7 +384,7 @@ function RecoveryView({ horseId }) {
               <div className="vx-banner vx-banner--info" style={{ marginTop: "10px", marginBottom: "12px", textAlign: "left", background: "#f0f9ff", borderLeft: "4px solid #0284c7" }}>
                 <strong style={{ color: "#0369a1" }}>Light work protocol active</strong>
                 <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#0c4a6e" }}>
-                  The horse is undergoing light exercise rehabilitation (HEAVY_WORK_ONLY). When the horse is ready, progress to Rating to evaluate fitness, or release lock when fully recovered.
+                  The horse is undergoing light exercise rehabilitation (Heavy work only). When the horse is ready, progress to Rating to evaluate fitness, or release lock when fully recovered.
                 </p>
               </div>
             )}
@@ -502,11 +503,11 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
         recordType: "EXAM",
         diagnosis: `Light work clearance: ${findings.trim()}`,
         injuryConfirmed: false,
-        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days. Training lock set to HEAVY_WORK_ONLY (max 800m). ${notes.trim()}`.trim(),
+        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days. Training lock set to Heavy work only (max 800m). ${notes.trim()}`.trim(),
       });
 
       onDone({
-        message: `${horse.horseName} has advanced to Light work. Training lock updated to HEAVY_WORK_ONLY (max 800m).`,
+        message: `${horse.horseName} has advanced to Light work. Training lock updated to Heavy work only (max 800m).`,
       });
     } catch (err) {
       setError(describeError(err));
@@ -527,7 +528,7 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
         <div className="vx-banner vx-banner--warn" style={{ marginTop: "12px", marginBottom: "16px" }}>
           <strong>Safety Rule & Training Restriction</strong>
           <p style={{ margin: "4px 0 0", fontSize: "13px" }}>
-            The training lock will automatically switch to <strong>HEAVY_WORK_ONLY</strong>. The head trainer will be restricted to light rehabilitation sessions only (maximum 800m, trotting/walking, HR &le; 130 bpm).
+            The training lock will automatically switch to <strong>Heavy work only</strong>. The head trainer will be restricted to light rehabilitation sessions only (maximum 800m, trotting/walking, HR &le; 130 bpm).
           </p>
         </div>
 
@@ -581,8 +582,8 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
                 type="text"
                 disabled
                 className="vx-input"
-                value="HEAVY_WORK_ONLY (Light work only)"
-                style={{ background: "#f8f9fa", fontWeight: 600 }}
+                value="Heavy work only (Light work only)"
+                style={{ background: "#f8f9fa", fontWeight: 700 }}
               />
             </label>
           </div>

@@ -352,7 +352,8 @@ function RunBanner({ result, error }) {
   return (
     <div className="vx-banner vx-banner--ok" role="status">
       <strong>
-        Reminder sent to {plural(result.vetsNotified, "veterinarian")}. Check the bell for it.
+        Reminder sent to {plural(result.vetsNotified, "veterinarian")}
+        {result.ownersNotified > 0 ? ` and ${plural(result.ownersNotified, "horse owner")}` : ""}. Check the bell for it.
       </strong>
       <p>
         {plural(result.reminded, "item")}: {result.overdue} overdue, {result.dueSoon} due soon,{" "}
@@ -375,13 +376,32 @@ function RecordDialog({ item, onClose, onDone }) {
 
   const label = careTypeLabel(item.careType);
 
+  const getNextDayYmd = (ymdStr) => {
+    if (!ymdStr) return undefined;
+    const base = String(ymdStr).slice(0, 10);
+    const [y, m, d] = base.split("-").map(Number);
+    const next = new Date(y, m - 1, d + 1);
+    const ny = next.getFullYear();
+    const nm = String(next.getMonth() + 1).padStart(2, "0");
+    const nd = String(next.getDate()).padStart(2, "0");
+    return `${ny}-${nm}-${nd}`;
+  };
+
+  const minDoneDate = item.lastExamDate ? getNextDayYmd(item.lastExamDate) : undefined;
+
   const submit = async () => {
     setError(null);
 
     // Báo sớm đúng những điều backend sẽ từ chối (UC14: ngày hẹn bắt buộc và ở tương lai).
     const problems = [];
-    if (!doneOn) problems.push("Enter the date it was done.");
-    else if (doneOn > todayInputValue()) problems.push("The date done cannot be in the future.");
+    if (!doneOn) {
+      problems.push("Enter the date it was done.");
+    } else if (doneOn > todayInputValue()) {
+      problems.push("The date done cannot be in the future.");
+    } else if (minDoneDate && doneOn < minDoneDate) {
+      problems.push(`The date done must be after the last recorded date (${formatDate(item.lastExamDate)}).`);
+    }
+
     if (!nextDue) problems.push("Enter the date it is next due, or it will never be reminded.");
     else if (nextDue <= todayInputValue()) problems.push("The next due date must be after today.");
     if (problems.length) {
@@ -435,6 +455,7 @@ function RecordDialog({ item, onClose, onDone }) {
               type="date"
               className="vx-input"
               value={doneOn}
+              min={minDoneDate}
               max={todayInputValue()}
               onChange={(e) => setDoneOn(e.target.value)}
             />

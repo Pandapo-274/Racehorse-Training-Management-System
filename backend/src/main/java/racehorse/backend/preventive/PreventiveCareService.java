@@ -145,7 +145,7 @@ public class PreventiveCareService {
         }
 
         return new PreventiveCareItem(
-                r.horseId(), r.horseName(), r.registrationCode(), r.stallNo(),
+                r.horseId(), r.ownerId(), r.horseName(), r.registrationCode(), r.stallNo(),
                 r.careType(), r.lastRecordId(), r.lastExamDate(), r.nextDueDate(),
                 r.vetName(), status, daysUntilDue, daysSinceRegistered);
     }

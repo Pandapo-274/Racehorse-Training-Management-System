@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
  */
 public record PreventiveCareItem(
         int horseId,
+        int ownerId,
         String horseName,
         String registrationCode,
         String stallNo,

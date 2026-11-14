@@ -140,4 +140,43 @@ public class NotificationRepository {
                 .param("userId", userId)
                 .update();
     }
+
+    public boolean hasNotificationSent(int userId, String type, String entity, int targetId, String title) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*) FROM NOTIFICATION
+                WHERE user_id = :userId
+                  AND notif_type = :type
+                  AND target_entity = :entity
+                  AND target_id = :targetId
+                  AND title = :title
+                  AND CAST(created_at AS DATE) = CAST(SYSUTCDATETIME() AS DATE)
+                """)
+                .param("userId", userId)
+                .param("type", type)
+                .param("entity", entity)
+                .param("targetId", targetId)
+                .param("title", title)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
+    public boolean hasOverdueNotificationRecently(int userId, String type, String entity, int targetId) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*) FROM NOTIFICATION
+                WHERE user_id = :userId
+                  AND notif_type = :type
+                  AND target_entity = :entity
+                  AND target_id = :targetId
+                  AND title LIKE '%Overdue%'
+                  AND created_at >= DATEADD(day, -7, SYSUTCDATETIME())
+                """)
+                .param("userId", userId)
+                .param("type", type)
+                .param("entity", entity)
+                .param("targetId", targetId)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
 }

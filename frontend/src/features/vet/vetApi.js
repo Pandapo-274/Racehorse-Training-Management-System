@@ -235,11 +235,13 @@ export const LOCK_LEVELS = [
   { value: "FULL", label: "Full lock", hint: "No training at all" },
   /* Khớp app.lock.light-work-max-distance (mặc định 1200 m) ở backend:
      buổi tập có cự ly dự kiến tới mức đó vẫn được xếp và bắt đầu. */
-  { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
+  { value: "HEAVY_WORK_ONLY", label: "Heavy work only", hint: "Light work only: sessions up to 1,200 m" },
 ];
 
 export function lockLevelLabel(level) {
-  return LOCK_LEVELS.find((l) => l.value === level)?.label || level || "—";
+  if (level === "HEAVY_WORK_ONLY") return "Heavy work only";
+  if (level === "FULL") return "Full lock";
+  return LOCK_LEVELS.find((l) => l.value === level)?.label || (level ? level.replace(/_/g, " ") : "—");
 }
 
 /** Ba loại chăm sóc định kỳ của UC17 (record_type khác EXAM). */

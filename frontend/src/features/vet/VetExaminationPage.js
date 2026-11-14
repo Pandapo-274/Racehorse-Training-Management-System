@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import { toAge } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
@@ -322,8 +322,10 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
 
 function ExaminationForm({ horseId, reportId }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = getUser();
   const [report, setReport] = useState(null);
+  const [notice, setNotice] = useState(location.state?.notice || "");
 
   useEffect(() => {
     if (!reportId) return undefined;
@@ -340,7 +342,7 @@ function ExaminationForm({ horseId, reportId }) {
   const [loadError, setLoadError] = useState("");
   const [reload, setReload] = useState(0);
 
-  const [examDate, setExamDate] = useState(todayInputValue());
+  const examDate = todayInputValue();
   const [diagnosis, setDiagnosis] = useState("");
   const [confirmed, setConfirmed] = useState("yes");
   const [restDays, setRestDays] = useState("");
@@ -367,6 +369,33 @@ function ExaminationForm({ horseId, reportId }) {
 
   const injuryConfirmed = confirmed === "yes";
   const activeLock = locks.find((l) => l.status === "ACTIVE") || null;
+
+  const effectivePostStatus = injuryConfirmed
+    ? "INJURED"
+    : (otherStatus || horse?.status || "ELIGIBLE");
+
+  const availableLockOptions = (() => {
+    if (effectivePostStatus === "QUARANTINE") {
+      return [
+        { value: "FULL", label: "Full lock", hint: "No training at all (mandatory for quarantine)" },
+      ];
+    }
+    if (effectivePostStatus === "INJURED") {
+      return [
+        { value: "FULL", label: "Full lock", hint: "No training at all" },
+        { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
+      ];
+    }
+    return LOCK_SELECTION_OPTIONS;
+  })();
+
+  useEffect(() => {
+    if (effectivePostStatus === "QUARANTINE" && lockLevel !== "FULL") {
+      setLockLevel("FULL");
+    } else if (effectivePostStatus === "INJURED" && lockLevel === "NONE") {
+      setLockLevel("FULL");
+    }
+  }, [effectivePostStatus, lockLevel]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -470,6 +499,13 @@ function ExaminationForm({ horseId, reportId }) {
       }
     }
 
+    if (effectivePostStatus === "QUARANTINE" && lockLevel !== "FULL") {
+      problems.push("A horse in quarantine must have a Full training lock.");
+    }
+    if (effectivePostStatus === "INJURED" && lockLevel === "NONE") {
+      problems.push("An injured horse cannot have No lock. Choose Full lock or No heavy work.");
+    }
+
     return problems;
   };
 
@@ -489,7 +525,6 @@ function ExaminationForm({ horseId, reportId }) {
     setSubmitting(withLock ? "lock" : "save");
 
     const done = saved.current;
-    const statusBefore = horse.status;
 
     try {
       if (!done.record) {
@@ -522,33 +557,32 @@ function ExaminationForm({ horseId, reportId }) {
         });
       }
 
-      if (!withLock) {
-        navigate("/veterinarian", {
-          state: {
-            notice: `Examination saved for ${horse.horseName}.`,
-          },
+      let successNotice = `Examination saved for ${horse.horseName}.`;
+      if (withLock) {
+        await issueLock({
+          horseId,
+          injuryId: done.injury?.injuryId ?? null,
+          reason: (reason.trim() || diagnosis.trim()).slice(0, 255),
+          lockLevel,
         });
-        return;
+        const levelText = lockLevel === "FULL" ? "Full lock" : "No heavy work (Light work only)";
+        successNotice = `Examination saved for ${horse.horseName}. Training lock is now in force (${levelText}).`;
       }
 
-      const lock = await issueLock({
-        horseId,
-        injuryId: done.injury?.injuryId ?? null,
-        reason: (reason.trim() || diagnosis.trim()).slice(0, 255),
-        lockLevel,
-      });
-
-      navigate(
-        `/veterinarian/examination/${horseId}/lock-issued`,
-        {
-          state: {
-            lock,
-            record: done.record,
-            injury: done.injury,
-            statusBefore,
-          },
-        }
-      );
+      setNotice(successNotice);
+      setError(null);
+      setDiagnosis("");
+      setNotes("");
+      setRestDays("");
+      setWeight("");
+      setMarker(null);
+      setBodyLocation("");
+      setReason("");
+      setOtherStatus("");
+      setConfirmed("yes");
+      saved.current = { record: null, injury: null };
+      setReload((r) => r + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
 
@@ -665,6 +699,20 @@ function ExaminationForm({ horseId, reportId }) {
       </div>
       <VetError error={error} />
 
+      {notice && (
+        <div className="vx-banner vx-banner--ok" role="status" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="vx-link"
+            style={{ border: "none", background: "none", cursor: "pointer", fontWeight: 700, padding: "0 4px" }}
+            onClick={() => setNotice("")}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {report && (
         <div className="vx-banner vx-banner--warn" role="status">
           <strong>
@@ -762,9 +810,10 @@ function ExaminationForm({ horseId, reportId }) {
                 <input
                   type="date"
                   className="vx-input"
-                  value={examDate}
-                  min={todayInputValue()}
-                  onChange={(e) => setExamDate(e.target.value)}
+                  value={todayInputValue()}
+                  readOnly
+                  disabled
+                  style={{ background: "#f8f9fa", cursor: "not-allowed", color: "#495057" }}
                 />
               </Field>
 
@@ -879,7 +928,7 @@ function ExaminationForm({ horseId, reportId }) {
                     value={lockLevel}
                     onChange={(e) => setLockLevel(e.target.value)}
                   >
-                    {LOCK_SELECTION_OPTIONS.map((l) => (
+                    {availableLockOptions.map((l) => (
                       <option key={l.value} value={l.value}>
                         {l.label} — {l.hint}
                       </option>

@@ -108,4 +108,12 @@ public class NotificationService {
     public int markAllRead(AuthenticatedUser me) {
         return notifications.markAllRead(me.userId());
     }
+
+    public boolean hasNotificationSentToday(int userId, String type, String entity, int targetId, String title) {
+        return notifications.hasNotificationSent(userId, type, entity, targetId, title);
+    }
+
+    public boolean hasOverdueNotificationRecently(int userId, String type, String entity, int targetId) {
+        return notifications.hasOverdueNotificationRecently(userId, type, entity, targetId);
+    }
 }

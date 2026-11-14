@@ -103,6 +103,49 @@ public class PreventiveReminderService {
             }
         }
 
+        // Notify horse owners for due soon (3, 2, 1 days or today) and overdue
+        int ownersNotified = 0;
+        for (PreventiveCareItem item : candidates) {
+            if (item.nextDueDate() == null || item.daysUntilDue() == null) {
+                continue;
+            }
+            int days = item.daysUntilDue();
+            int ownerId = item.ownerId();
+            String careName = switch (item.careType()) {
+                case "VACCINATION" -> "Vaccination";
+                case "DEWORMING" -> "Deworming";
+                case "FARRIER" -> "Farrier";
+                default -> item.careType();
+            };
+
+            if (days == 3 || days == 2 || days == 1 || days == 0) {
+                String dayText = switch (days) {
+                    case 0 -> "due today";
+                    case 1 -> "due tomorrow";
+                    default -> "due in " + days + " days";
+                };
+                String title = "[Care reminder] " + careName + " " + dayText + ": " + item.horseName();
+                String message = "Your horse " + item.horseName() + " (" + item.registrationCode()
+                        + ") is scheduled for " + careName.toLowerCase() + " on " + item.nextDueDate()
+                        + " (" + dayText + ").";
+
+                if (!notifications.hasNotificationSentToday(ownerId, NOTICE_TYPE, Notice.HORSE, item.horseId(), title)) {
+                    notifications.notifyUser(ownerId, new Notice(NOTICE_TYPE, title, message, Notice.HORSE, item.horseId()));
+                    ownersNotified++;
+                }
+            } else if (days < 0) {
+                String title = "[Care overdue] " + careName + " overdue: " + item.horseName();
+                String message = "Your horse " + item.horseName() + " (" + item.registrationCode()
+                        + ") is overdue for " + careName.toLowerCase() + " (was due on " + item.nextDueDate()
+                        + "). Please schedule with the club veterinarian.";
+
+                if (!notifications.hasOverdueNotificationRecently(ownerId, NOTICE_TYPE, Notice.HORSE, item.horseId())) {
+                    notifications.notifyUser(ownerId, new Notice(NOTICE_TYPE, title, message, Notice.HORSE, item.horseId()));
+                    ownersNotified++;
+                }
+            }
+        }
+
         logs.deleteOlderThan(today.minusDays(KEEP_LOG_DAYS));
 
         if (actorId != null) {
@@ -117,7 +160,8 @@ public class PreventiveReminderService {
                 (int) toRemind.stream().filter(i -> "DUE_SOON".equals(i.careStatus())).count(),
                 (int) toRemind.stream().filter(i -> "NEVER".equals(i.careStatus())).count(),
                 candidates.size() - toRemind.size(),
-                vetsNotified);
+                vetsNotified,
+                ownersNotified);
     }
 
     /* ------------------------------------------------------------------ */

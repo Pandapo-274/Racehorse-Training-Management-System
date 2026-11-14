@@ -52,7 +52,7 @@ public class PreventiveCareRepository {
      * che mất đúng những con ngựa thật đang cần việc.
      */
     private static final String SELECT_BOARD = """
-            SELECT h.horse_id, h.horse_name, h.registration_code, h.stall_no, h.created_at,
+            SELECT h.horse_id, h.owner_id, h.horse_name, h.registration_code, h.stall_no, h.created_at,
                    t.care_type,
                    m.record_id, m.exam_date, m.next_due_date,
                    u.full_name AS vet_name
@@ -71,6 +71,7 @@ public class PreventiveCareRepository {
     private static PreventiveCareRow map(ResultSet rs, int rowNum) throws SQLException {
         return new PreventiveCareRow(
                 rs.getInt("horse_id"),
+                rs.getInt("owner_id"),
                 rs.getString("horse_name"),
                 rs.getString("registration_code"),
                 rs.getString("stall_no"),
@@ -84,7 +85,7 @@ public class PreventiveCareRepository {
 
     /** Dòng thô từ database, chưa phân loại. Service quyết OVERDUE hay DUE_SOON. */
     public record PreventiveCareRow(
-            int horseId, String horseName, String registrationCode, String stallNo,
+            int horseId, int ownerId, String horseName, String registrationCode, String stallNo,
             LocalDateTime horseCreatedAt, String careType,
             Integer lastRecordId, LocalDateTime lastExamDate, LocalDate nextDueDate,
             String vetName) {}
