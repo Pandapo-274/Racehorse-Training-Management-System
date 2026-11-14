@@ -29,12 +29,40 @@ public class RaceRepository {
                    u.full_name AS registered_by_name, r.result, r.prize_money, r.note,
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
                    r.finish_position, r.finish_time_ms, r.scratch_reason,
-                   r.approval_status, r.reject_reason
+                   r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
             JOIN APP_USER o ON o.user_id  = h.owner_id
             JOIN APP_USER u ON u.user_id  = r.registered_by
+            """;
+
+    /**
+     * Một suất còn hiệu lực: chưa rút, chủ chưa từ chối, và nếu còn chờ chủ duyệt
+     * thì chưa hết hạn (RaceModels.proposalExpired, cùng điều kiện bằng SQL).
+     * Đề xuất hết hạn không giữ chỗ trong giải và không chặn luật nghỉ giữa hai
+     * giải: con ngựa sẽ không chạy giải đó.
+     * Cần alias r = RACE_REGISTRATION, rc = RACE và tham số :today.
+     */
+    private static final String LIVE_ENTRY = """
+            (r.result IS NULL OR r.result <> 'SCRATCHED')
+            AND r.approval_status <> 'REJECTED'
+            AND NOT (r.approval_status = 'PENDING_OWNER'
+                     AND (:today >= rc.race_date
+                          OR (rc.entry_deadline IS NOT NULL AND :today > rc.entry_deadline)))
+            """;
+
+    /**
+     * Đề xuất còn chờ chủ duyệt và CHƯA hết hạn - việc chủ ngựa thật sự còn phải làm.
+     * Cho các chỗ đếm "việc treo của chủ" ngoài Flow 5 (HorseRepository.pendingOnOwner
+     * chặn chuyển chủ, StaffRepository.countRaceEntriesAwaitingOwner): đề xuất hết hạn
+     * không duyệt hay từ chối được nữa, đếm nó thì chuyển chủ bị chặn mãi.
+     * Cần alias r = RACE_REGISTRATION, rc = RACE và tham số :today.
+     */
+    static final String AWAITING_OWNER = """
+            r.approval_status = 'PENDING_OWNER' AND r.result IS NULL
+            AND :today < rc.race_date
+            AND (rc.entry_deadline IS NULL OR :today <= rc.entry_deadline)
             """;
 
     private static RaceModels.Entry map(ResultSet rs, int n) throws SQLException {
@@ -45,21 +73,28 @@ public class RaceRepository {
                 rs.getString("stall_no"), rs.getInt("owner_id"), rs.getString("owner_name"),
                 rs.getString("race_name"), date, rs.getInt("registered_by"),
                 rs.getString("registered_by_name"), result, rs.getBigDecimal("prize_money"),
-                rs.getString("note"), stateOf(result, date, rs.getString("approval_status")),
+                rs.getString("note"),
+                stateOf(result, date, rs.getString("approval_status"),
+                        rs.getObject("entry_deadline", LocalDate.class)),
                 rs.getInt("race_id"), rs.getObject("distance_m", Integer.class), rs.getString("venue"),
                 rs.getString("race_status"), rs.getObject("finish_position", Integer.class),
                 rs.getObject("finish_time_ms", Integer.class), rs.getString("scratch_reason"),
-                rs.getString("approval_status"), rs.getString("reject_reason"));
+                rs.getString("approval_status"), rs.getString("reject_reason"),
+                rs.getObject("trainer_id", Integer.class));
     }
 
     /**
      * SCRATCHED đứng trước trạng thái duyệt: một đề xuất còn chờ chủ mà bị rút
      * (Head Trainer rút, hay huỷ cả giải) là đã rút, không còn "chờ chủ duyệt".
+     * Đề xuất chờ chủ mà đã hết hạn đăng ký là EXPIRED: trước đây nó nằm ở
+     * PENDING_APPROVAL mãi mãi, không duyệt, không rút, không nhập kết quả được.
      */
-    static String stateOf(String result, LocalDate raceDate, String approvalStatus) {
+    static String stateOf(String result, LocalDate raceDate, String approvalStatus, LocalDate entryDeadline) {
         if ("SCRATCHED".equals(result)) return "SCRATCHED";
         if ("REJECTED".equals(approvalStatus)) return "REJECTED";
-        if ("PENDING_OWNER".equals(approvalStatus)) return "PENDING_APPROVAL";
+        if ("PENDING_OWNER".equals(approvalStatus)) {
+            return RaceModels.proposalExpired(raceDate, entryDeadline, LocalDate.now()) ? "EXPIRED" : "PENDING_APPROVAL";
+        }
         if (result != null) return "FINISHED";
         return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
@@ -143,14 +178,16 @@ public class RaceRepository {
 
     /**
      * Ngựa đã có giải khác trong cùng ngày: một con không chạy hai giải một ngày.
-     * Đề xuất bị rút hoặc bị chủ từ chối không tính - con ngựa sẽ không chạy giải đó.
+     * Đề xuất bị rút, bị chủ từ chối hay đã hết hạn không tính - con ngựa sẽ không chạy giải đó.
      */
     public Optional<String> otherRaceOn(int horseId, LocalDate date) {
         return jdbc.sql("""
-                SELECT TOP 1 race_name FROM RACE_REGISTRATION
-                WHERE horse_id = :h AND race_date = :d AND (result IS NULL OR result <> 'SCRATCHED')
-                  AND approval_status <> 'REJECTED'
-                """).param("h", horseId).param("d", date).query(String.class).optional();
+                SELECT TOP 1 r.race_name FROM RACE_REGISTRATION r
+                JOIN RACE rc ON rc.race_id = r.race_id
+                WHERE r.horse_id = :h AND r.race_date = :d AND
+                """ + LIVE_ENTRY)
+                .param("h", horseId).param("d", date).param("today", LocalDate.now())
+                .query(String.class).optional();
     }
 
     /**
@@ -210,17 +247,16 @@ public class RaceRepository {
                 .param("e", expenseId).param("id", registrationId).update();
     }
 
-    /** Entries (not scratched) within gapDays of raceDate, other than this race (#3). */
+    /** Live entries (LIVE_ENTRY) within gapDays of raceDate, other than this race (#3). */
     public Optional<RaceModels.Entry> nearbyEntry(int horseId, LocalDate raceDate, int gapDays, Integer exceptRaceId) {
-        StringBuilder sql = new StringBuilder(SELECT).append("""
-                 WHERE r.horse_id = :h AND (r.result IS NULL OR r.result <> 'SCRATCHED')
-                   AND r.approval_status <> 'REJECTED'
-                   AND ABS(DATEDIFF(DAY, r.race_date, :d)) < :gap
-                """);
+        StringBuilder sql = new StringBuilder(SELECT)
+                .append(" WHERE r.horse_id = :h AND ABS(DATEDIFF(DAY, r.race_date, :d)) < :gap AND ")
+                .append(LIVE_ENTRY);
         Map<String, Object> p = new HashMap<>();
         p.put("h", horseId);
         p.put("d", raceDate);
         p.put("gap", gapDays);
+        p.put("today", LocalDate.now());
         if (exceptRaceId != null) {
             sql.append(" AND r.race_id <> :except");
             p.put("except", exceptRaceId);
@@ -231,12 +267,14 @@ public class RaceRepository {
 
     /* ---------------- RACE (V22) ---------------- */
 
+    /** entries = live entries (LIVE_ENTRY); needs the :today parameter. */
     private static final String SELECT_RACE = """
             SELECT rc.race_id, rc.race_name, rc.race_date, rc.distance_m, rc.venue, rc.entry_deadline,
                    rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason,
-                   (SELECT COUNT(*) FROM RACE_REGISTRATION x
-                    WHERE x.race_id = rc.race_id AND (x.result IS NULL OR x.result <> 'SCRATCHED')
-                      AND x.approval_status <> 'REJECTED') AS entries
+                   (SELECT COUNT(*) FROM RACE_REGISTRATION r
+                    WHERE r.race_id = rc.race_id AND
+            """ + LIVE_ENTRY + """
+                   ) AS entries
             FROM RACE rc
             """;
 
@@ -251,6 +289,7 @@ public class RaceRepository {
 
     public Optional<RaceModels.RaceEvent> findRace(int raceId) {
         return jdbc.sql(SELECT_RACE + " WHERE rc.race_id = :id").param("id", raceId)
+                .param("today", LocalDate.now())
                 .query(RaceRepository::mapRace).optional();
     }
 
@@ -258,10 +297,12 @@ public class RaceRepository {
     public List<RaceModels.RaceEvent> listRaces(LocalDate fromDate) {
         if (fromDate == null) {
             return jdbc.sql(SELECT_RACE + " ORDER BY rc.race_date DESC, rc.race_name")
+                    .param("today", LocalDate.now())
                     .query(RaceRepository::mapRace).list();
         }
         return jdbc.sql(SELECT_RACE + " WHERE rc.race_date >= :from ORDER BY rc.race_date, rc.race_name")
-                .param("from", fromDate).query(RaceRepository::mapRace).list();
+                .param("from", fromDate).param("today", LocalDate.now())
+                .query(RaceRepository::mapRace).list();
     }
 
     public boolean existsByName(String name) {

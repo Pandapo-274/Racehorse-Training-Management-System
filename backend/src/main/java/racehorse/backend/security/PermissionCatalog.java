@@ -126,6 +126,8 @@ public final class PermissionCatalog {
 
             // ---------- Giải đua (Flow 5) ----------
             new Entry(RACES, "View race entries and results", "GET /api/races", OWNER),
+            new Entry(RACES, "View years that have race entries", "GET /api/races/years", NONE),
+            new Entry(RACES, "List horses that can be entered", "GET /api/races/candidates", NONE),
             new Entry(RACES, "View races", "GET /api/races/events", NONE),
             new Entry(RACES, "Create races", "POST /api/races/events", NONE),
             new Entry(RACES, "Cancel a race", "PUT /api/races/events/{id}/cancel", NONE),

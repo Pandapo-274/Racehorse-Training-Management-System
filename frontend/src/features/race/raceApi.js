@@ -124,22 +124,51 @@ export const RESULT_TEXT = {
 export const STATE_TEXT = {
   UPCOMING: { label: "Upcoming", tone: "neutral" },
   PENDING_APPROVAL: { label: "Pending Owner", tone: "warning" },
+  EXPIRED: { label: "Expired", tone: "neutral" },
   AWAITING_RESULT: { label: "Result needed", tone: "warning" },
   FINISHED: { label: "Finished", tone: "good" },
   SCRATCHED: { label: "Scratched", tone: "serious" },
   REJECTED: { label: "Declined", tone: "serious" },
 };
 
-/** The chip for a row: the result once there is one, otherwise the state. */
+/**
+ * The chip for a row: the result once the horse has run, otherwise the state
+ * the backend derived. Goes by state, not approvalStatus: a proposal withdrawn
+ * (or whose race was cancelled) keeps approvalStatus PENDING_OWNER but its
+ * state is SCRATCHED, and used to show as "Pending Owner".
+ */
 export function toEntryChip(entry) {
-  if (entry.approvalStatus === "PENDING_OWNER" || entry.state === "PENDING_APPROVAL") {
-    return { label: "Pending Owner", tone: "warning" };
-  }
-  if (entry.approvalStatus === "REJECTED" || entry.state === "REJECTED") {
-    return { label: "Declined", tone: "serious" };
-  }
-  if (entry.result && RESULT_TEXT[entry.result]) return RESULT_TEXT[entry.result];
+  if (entry.state === "FINISHED" && RESULT_TEXT[entry.result]) return RESULT_TEXT[entry.result];
   return STATE_TEXT[entry.state] || { label: entry.state || "—", tone: "neutral" };
+}
+
+/**
+ * Mirrors app.race.result.edit-window-days in the backend: a result can be
+ * changed by the Head Trainer for this many days after the race; after that
+ * only the Club Manager can, with a reason. Change both together.
+ */
+export const RESULT_EDIT_WINDOW_DAYS = 7;
+
+/** True when the entry already has a result and the edit window has closed. today: "YYYY-MM-DD". */
+export function isResultLocked(entry, today = todayIso()) {
+  if (!entry || entry.state !== "FINISHED" || !entry.raceDate) return false;
+  const [y, m, d] = entry.raceDate.split("-").map(Number);
+  return today > isoOf(new Date(y, m - 1, d + RESULT_EDIT_WINDOW_DAYS));
+}
+
+/** A Head Trainer may enter or scratch only their own horses, or horses not assigned to anyone. */
+export function isTrainersHorse(entry, userId) {
+  return entry.trainerId == null || entry.trainerId === userId;
+}
+
+/**
+ * The backend's message, except the generic "Validation failed" of bean
+ * validation, which says nothing: then the first field error is shown instead.
+ */
+export function errorText(err) {
+  const first = Object.values(err?.fieldErrors || {})[0];
+  if (err?.message && err.message !== "Validation failed") return err.message;
+  return first || err?.message || "Something went wrong";
 }
 
 const money = new Intl.NumberFormat("en-US", {
@@ -161,15 +190,18 @@ export function formatRaceDate(iso) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function tomorrowIso() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
+/** Local date -> "YYYY-MM-DD" (not toISOString, which is UTC). */
+function isoOf(d) {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export function todayIso() {
+export function tomorrowIso() {
   const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  d.setDate(d.getDate() + 1);
+  return isoOf(d);
+}
+
+export function todayIso() {
+  return isoOf(new Date());
 }

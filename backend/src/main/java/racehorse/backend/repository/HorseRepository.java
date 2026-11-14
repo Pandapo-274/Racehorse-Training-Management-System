@@ -138,14 +138,17 @@ public class HorseRepository {
         public boolean any() { return plans + raceEntries + withdrawals > 0; }
     }
 
+    /** Suất đua: chỉ đề xuất chưa hết hạn (RaceRepository.AWAITING_OWNER). */
     public PendingOnOwner pendingOnOwner(int horseId) {
         return jdbc.sql("""
                 SELECT
                   (SELECT COUNT(*) FROM TRAINING_PLAN WHERE horse_id = :id AND status = 'PENDING_APPROVAL') AS plans,
-                  (SELECT COUNT(*) FROM RACE_REGISTRATION WHERE horse_id = :id
-                          AND approval_status = 'PENDING_OWNER' AND result IS NULL) AS entries,
+                  (SELECT COUNT(*) FROM RACE_REGISTRATION r JOIN RACE rc ON rc.race_id = r.race_id
+                   WHERE r.horse_id = :id AND
+                """ + RaceRepository.AWAITING_OWNER + """
+                  ) AS entries,
                   (SELECT COUNT(*) FROM HORSE_WITHDRAWAL WHERE horse_id = :id AND status = 'PENDING') AS withdrawals
-                """).param("id", horseId)
+                """).param("id", horseId).param("today", LocalDate.now())
                 .query((rs, n) -> new PendingOnOwner(rs.getInt("plans"), rs.getInt("entries"), rs.getInt("withdrawals")))
                 .single();
     }

@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import racehorse.backend.dto.HorseResponse;
-import racehorse.backend.dto.RegisterRequest;
 import racehorse.backend.entity.ExpenseModels;
 import racehorse.backend.entity.Notice;
 import racehorse.backend.entity.RaceModels;
@@ -35,12 +35,17 @@ import racehorse.backend.security.AuthenticatedUser;
  *  - ngựa của câu lạc bộ (ACADEMY), chưa rút;
  *  - sức khoẻ ELIGIBLE, không bị khoá tập, không còn báo cáo sự cố chưa khám;
  *  - tuổi đua 2..10 (HorsePolicy.FOAL_BELOW, RACING_MAX_AGE);
- *  - vaccination not overdue (UC17 data), and at least app.race.min-rest-days
- *    between two races (#3);
+ *  - có hồ sơ tiêm phòng và chưa quá hạn (UC17), có ít nhất một buổi trial run
+ *    hoàn thành trong app.race.trial-window-days, và cách giải khác ít nhất
+ *    app.race.min-rest-days (#3). Hai luật đầu trước đây chỉ là cảnh báo; nhóm
+ *    chốt (11/2026) là chặn, cho khớp với màn Enter a horse;
  *  - the race is OPEN, has not run, its entry deadline has not passed and it
  *    is not full; the horse has no other race that day.
- * Warnings that do not block: no completed trial run within
- * app.race.trial-window-days, vaccination never recorded.
+ *
+ * Head Trainer chỉ đăng ký và rút ngựa mình phụ trách (HORSE.trainer_id) hoặc
+ * ngựa chưa giao cho ai. Nhập kết quả thì Head Trainer nào cũng được.
+ *
+ * Đề xuất chủ chưa duyệt khi hết hạn đăng ký thành EXPIRED (RaceModels.proposalExpired).
  *
  * A result can be changed freely for app.race.result.edit-window-days after
  * the race; after that only the Club Manager may change it, with a reason (#5).
@@ -106,15 +111,22 @@ public class RaceService {
     public RaceModels.Entry approveEntry(int id, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
         checkCanManageEntry(e, user);
-        if (!"PENDING_APPROVAL".equals(e.state())) {
+        if (!"PENDING_APPROVAL".equals(e.state()) && !"EXPIRED".equals(e.state())) {
             throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
         }
         RaceModels.RaceEvent race = requireRace(e.raceId());
+        LocalDate today = LocalDate.now();
         if (!"OPEN".equals(race.status())) {
             throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " has been cancelled");
         }
-        if (!race.raceDate().isAfter(LocalDate.now())) {
+        if (!race.raceDate().isAfter(today)) {
             throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " has already been run");
+        }
+        /* Hết hạn đăng ký thì không duyệt nữa: trước đây chủ vẫn duyệt được sau hạn,
+           và lệ phí vừa thu đã không hoàn được ngay (settleEntryFee). */
+        if (RaceModels.proposalExpired(race.raceDate(), race.entryDeadline(), today)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Entries for " + race.raceName() + " closed on "
+                    + race.entryDeadline().format(DAY) + ". This proposal can no longer be approved");
         }
         HorseResponse h = horses.findById(e.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + e.horseId() + " not found"));
@@ -128,12 +140,25 @@ public class RaceService {
         }
         users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
         String fee = chargeEntryFee(e, race, user, ip);
-        notifications.notifyHorseTrainer(e.horseId(), user, new Notice(
+        notifyTrainers(e, h.trainerId(), user, new Notice(
                 "RACE_APPROVED", "Race entry approved",
                 "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName()
                         + (fee == null ? "." : " (entry fee " + fee + " charged)."),
                 Notice.HORSE, e.horseId()));
         return require(id);
+    }
+
+    /**
+     * Báo câu trả lời của chủ cho Head Trainer đã đề xuất (registered_by), và cho
+     * Head Trainer đang phụ trách ngựa nếu là người khác. Trước đây chỉ báo người
+     * phụ trách, nên ai đề xuất ngựa của người khác thì không bao giờ biết kết quả.
+     */
+    private void notifyTrainers(RaceModels.Entry e, Integer assignedTrainerId, AuthenticatedUser owner,
+                                Notice notice) {
+        notifications.notifyUser(e.registeredBy(), notice);
+        if (assignedTrainerId != null && assignedTrainerId.intValue() != e.registeredBy()) {
+            notifications.notifyHorseTrainer(e.horseId(), owner, notice);
+        }
     }
 
     /**
@@ -198,14 +223,16 @@ public class RaceService {
         if (!"PENDING_APPROVAL".equals(e.state())) {
             throw new ApiException(HttpStatus.CONFLICT, "Entry is not awaiting owner approval");
         }
-        if (races.updateApproval(id, "REJECTED", reason) == 0) {
+        String why = blankToNull(reason);
+        if (races.updateApproval(id, "REJECTED", why) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This entry has just been changed by the head trainer");
         }
-        users.writeAudit(user.userId(), "RACE_OWNER_REJECT", "RACE_REGISTRATION", id, "SUCCESS", ip, reason);
-        notifications.notifyHorseTrainer(e.horseId(), user, new Notice(
+        users.writeAudit(user.userId(), "RACE_OWNER_REJECT", "RACE_REGISTRATION", id, "SUCCESS", ip, why);
+        Integer assignedTrainerId = horses.findById(e.horseId()).map(HorseResponse::trainerId).orElse(null);
+        notifyTrainers(e, assignedTrainerId, user, new Notice(
                 "RACE_REJECTED", "Race entry declined",
                 "Owner " + e.ownerName() + " declined " + e.horseName() + " for " + e.raceName()
-                        + (reason == null || reason.isBlank() ? "." : ": " + reason.trim()),
+                        + (why == null ? "." : ": " + why),
                 Notice.HORSE, e.horseId()));
         return require(id);
     }
@@ -216,19 +243,35 @@ public class RaceService {
         }
     }
 
+    /**
+     * Head Trainer chỉ đăng ký / rút ngựa mình phụ trách (HORSE.trainer_id), như ở
+     * TrainingPlanService; ngựa chưa giao cho ai thì Head Trainer nào cũng làm được.
+     * Vai trò khác không bị giới hạn ở đây (@RequireRole đã lọc).
+     */
+    private static boolean managedBy(Integer trainerId, AuthenticatedUser user) {
+        return !"HEAD_TRAINER".equals(user.role()) || trainerId == null || trainerId.intValue() == user.userId();
+    }
+
+    private static ApiException notYourHorse(String horseName) {
+        return new ApiException(HttpStatus.FORBIDDEN, horseName + " is assigned to another Head Trainer",
+                Map.of("horseId", "Only the horse's own Head Trainer can enter or scratch it"));
+    }
+
     public List<Integer> years() {
         return races.years();
     }
 
     /**
      * Horses that could be entered. With raceId, the checks that depend on the
-     * race (rest days between races) are included too.
+     * race (rest days between races) are included too. A Head Trainer only sees
+     * the horses they may enter (managedBy).
      */
-    public List<RaceModels.Candidate> candidates(Integer raceId) {
+    public List<RaceModels.Candidate> candidates(Integer raceId, AuthenticatedUser user) {
         RaceModels.RaceEvent race = raceId == null ? null : requireRace(raceId);
         List<RaceModels.Candidate> out = new ArrayList<>();
         for (HorseResponse h : horses.findActive()) {
             if (!HorsePolicy.ACADEMY.equals(HorsePolicy.normalizeType(h.recordType()))) continue;
+            if (!managedBy(h.trainerId(), user)) continue;
             Integer age = h.dateOfBirth() == null ? null : HorsePolicy.ageOf(h.dateOfBirth());
             Check c = check(h, race);
             out.add(new RaceModels.Candidate(h.horseId(), h.horseName(), h.stallNo(), h.ownerName(),
@@ -315,6 +358,9 @@ public class RaceService {
     public RaceModels.Entry register(RaceModels.RegisterRequest r, AuthenticatedUser user, String ip) {
         HorseResponse h = horses.findById(r.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + r.horseId() + " not found"));
+        if (!managedBy(h.trainerId(), user)) {
+            throw notYourHorse(h.horseName());
+        }
         RaceModels.RaceEvent race = requireRace(r.raceId());
         LocalDate today = LocalDate.now();
         if (!"OPEN".equals(race.status())) {
@@ -416,8 +462,11 @@ public class RaceService {
         boolean change = e.result() != null;
         boolean locked = change && LocalDate.now().isAfter(e.raceDate().plusDays(resultEditWindowDays));
         String why = blankToNull(r.reason());
+        /* 409 chứ không phải 403: Head Trainer vẫn có quyền nhập kết quả, chỉ là kết quả
+           này đã khoá. Frontend coi mọi 403 là "không có quyền vào trang" và chuyển sang
+           /access-denied, nên trả 403 ở đây đá Head Trainer ra khỏi màn Races. */
         if (locked && !"CLUB_MANAGER".equals(user.role())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "The result was locked " + resultEditWindowDays
+            throw new ApiException(HttpStatus.CONFLICT, "The result was locked " + resultEditWindowDays
                     + " days after the race. Ask the club manager to change it");
         }
         if (locked && why == null) {
@@ -464,6 +513,9 @@ public class RaceService {
     @Transactional
     public RaceModels.Entry scratch(int id, String reason, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
+        if (!managedBy(e.trainerId(), user)) {
+            throw notYourHorse(e.horseName());
+        }
         if (e.result() != null) {
             throw new ApiException(HttpStatus.CONFLICT, "Only an entry without a result can be scratched");
         }
@@ -524,7 +576,7 @@ public class RaceService {
         Map<Integer, BigDecimal> prizes = new LinkedHashMap<>();
         Map<Integer, RaceModels.Entry> first = new LinkedHashMap<>();
         int finished = 0, wins = 0, places = 0, unplaced = 0, scratched = 0, upcoming = 0,
-            awaitingResult = 0;
+            awaitingResult = 0, pendingApproval = 0;
         BigDecimal total = BigDecimal.ZERO;
 
         for (RaceModels.Entry e : all) {
@@ -535,13 +587,14 @@ public class RaceService {
                 // A past race with no result yet is not "upcoming" - see RaceModels.Summary.
                 case "AWAITING_RESULT" -> awaitingResult++;
                 case "UPCOMING" -> upcoming++;
-                default -> {}
+                case "PENDING_APPROVAL" -> pendingApproval++;
+                default -> {}   // REJECTED, EXPIRED: con ngựa không chạy, không đếm
             }
             if ("WON".equals(e.result())) wins++;
             if ("PLACED".equals(e.result())) places++;
             if ("UNPLACED".equals(e.result())) unplaced++;
             total = total.add(prize);
-            if ("SCRATCHED".equals(e.state()) || "PENDING_APPROVAL".equals(e.state()) || "REJECTED".equals(e.state())) continue;
+            if (!RAN_OR_WILL_RUN.contains(e.state())) continue;
 
             int[] c = counts.computeIfAbsent(e.horseId(), k -> new int[3]);
             first.putIfAbsent(e.horseId(), e);
@@ -561,9 +614,12 @@ public class RaceService {
             int byPrize = b.prizeMoney().compareTo(a.prizeMoney());
             return byPrize != 0 ? byPrize : Integer.compare(b.wins(), a.wins());
         });
-        return new RaceModels.Summary(year, all.size() - scratched, finished, wins, places, unplaced,
-                scratched, upcoming, awaitingResult, total, perHorse);
+        return new RaceModels.Summary(year, finished + upcoming + awaitingResult, finished, wins, places,
+                unplaced, scratched, upcoming, awaitingResult, pendingApproval, total, perHorse);
     }
+
+    /** Suất chủ đã đồng ý: đếm vào thành tích (Summary.entries, Performance by horse). */
+    private static final Set<String> RAN_OR_WILL_RUN = Set.of("FINISHED", "UPCOMING", "AWAITING_RESULT");
 
     /* ---------------- helper ---------------- */
 
@@ -608,14 +664,14 @@ public class RaceService {
         if (incidents.findOpenReport(h.horseId()).isPresent()) {
             problems.add(h.horseName() + " has an incident report waiting for a veterinarian");
         }
-        /* #3: vaccination. OVERDUE blocks. NEVER only warns: a horse with no
-           record may have been vaccinated before it came to the club, and
-           blocking it would stop racing until the history is typed in. */
+        /* #3: tiêm phòng. OVERDUE và NEVER đều chặn. NEVER trước đây chỉ cảnh báo,
+           nhưng màn Enter a horse đã chặn nó (commit 880540b) và nhóm chốt giữ luật chặn:
+           ngựa mới về CLB thì nhập lịch sử tiêm phòng trước khi cho đua. */
         preventive.statusOf(h.horseId(), "VACCINATION").ifPresent(v -> {
             if ("OVERDUE".equals(v.careStatus())) {
                 problems.add(h.horseName() + "'s vaccination is overdue (was due " + v.nextDueDate() + ")");
             } else if ("NEVER".equals(v.careStatus())) {
-                warnings.add("No vaccination on record for " + h.horseName());
+                problems.add(h.horseName() + " has no vaccination on record");
             }
         });
         /* #3: rest between races. */
@@ -625,9 +681,11 @@ public class RaceService {
                             + other.raceDate().format(DAY) + "; races must be at least " + minRestDays
                             + " days apart"));
         }
-        /* #3: trial run. A warning, not a rule - it is the trainer's call. */
+        /* #3: trial run. Cũng chặn (cùng quyết định như tiêm phòng ở trên). Kiểm lại
+           lúc chủ duyệt, nên đề xuất để lâu tới khi trial run quá 30 ngày thì phải
+           chạy thử lại mới duyệt được. */
         if (!races.hasRecentTrial(h.horseId(), trialWindowDays)) {
-            warnings.add("No completed trial run in the last " + trialWindowDays + " days");
+            problems.add(h.horseName() + " has no completed trial run in the last " + trialWindowDays + " days");
         }
         return new Check(problems, warnings);
     }

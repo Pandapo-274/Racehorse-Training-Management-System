@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import racehorse.backend.dto.RegisterRequest;
 import racehorse.backend.entity.RaceModels;
 import racehorse.backend.security.AuthInterceptor;
 import racehorse.backend.security.AuthenticatedUser;
@@ -63,8 +62,9 @@ public class RaceController {
 
     @GetMapping("/candidates")
     @RequireRole({"HEAD_TRAINER"})
-    public List<RaceModels.Candidate> candidates(@RequestParam(required = false) Integer raceId) {
-        return service.candidates(raceId);
+    public List<RaceModels.Candidate> candidates(@RequestParam(required = false) Integer raceId,
+                                                 @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.candidates(raceId, user);
     }
 
     @GetMapping("/events")

@@ -2,6 +2,7 @@ package racehorse.backend.repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -228,12 +229,14 @@ public class StaffRepository {
                 """).param("owner", ownerId).query(Integer.class).single();
     }
 
-    /** Race entries of the owner's horses waiting for the owner's approval (V28). */
+    /** Race entries of the owner's horses waiting for the owner's approval (V28), not yet expired. */
     public int countRaceEntriesAwaitingOwner(int ownerId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM RACE_REGISTRATION r JOIN HORSE h ON h.horse_id = r.horse_id
-                WHERE h.owner_id = :owner AND r.approval_status = 'PENDING_OWNER' AND r.result IS NULL
-                """).param("owner", ownerId).query(Integer.class).single();
+                JOIN RACE rc ON rc.race_id = r.race_id
+                WHERE h.owner_id = :owner AND
+                """ + RaceRepository.AWAITING_OWNER)
+                .param("owner", ownerId).param("today", LocalDate.now()).query(Integer.class).single();
     }
 
     /** Club horses the owner still has at the club. */

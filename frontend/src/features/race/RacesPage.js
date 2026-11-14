@@ -11,9 +11,10 @@ import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import {
-  RESULTS, RESULT_TEXT, cancelRaceEvent, createRaceEvent, formatPrize, formatRaceDate, formatRaceTime,
-  getSummary, listCandidates, listRaceEvents, listRaces, listYears, ordinal, parseRaceTime, recordResult,
-  registerRace, scratchEntry, toEntryChip, todayIso, tomorrowIso,
+  RESULTS, RESULT_EDIT_WINDOW_DAYS, RESULT_TEXT, cancelRaceEvent, createRaceEvent, errorText, formatPrize,
+  formatRaceDate, formatRaceTime, getSummary, isResultLocked, isTrainersHorse, listCandidates, listRaceEvents,
+  listRaces, listYears, ordinal, parseRaceTime, recordResult, registerRace, scratchEntry, toEntryChip, todayIso,
+  tomorrowIso,
 } from "./raceApi";
 import "./race.css";
 
@@ -91,7 +92,7 @@ function RaceForm({ races = [], onCreated, onCancel }) {
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(err.message);
-      setErrors(err.errors || {});
+      setErrors(err.fieldErrors || {});
     } finally {
       setSaving(false);
     }
@@ -159,8 +160,9 @@ function EntryForm({ races, onRegistered }) {
     return () => ctrl.abort();
   }, [form.raceId, navigate]);
 
-  const eligible = candidates.filter((c) => !c.problem && (!c.warnings || c.warnings.length === 0));
-  const blocked = candidates.filter((c) => c.problem || (c.warnings && c.warnings.length > 0));
+  // The backend decides what blocks (problems); missing trial run / vaccination are problems too.
+  const eligible = candidates.filter((c) => !c.problem);
+  const blocked = candidates.filter((c) => c.problem);
   const chosen = candidates.find((c) => String(c.horseId) === form.horseId);
   const full = race && race.maxEntries && race.entries >= race.maxEntries;
 
@@ -185,14 +187,14 @@ function EntryForm({ races, onRegistered }) {
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(err.message);
-      setErrors(err.errors || {});
+      setErrors(err.fieldErrors || {});
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Card title="Enter a horse" hint="Club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination not overdue, and races at least two weeks apart.">
+    <Card title="Enter a horse" hint="Your horses (or horses not yet assigned to a Head Trainer): club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
@@ -232,7 +234,7 @@ function EntryForm({ races, onRegistered }) {
                 <ul>
                   {blocked.map((c) => (
                     <li key={c.horseId}>
-                      <strong>{c.horseName}</strong>: {c.problem || (c.warnings || []).join("; ")}
+                      <strong>{c.horseName}</strong>: {(c.problems && c.problems.length ? c.problems : [c.problem]).join("; ")}
                     </li>
                   ))}
                 </ul>
@@ -269,10 +271,14 @@ function EntryForm({ races, onRegistered }) {
 }
 
 /** Action buttons in row: open result editor or scratch editor. */
-function RowActions({ entry, isTrainer, isEditing, onOpenEdit, onCancelEdit }) {
+function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelEdit }) {
   const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED") && entry.approvalStatus === "APPROVED";
-  // A proposal still waiting for the owner can be withdrawn too (backend allows it).
-  const canScratch = isTrainer && (entry.state === "UPCOMING" || entry.state === "PENDING_APPROVAL");
+  // A proposal still waiting for the owner can be withdrawn too (backend allows it),
+  // but only by the horse's own Head Trainer.
+  const canScratch = isTrainer && isTrainersHorse(entry, userId)
+    && (entry.state === "UPCOMING" || entry.state === "PENDING_APPROVAL");
+  // After the edit window only the Club Manager may change a result.
+  const locked = isTrainer && isResultLocked(entry);
   if (!raceDone && !canScratch) return null;
 
   if (isEditing) {
@@ -285,7 +291,12 @@ function RowActions({ entry, isTrainer, isEditing, onOpenEdit, onCancelEdit }) {
 
   return (
     <div className="race-actions">
-      {raceDone && (
+      {raceDone && locked && (
+        <span className="hz-muted" title={`Results lock ${RESULT_EDIT_WINDOW_DAYS} days after the race. Ask the Club Manager to change it.`}>
+          Locked
+        </span>
+      )}
+      {raceDone && !locked && (
         <button type="button" className="race-link" onClick={() => onOpenEdit("result")}>
           {entry.result ? "Edit result" : "Record result"}
         </button>
@@ -316,7 +327,7 @@ function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
     try {
       onSaved(await fn());
     } catch (err) {
-      if (!handleAuthError(err, navigate)) setError(err.message);
+      if (!handleAuthError(err, navigate)) setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -471,7 +482,9 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
 
 export default function RacesPage() {
   const navigate = useNavigate();
-  const role = getUser()?.role;
+  const user = getUser();
+  const role = user?.role;
+  const userId = user?.userId;
   const isTrainer = role === "HEAD_TRAINER";
   const isManager = role === "CLUB_MANAGER";
   const thisYear = new Date().getFullYear();
@@ -524,7 +537,7 @@ export default function RacesPage() {
   };
 
   const counts = useMemo(() => {
-    const c = { ALL: 0, UPCOMING: 0, PENDING_APPROVAL: 0, AWAITING_RESULT: 0, FINISHED: 0, SCRATCHED: 0, REJECTED: 0 };
+    const c = { ALL: 0, UPCOMING: 0, PENDING_APPROVAL: 0, AWAITING_RESULT: 0, FINISHED: 0, SCRATCHED: 0, REJECTED: 0, EXPIRED: 0 };
     for (const e of entries || []) {
       c.ALL++;
       c[e.state] = (c[e.state] || 0) + 1;
@@ -557,6 +570,7 @@ export default function RacesPage() {
             <div className="hz-stat"><span>Entries</span><strong>{summary.entries}</strong><small>
                 {summary.upcoming} upcoming
                 {summary.awaitingResult > 0 && ` · ${summary.awaitingResult} awaiting result`}
+                {summary.pendingApproval > 0 && ` · ${summary.pendingApproval} waiting for owner`}
               </small></div>
             <div className="hz-stat"><span>Wins</span><strong>{summary.wins}</strong><small>of {summary.finished} finished</small></div>
             <div className="hz-stat"><span>Placed</span><strong>{summary.places}</strong></div>
@@ -614,7 +628,7 @@ export default function RacesPage() {
               title={`Entries ${year}`}
               actions={
                 <div className="hz-segment" role="group" aria-label="Filter entries">
-                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["PENDING_APPROVAL", "Pending Owner"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"], ["REJECTED", "Declined"]].map(([k, l]) => (
+                  {[["ALL", "All"], ["UPCOMING", "Upcoming"], ["PENDING_APPROVAL", "Pending Owner"], ["AWAITING_RESULT", "Result needed"], ["FINISHED", "Finished"], ["SCRATCHED", "Scratched"], ["REJECTED", "Declined"], ["EXPIRED", "Expired"]].map(([k, l]) => (
                     <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}>
                       {l} <b>{counts[k] || 0}</b>
                     </button>
@@ -668,6 +682,7 @@ export default function RacesPage() {
                               <RowActions
                                 entry={e}
                                 isTrainer={isTrainer}
+                                userId={userId}
                                 isEditing={isEditing}
                                 onOpenEdit={(m) => setActiveEdit({ id: e.registrationId, mode: m })}
                                 onCancelEdit={() => setActiveEdit(null)}
@@ -701,7 +716,7 @@ export default function RacesPage() {
           )}
 
           {tab === "performance" && (
-            <Card title={`Performance ${year}`} hint="Scratched entries are not counted. Sorted by prize money.">
+            <Card title={`Performance ${year}`} hint="Only entries the owner approved are counted (not scratched, declined or expired ones). Sorted by prize money.">
               <div className="hz-table-wrap">
                 <table className="hz-table">
                   <thead>

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
-import { approveEntry, formatPrize, formatRaceDate, listRaces, rejectEntry, toEntryChip } from "./raceApi";
+import { approveEntry, errorText, formatPrize, formatRaceDate, listRaces, rejectEntry, toEntryChip } from "./raceApi";
 import "./race.css";
 
 export default function OwnerRacesPage() {
@@ -39,9 +39,12 @@ export default function OwnerRacesPage() {
   }, [entries]);
 
   const mine = (entries || []).filter((e) => !horseId || String(e.horseId) === horseId);
-  const pending = mine.filter((e) => e.approvalStatus === "PENDING_OWNER" || e.state === "PENDING_APPROVAL");
-  const upcoming = mine.filter((e) => e.state === "UPCOMING" && e.approvalStatus === "APPROVED").sort((a, b) => a.raceDate.localeCompare(b.raceDate));
-  const history = mine.filter((e) => e.state !== "UPCOMING" && e.state !== "PENDING_APPROVAL" && e.approvalStatus !== "PENDING_OWNER");
+  // By state, not approvalStatus: a withdrawn proposal (or one whose race was cancelled)
+  // keeps approvalStatus PENDING_OWNER but is SCRATCHED, and an expired one is EXPIRED.
+  // Both used to stay in "proposals" with Approve / Decline buttons that could only fail.
+  const pending = mine.filter((e) => e.state === "PENDING_APPROVAL");
+  const upcoming = mine.filter((e) => e.state === "UPCOMING").sort((a, b) => a.raceDate.localeCompare(b.raceDate));
+  const history = mine.filter((e) => e.state !== "UPCOMING" && e.state !== "PENDING_APPROVAL");
   const ran = mine.filter((e) => e.state === "FINISHED");
   const wins = ran.filter((e) => e.result === "WON").length;
   const places = ran.filter((e) => e.result === "PLACED").length;
@@ -56,7 +59,8 @@ export default function OwnerRacesPage() {
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
-      setActionError(err.message || "Could not approve race entry");
+      setSuccessMsg("");
+      setActionError(errorText(err));
     } finally {
       setProcessingId(null);
     }
@@ -72,7 +76,8 @@ export default function OwnerRacesPage() {
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
-      setActionError(err.message || "Could not decline race entry");
+      setSuccessMsg("");
+      setActionError(errorText(err));
     } finally {
       setProcessingId(null);
     }
@@ -134,7 +139,7 @@ export default function OwnerRacesPage() {
                       <th style={{ width: "22%" }}>Race</th>
                       <th style={{ width: "16%" }}>Horse</th>
                       <th style={{ width: "20%" }}>Trainer note</th>
-                      <th>Owner note</th>
+                      <th>Reason if you decline</th>
                       <th className="hz-sticky-end" style={{ width: "160px", textAlign: "right" }} aria-label="Actions" />
                     </tr>
                   </thead>
@@ -157,6 +162,8 @@ export default function OwnerRacesPage() {
                             type="text"
                             className="race-owner-note"
                             placeholder="Optional"
+                            maxLength={255}
+                            aria-label={`Reason for declining ${e.horseName}`}
                             value={rejectNotes[e.registrationId] || ""}
                             onChange={(ev) => {
                               const val = ev.target.value;
@@ -234,7 +241,10 @@ export default function OwnerRacesPage() {
                         <td><StatusChip tone={chip.tone} label={chip.label} /></td>
                         <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
                         <td className="hz-muted">
-                          {e.rejectReason ? `Declined: ${e.rejectReason}` : e.scratchReason ? `Scratched: ${e.scratchReason}` : e.note || "—"}
+                          {e.rejectReason ? `Declined: ${e.rejectReason}`
+                            : e.scratchReason ? `Scratched: ${e.scratchReason}`
+                              : e.state === "EXPIRED" ? "Not approved before entries closed"
+                                : e.note || "—"}
                         </td>
                       </tr>
                     );

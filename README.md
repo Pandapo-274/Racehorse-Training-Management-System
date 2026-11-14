@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 13, 2026` at `11:50` by `Pandapo274`
+### Last Commited: `Nov 14, 2026` at `07:50` by `ArichiAya`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > ### `Nov 14, 2026`
+- `[07:50]` `ArichiAya` - Fix Flow 5 (races): Head Trainer only enters/scratches own horses; no trial run in 30 days or no vaccination record now blocks entry; proposals not approved by the entry deadline become `Expired`; owner can decline without a reason; locked result shows `Locked` instead of Access Denied; owner's answer notifies the proposing trainer; withdrawn proposals no longer show as `Pending Owner`; add `docs/FLOW5_DEMO_SCRIPT.md`
 - `[07:36]` `tqt195` - Flow 4 (stable care and supplies): `Veterinarian` sees only medicine on the new `Medicine` page (stock, minimum, expiry) and can only `Report`; counting, restocking and throwing away stock is the `Club Manager`'s job (API refuses the vet with 403); vets now get the medicine low-stock bell and the medicine part of the 07:05 store check; an expired medicine cannot be prescribed (form greys it out, API 409); new `Report` button (`POST /api/supplies/{id}/report`) for Groom, Head Trainer and Vet to flag an item running low, damaged or expired (manager notified, vets too for medicine); a count higher than the record needs a reason (recount, returned, found, taken but not used, other) written to the ledger, and the manager is told when a groom counts more; ration changes notify the horse's Head Trainer (vet edit) or the vet who set the old ration (trainer edit, every vet if the horse is under medical watch) and the grooms caring for the horse; a Head Trainer cannot replace a vet's ration while the horse is INJURED or QUARANTINE; Head Trainer can `Mark done` / `Reopen` a groom's care task (today or yesterday, "ticked by"); bell notifications without a target now open the right page (care tasks, missed tasks, supplies, staff hand-overs); add `docs/FLOW4_GIAI_THICH.md` (Flow 4 explained) and `docs/TEST_CHECKLIST.md` (test checklist for the 5 flows)
 
 > ### `Nov 13, 2026`

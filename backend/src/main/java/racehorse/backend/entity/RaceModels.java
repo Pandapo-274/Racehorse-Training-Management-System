@@ -11,9 +11,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import racehorse.backend.dto.RegisterRequest;
-import racehorse.backend.service.RaceService;
-
 /**
  * Flow 5 - đăng ký giải đua và kết quả. Một dòng RACE_REGISTRATION (V1) giữ cả
  * đăng ký lẫn kết quả; tập giá trị result chốt ở V17.
@@ -24,11 +21,15 @@ public final class RaceModels {
     }
 
     /**
-     * state tính từ result và ngày đua:
+     * state tính từ result, trạng thái duyệt và ngày (RaceRepository.stateOf):
+     *  PENDING_APPROVAL - chờ chủ ngựa duyệt
+     *  EXPIRED          - chủ chưa duyệt mà đã hết hạn đăng ký (proposalExpired)
+     *  REJECTED         - chủ đã từ chối
      *  UPCOMING        - chưa tới ngày đua
      *  AWAITING_RESULT - đã qua ngày đua mà chưa nhập kết quả
      *  FINISHED        - đã có WON / PLACED / UNPLACED
      *  SCRATCHED       - rút khỏi giải trước ngày đua
+     * trainerId: Head Trainer phụ trách ngựa (HORSE.trainer_id, V37), null nếu chưa giao.
      */
     public record Entry(
             int registrationId, int horseId, String horseName, String stallNo,
@@ -38,11 +39,22 @@ public final class RaceModels {
             /* V22 */ int raceId, Integer distanceM, String venue, String raceStatus,
             Integer finishPosition, Integer finishTimeMs,
             /* V23 */ String scratchReason,
-            /* V27 */ String approvalStatus, String rejectReason) {
+            /* V27 */ String approvalStatus, String rejectReason,
+            /* V37 */ Integer trainerId) {
     }
 
+    /**
+     * Đề xuất chờ chủ duyệt hết hạn khi đã qua hạn đăng ký, hoặc đã tới ngày đua
+     * (giải không có hạn đăng ký). Sau đó chủ không duyệt được nữa, và đề xuất
+     * không còn giữ chỗ trong giải hay chặn luật nghỉ giữa hai giải.
+     * RaceRepository.LIVE_ENTRY viết lại đúng điều kiện này bằng SQL.
+     */
+    public static boolean proposalExpired(LocalDate raceDate, LocalDate entryDeadline, LocalDate today) {
+        return !today.isBefore(raceDate) || (entryDeadline != null && today.isAfter(entryDeadline));
+    }
+
+    /** Lý do không bắt buộc: màn chủ ngựa ghi "Optional", thông báo cũng xử lý trường hợp trống. */
     public record RejectRequest(
-            @NotBlank(message = "Reason is required")
             @Size(max = 255, message = "Reason must be at most 255 characters")
             String reason) {
     }
@@ -134,9 +146,13 @@ public final class RaceModels {
      * prizeMoney is the TOTAL PRIZE MONEY OF THE OWNERS, not club revenue. Prize
      * money belongs to the horse's owner; nothing in the system models a
      * training fee or commission the club would earn.
+     *
+     * entries = finished + upcoming + awaitingResult: chỉ những suất chủ đã đồng ý.
+     * Đề xuất còn chờ chủ nằm ở pendingApproval; đề xuất bị từ chối hay hết hạn
+     * không tính (trước đây entries đếm cả chúng nên không khớp với "x upcoming").
      */
     public record Summary(int year, int entries, int finished, int wins, int places, int unplaced,
-                          int scratched, int upcoming, int awaitingResult,
+                          int scratched, int upcoming, int awaitingResult, int pendingApproval,
                           BigDecimal prizeMoney, List<HorseSummary> horses) {
     }
 }
