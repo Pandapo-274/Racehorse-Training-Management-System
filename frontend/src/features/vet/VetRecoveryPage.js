@@ -28,6 +28,7 @@ import {
   confirmRecovery,
   statusLabel,
   nowForApi,
+  formatDate,
   formatShortDate,
   daysSince,
   describeError,
@@ -148,11 +149,15 @@ function RecoveryView({ horseId }) {
     let lightWorkInfo = null;
     if (currentStage === 2) {
       const lwExam = exams.find((r) => (r.diagnosis && r.diagnosis.toLowerCase().includes("light work")) || (r.notes && r.notes.toLowerCase().includes("light work")));
+      const durMatch = lwExam?.notes?.match(/duration:\s*(\d+)/i);
+      const expectedDays = durMatch ? parseInt(durMatch[1], 10) : 5;
       const lwStart = lwExam ? lwExam.examDate : base?.examDate || activeLock?.issuedAt;
       const lwDays = lwStart ? daysSince(lwStart) + 1 : 1;
-      const expectedDays = 5;
+      const lwStartDate = lwStart ? new Date(lwStart) : new Date();
+      const lwEndDate = new Date(lwStartDate);
+      lwEndDate.setDate(lwEndDate.getDate() + expectedDays);
       const lockDisplay = activeLock?.lockLevel === "HEAVY_WORK_ONLY" ? "Heavy work only" : (activeLock?.lockLevel || "Heavy work only");
-      lightWorkInfo = `Light work · Day ${lwDays}/${expectedDays} (Lock: ${lockDisplay})`;
+      lightWorkInfo = `Light work · Day ${lwDays}/${expectedDays} (${formatDate(lwStartDate)} – ${formatDate(lwEndDate)}) (Lock: ${lockDisplay})`;
     }
 
     const reminders = REMINDERS.map(([type, label]) => {
@@ -583,13 +588,18 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
       await updateLockLevel(horse.horseId, "HEAVY_WORK_ONLY");
 
       // 3. Log follow-up medical record
+      const startEst = new Date();
+      const endEst = new Date();
+      endEst.setDate(endEst.getDate() + (Number(durationDays) || 5));
+      const periodStr = `Period: ${formatDate(startEst)} to ${formatDate(endEst)} (${durationDays} days)`;
+
       await createMedicalRecord({
         horseId: horse.horseId,
         examDate: nowForApi(),
         recordType: "EXAM",
         diagnosis: `Light work clearance: ${findings.trim()}`,
         injuryConfirmed: false,
-        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days. Frequency: ${frequency}. Training lock set to Heavy work only (max 800m). ${notes.trim()}`.trim(),
+        notes: `Light work protocol: ${protocol}. Duration: ${durationDays} days (${periodStr}). Frequency: ${frequency}. Training lock set to Heavy work only (max 800m). ${notes.trim()}`.trim(),
       });
 
       onDone({
@@ -661,6 +671,14 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
                 value={durationDays}
                 onChange={(e) => setDurationDays(Number(e.target.value))}
               />
+              <span style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                {(() => {
+                  const s = new Date();
+                  const e = new Date();
+                  e.setDate(e.getDate() + (Number(durationDays) || 0));
+                  return `Period: ${formatDate(s)} – ${formatDate(e)}`;
+                })()}
+              </span>
             </label>
             <label className="vx-field">
               <span>Frequency</span>

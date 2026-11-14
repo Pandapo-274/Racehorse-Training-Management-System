@@ -51,6 +51,17 @@ function formatDate(date) {
   });
 }
 
+function formatFullDate(date) {
+  if (!date) return "—";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function formatTime(value) {
   if (!value) return "--:--";
   return String(value).slice(11, 16);
@@ -417,29 +428,50 @@ function SessionModal({
           const protocol = protoMatch ? protoMatch[0] : (lw.diagnosis || "Controlled walking & light trotting (max 800m)");
           const maxHr = hrMatch ? `${hrMatch[1]} bpm` : "130 bpm";
           const frequency = freqMatch ? freqMatch[1].trim() : "Once daily";
-          const duration = durMatch ? `${durMatch[1]} days` : "5 days";
-          const plannedDist = distMatch ? distMatch[1] : "800";
+          const durDays = durMatch ? parseInt(durMatch[1], 10) : 5;
+
+          const startRaw = lw.examDate || vitals?.activeLock?.issuedAt || new Date().toISOString();
+          const startDateObj = new Date(startRaw);
+          const endDateObj = new Date(startDateObj);
+          endDateObj.setDate(endDateObj.getDate() + durDays);
+
+          const startDateStr = formatFullDate(startDateObj);
+          const endDateStr = formatFullDate(endDateObj);
 
           setRecoveryDetails({
             hasVetOrder: true,
             protocol,
             maxHr,
             frequency,
-            duration,
-            plannedDist,
+            durationDays: durDays,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            duration: `${durDays} days (Start: ${startDateStr} → End: ${endDateStr})`,
+            plannedDist: distMatch ? distMatch[1] : "800",
           });
 
           setForm((old) => ({
             ...old,
-            plannedDistance: plannedDist,
+            plannedDistance: distMatch ? distMatch[1] : "800",
           }));
         } else if (hasVetOrder && hasLightWorkLock) {
+          const startRaw = vitals?.activeLock?.issuedAt || new Date().toISOString();
+          const startDateObj = new Date(startRaw);
+          const endDateObj = new Date(startDateObj);
+          endDateObj.setDate(endDateObj.getDate() + 5);
+
+          const startDateStr = formatFullDate(startDateObj);
+          const endDateStr = formatFullDate(endDateObj);
+
           setRecoveryDetails({
             hasVetOrder: true,
             protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
             maxHr: "130 bpm",
             frequency: "Once daily",
-            duration: "5 days",
+            durationDays: 5,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            duration: `5 days (Start: ${startDateStr} → End: ${endDateStr})`,
             plannedDist: "800",
           });
           setForm((old) => ({
@@ -557,10 +589,11 @@ function SessionModal({
                   <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
                     🩺 Prescribed Rehabilitation Plan (from Veterinarian)
                   </strong>
-                  <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px", color: "#15803d", fontSize: "12px" }}>
+                  <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "5px", color: "#15803d", fontSize: "12px" }}>
                     <span>• <strong>Protocol:</strong> {recoveryDetails.protocol}</span>
                     <span>• <strong>Prescribed Frequency:</strong> {recoveryDetails.frequency}</span>
-                    <span>• <strong>Expected Duration:</strong> {recoveryDetails.duration}</span>
+                    <span>• <strong>Expected Duration:</strong> {recoveryDetails.durationDays ? `${recoveryDetails.durationDays} days` : recoveryDetails.duration}</span>
+                    <span>• <strong>Rehabilitation Period:</strong> From <strong>{recoveryDetails.startDate}</strong> to <strong>{recoveryDetails.endDate}</strong> ({recoveryDetails.durationDays || 5} days)</span>
                     <span>• <strong>Safety Rule:</strong> Training lock restricts distance to maximum {recoveryDetails.plannedDist || "800"}m.</span>
                   </div>
                 </div>
