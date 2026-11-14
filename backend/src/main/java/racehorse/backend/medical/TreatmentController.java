@@ -32,9 +32,11 @@ import racehorse.backend.auth.RequireRole;
 public class TreatmentController {
 
     private final TreatmentService service;
+    private final TreatmentReminderService reminders;
 
-    public TreatmentController(TreatmentService service) {
+    public TreatmentController(TreatmentService service, TreatmentReminderService reminders) {
         this.service = service;
+        this.reminders = reminders;
     }
 
     @PostMapping
@@ -70,6 +72,8 @@ public class TreatmentController {
     @GetMapping("/active")
     @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "GROOM", "CLUB_MANAGER"})
     public List<TreatmentRow> listActive() {
+        reminders.checkCompletedTreatments();
+        reminders.checkWaitingIncidentReports();
         return service.listActive();
     }
 

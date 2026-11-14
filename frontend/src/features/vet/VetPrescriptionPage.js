@@ -15,6 +15,7 @@ import {
   listHorses,
   createTreatment,
   endTreatment,
+  issueLock,
   listMedicalExpenses,
   listMedicineSupplies,
   careTypeLabel,
@@ -245,8 +246,8 @@ export default function VetPrescriptionPage() {
   return (
     <VetShell
       active="prescriptions"
-      title="Prescriptions & Medical Care"
-      subtitle="Treatments, prescriptions and medical expenses across the herd"
+      title="Treatment Plans & Medical Care"
+      subtitle="Treatments, care plans and medical expenses across the herd"
       query={query}
       onQueryChange={setQuery}
     >
@@ -271,7 +272,7 @@ export default function VetPrescriptionPage() {
           aria-selected={tab === "prescriptions"}
           onClick={() => handleTabChange("prescriptions")}
         >
-          Prescriptions ({prescriptionGroups ? prescriptionGroups.length : 0})
+          Treatment plans ({prescriptionGroups ? prescriptionGroups.length : 0})
         </button>
         <button
           type="button"
@@ -280,7 +281,7 @@ export default function VetPrescriptionPage() {
           aria-selected={tab === "directory"}
           onClick={() => handleTabChange("directory")}
         >
-          Horse Medical Directory ({horses ? horses.length : "..."})
+          Horse Treatment Directory ({horses ? horses.length : "..."})
         </button>
         <button
           type="button"
@@ -293,12 +294,12 @@ export default function VetPrescriptionPage() {
         </button>
       </div>
 
-      {!error && !active && <VetState title="Loading prescriptions…" />}
+      {!error && !active && <VetState title="Loading treatment plans…" />}
 
       {tab === "prescriptions" && active && (
         <VetCard
-          title="Active prescriptions"
-          hint={`${plural(prescriptionGroups.length, "prescription")} active or scheduled`}
+          title="Active treatment plans"
+          hint={`${plural(prescriptionGroups.length, "treatment plan")} active or scheduled`}
           tone="green"
           actions={
             <div className="vc-actions">
@@ -310,7 +311,7 @@ export default function VetPrescriptionPage() {
                   setPrescribing(true);
                 }}
               >
-                New prescription
+                New treatment plan
               </button>
             </div>
           }
@@ -318,8 +319,8 @@ export default function VetPrescriptionPage() {
           {prescriptionGroups.length === 0 ? (
             <div className="vet-inline-state">
               {query
-                ? "No prescriptions match your search."
-                : "No horse is on a treatment today. Use New prescription to add one."}
+                ? "No treatment plans match your search."
+                : "No horse is on a treatment plan today. Use New treatment plan to add one."}
             </div>
           ) : (
             <div className="vc-table-wrap">
@@ -396,7 +397,7 @@ export default function VetPrescriptionPage() {
                 setPrescribing(true);
               }}
             >
-              New prescription
+              New treatment plan
             </button>
           }
         >
@@ -422,7 +423,7 @@ export default function VetPrescriptionPage() {
                     <tr key={e.expenseId}>
                       <td className="vc-muted">{formatDate(e.expenseDate)}</td>
                       <td><strong>{e.horseName}</strong></td>
-                      <td>{formatExpenseNote(e.note) || "Medical prescription"}</td>
+                      <td>{formatExpenseNote(e.note) || "Medical treatment"}</td>
                       <td style={{ color: "#2e7d32", fontWeight: 700 }}>
                         {formatVND(e.amount)}
                       </td>
@@ -443,8 +444,8 @@ export default function VetPrescriptionPage() {
 
       {tab === "directory" && (
         <VetCard
-          title="Horse Prescription Directory"
-          hint={`Select any horse to view its complete lifetime prescription history and medical treatments (${horseRows.length} horses)`}
+          title="Horse Treatment Directory"
+          hint={`Select any horse to view its complete lifetime treatment history and medical care (${horseRows.length} horses)`}
           tone="gold"
           actions={
             <button
@@ -455,7 +456,7 @@ export default function VetPrescriptionPage() {
                 setPrescribing(true);
               }}
             >
-              New prescription
+              New treatment plan
             </button>
           }
         >
@@ -549,7 +550,7 @@ function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
       >
         <div className="vet-modal-header">
           <div>
-            <h3 style={{ margin: 0 }}>Prescription Details · {prescription.horseName}</h3>
+            <h3 style={{ margin: 0 }}>Treatment Plan Details · {prescription.horseName}</h3>
             <small style={{ color: "#64748b" }}>
               {prescription.recordId ? `Examination #${prescription.recordId}` : "Medical Record"} ·{" "}
               {formatDate(prescription.startDate)} →{" "}
@@ -575,7 +576,7 @@ function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
                 {prescription.items.map((m, idx) => (
                   <tr key={m.treatmentId || idx}>
                     <td>
-                      <strong>{m.medicineName || "Prescription item"}</strong>
+                      <strong>{m.medicineName || "Treatment item"}</strong>
                     </td>
                     <td>{dose(m)}</td>
                     <td>{period(m)}</td>
@@ -597,7 +598,7 @@ function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
                 onViewHistory(prescription.horseId);
               }}
             >
-              📋 View Lifetime Prescriptions for {prescription.horseName} →
+              📋 View Lifetime Treatments for {prescription.horseName} →
             </button>
           )}
           <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose}>
@@ -778,6 +779,7 @@ function PrescribeDialog({ onClose, onDone }) {
   // Thời gian áp dụng
   const [startDate, setStartDate] = useState(todayInputValue());
   const [endDate, setEndDate] = useState("");
+  const [trainingLock, setTrainingLock] = useState("FULL");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -1120,7 +1122,21 @@ function PrescribeDialog({ onClose, onDone }) {
       }
 
       const summaryStr = finalMeds.map((m) => m.name).join(", ");
-      onDone(`Prescription (${summaryStr}) has been saved successfully for ${horseName}. Owner and Manager have been notified.`);
+
+      if (trainingLock === "FULL") {
+        try {
+          await issueLock({
+            horseId: Number(horseId),
+            injuryId: null,
+            reason: `Treatment plan: ${summaryStr}`.slice(0, 255),
+            lockLevel: "FULL",
+          });
+        } catch {
+          // If already under active lock, keep existing lock
+        }
+      }
+
+      onDone(`Treatment plan (${summaryStr}) has been saved successfully for ${horseName}${trainingLock === "FULL" ? " with Full training lock" : ""}. Owner and Manager have been notified.`);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(describeError(err));
@@ -1133,8 +1149,8 @@ function PrescribeDialog({ onClose, onDone }) {
   return (
     <div className="vx-overlay" role="dialog" aria-modal="true" aria-labelledby="vc-rx-title">
       <div className="vx-dialog vc-dialog-wide">
-        <h2 id="vc-rx-title">New prescription</h2>
-        <p className="vx-lead">A prescription is written against one examination of the horse.</p>
+        <h2 id="vc-rx-title">New treatment plan</h2>
+        <p className="vx-lead">A treatment plan is written against one examination of the horse.</p>
 
         <VetError error={error} />
 
@@ -1188,8 +1204,8 @@ function PrescribeDialog({ onClose, onDone }) {
             </strong>
             <p style={{ margin: "4px 0 0" }}>
               {records.length === 0
-                ? "An active examination is required before creating a prescription."
-                : "All previous examinations have already been treated or marked as recovered. You cannot create a prescription without an active, untreated examination."}
+                ? "An active examination is required before creating a treatment plan."
+                : "All previous examinations have already been treated or marked as recovered. You cannot create a treatment plan without an active, untreated examination."}
             </p>
           </div>
         )}
@@ -1299,7 +1315,7 @@ function PrescribeDialog({ onClose, onDone }) {
             }
             onClick={handleAddMedicine}
           >
-            + Add medicine to prescription
+            + Add medicine to treatment plan
           </button>
         </div>
 
@@ -1394,6 +1410,27 @@ function PrescribeDialog({ onClose, onDone }) {
           />
         </div>
 
+        {/* 6. Training Lock Option */}
+        <div className="vx-form-field" style={{ marginTop: "14px" }}>
+          <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
+            Training lock
+          </label>
+          <select
+            className="vx-input"
+            style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
+            value={trainingLock}
+            onChange={(e) => setTrainingLock(e.target.value)}
+          >
+            <option value="FULL">Full lock — No training at all</option>
+            <option value="NONE">No lock — Normal training permitted</option>
+          </select>
+          <p className="vx-meta" style={{ marginTop: "4px" }}>
+            {trainingLock === "FULL"
+              ? "The horse will be placed under Full training lock until treatment finishes or a vet releases it."
+              : "No training lock will be issued. Normal workouts remain permitted."}
+          </p>
+        </div>
+
         {/* Actions */}
         <div className="vx-actions" style={{ marginTop: "20px" }}>
           <button
@@ -1411,7 +1448,7 @@ function PrescribeDialog({ onClose, onDone }) {
           >
             {busy
               ? "Saving…"
-              : `Save prescription (${selectedMeds.length || (chosenMedKey || customMed || prescriptionNote.trim() ? 1 : 0)} items)`}
+              : `Save treatment plan (${selectedMeds.length || (chosenMedKey || customMed || prescriptionNote.trim() ? 1 : 0)} items)`}
           </button>
           <button type="button" className="vx-btn vx-btn--ghost" disabled={busy} onClick={onClose}>
             Cancel

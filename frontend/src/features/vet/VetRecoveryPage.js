@@ -71,12 +71,14 @@ function captionOf(stage, open, activeTreatments = [], activeLock = null, lightW
       return "Fitness assessment completed. All injuries have healed. Confirm recovery to release the training lock.";
     case 2:
       return `Light work rehabilitation in progress (${lightWorkInfo || "Stage 2"}). Restricted to light sessions (max 800m, trotting/walking, HR <= 130 bpm). Lock level: ${activeLock?.lockLevel === "HEAVY_WORK_ONLY" ? "Heavy work only" : (activeLock?.lockLevel || "Heavy work only")}.`;
-    case 1:
+    case 1: {
+      const lockText = activeLock ? (activeLock.lockLevel === "FULL" ? "Full lock" : (activeLock.lockLevel === "HEAVY_WORK_ONLY" ? "Heavy work only" : activeLock.lockLevel)) : "No lock";
       if (activeTreatments.length > 0) {
         const medNames = activeTreatments.map((t) => t.medicineName || t.instruction).filter(Boolean).join(", ");
-        return `Under active treatment: Receiving prescribed medication (${medNames || "medication"}). Training lock: FULL.`;
+        return `Under active treatment: Receiving prescribed treatment (${medNames || "treatment"}). Training lock: ${lockText}.`;
       }
-      return `Under treatment: ${open.map((i) => `${i.bodyLocation} (${i.severity.replace("_", " ").toLowerCase()})`).join(", ")}. Training lock: FULL.`;
+      return `Under treatment: ${open.map((i) => `${i.bodyLocation} (${i.severity.replace("_", " ").toLowerCase()})`).join(", ")}. Training lock: ${lockText}.`;
+    }
     default:
       return "No injury has been marked for this horse yet.";
   }

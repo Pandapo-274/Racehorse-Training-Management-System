@@ -116,4 +116,12 @@ public class NotificationService {
     public boolean hasOverdueNotificationRecently(int userId, String type, String entity, int targetId) {
         return notifications.hasOverdueNotificationRecently(userId, type, entity, targetId);
     }
+
+    public boolean hasNotificationInLastHours(String type, String entity, int targetId, int hours) {
+        return notifications.hasNotificationInLastHours(type, entity, targetId, hours);
+    }
+
+    public boolean hasBroadcastSentToday(String type, String entity, int targetId) {
+        return notifications.hasBroadcastSentToday(type, entity, targetId);
+    }
 }

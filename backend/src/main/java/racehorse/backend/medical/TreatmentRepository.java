@@ -134,6 +134,18 @@ public class TreatmentRepository {
                 .list();
     }
 
+    public List<TreatmentRow> findRecentlyEnded() {
+        return jdbc.sql(SELECT_TREATMENT + """
+                 WHERE h.record_type = 'ACADEMY'
+                   AND h.activity_status = 'ACTIVE'
+                   AND t.end_date IS NOT NULL
+                   AND t.end_date <= CAST(GETDATE() AS DATE)
+                 ORDER BY t.end_date DESC
+                """)
+                .query(TreatmentRepository::map)
+                .list();
+    }
+
     public int insert(TreatmentRequest r, Integer supplyId, String medName, java.math.BigDecimal price, String consentStatus) {
         return jdbc.sql("""
                 INSERT INTO TREATMENT

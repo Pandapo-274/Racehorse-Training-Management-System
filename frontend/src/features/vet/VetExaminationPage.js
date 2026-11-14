@@ -611,7 +611,7 @@ function ExaminationForm({ horseId, reportId }) {
       setShowReferralModal(false);
       navigate("/veterinarian", {
         state: {
-          notice: `Đã hoàn tất thủ tục chuyển viện ngoài cho ${horse.horseName}. Lịch tập đã được khoá hoàn toàn.`,
+          notice: `External hospital referral completed for ${horse.horseName}. Training lock is in force.`,
         },
       });
     } catch (err) {

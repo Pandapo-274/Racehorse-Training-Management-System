@@ -199,6 +199,11 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
                   <tr key={r.reportId}>
                     <td className="horse-name">
                       {r.horseName}
+                      {r.status === "PENDING" && (
+                        <span style={{ display: "inline-block", padding: "1px 6px", borderRadius: "10px", background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: "10px", marginLeft: "6px" }}>
+                          Unassigned
+                        </span>
+                      )}
                       {r.stallNo && <span className="waiting-sub">Stall {r.stallNo}</span>}
                     </td>
                     <td>
@@ -238,7 +243,7 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
                               type="button"
                               className="waiting-action"
                               style={{ whiteSpace: "nowrap", flexShrink: 0 }}
-                              title="Bàn giao ca cho bác sĩ khác hoặc tiếp quản ca"
+                              title="Handover this case to another veterinarian or take over"
                               onClick={() => onOpenHandover(r)}
                             >
                               {isMyCase ? "Handover" : "Take over"}

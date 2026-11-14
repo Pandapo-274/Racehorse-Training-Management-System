@@ -94,7 +94,7 @@ export function dischargeExternalReferral(referralId, body) {
 
 /** Mức khẩn cấp của báo cáo. cls là lớp CSS của chip trong vet.css. */
 const URGENCY = {
-  HIGH: { label: "Urgent", cls: "urgent" },
+  HIGH: { label: "Soon", cls: "soon" },
   MEDIUM: { label: "Soon", cls: "soon" },
   LOW: { label: "Routine", cls: "normal" },
 };

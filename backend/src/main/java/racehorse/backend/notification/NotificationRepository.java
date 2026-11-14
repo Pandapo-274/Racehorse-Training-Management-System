@@ -179,4 +179,37 @@ public class NotificationRepository {
                 .single();
         return count != null && count > 0;
     }
+
+    public boolean hasNotificationInLastHours(String type, String entity, int targetId, int hours) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*) FROM NOTIFICATION
+                WHERE notif_type = :type
+                  AND target_entity = :entity
+                  AND target_id = :targetId
+                  AND created_at >= DATEADD(hour, -:hours, SYSUTCDATETIME())
+                """)
+                .param("type", type)
+                .param("entity", entity)
+                .param("targetId", targetId)
+                .param("hours", hours)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
+    public boolean hasBroadcastSentToday(String type, String entity, int targetId) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*) FROM NOTIFICATION
+                WHERE notif_type = :type
+                  AND target_entity = :entity
+                  AND target_id = :targetId
+                  AND CAST(created_at AS DATE) = CAST(SYSUTCDATETIME() AS DATE)
+                """)
+                .param("type", type)
+                .param("entity", entity)
+                .param("targetId", targetId)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
 }
