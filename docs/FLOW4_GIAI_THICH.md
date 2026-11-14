@@ -2,7 +2,7 @@
 
 Tài liệu cho người chưa biết gì về Flow 4. Đọc theo thứ tự: phần 1-3 để hình dung, phần 4-8 để nắm từng luật và lý do, phần 9-12 để nối với code và các flow khác, phần 13 là những chỗ nghiệp vụ còn đáng nghi để sửa, phần 14 để tự kiểm tra đã hiểu chưa.
 
-Mọi luật dưới đây được đối chiếu với code ngày 13/11/2026. Đường dẫn file tính từ `backend/src/main/java/racehorse/backend/` và `frontend/src/features/`.
+Mọi luật dưới đây được đối chiếu với code ngày 13/11/2026. Đường dẫn file backend tính từ `backend/src/main/java/racehorse/backend/` (cấu trúc theo lớp từ 14/11: `controller/`, `service/`, `repository/`, `entity/`…), frontend tính từ `frontend/src/features/`.
 
 ---
 
@@ -95,12 +95,12 @@ Ví dụ Symboli Rudolf:
 
 | Luật | Vì sao | Code |
 |---|---|---|
-| Lưu khẩu phần là **thay toàn bộ** khẩu phần cũ (xoá cũ, chèn mới, trong một giao dịch) | Đơn giản, không có chuyện nửa cũ nửa mới | `care/CareService.replaceRation` |
+| Lưu khẩu phần là **thay toàn bộ** khẩu phần cũ (xoá cũ, chèn mới, trong một giao dịch) | Đơn giản, không có chuyện nửa cũ nửa mới | `service/CareService.replaceRation` |
 | Mọi dòng **phải chọn một món FEED có trong kho**; tên và đơn vị lấy theo món đó | Để khi cho ăn, hệ thống biết trừ món nào, theo đơn vị nào | như trên |
 | Kiểm tra mọi dòng **trước** khi xoá khẩu phần cũ | Một dòng sai không làm con ngựa mất hết khẩu phần | như trên |
-| 1 đến 15 dòng; số lượng > 0 | Khẩu phần rỗng thì ngựa không được ăn | `care/CareModels.RationRequest` |
+| 1 đến 15 dòng; số lượng > 0 | Khẩu phần rỗng thì ngựa không được ăn | `entity/CareModels.RationRequest` |
 | Chỉ ngựa đang ở chuồng: không cho hồ sơ PEDIGREE (chỉ để làm tổ tiên) hay ngựa đã rút | Không có chuồng thì không có ai cho ăn | `CareService.requireStabledHorse` |
-| Không được đổi **đơn vị** của món đang dùng trong khẩu phần (vd. kg sang bao); không đổi món FEED sang loại khác | Khẩu phần ghi "3 kg"; đổi đơn vị kho sang "bao" thì mỗi bữa sẽ trừ 3 **bao** | `supply/SupplyService.update` |
+| Không được đổi **đơn vị** của món đang dùng trong khẩu phần (vd. kg sang bao); không đổi món FEED sang loại khác | Khẩu phần ghi "3 kg"; đổi đơn vị kho sang "bao" thì mỗi bữa sẽ trừ 3 **bao** | `service/SupplyService.update` |
 | **HLV không được thay khẩu phần do bác sĩ duyệt khi ngựa đang INJURED hoặc QUARANTINE** (lỗi 409 "Ask the vet to change it"). HLV vẫn sửa được khẩu phần do chính HLV đặt | Khẩu phần bác sĩ đặt cho ngựa ốm thường là chế độ ăn điều trị (ăn kiêng sau đau bụng…) | `CareService.replaceRation` (`RATION_LOCKED_STATUSES`) |
 | **Khẩu phần đổi thì báo** (trừ người vừa lưu): bác sĩ lưu → **HLV phụ trách ngựa** và các bác sĩ khác; HLV lưu → **bác sĩ đã duyệt khẩu phần cũ**, hoặc **mọi bác sĩ** nếu ngựa đang INJURED, MONITOR, QUARANTINE; luôn báo **Groom có việc với con ngựa từ hôm nay**. Bấm chuông mở trang khẩu phần của từng vai trò | HLV và bác sĩ không vô tình ghi đè nhau; Groom cho ăn theo khẩu phần mới | `CareService.notifyRationChanged` |
 | Dòng khẩu phần cũ (trước V21) có thể chưa nối kho (`supplyId = null`) và sẽ **không bị trừ kho** | Dữ liệu cũ chỉ là chữ; nối sai còn tệ hơn không nối | `V21__supply_movement_and_ration_link.sql` |
@@ -125,7 +125,7 @@ Một **việc** gồm: con ngựa + **loại việc** (FEEDING cho ăn, CLEANIN
                MISSED vĩnh viễn (bằng chứng chuồng không được dọn)
 ```
 
-Trạng thái **không lưu trong một cột**, mà được **tính ra khi đọc** (`care/CareRepository.stateOf`):
+Trạng thái **không lưu trong một cột**, mà được **tính ra khi đọc** (`repository/CareRepository.stateOf`):
 - `is_completed = 1` và hoàn thành đúng ngày → **DONE**; hoàn thành sau ngày của việc → **DONE_LATE**.
 - `is_completed = 0` và ngày đã qua → **MISSED**; ngày là hôm nay hoặc tương lai → **OPEN**.
 - Cột `missed_at` do job 00:15 đóng dấu, dùng để biết đã báo HLV chưa.
@@ -207,12 +207,12 @@ Ví dụ: kho cà rốt còn 3 kg, khẩu phần cần 4 kg → bấm xong thì 
 
 | Luật | Vì sao | Code |
 |---|---|---|
-| Groom hoặc HLV gửi; triệu chứng bắt buộc (≤ 255 ký tự), mô tả ≤ 2000, mức khẩn HIGH/MEDIUM/LOW | Bác sĩ cần đủ thông tin để xếp thứ tự ưu tiên | `incident/IncidentFilingService` |
-| Ảnh tuỳ chọn: chỉ JPEG/PNG/WebP (kiểm tra **nội dung file**, không chỉ đuôi), ≤ 2 MB | Chống tải file độc hại hoặc quá nặng | `upload/ImageFiles` |
+| Groom hoặc HLV gửi; triệu chứng bắt buộc (≤ 255 ký tự), mô tả ≤ 2000, mức khẩn HIGH/MEDIUM/LOW | Bác sĩ cần đủ thông tin để xếp thứ tự ưu tiên | `service/IncidentFilingService` |
+| Ảnh tuỳ chọn: chỉ JPEG/PNG/WebP (kiểm tra **nội dung file**, không chỉ đuôi), ≤ 2 MB | Chống tải file độc hại hoặc quá nặng | `util/ImageFiles` |
 | Ngựa phải đang ở chuồng | Ngựa đã rút thì câu lạc bộ không chịu trách nhiệm | như trên |
 | Gửi xong thì báo **mọi bác sĩ**, **chủ ngựa** và **mọi HLV** | Ai liên quan cũng phải biết | `notifyRole`, `notifyHorseWatchers` |
 | Báo cáo vào **cùng hàng chờ khám** với báo cáo từ buổi tập bị dừng | Bác sĩ chỉ cần xem một nơi | |
-| Khi báo cáo chưa được khám: **chặn tập** (`IncidentGuard`) và **chặn đăng ký thi đấu** | Ngựa có thể đang ốm, ép tập hoặc thi là nguy hiểm | `incident/IncidentGuard`, `race/RaceService` |
+| Khi báo cáo chưa được khám: **chặn tập** (`IncidentGuard`) và **chặn đăng ký thi đấu** | Ngựa có thể đang ốm, ép tập hoặc thi là nguy hiểm | `service/IncidentGuard`, `service/RaceService` |
 
 ## 9. Một cú bấm kéo theo những gì (chuỗi phản ứng)
 
@@ -243,8 +243,8 @@ Ví dụ: kho cà rốt còn 3 kg, khẩu phần cần 4 kg → bấm xong thì 
 
 | Giờ | Job | Làm gì | Cấu hình |
 |---|---|---|---|
-| 00:15 hằng ngày | `care/MissedTaskJob` | Đóng dấu MISSED, báo HLV (đồng thời huỷ buổi tập lỡ ngày, kết thúc giáo án quá hạn của Flow 2) | `app.task.missed.cron` |
-| 07:05 hằng ngày | `supply/SupplyDigestJob` | Tổng hợp kho cho Manager | `app.supply.digest.cron` |
+| 00:15 hằng ngày | `service/MissedTaskJob` | Đóng dấu MISSED, báo HLV (đồng thời huỷ buổi tập lỡ ngày, kết thúc giáo án quá hạn của Flow 2) | `app.task.missed.cron` |
+| 07:05 hằng ngày | `service/SupplyDigestJob` | Tổng hợp kho cho Manager | `app.supply.digest.cron` |
 
 Muốn thử ngay thì đổi cron trong `application.properties` sang vài phút tới rồi khởi động lại backend.
 
@@ -252,14 +252,14 @@ Muốn thử ngay thì đổi cron trong `application.properties` sang vài phú
 
 | Lớp | File | Làm gì |
 |---|---|---|
-| API khẩu phần, việc | `care/CareController.java` | Danh sách endpoint, phân quyền `@RequireRole` |
-| Luật khẩu phần, việc | `care/CareService.java` | **Đọc file này đầu tiên**: mọi luật mục 5 và 6 |
-| SQL khẩu phần, việc | `care/CareRepository.java` | Câu lệnh SQL, tính trạng thái OPEN/DONE/… |
-| Job đêm | `care/MissedTaskJob.java` | |
-| API kho | `supply/SupplyController.java` | |
-| Luật kho | `supply/SupplyService.java` | Mục 7: số dư, sổ cái, cảnh báo, tổng hợp |
-| SQL kho | `supply/SupplyRepository.java` | Trừ kho bằng **một câu UPDATE** để hai người bấm cùng lúc không trừ sai |
-| Báo sự cố | `incident/IncidentFilingService.java`, `incident/IncidentGuard.java` | |
+| API khẩu phần, việc | `controller/CareController.java` | Danh sách endpoint, phân quyền `@RequireRole` |
+| Luật khẩu phần, việc | `service/CareService.java` | **Đọc file này đầu tiên**: mọi luật mục 5 và 6 |
+| SQL khẩu phần, việc | `repository/CareRepository.java` | Câu lệnh SQL, tính trạng thái OPEN/DONE/… |
+| Job đêm | `service/MissedTaskJob.java` | |
+| API kho | `controller/SupplyController.java` | |
+| Luật kho | `service/SupplyService.java` | Mục 7: số dư, sổ cái, cảnh báo, tổng hợp |
+| SQL kho | `repository/SupplyRepository.java` | Trừ kho bằng **một câu UPDATE** để hai người bấm cùng lúc không trừ sai |
+| Báo sự cố | `service/IncidentFilingService.java`, `service/IncidentGuard.java` | |
 | Bảng dữ liệu | `migration/V1` (bảng gốc), `V21` (sổ kho, nối khẩu phần), `V24` (tên theo khu vực, hạn dùng, nhắc), `V25` (người đánh dấu, bỏ lỡ) | |
 | Gọi API (frontend) | `care/careApi.js` | Mọi hàm gọi `/api/...` của Flow 4, nhãn hiển thị |
 | Trang Groom | `care/StableMapPage.js` (sơ đồ chuồng + việc), `care/FeedingPage.js`, `care/IncidentReportPage.js`, `care/SuppliesPage.js` | |
