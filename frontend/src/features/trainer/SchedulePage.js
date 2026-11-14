@@ -12,6 +12,7 @@ const SESSION_API = "/api/training-sessions";
 const PLAN_API = "/api/training-plans";
 
 const EMPTY_FORM = {
+  horseId: "",
   planId: "",
   phaseId: "",
   assignedTo: "",
@@ -19,6 +20,7 @@ const EMPTY_FORM = {
   plannedDistance: "",
   plannedDuration: "60",
   velocityCeiling: "",
+  groomNotes: "",
 };
 
 function dateKey(date) {
@@ -163,9 +165,15 @@ function SessionCard({ session, onEdit, now }) {
         {session.horseName || `Horse #${session.horseId}`}
       </strong>
 
-      <span className="schedule-session-phase">
-        {session.phaseName || `Phase ${session.phaseNo}`}
-      </span>
+      {session.remarks && session.remarks.includes("[Recovery Session]") ? (
+        <span className="schedule-session-phase" style={{ color: "#059669", fontWeight: 600 }}>
+          Rehabilitation Light Work
+        </span>
+      ) : (
+        <span className="schedule-session-phase">
+          {session.phaseName || `Phase ${session.phaseNo}`}
+        </span>
+      )}
 
       <span className="schedule-session-groom">
         <span aria-hidden="true">♙</span>{" "}
@@ -288,7 +296,7 @@ function SessionTypeChoiceModal({ isOpen, onClose, onSelect }) {
             <div>
               <strong style={{ fontSize: "15px", color: "#059669", display: "block" }}>Recovery session</strong>
               <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", display: "block", lineHeight: 1.4 }}>
-                Rehabilitation light work prescribed by veterinarian (walking, trotting, max 800m).
+                Rehabilitation session prescribed by veterinarian.
               </span>
             </div>
           </button>
@@ -306,12 +314,13 @@ function SessionModal({
   grooms,
   editingSession,
   isRecovery,
+  recoveryDetails,
+  setRecoveryDetails,
   saving,
   onClose,
   onSubmit,
   onCancel,
 }) {
-  const [recoveryDetails, setRecoveryDetails] = useState(null);
   const selectedPlan = plans.find(
     (plan) => String(plan.planId) === String(form.planId),
   );
@@ -320,13 +329,66 @@ function SessionModal({
   );
   const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
 
+  const recoveryHorses = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    for (const p of plans) {
+      if (p.horseId && !seen.has(p.horseId)) {
+        seen.add(p.horseId);
+        list.push({
+          horseId: p.horseId,
+          horseName: p.horseName,
+          planId: p.planId,
+          groomId: p.groomId,
+          groomName: p.groomName,
+        });
+      }
+    }
+    return list;
+  }, [plans]);
+
+  const activeHorseId = form.horseId || (selectedPlan ? String(selectedPlan.horseId) : "");
+
+  const handleRecoveryHorseSelect = async (selectedHorseId) => {
+    const horseEntry = recoveryHorses.find((h) => String(h.horseId) === String(selectedHorseId));
+    if (!horseEntry) {
+      setForm((old) => ({
+        ...old,
+        horseId: "",
+        planId: "",
+        phaseId: "",
+        groomNotes: "",
+      }));
+      setRecoveryDetails(null);
+      return;
+    }
+
+    let phaseId = "";
+    try {
+      const planData = await authFetch(`${PLAN_API}/${horseEntry.planId}`);
+      if (Array.isArray(planData.phases) && planData.phases.length > 0) {
+        phaseId = String(planData.phases[0].phaseId);
+      }
+    } catch (err) {
+      console.warn("Failed to load plan phases for recovery horse", err);
+    }
+
+    setForm((old) => ({
+      ...old,
+      horseId: String(horseEntry.horseId),
+      planId: String(horseEntry.planId),
+      phaseId,
+      assignedTo: horseEntry.groomId ? String(horseEntry.groomId) : old.assignedTo,
+    }));
+  };
+
   useEffect(() => {
-    if (!isRecovery || !selectedPlan?.horseId) {
+    if (!isRecovery || !activeHorseId) {
       setRecoveryDetails(null);
       return;
     }
     let cancelled = false;
-    authFetch(`/api/medical-records?horseId=${selectedPlan.horseId}`)
+    authFetch(`/api/medical-records?horseId=${activeHorseId}`)
       .then((records) => {
         if (cancelled || !Array.isArray(records)) return;
         const lw = records.find(
@@ -338,32 +400,60 @@ function SessionModal({
           const protoMatch = lw.notes?.match(/protocol:\s*([^.]+)/i) || lw.notes?.match(/protocol\s*[a-c]:\s*([^.]+)/i);
           const freqMatch = lw.notes?.match(/frequency:\s*([^.]+)/i);
           const durMatch = lw.notes?.match(/duration:\s*(\d+)/i);
+          const hrMatch = (lw.notes || "").match(/(?:max\s*HR|HR\s*ceiling)\s*(\d+)/i) || (protoMatch ? protoMatch[0].match(/(?:max\s*HR|HR\s*ceiling)\s*(\d+)/i) : null);
+          const distMatch = (lw.notes || "").match(/max\s*(\d+)\s*m/i) || (protoMatch ? protoMatch[0].match(/max\s*(\d+)\s*m/i) : null);
+
+          const protocol = protoMatch ? protoMatch[0] : (lw.diagnosis || "Controlled walking & light trotting (max 800m)");
+          const maxHr = hrMatch ? `${hrMatch[1]} bpm` : "130 bpm";
+          const frequency = freqMatch ? freqMatch[1].trim() : "Once daily";
+          const duration = durMatch ? `${durMatch[1]} days` : "5 days";
+          const plannedDist = distMatch ? distMatch[1] : "800";
+
           setRecoveryDetails({
-            protocol: protoMatch ? protoMatch[0] : (lw.diagnosis || "Controlled walking & light trotting (max 800m)"),
-            frequency: freqMatch ? freqMatch[1].trim() : "Once daily",
-            duration: durMatch ? `${durMatch[1]} days` : "5 days",
+            protocol,
+            maxHr,
+            frequency,
+            duration,
+            plannedDist,
           });
+
+          setForm((old) => ({
+            ...old,
+            plannedDistance: plannedDist,
+          }));
         } else {
           setRecoveryDetails({
             protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
+            maxHr: "130 bpm",
             frequency: "Once daily",
             duration: "5 days",
+            plannedDist: "800",
           });
+          setForm((old) => ({
+            ...old,
+            plannedDistance: "800",
+          }));
         }
       })
       .catch(() => {
         if (!cancelled) {
           setRecoveryDetails({
             protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
+            maxHr: "130 bpm",
             frequency: "Once daily",
             duration: "5 days",
+            plannedDist: "800",
           });
+          setForm((old) => ({
+            ...old,
+            plannedDistance: "800",
+          }));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [isRecovery, selectedPlan?.horseId]);
+  }, [isRecovery, activeHorseId, setRecoveryDetails, setForm]);
 
   const availableGrooms = useMemo(() => {
     const list = [...grooms];
@@ -457,130 +547,170 @@ function SessionModal({
 
           {!editingSession && (
             <>
-              <label>
-                Training plan
-                <select
-                  required
-                  value={form.planId}
-                  onChange={(event) => {
-                    const chosenPlanId = event.target.value;
-                    const chosenPlan = plans.find(
-                      (p) => String(p.planId) === String(chosenPlanId),
-                    );
-                    setForm((old) => ({
-                      ...old,
-                      planId: chosenPlanId,
-                      phaseId: "",
-                      plannedDistance: "",
-                      velocityCeiling: "",
-                      assignedTo: chosenPlan?.groomId
-                        ? String(chosenPlan.groomId)
-                        : "",
-                    }));
-                  }}
-                >
-                  <option value="">Select a training plan</option>
-                  {plans.map((plan) => (
-                    <option key={plan.planId} value={plan.planId}>
-                      {plan.horseName} — {plan.planName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {isRecovery ? (
+                <>
+                  <label>
+                    Horse
+                    <select
+                      required
+                      value={form.horseId || (selectedPlan ? String(selectedPlan.horseId) : "")}
+                      onChange={(event) => handleRecoveryHorseSelect(event.target.value)}
+                    >
+                      <option value="">Select a horse</option>
+                      {recoveryHorses.map((h) => (
+                        <option key={h.horseId} value={h.horseId}>
+                          {h.horseName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label>
-                Training phase
-                <select
-                  required
-                  disabled={!form.planId}
-                  value={form.phaseId}
-                  onChange={(event) => {
-                    const phase = phases.find(
-                      (item) => String(item.phaseId) === event.target.value,
-                    );
-                    setForm((old) => ({
-                      ...old,
-                      phaseId: event.target.value,
-                      plannedDistance: phase?.distance ?? "",
-                      velocityCeiling: phase?.targetVelocity != null ? String(phase.targetVelocity) : "",
-                    }))
-                  }}
-                >
-                  <option value="">Select a phase</option>
-                  {phases.map((phase) => (
-                    <option key={phase.phaseId} value={phase.phaseId}>
-                      Phase {phase.phaseNo}: {phase.phaseName}
-                    </option>
-                  ))}
-                </select>
-                {selectedPlan && phases.length === 0 && (
-                  <small className="schedule-field-hint">
-                    No phases were found for this plan.
-                  </small>
-                )}
-                {selectedPhase && (
-                  <div className="schedule-phase-info-box">
-                    <div className="schedule-phase-info-header">
-                      <strong>Phase {selectedPhase.phaseNo}: {selectedPhase.phaseName}</strong>
-                      <span>📅 {selectedPhase.startDate} – {selectedPhase.endDate}</span>
-                    </div>
-                    <div className="schedule-phase-info-grid">
-                      <div className="schedule-phase-info-item">
-                        <span>Planned Distance</span>
-                        <strong>{selectedPhase.distance ? `${Number(selectedPhase.distance).toLocaleString()} m` : "—"}</strong>
-                      </div>
-                      <div className="schedule-phase-info-item">
-                        <span>Target Surface</span>
-                        <strong>{selectedPhase.surface || "TURF"}</strong>
-                      </div>
-                      <div className="schedule-phase-info-item">
-                        <span>Sessions / Wk</span>
-                        <strong>{selectedPhase.sessionsPerWeek || "—"}</strong>
-                      </div>
-                      <div className="schedule-phase-info-item">
-                        <span>HR Ceiling</span>
-                        <strong>{selectedPhase.heartRateCeiling ? `${selectedPhase.heartRateCeiling} bpm` : "—"}</strong>
-                      </div>
-                      <div className="schedule-phase-info-item">
-                        <span>Workload</span>
-                        <strong>{selectedPhase.workload || "Normal"}</strong>
-                      </div>
-                      <div className="schedule-phase-info-item">
-                        <span>Min Rest Gap</span>
-                        <strong>{selectedPhase.minGapMinutes || 90}m</strong>
-                      </div>
-                      {selectedPhase.targetVelocity && (
-                        <div className="schedule-phase-info-item">
-                          <span>Target Speed</span>
-                          <strong>{selectedPhase.targetVelocity} m/s</strong>
-                        </div>
-                      )}
-                    </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                    <label style={{ margin: 0 }}>
+                      Planned distance
+                      <input
+                        type="text"
+                        readOnly
+                        value={form.plannedDistance ? `${form.plannedDistance} m` : "800 m"}
+                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                      />
+                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                        ✓ Auto-filled (max 800m)
+                      </small>
+                    </label>
+
+                    <label style={{ margin: 0 }}>
+                      Max Heart Rate
+                      <input
+                        type="text"
+                        readOnly
+                        value={recoveryDetails?.maxHr || "130 bpm"}
+                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                      />
+                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                        ✓ Auto-filled ceiling
+                      </small>
+                    </label>
+
+                    <label style={{ margin: 0 }}>
+                      Prescribed Frequency
+                      <input
+                        type="text"
+                        readOnly
+                        value={recoveryDetails?.frequency || "Once daily"}
+                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                      />
+                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                        ✓ Auto-filled protocol
+                      </small>
+                    </label>
                   </div>
-                )}
-              </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    Training plan
+                    <select
+                      required
+                      value={form.planId}
+                      onChange={(event) => {
+                        const chosenPlanId = event.target.value;
+                        const chosenPlan = plans.find(
+                          (p) => String(p.planId) === String(chosenPlanId),
+                        );
+                        setForm((old) => ({
+                          ...old,
+                          planId: chosenPlanId,
+                          phaseId: "",
+                          plannedDistance: "",
+                          velocityCeiling: "",
+                          assignedTo: chosenPlan?.groomId
+                            ? String(chosenPlan.groomId)
+                            : "",
+                        }));
+                      }}
+                    >
+                      <option value="">Select a training plan</option>
+                      {plans.map((plan) => (
+                        <option key={plan.planId} value={plan.planId}>
+                          {plan.horseName} — {plan.planName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              {isRecovery && (
-                <label>
-                  Planned distance (meters)
-                  <input
-                    type="number"
-                    required
-                    min="100"
-                    max="800"
-                    step="50"
-                    value={form.plannedDistance || "800"}
-                    onChange={(event) =>
-                      setForm((old) => ({
-                        ...old,
-                        plannedDistance: event.target.value,
-                      }))
-                    }
-                  />
-                  <small className="schedule-field-hint" style={{ color: "#166534" }}>
-                    ✓ Restricted by Light work training lock: Maximum 800 meters.
-                  </small>
-                </label>
+                  <label>
+                    Training phase
+                    <select
+                      required
+                      disabled={!form.planId}
+                      value={form.phaseId}
+                      onChange={(event) => {
+                        const phase = phases.find(
+                          (item) => String(item.phaseId) === event.target.value,
+                        );
+                        setForm((old) => ({
+                          ...old,
+                          phaseId: event.target.value,
+                          plannedDistance: phase?.distance ?? "",
+                          velocityCeiling: phase?.targetVelocity != null ? String(phase.targetVelocity) : "",
+                        }))
+                      }}
+                    >
+                      <option value="">Select a phase</option>
+                      {phases.map((phase) => (
+                        <option key={phase.phaseId} value={phase.phaseId}>
+                          Phase {phase.phaseNo}: {phase.phaseName}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedPlan && phases.length === 0 && (
+                      <small className="schedule-field-hint">
+                        No phases were found for this plan.
+                      </small>
+                    )}
+                    {selectedPhase && (
+                      <div className="schedule-phase-info-box">
+                        <div className="schedule-phase-info-header">
+                          <strong>Phase {selectedPhase.phaseNo}: {selectedPhase.phaseName}</strong>
+                          <span>📅 {selectedPhase.startDate} – {selectedPhase.endDate}</span>
+                        </div>
+                        <div className="schedule-phase-info-grid">
+                          <div className="schedule-phase-info-item">
+                            <span>Planned Distance</span>
+                            <strong>{selectedPhase.distance ? `${Number(selectedPhase.distance).toLocaleString()} m` : "—"}</strong>
+                          </div>
+                          <div className="schedule-phase-info-item">
+                            <span>Target Surface</span>
+                            <strong>{selectedPhase.surface || "TURF"}</strong>
+                          </div>
+                          <div className="schedule-phase-info-item">
+                            <span>Sessions / Wk</span>
+                            <strong>{selectedPhase.sessionsPerWeek || "—"}</strong>
+                          </div>
+                          <div className="schedule-phase-info-item">
+                            <span>HR Ceiling</span>
+                            <strong>{selectedPhase.heartRateCeiling ? `${selectedPhase.heartRateCeiling} bpm` : "—"}</strong>
+                          </div>
+                          <div className="schedule-phase-info-item">
+                            <span>Workload</span>
+                            <strong>{selectedPhase.workload || "Normal"}</strong>
+                          </div>
+                          <div className="schedule-phase-info-item">
+                            <span>Min Rest Gap</span>
+                            <strong>{selectedPhase.minGapMinutes || 90}m</strong>
+                          </div>
+                          {selectedPhase.targetVelocity && (
+                            <div className="schedule-phase-info-item">
+                              <span>Target Speed</span>
+                              <strong>{selectedPhase.targetVelocity} m/s</strong>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </label>
+                </>
               )}
             </>
           )}
@@ -589,10 +719,14 @@ function SessionModal({
             <div className="schedule-session-summary">
               <span>HORSE</span>
               <strong>{editingSession.horseName}</strong>
-              <span>TRAINING PHASE</span>
-              <strong>
-                {editingSession.phaseName || `Phase ${editingSession.phaseNo}`}
-              </strong>
+              {!isRecovery && (
+                <>
+                  <span>TRAINING PHASE</span>
+                  <strong>
+                    {editingSession.phaseName || `Phase ${editingSession.phaseNo}`}
+                  </strong>
+                </>
+              )}
             </div>
           )}
 
@@ -684,7 +818,32 @@ function SessionModal({
             )}
           </label>
 
-          {!editingSession && (
+          {isRecovery && (
+            <label>
+              Protocol instructions for Groom
+              <textarea
+                rows={3}
+                placeholder="e.g. Follow Protocol: Hand-walking and light trotting. Keep heart rate below ceiling, stop immediately if horse shows stiffness."
+                value={form.groomNotes || ""}
+                onChange={(e) => setForm((old) => ({ ...old, groomNotes: e.target.value }))}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
+              <small className="schedule-field-hint">
+                Specific instructions or cautions for the Groom during this recovery session.
+              </small>
+            </label>
+          )}
+
+          {!editingSession && !isRecovery && (
             <label>
               Max allowed speed (m/s)
               <input
@@ -740,7 +899,8 @@ function SessionModal({
                 disabled={
                   saving ||
                   grooms.length === 0 ||
-                  (!editingSession && phases.length === 0) ||
+                  (!editingSession && !isRecovery && phases.length === 0) ||
+                  (!editingSession && isRecovery && (!form.phaseId || (!form.horseId && !form.planId))) ||
                   (endInfo != null && (!endInfo.sameDay || endInfo.dur > 720 || endInfo.dur < 15))
                 }
               >
@@ -772,6 +932,7 @@ export default function SchedulePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [sessionTypeChoiceOpen, setSessionTypeChoiceOpen] = useState(false);
   const [isRecoverySession, setIsRecoverySession] = useState(false);
+  const [recoveryDetails, setRecoveryDetails] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState("");
@@ -829,7 +990,14 @@ export default function SchedulePage() {
       try {
         const plan = await authFetch(`${PLAN_API}/${form.planId}`);
         if (!cancelled) {
-          setPhases(Array.isArray(plan.phases) ? plan.phases : []);
+          const planPhases = Array.isArray(plan.phases) ? plan.phases : [];
+          setPhases(planPhases);
+          if (isRecoverySession && planPhases.length > 0) {
+            setForm((old) => ({
+              ...old,
+              phaseId: String(planPhases[0].phaseId),
+            }));
+          }
           if (plan.groomId) {
             setForm((old) => {
               if (old.assignedTo) return old;
@@ -849,7 +1017,7 @@ export default function SchedulePage() {
     return () => {
       cancelled = true;
     };
-  }, [form.planId, editingSession, navigate]);
+  }, [form.planId, editingSession, navigate, isRecoverySession]);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
@@ -878,24 +1046,40 @@ export default function SchedulePage() {
     return result;
   }, [sessions, weekDays]);
 
-  const openCreateModal = (recovery = false) => {
+  const openCreateModal = async (recovery = false) => {
     setIsRecoverySession(Boolean(recovery));
     setEditingSession(null);
     setPhases([]);
+    setRecoveryDetails(null);
     const defaultPlan = plans.length === 1 ? plans[0] : null;
+    let defaultPhaseId = "";
+    if (recovery && defaultPlan) {
+      try {
+        const planData = await authFetch(`${PLAN_API}/${defaultPlan.planId}`);
+        if (Array.isArray(planData.phases) && planData.phases.length > 0) {
+          defaultPhaseId = String(planData.phases[0].phaseId);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
     setForm(
       defaultPlan
         ? {
             ...EMPTY_FORM,
+            horseId: String(defaultPlan.horseId),
             planId: String(defaultPlan.planId),
+            phaseId: defaultPhaseId,
             assignedTo: defaultPlan.groomId ? String(defaultPlan.groomId) : "",
             plannedDistance: recovery ? "800" : "",
             plannedDuration: recovery ? "30" : "60",
+            groomNotes: "",
           }
         : {
             ...EMPTY_FORM,
             plannedDistance: recovery ? "800" : "",
             plannedDuration: recovery ? "30" : "60",
+            groomNotes: "",
           },
     );
     setError("");
@@ -926,6 +1110,7 @@ export default function SchedulePage() {
     setIsRecoverySession(false);
     setEditingSession(null);
     setPhases([]);
+    setRecoveryDetails(null);
     setForm(EMPTY_FORM);
   };
 
@@ -981,6 +1166,16 @@ export default function SchedulePage() {
         setNotice("Schedule updated successfully.");
       } else {
         const selectedPhase = phases.find((p) => String(p.phaseId) === String(form.phaseId));
+        let remarks = null;
+        if (isRecoverySession) {
+          const groomNotes = form.groomNotes ? form.groomNotes.trim() : "";
+          const protoText = recoveryDetails?.protocol ? `Protocol: ${recoveryDetails.protocol}. ` : "Light work rehabilitation. ";
+          const hrText = recoveryDetails?.maxHr ? `Max HR: ${recoveryDetails.maxHr}. ` : "";
+          const freqText = recoveryDetails?.frequency ? `Frequency: ${recoveryDetails.frequency}. ` : "";
+          const groomPart = groomNotes ? `Instructions for Groom: ${groomNotes}` : "";
+          remarks = `[Recovery Session] ${protoText}${hrText}${freqText}${groomPart}`.trim();
+        }
+
         const body = {
           phaseId: Number(form.phaseId),
           assignedTo: Number(form.assignedTo),
@@ -991,8 +1186,10 @@ export default function SchedulePage() {
               ? Number(form.plannedDistance || selectedPhase?.distance)
               : null),
           plannedDuration,
-          velocityCeiling: form.velocityCeiling !== "" ? Number(form.velocityCeiling) : (selectedPhase?.targetVelocity != null ? Number(selectedPhase.targetVelocity) : null),
-          remarks: isRecoverySession ? "[Recovery Session] Prescribed light work rehabilitation" : null,
+          velocityCeiling: isRecoverySession
+            ? null
+            : (form.velocityCeiling !== "" ? Number(form.velocityCeiling) : (selectedPhase?.targetVelocity != null ? Number(selectedPhase.targetVelocity) : null)),
+          remarks,
         };
 
         await authFetch(SESSION_API, {
@@ -1214,6 +1411,8 @@ export default function SchedulePage() {
           grooms={grooms}
           editingSession={editingSession}
           isRecovery={isRecoverySession}
+          recoveryDetails={recoveryDetails}
+          setRecoveryDetails={setRecoveryDetails}
           saving={saving}
           onClose={closeModal}
           onSubmit={handleSubmit}

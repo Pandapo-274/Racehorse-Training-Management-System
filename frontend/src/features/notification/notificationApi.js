@@ -56,9 +56,27 @@ export function notificationTarget(n, user) {
     if (role === "VETERINARIAN") return `/veterinarian/recovery/${n.targetId}`;
     if (role === "HEAD_TRAINER") return "/trainer/session-review";
   }
+  if (role === "HEAD_TRAINER") {
+    if (
+      n?.type === "TRAINING_LOCK_ISSUED" ||
+      n?.type === "TRAINING_LOCK_RELEASED" ||
+      n?.type === "TRAINING_LOCK_LEVEL_UPDATED" ||
+      n?.type === "HORSE_CLEARED_TO_TRAIN" ||
+      n?.type === "HEALTH_STATUS_CHANGED" ||
+      n?.type === "TRAINING_SESSION_ASSIGNED" ||
+      n?.type === "TRAINING_SESSION_FINISHED" ||
+      n?.type === "TRAINING_SESSION_AUTO_FINISHED"
+    ) {
+      return "/trainer/schedule";
+    }
+  }
   switch (n?.targetEntity) {
     case "HORSE":
+      if (role === "HEAD_TRAINER") return "/trainer/schedule";
       return `${getHorseBasePath(user)}/${n.targetId}`;
+    case "TRAINING_LOCK":
+      if (role === "HEAD_TRAINER") return "/trainer/schedule";
+      return null;
     case "HORSE_REQUEST":
       if (role === "CLUB_MANAGER") return "/manager/horse-requests";
       if (role === "HORSE_OWNER") return "/horse-owner/request";

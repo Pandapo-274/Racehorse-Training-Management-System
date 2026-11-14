@@ -386,6 +386,27 @@ function SessionPanel({ session, onChanged, navigate }) {
         </div>
       </dl>
 
+      {session.remarks && (
+        <div
+          style={{
+            marginTop: "12px",
+            marginBottom: "12px",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            backgroundColor: session.remarks.includes("[Recovery Session]") ? "#ecfdf5" : "#f8fafc",
+            border: `1px solid ${session.remarks.includes("[Recovery Session]") ? "#a7f3d0" : "#e2e8f0"}`,
+            fontSize: "12px",
+            lineHeight: 1.5,
+            color: session.remarks.includes("[Recovery Session]") ? "#065f46" : "#334155",
+          }}
+        >
+          <strong>{session.remarks.includes("[Recovery Session]") ? "🩺 Recovery Protocol & Instructions:" : "📝 Trainer Instructions:"}</strong>
+          <div style={{ marginTop: "4px" }}>
+            {session.remarks.replace(/^\[Recovery Session\]\s*/, "")}
+          </div>
+        </div>
+      )}
+
       {session.status === "SCHEDULED" && (
         <div>
           <button
