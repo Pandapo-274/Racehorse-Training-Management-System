@@ -186,6 +186,13 @@ function RecoveryView({ horseId }) {
       reminders,
       subtitle,
       recoverySessions: (data.sessions || []).filter((s) => s.status === "COMPLETED" || s.status === "STOPPED_EARLY"),
+      hasTrainerReported: (data.sessions || []).some(
+        (s) =>
+          (s.status === "COMPLETED" || s.status === "STOPPED_EARLY") &&
+          ((s.remarks && s.remarks.includes("[SUBMITTED_TO_VET]")) ||
+            (s.remarks && s.remarks.includes("[Recovery Session]") && (s.reviewStatus === "REVIEWED" || s.evaluation != null)) ||
+            (s.reviewStatus === "REVIEWED" && s.evaluation != null))
+      ),
     };
   }, [data]);
 
@@ -210,7 +217,7 @@ function RecoveryView({ horseId }) {
     );
   }
 
-  const { horse, exams, activeLock, openInjuries, allInjuries, openReports, activeTreatments, stage, reminders, lightWorkInfo, recoverySessions } = view;
+  const { horse, exams, activeLock, openInjuries, allInjuries, openReports, activeTreatments, stage, reminders, lightWorkInfo, recoverySessions, hasTrainerReported } = view;
   const hasActiveTreatment = (activeTreatments || []).length > 0;
   const canClear = (horse.status !== "ELIGIBLE" || !!activeLock) && !hasActiveTreatment;
   const today = todayInputValue();
@@ -281,13 +288,30 @@ function RecoveryView({ horseId }) {
                 >
                   Relapse / Return to Treatment ↺
                 </button>
-                <button
-                  type="button"
-                  className="examine-button"
-                  onClick={() => setRatingDialog(true)}
-                >
-                  Progress to Rating →
-                </button>
+                {hasTrainerReported ? (
+                  <button
+                    type="button"
+                    className="examine-button"
+                    onClick={() => setRatingDialog(true)}
+                  >
+                    Progress to Rating →
+                  </button>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      backgroundColor: "#f3f4f6",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e7eb",
+                      fontWeight: 500,
+                    }}
+                    title="Awaiting Head Trainer recovery workout evaluation and submission"
+                  >
+                    ⏳ Awaiting Head Trainer report
+                  </span>
+                )}
               </>
             )}
             {stage === 3 && (
@@ -322,6 +346,11 @@ function RecoveryView({ horseId }) {
           </div>
         </div>
         <p className="vx-caption">{captionOf(stage, openInjuries, activeTreatments, activeLock, lightWorkInfo)}</p>
+        {stage === 2 && !hasTrainerReported && (
+          <div style={{ marginTop: "12px", padding: "10px 14px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "12px", color: "#92400e" }}>
+            ℹ️ <strong>Awaiting Recovery Workout Report:</strong> The &quot;Progress to Rating&quot; button will unlock once the Head Trainer reviews and submits the horse&apos;s recovery workout data to you.
+          </div>
+        )}
       </VetCard>
 
       {(stage === 2 || stage === 3 || (recoverySessions && recoverySessions.length > 0)) && (

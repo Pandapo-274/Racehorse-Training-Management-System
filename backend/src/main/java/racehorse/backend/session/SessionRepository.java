@@ -169,4 +169,20 @@ public class SessionRepository {
                 .param("id", sessionId)
                 .update();
     }
+
+    /**
+     * Đánh dấu buổi tập đã được gửi dữ liệu sang Bác sĩ thú y để chấm điểm phục hồi.
+     */
+    public int markSubmittedToVet(int sessionId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET remarks = CASE
+                    WHEN remarks IS NULL OR remarks = '' THEN '[SUBMITTED_TO_VET]'
+                    WHEN remarks NOT LIKE '%[SUBMITTED_TO_VET]%' THEN remarks + ' [SUBMITTED_TO_VET]'
+                    ELSE remarks END
+                WHERE session_id = :id
+                """)
+                .param("id", sessionId)
+                .update();
+    }
 }

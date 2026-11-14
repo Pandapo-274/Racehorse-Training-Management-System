@@ -388,15 +388,26 @@ function SessionModal({
       return;
     }
     let cancelled = false;
-    authFetch(`/api/medical-records?horseId=${activeHorseId}`)
-      .then((records) => {
-        if (cancelled || !Array.isArray(records)) return;
-        const lw = records.find(
+    Promise.all([
+      authFetch(`/api/medical-records?horseId=${activeHorseId}`).catch(() => []),
+      authFetch(`/api/horses/${activeHorseId}/vitals`).catch(() => null),
+    ])
+      .then(([records, vitals]) => {
+        if (cancelled) return;
+        const recList = Array.isArray(records) ? records : [];
+        const lw = recList.find(
           (r) =>
             (r.diagnosis && r.diagnosis.toLowerCase().includes("light work")) ||
             (r.notes && r.notes.toLowerCase().includes("light work")),
         );
-        if (lw) {
+
+        const hasLightWorkLock = vitals?.activeLock?.lockLevel === "HEAVY_WORK_ONLY";
+        const hasVetOrder = Boolean(
+          (lw && (hasLightWorkLock || (lw.notes && lw.notes.toLowerCase().includes("protocol")))) ||
+          (hasLightWorkLock && (lw || (vitals?.activeLock?.reason && vitals.activeLock.reason.toLowerCase().includes("light work"))))
+        );
+
+        if (hasVetOrder && lw) {
           const protoMatch = lw.notes?.match(/protocol:\s*([^.]+)/i) || lw.notes?.match(/protocol\s*[a-c]:\s*([^.]+)/i);
           const freqMatch = lw.notes?.match(/frequency:\s*([^.]+)/i);
           const durMatch = lw.notes?.match(/duration:\s*(\d+)/i);
@@ -410,6 +421,7 @@ function SessionModal({
           const plannedDist = distMatch ? distMatch[1] : "800";
 
           setRecoveryDetails({
+            hasVetOrder: true,
             protocol,
             maxHr,
             frequency,
@@ -421,8 +433,9 @@ function SessionModal({
             ...old,
             plannedDistance: plannedDist,
           }));
-        } else {
+        } else if (hasVetOrder && hasLightWorkLock) {
           setRecoveryDetails({
+            hasVetOrder: true,
             protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
             maxHr: "130 bpm",
             frequency: "Once daily",
@@ -433,20 +446,26 @@ function SessionModal({
             ...old,
             plannedDistance: "800",
           }));
+        } else {
+          setRecoveryDetails({
+            hasVetOrder: false,
+            message: "No recovery training has been prescribed by the veterinarian for this horse.",
+          });
+          setForm((old) => ({
+            ...old,
+            plannedDistance: "",
+          }));
         }
       })
       .catch(() => {
         if (!cancelled) {
           setRecoveryDetails({
-            protocol: "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm",
-            maxHr: "130 bpm",
-            frequency: "Once daily",
-            duration: "5 days",
-            plannedDist: "800",
+            hasVetOrder: false,
+            message: "No recovery training has been prescribed by the veterinarian for this horse.",
           });
           setForm((old) => ({
             ...old,
-            plannedDistance: "800",
+            plannedDistance: "",
           }));
         }
       });
@@ -522,27 +541,50 @@ function SessionModal({
 
         <form className="schedule-form" onSubmit={onSubmit} noValidate>
           {isRecovery && (
-            <div
-              style={{
-                backgroundColor: "#f0fdf4",
-                border: "1px solid #86efac",
-                borderRadius: "10px",
-                padding: "12px 16px",
-                marginBottom: "16px",
-                fontSize: "13px",
-                lineHeight: 1.5,
-              }}
-            >
-              <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
-                🩺 Prescribed Rehabilitation Plan (from Veterinarian)
-              </strong>
-              <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px", color: "#15803d", fontSize: "12px" }}>
-                <span>• <strong>Protocol:</strong> {recoveryDetails?.protocol || "Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm"}</span>
-                <span>• <strong>Prescribed Frequency:</strong> {recoveryDetails?.frequency || "Once daily (1 session/day)"}</span>
-                <span>• <strong>Expected Duration:</strong> {recoveryDetails?.duration || "5 days"}</span>
-                <span>• <strong>Safety Rule:</strong> Training lock restricts distance to maximum 800m.</span>
-              </div>
-            </div>
+            <>
+              {recoveryDetails?.hasVetOrder ? (
+                <div
+                  style={{
+                    backgroundColor: "#f0fdf4",
+                    border: "1px solid #86efac",
+                    borderRadius: "10px",
+                    padding: "12px 16px",
+                    marginBottom: "16px",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                    🩺 Prescribed Rehabilitation Plan (from Veterinarian)
+                  </strong>
+                  <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px", color: "#15803d", fontSize: "12px" }}>
+                    <span>• <strong>Protocol:</strong> {recoveryDetails.protocol}</span>
+                    <span>• <strong>Prescribed Frequency:</strong> {recoveryDetails.frequency}</span>
+                    <span>• <strong>Expected Duration:</strong> {recoveryDetails.duration}</span>
+                    <span>• <strong>Safety Rule:</strong> Training lock restricts distance to maximum {recoveryDetails.plannedDist || "800"}m.</span>
+                  </div>
+                </div>
+              ) : activeHorseId ? (
+                <div
+                  style={{
+                    backgroundColor: "#fff7ed",
+                    border: "1px solid #fdba74",
+                    borderRadius: "10px",
+                    padding: "12px 16px",
+                    marginBottom: "16px",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong style={{ color: "#c2410c", display: "flex", alignItems: "center", gap: "6px" }}>
+                    ⚠️ No recovery training prescribed by veterinarian
+                  </strong>
+                  <div style={{ marginTop: "4px", color: "#9a3412", fontSize: "12px" }}>
+                    This horse does not have an active rehabilitation or Light work protocol assigned by the veterinarian. You cannot create a recovery session for this horse.
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
 
           {!editingSession && (
@@ -565,46 +607,48 @@ function SessionModal({
                     </select>
                   </label>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                    <label style={{ margin: 0 }}>
-                      Planned distance
-                      <input
-                        type="text"
-                        readOnly
-                        value={form.plannedDistance ? `${form.plannedDistance} m` : "800 m"}
-                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
-                      />
-                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
-                        ✓ Auto-filled (max 800m)
-                      </small>
-                    </label>
+                  {recoveryDetails?.hasVetOrder && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                      <label style={{ margin: 0 }}>
+                        Planned distance
+                        <input
+                          type="text"
+                          readOnly
+                          value={form.plannedDistance ? `${form.plannedDistance} m` : "800 m"}
+                          style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                        />
+                        <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                          ✓ Auto-filled (max 800m)
+                        </small>
+                      </label>
 
-                    <label style={{ margin: 0 }}>
-                      Max Heart Rate
-                      <input
-                        type="text"
-                        readOnly
-                        value={recoveryDetails?.maxHr || "130 bpm"}
-                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
-                      />
-                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
-                        ✓ Auto-filled ceiling
-                      </small>
-                    </label>
+                      <label style={{ margin: 0 }}>
+                        Max Heart Rate
+                        <input
+                          type="text"
+                          readOnly
+                          value={recoveryDetails?.maxHr || "130 bpm"}
+                          style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                        />
+                        <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                          ✓ Auto-filled ceiling
+                        </small>
+                      </label>
 
-                    <label style={{ margin: 0 }}>
-                      Prescribed Frequency
-                      <input
-                        type="text"
-                        readOnly
-                        value={recoveryDetails?.frequency || "Once daily"}
-                        style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
-                      />
-                      <small className="schedule-field-hint" style={{ color: "#166534" }}>
-                        ✓ Auto-filled protocol
-                      </small>
-                    </label>
-                  </div>
+                      <label style={{ margin: 0 }}>
+                        Prescribed Frequency
+                        <input
+                          type="text"
+                          readOnly
+                          value={recoveryDetails?.frequency || "Once daily"}
+                          style={{ backgroundColor: "#f8fafc", color: "#1e293b", fontWeight: 600, cursor: "not-allowed" }}
+                        />
+                        <small className="schedule-field-hint" style={{ color: "#166534" }}>
+                          ✓ Auto-filled protocol
+                        </small>
+                      </label>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -884,7 +928,12 @@ function SessionModal({
                 Cancel session
               </button>
             )}
-            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+            {isRecovery && activeHorseId && !recoveryDetails?.hasVetOrder && (
+              <span style={{ color: "#dc2626", fontSize: "12px", fontWeight: 600 }}>
+                ⚠️ No recovery plan assigned by Vet
+              </span>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginLeft: "auto", alignItems: "center" }}>
               <button
                 type="button"
                 className="schedule-button secondary"
@@ -900,7 +949,7 @@ function SessionModal({
                   saving ||
                   grooms.length === 0 ||
                   (!editingSession && !isRecovery && phases.length === 0) ||
-                  (!editingSession && isRecovery && (!form.phaseId || (!form.horseId && !form.planId))) ||
+                  (!editingSession && isRecovery && (!form.phaseId || (!form.horseId && !form.planId) || !recoveryDetails?.hasVetOrder)) ||
                   (endInfo != null && (!endInfo.sameDay || endInfo.dur > 720 || endInfo.dur < 15))
                 }
               >
@@ -1064,15 +1113,15 @@ export default function SchedulePage() {
       }
     }
     setForm(
-      defaultPlan
+      !recovery && defaultPlan
         ? {
             ...EMPTY_FORM,
             horseId: String(defaultPlan.horseId),
             planId: String(defaultPlan.planId),
             phaseId: defaultPhaseId,
             assignedTo: defaultPlan.groomId ? String(defaultPlan.groomId) : "",
-            plannedDistance: recovery ? "800" : "",
-            plannedDuration: recovery ? "30" : "60",
+            plannedDistance: "",
+            plannedDuration: "60",
             groomNotes: "",
           }
         : {
@@ -1116,6 +1165,10 @@ export default function SchedulePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (isRecoverySession && !recoveryDetails?.hasVetOrder) {
+      setError("Cannot create recovery session: This horse has not been prescribed recovery training by the veterinarian.");
+      return;
+    }
     if (form.plannedDistance !== "" && form.plannedDistance != null) {
       const dist = Number(form.plannedDistance);
       if (!Number.isFinite(dist) || dist <= 0 || dist > 5000) {

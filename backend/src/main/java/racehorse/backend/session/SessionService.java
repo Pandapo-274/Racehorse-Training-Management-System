@@ -192,6 +192,8 @@ public class SessionService {
                 throw new ApiException(HttpStatus.FORBIDDEN, "This session belongs to a horse not assigned to you");
             }
         }
+        repository.markSubmittedToVet(sessionId);
+
         users.writeAudit(me == null ? null : me.userId(),
                 "RECOVERY_SESSION_SUBMIT_TO_VET", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
 
@@ -206,7 +208,7 @@ public class SessionService {
                     current.horseName() + " has completed a recovery session #" + sessionId + " (Distance: " + distStr + ", Avg HR: " + hrStr + ", Recovery HR: " + recoveryHrStr + "). Data is ready for Vet rating.",
                     Notice.HORSE, current.horseId()));
         }
-        return current;
+        return getOrThrow(sessionId);
     }
 
     /**
