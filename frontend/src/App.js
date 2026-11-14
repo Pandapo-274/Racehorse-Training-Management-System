@@ -151,7 +151,8 @@ export default function App() {
         <Route path="/veterinarian/recovery/:horseId" element={<RoleRoute roles={["VETERINARIAN"]}><VetRecoveryPage /></RoleRoute>} />
         {/* Flow 4: bác sĩ duyệt khẩu phần. */}
         <Route path="/veterinarian/feeding" element={<RoleRoute roles={["VETERINARIAN"]}><FeedingPage /></RoleRoute>} />
-        {/* Vet counts medicine (Groom may not, #11) and records expired stock thrown away. */}
+        {/* Vet sees the medicine in the store (stock, minimum, expiry) and reports problems.
+            The club manager runs the store: counts, deliveries, waste. */}
         <Route path="/veterinarian/supplies" element={<RoleRoute roles={["VETERINARIAN"]}><SuppliesPage /></RoleRoute>} />
 
         {/* UC17 - lịch tiêm phòng / tẩy giun / móng, và đơn thuốc đang dùng toàn đàn. */}

@@ -58,7 +58,7 @@ export const ROLE_NAV = {
     { key: "preventive", label: "Preventive care", path: "/veterinarian/preventive-care" },
     { key: "prescriptions", label: "Treatment plans", path: "/veterinarian/prescriptions" },
     { key: "rations", label: "Rations", path: "/veterinarian/feeding" },
-    { key: "supplies", label: "Medicine & supplies", path: "/veterinarian/supplies" },
+    { key: "supplies", label: "Medicine", path: "/veterinarian/supplies" },
   ],
 
   GROOM: [

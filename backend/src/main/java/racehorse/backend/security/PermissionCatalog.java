@@ -119,6 +119,7 @@ public final class PermissionCatalog {
             new Entry(CARE, "Update stock counts", "PUT /api/supplies/{id}/count", NONE),
             new Entry(CARE, "Receive deliveries into the store", "POST /api/supplies/{id}/receive", NONE),
             new Entry(CARE, "Record stock thrown away", "POST /api/supplies/{id}/waste", NONE),
+            new Entry(CARE, "Report a stock problem or ask for a restock", "POST /api/supplies/{id}/report", NONE),
             new Entry(CARE, "View a supply's stock history", "GET /api/supplies/{id}/movements", NONE),
             new Entry(CARE, "Hand a care task to another groom", "PUT /api/daily-tasks/{id}/assignee", NONE),
             new Entry(CARE, "View missed care tasks", "GET /api/daily-tasks/missed", NONE),

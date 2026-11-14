@@ -79,8 +79,36 @@ public final class SupplyModels {
                            int createdBy, String createdByName, Instant createdAt) {
     }
 
+    /**
+     * A groom (or head trainer, vet) flags an item to the club manager: running
+     * low, damaged or spoiled, expired, or something else. This is the
+     * "propose a restock" of the spec; it does not change the quantity.
+     */
+    public record ProblemReport(
+            @NotBlank(message = "Choose what is wrong")
+            @Pattern(regexp = "LOW|DAMAGED|EXPIRED|OTHER", message = "Reason must be LOW, DAMAGED, EXPIRED or OTHER")
+            String reason,
+            @DecimalMin(value = "0.01", message = "Quantity must be greater than 0")
+            BigDecimal qty,
+            @Size(max = 255, message = "Note must be at most 255 characters")
+            String note) {
+    }
+
+    /**
+     * A shelf count. Stock does not appear by itself, so a count HIGHER than the
+     * record needs a reason (and a note for OTHER); a lower or equal count does not
+     * (wear and loss are normal). See SupplyService.count.
+     */
     public record CountRequest(
             @NotNull(message = "Quantity is required") @DecimalMin(value = "0", message = "Quantity cannot be negative")
-            BigDecimal currentQty) {
+            BigDecimal currentQty,
+            @Pattern(regexp = "RECOUNT|RETURNED|FOUND|NOT_USED|OTHER",
+                    message = "Reason must be RECOUNT, RETURNED, FOUND, NOT_USED or OTHER")
+            String reason,
+            @Size(max = 255, message = "Note must be at most 255 characters")
+            String note) {
+        public CountRequest(BigDecimal currentQty) {
+            this(currentQty, null, null);
+        }
     }
 }

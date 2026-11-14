@@ -1,10 +1,12 @@
 // src/features/care/SuppliesPage.js
 // Flow 4 - feed, medicine and tools by storage area.
-//   Groom (and Vet): update the count after checking the shelf. Medicine is
-//   counted by a vet or the manager only (backend answers 403 for a groom).
-//   Club Manager:    also add items, edit name / unit / minimum / area / expiry /
-//                    unit price, record deliveries.
-//   Manager and Vet: record deliveries and stock thrown away, see each item's history.
+//   Club Manager: runs the store - add / edit items, count, record deliveries
+//                 and stock thrown away, see each item's history.
+//   Groom:        counts feed and tools (not medicine), reports problems.
+//   Head Trainer: sees the store and its history, reports problems.
+//   Veterinarian: sees the MEDICINE only (stock, minimum, expiry) to know what
+//                 can be prescribed, and reports problems. The vet does not run
+//                 the store: no counts, deliveries or waste (backend refuses too).
 // Every change to a quantity is a line in the stock ledger (V21): a count, a
 // delivery, waste, or a feeding task taking the ration. Editing an item never
 // changes its quantity. "Restock suggested" = below the minimum; managers also
@@ -15,8 +17,8 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { formatDateTime } from "../horse/horseApi";
 import {
-  CATEGORY_TEXT, MOVEMENT_TEXT, countSupply, createSupply, formatQty, listMovements, listSupplies,
-  receiveSupply, todayIso, updateSupply, wasteSupply,
+  CATEGORY_TEXT, COUNT_UP_REASONS, MOVEMENT_TEXT, REPORT_REASONS, countSupply, createSupply, formatQty, listMovements, listSupplies,
+  receiveSupply, reportSupply, todayIso, updateSupply, wasteSupply,
 } from "./careApi";
 import "./care.css";
 
@@ -27,7 +29,7 @@ function formatSupplyPrice(price, unit) {
 
 /** Who may count an item (mirrors SupplyService.count: a groom may not count medicine). */
 function canCountItem(role, item) {
-  if (role === "CLUB_MANAGER" || role === "VETERINARIAN") return true;
+  if (role === "CLUB_MANAGER") return true;
   return role === "GROOM" && item.category !== "MEDICINE";
 }
 
@@ -147,12 +149,102 @@ function SupplyForm({ initial, areas, onSaved, onCancel }) {
   );
 }
 
+/**
+ * Groom (or head trainer, vet) flags an item to the club manager: running low,
+ * damaged, expired. Medicine also goes to the vets. The quantity does not change;
+ * the manager decides to restock, count or throw away. This is the spec's
+ * "propose a restock" - the automatic "Restock suggested" only sees the numbers,
+ * not a wet sack of feed or a cracked vial.
+ */
+function ReportForm({ item, onDone, onCancel }) {
+  const navigate = useNavigate();
+  const [reason, setReason] = useState(item.needsRestock ? "LOW" : item.expired ? "EXPIRED" : "");
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const medicine = item.category === "MEDICINE";
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!reason) {
+      setError("Choose what is wrong");
+      return;
+    }
+    if (reason === "OTHER" && !note.trim()) {
+      setError("Describe the problem");
+      return;
+    }
+    if (qty !== "" && !(Number(qty) > 0)) {
+      setError("Quantity must be greater than 0");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await reportSupply(item.supplyId, {
+        reason,
+        qty: qty === "" ? null : Number(qty),
+        note: note.trim() || null,
+      });
+      onDone(`${item.supplyName}: ${res.message}`);
+    } catch (err) {
+      if (err.status === 401) {
+        handleAuthError(err, navigate);
+        return;
+      }
+      setError(err.message || "Could not send the report");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title={`Report ${item.supplyName}`}
+      hint={`On record: ${formatQty(item.currentQty)} ${item.unit}${item.area ? ` in ${item.area}` : ""}. `
+        + `The club manager${medicine ? " and the vets" : ""} get a notification at once.`}
+      actions={<button type="button" className="hz-btn hz-btn--ghost" onClick={onCancel}>Cancel</button>}
+    >
+      <form onSubmit={submit} noValidate>
+        <div className="hz-form-grid">
+          <div className="hz-field">
+            <label htmlFor="sr-reason">What is wrong? *</label>
+            <select id="sr-reason" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
+              <option value="">Choose…</option>
+              {Object.entries(REPORT_REASONS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          {reason === "LOW" && (
+            <div className="hz-field">
+              <label htmlFor="sr-qty">About how much is needed ({item.unit})</label>
+              <input id="sr-qty" type="number" min="0.01" step="0.01" placeholder="Optional"
+                value={qty} onChange={(e) => setQty(e.target.value)} />
+            </div>
+          )}
+          <div className="hz-field care-field-wide">
+            <label htmlFor="sr-note">{reason === "OTHER" ? "What happened? *" : "Note (optional)"}</label>
+            <input id="sr-note" value={note} maxLength={255} onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Two vials cracked on the shelf, the bottom sack is wet" />
+          </div>
+        </div>
+        {error && <p className="hz-form-error" role="alert">{error}</p>}
+        <div className="hz-form-footer">
+          <button type="submit" className="hz-btn" disabled={busy}>{busy ? "Sending…" : "Send report"}</button>
+          <button type="button" className="hz-btn hz-btn--ghost" onClick={onCancel}>Cancel</button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 /** Count the shelf, receive a delivery, record waste, or show the ledger of one item. */
 function StockAction({ kind, item, onDone, onCancel }) {
   const navigate = useNavigate();
   // A count starts from the number on record: the groom only changes it if the shelf differs.
   const [qty, setQty] = useState(kind === "count" ? formatQty(item.currentQty) : "");
   const [text, setText] = useState("");
+  const [upReason, setUpReason] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [moves, setMoves] = useState(null);
@@ -205,6 +297,8 @@ function StockAction({ kind, item, onDone, onCancel }) {
   const isCount = kind === "count";
   const qtyNum = Number(qty);
   const qtyOk = qty !== "" && Number.isFinite(qtyNum) && (isCount ? qtyNum >= 0 : qtyNum > 0);
+  /* More than on record: stock does not appear by itself, so say why (backend requires it). */
+  const countUp = isCount && qtyOk && qtyNum > Number(item.currentQty);
   const fixedPrice = Number(item.unitPrice) || 0;
   const totalCost = qtyOk ? qtyNum * fixedPrice : 0;
 
@@ -222,12 +316,21 @@ function StockAction({ kind, item, onDone, onCancel }) {
       setError("Please specify reason for disposal");
       return;
     }
+    if (countUp && !upReason) {
+      setError("The count is higher than the record. Choose why there is more");
+      return;
+    }
+    if (countUp && upReason === "OTHER" && !text.trim()) {
+      setError("Describe why there is more than on record");
+      return;
+    }
 
     setBusy(true);
     setError("");
     try {
       if (isCount) {
-        const saved = await countSupply(item.supplyId, qtyNum);
+        const saved = await countSupply(item.supplyId, qtyNum,
+          countUp ? upReason : null, countUp && text.trim() ? text.trim() : null);
         const diff = Number(saved.currentQty) - Number(item.currentQty);
         onDone(saved, diff === 0
           ? `${saved.supplyName}: count matches the record (${formatQty(saved.currentQty)} ${saved.unit}).`
@@ -299,6 +402,26 @@ function StockAction({ kind, item, onDone, onCancel }) {
             </div>
           )}
 
+          {countUp && (
+            <>
+              <div className="hz-field">
+                <label htmlFor="sa-up">Why is there more than on record? *</label>
+                <select id="sa-up" value={upReason} onChange={(e) => setUpReason(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {Object.entries(COUNT_UP_REASONS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div className="hz-field care-field-wide">
+                <label htmlFor="sa-up-note">{upReason === "OTHER" ? "What happened? *" : "Note (optional)"}</label>
+                <input id="sa-up-note" value={text} maxLength={255} onChange={(e) => setText(e.target.value)}
+                  placeholder="e.g. Two sacks were in Store B" />
+              </div>
+              <p className="hz-note care-warn care-field-wide">
+                Stock does not appear by itself. If a delivery arrived, use Restock instead so its cost is recorded.
+              </p>
+            </>
+          )}
+
           {!isCount && (
             <div className="hz-field care-field-wide">
               <label htmlFor="sa-text">{isRestock ? "Note / Supplier / Invoice (optional)" : "Reason *"}</label>
@@ -337,11 +460,15 @@ export default function SuppliesPage() {
   const navigate = useNavigate();
   const role = getUser()?.role;
   const isManager = role === "CLUB_MANAGER";
-  const canRestock = ["CLUB_MANAGER", "VETERINARIAN"].includes(role);
-  const canWaste = ["CLUB_MANAGER", "VETERINARIAN"].includes(role);
-  const canSeeHistory = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN"].includes(role);
-  const canCountAny = ["CLUB_MANAGER", "VETERINARIAN", "GROOM"].includes(role);
-  const hasActions = canRestock || canWaste || canSeeHistory || isManager || canCountAny;
+  /* The vet only sees medicine: what is in the cabinet, what runs low, what expires. */
+  const isVet = role === "VETERINARIAN";
+  const canRestock = isManager;
+  const canWaste = isManager;
+  const canSeeHistory = ["CLUB_MANAGER", "HEAD_TRAINER"].includes(role);
+  const canCountAny = ["CLUB_MANAGER", "GROOM"].includes(role);
+  /* POST /api/supplies/{id}/report: everyone who is not the manager can flag an item to the manager. */
+  const canReport = ["GROOM", "HEAD_TRAINER", "VETERINARIAN"].includes(role);
+  const hasActions = canRestock || canWaste || canSeeHistory || isManager || canCountAny || canReport;
   const open = (kind, item) => { setInfo(""); setEditing(null); setAction({ kind, item }); };
   const [action, setAction] = useState(null); // null | { kind, item }
 
@@ -357,15 +484,15 @@ export default function SuppliesPage() {
   useEffect(() => {
     const ctrl = new AbortController();
     setError("");
-    listSupplies({}, ctrl.signal)
-      .then(setItems)
+    listSupplies(isVet ? { category: "MEDICINE" } : {}, ctrl.signal)
+      .then((list) => setItems(isVet ? list.filter((i) => i.category === "MEDICINE") : list))
       .catch((err) => {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
         setError(err.message);
       });
     return () => ctrl.abort();
-  }, [navigate, reloadKey]);
+  }, [navigate, reloadKey, isVet]);
 
   const areas = useMemo(() => [...new Set((items || []).map((i) => i.area).filter(Boolean))].sort(), [items]);
   const lowCount = (items || []).filter((i) => i.needsRestock).length;
@@ -384,9 +511,11 @@ export default function SuppliesPage() {
 
   return (
     <HorseShell
-      title={isManager ? "Supplies & feed" : "Supplies"}
+      title={isManager ? "Supplies & feed" : isVet ? "Medicine" : "Supplies"}
       subtitle={isManager ? "Stock by storage area, deliveries, and what needs restocking"
-        : canCountAny ? "Check the shelves and update the counts" : "Stock by storage area and what needs restocking"}
+        : isVet ? "Medicine in the club's store: stock, minimum and expiry. The club manager restocks; report what runs low, is damaged or expired"
+          : canCountAny ? "Check the shelves, update the counts and report what is missing or damaged"
+            : "Stock by storage area; report what is missing or damaged"}
       actions={isManager && editing !== "new" && (
         <button type="button" className="hz-btn" onClick={() => { setInfo(""); setEditing("new"); }}>Add item</button>
       )}
@@ -401,7 +530,7 @@ export default function SuppliesPage() {
       {items && (
         <>
           <div className="care-summary">
-            <div className="hz-stat"><span>Items</span><strong>{items.length}</strong></div>
+            <div className="hz-stat"><span>{isVet ? "Medicines" : "Items"}</span><strong>{items.length}</strong></div>
             <div className="hz-stat"><span>Restock suggested</span><strong>{lowCount}</strong><small>below the minimum</small></div>
             <div className="hz-stat"><span>Storage areas</span><strong>{areas.length}</strong></div>
           </div>
@@ -419,7 +548,15 @@ export default function SuppliesPage() {
               }}
             />
           )}
-          {action && (
+          {action && action.kind === "report" && (
+            <ReportForm
+              key={`report-${action.item.supplyId}`}
+              item={action.item}
+              onCancel={() => setAction(null)}
+              onDone={(message) => { setAction(null); setInfo(message); }}
+            />
+          )}
+          {action && action.kind !== "report" && (
             <StockAction
               key={`${action.kind}-${action.item.supplyId}`}
               kind={action.kind}
@@ -438,10 +575,12 @@ export default function SuppliesPage() {
                   <option value="">All areas</option>
                   {areas.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
-                <select className="hz-search" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-                  <option value="">All categories</option>
-                  {Object.entries(CATEGORY_TEXT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                {!isVet && (
+                  <select className="hz-search" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+                    <option value="">All categories</option>
+                    {Object.entries(CATEGORY_TEXT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                )}
                 <div className="hz-segment" role="group" aria-label="Which items">
                   <button type="button" aria-pressed={!lowOnly} onClick={() => setLowOnly(false)}>All</button>
                   <button type="button" aria-pressed={lowOnly} onClick={() => setLowOnly(true)}>Restock <b>{lowCount}</b></button>
@@ -508,6 +647,11 @@ export default function SuppliesPage() {
                               <button type="button" className="hz-btn hz-btn--ghost care-btn-pill care-btn-pill--waste"
                                 onClick={() => open("waste", i)}>
                                 Throw away
+                              </button>
+                            )}
+                            {canReport && (
+                              <button type="button" className="hz-btn hz-btn--ghost care-btn-pill" onClick={() => open("report", i)}>
+                                Report
                               </button>
                             )}
                             {canSeeHistory && (

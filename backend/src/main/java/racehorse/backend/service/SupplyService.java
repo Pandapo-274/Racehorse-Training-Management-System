@@ -130,27 +130,73 @@ public class SupplyService {
 
     @Transactional
     public SupplyModels.Supply count(int id, BigDecimal qty, AuthenticatedUser user, String ip) {
+        return count(id, qty, null, null, user, ip);
+    }
+
+    /** Why a count can be higher than the record (stock does not appear by itself). */
+    static final Map<String, String> COUNT_UP_TEXT = Map.of(
+            "RECOUNT", "earlier count was wrong",
+            "RETURNED", "returned to the store",
+            "FOUND", "found misplaced",
+            "NOT_USED", "taken by the system but not used",
+            "OTHER", "other");
+
+    /**
+     * A shelf count sets the quantity and writes an ADJUST line for the difference.
+     * Lower or equal: no reason needed (wear, loss). HIGHER: stock does not appear by
+     * itself, so a reason is required (and a note for OTHER); it goes into the ledger
+     * line, and the club manager is told when someone else counted. Refusing higher
+     * counts outright would push people to record a fake delivery instead.
+     */
+    @Transactional
+    public SupplyModels.Supply count(int id, BigDecimal qty, String reason, String note,
+                                     AuthenticatedUser user, String ip) {
         SupplyModels.Supply before = get(id);
-        /* Medicine is a controlled stock: a groom may report it missing via an
-           incident, but the count is made by a vet or the manager (review #11). */
+        /* Medicine is a controlled stock: a groom may report it (POST /{id}/report),
+           but only the club manager counts it (review #11; the vet no longer runs the store). */
         if ("GROOM".equals(user.role()) && "MEDICINE".equals(before.category())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
-                    "Medicine is counted by a veterinarian or the club manager");
+                    "Medicine is counted by the club manager");
         }
+        boolean higher = qty.compareTo(before.currentQty()) > 0;
+        String why = reason == null || reason.isBlank() ? null : reason.trim().toUpperCase(Locale.ROOT);
+        String cleanNote = note == null || note.isBlank() ? null : note.trim();
+        if (higher && (why == null || !COUNT_UP_TEXT.containsKey(why))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "The count is higher than the record (" + plain(before.currentQty()) + " " + before.unit()
+                            + "). Say why there is more",
+                    Map.of("reason", "Choose why there is more than on record"));
+        }
+        if (higher && "OTHER".equals(why) && cleanNote == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Say why there is more than on record",
+                    Map.of("note", "Describe why there is more"));
+        }
+        String moveReason = higher
+                ? "Stock count, more than record: " + COUNT_UP_TEXT.get(why) + (cleanNote == null ? "" : " - " + cleanNote)
+                : "Stock count";
         BigDecimal[] range = repo.setQty(id, qty, user.userId()).orElseThrow(() -> notFound(id));
         BigDecimal delta = range[1].subtract(range[0]);
         if (delta.signum() != 0) {
-            repo.insertMovement(id, "ADJUST", delta, range[1], null, null, "Stock count", user.userId());
+            repo.insertMovement(id, "ADJUST", delta, range[1], null, null, moveReason, user.userId());
         }
         SupplyModels.Supply after = get(id);
         users.writeAudit(user.userId(), "SUPPLY_COUNT", "SUPPLY_STOCK", id, "SUCCESS", ip,
                 after.supplyName() + where(after) + ": " + plain(range[0]) + " -> " + plain(range[1])
-                        + " " + after.unit());
+                        + " " + after.unit() + (higher ? ". " + moveReason : ""));
+        if (higher && delta.signum() > 0 && !"CLUB_MANAGER".equals(user.role())) {
+            String who = users.findById(user.userId()).map(u -> u.fullName()).orElse(user.username());
+            String text = who + " counted " + plain(range[1]) + " " + after.unit() + " of " + after.supplyName()
+                    + where(after) + ", the record was " + plain(range[0]) + ". Reason: " + COUNT_UP_TEXT.get(why)
+                    + (cleanNote == null ? "" : " - " + cleanNote) + ".";
+            notifications.notifyRole("CLUB_MANAGER", user, new Notice("SUPPLY_COUNT_UP",
+                    "Count higher than record: " + after.supplyName(),
+                    text.length() <= 500 ? text : text.substring(0, 497) + "...", null, null));
+        }
         warnIfLow(before, after, user);
         return after;
     }
 
-    /** A delivery arrived (Manager or Veterinarian). */
+    /** A delivery arrived (Club Manager). */
     @Transactional
     public SupplyModels.Supply receive(int id, SupplyModels.ReceiveRequest r, AuthenticatedUser user, String ip) {
         SupplyModels.Supply before = get(id);
@@ -185,7 +231,7 @@ public class SupplyService {
         return after;
     }
 
-    /** Thrown away: spoiled feed, expired medicine (Manager, Vet). */
+    /** Thrown away: spoiled feed, expired medicine (Club Manager). */
     @Transactional
     public SupplyModels.Supply waste(int id, SupplyModels.WasteRequest r, AuthenticatedUser user, String ip) {
         SupplyModels.Supply before = get(id);
@@ -205,6 +251,47 @@ public class SupplyService {
                         + ". Reason: " + r.reason().trim());
         warnIfLow(before, after, user);
         return after;
+    }
+
+    /* ---------------- Reported by staff (#spec: propose a restock) ---------------- */
+
+    private static final Map<String, String> REPORT_TEXT = Map.of(
+            "LOW", "running low", "DAMAGED", "damaged or spoiled", "EXPIRED", "expired", "OTHER", "problem");
+
+    /**
+     * A groom flags an item: the manager (and, for medicine, the vets) get a bell
+     * at once instead of waiting for the next count or the 07:05 check. Nothing
+     * in the store changes; the manager restocks, counts or throws away.
+     *
+     * @return what to show the reporter.
+     */
+    @Transactional
+    public String report(int id, SupplyModels.ProblemReport r, AuthenticatedUser user, String ip) {
+        SupplyModels.Supply item = get(id);
+        String note = r.note() == null || r.note().isBlank() ? null : r.note().trim();
+        if ("OTHER".equals(r.reason()) && note == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Say what is wrong",
+                    Map.of("note", "Describe the problem"));
+        }
+        String who = users.findById(user.userId()).map(u -> u.fullName()).orElse(user.username());
+        String what = REPORT_TEXT.get(r.reason());
+        String text = who + ": " + item.supplyName() + where(item) + " is " + what
+                + " (" + plain(item.currentQty()) + " " + item.unit() + " on record)."
+                + (r.qty() == null ? "" : " Needs about " + plain(r.qty()) + " " + item.unit() + ".")
+                + (note == null ? "" : " " + note);
+        Notice notice = new Notice("SUPPLY_REPORTED",
+                ("LOW".equals(r.reason()) ? "Restock requested: " : "Stock problem: ") + item.supplyName(),
+                text.length() <= 500 ? text : text.substring(0, 497) + "...", null, null);
+        notifications.notifyRole("CLUB_MANAGER", user, notice);
+        boolean medicine = "MEDICINE".equals(item.category());
+        if (medicine) {
+            notifications.notifyRole("VETERINARIAN", user, notice);
+        }
+        users.writeAudit(user.userId(), "SUPPLY_REPORT", "SUPPLY_STOCK", id, "SUCCESS", ip,
+                item.supplyName() + where(item) + ": " + what
+                        + (r.qty() == null ? "" : ", needs " + plain(r.qty()) + " " + item.unit())
+                        + (note == null ? "" : ". " + note));
+        return "Sent to the club manager" + (medicine ? " and the veterinarians" : "") + ".";
     }
 
     /* ---------------- Used by tasks (CareService) ---------------- */
@@ -280,8 +367,26 @@ public class SupplyService {
         if (due.isEmpty()) {
             return 0;
         }
+        notifications.notifyRole("CLUB_MANAGER", null, new Notice(
+                "SUPPLY_DIGEST", "Store check: " + due.size() + " item(s) need attention",
+                digestText(due, today), null, null));
+        /* The vets use the medicine and prescribing takes it from this store, so
+           they get the medicine part of the same check (they used to get nothing
+           and only found out when a prescription was refused). */
+        List<SupplyModels.Supply> medicine = due.stream().filter(s -> "MEDICINE".equals(s.category())).toList();
+        if (!medicine.isEmpty()) {
+            notifications.notifyRole("VETERINARIAN", null, new Notice(
+                    "SUPPLY_DIGEST", "Medicine check: " + medicine.size() + " item(s) need attention",
+                    digestText(medicine, today), null, null));
+        }
+        repo.markReminded(due.stream().map(SupplyModels.Supply::supplyId).toList(), today);
+        return due.size();
+    }
+
+    /** "Below minimum: … Expired: … Expires soon: …", at most 500 characters. */
+    private static String digestText(List<SupplyModels.Supply> items, LocalDate today) {
         Map<String, List<String>> lines = new LinkedHashMap<>();
-        for (SupplyModels.Supply s : due) {
+        for (SupplyModels.Supply s : items) {
             if (s.needsRestock()) {
                 lines.computeIfAbsent("Below minimum", k -> new java.util.ArrayList<>())
                         .add(s.supplyName() + " " + plain(s.currentQty()) + "/" + plain(s.minThreshold()) + " " + s.unit());
@@ -293,29 +398,32 @@ public class SupplyService {
             }
         }
         StringBuilder msg = new StringBuilder();
-        lines.forEach((head, items) -> {
+        lines.forEach((head, names) -> {
             if (msg.length() > 0) msg.append(" ");
-            msg.append(head).append(": ").append(String.join(", ", items)).append(".");
+            msg.append(head).append(": ").append(String.join(", ", names)).append(".");
         });
-        String text = msg.length() <= 500 ? msg.toString() : msg.substring(0, 497) + "...";
-        notifications.notifyRole("CLUB_MANAGER", null, new Notice(
-                "SUPPLY_DIGEST", "Store check: " + due.size() + " item(s) need attention", text, null, null));
-        repo.markReminded(due.stream().map(SupplyModels.Supply::supplyId).toList(), today);
-        return due.size();
+        return msg.length() <= 500 ? msg.toString() : msg.substring(0, 497) + "...";
     }
 
     /* ---------------- helpers ---------------- */
 
-    /** Fires only when an item first drops below its minimum; the daily digest repeats it. */
+    /**
+     * Fires only when an item first drops below its minimum; the daily digest repeats it.
+     * Medicine also goes to the vets: they prescribe from this stock.
+     */
     private void warnIfLow(SupplyModels.Supply before, SupplyModels.Supply after, AuthenticatedUser actor) {
         boolean wasLow = before != null && before.needsRestock();
         if (after.needsRestock() && !wasLow) {
-            notifications.notifyRole("CLUB_MANAGER", actor, new Notice(
+            Notice notice = new Notice(
                     "SUPPLY_LOW", "Restock suggested",
                     after.supplyName() + " (" + (after.area() == null ? "no area" : after.area()) + "): "
                             + plain(after.currentQty()) + " " + after.unit()
                             + " left, minimum is " + plain(after.minThreshold()) + ".",
-                    null, null));
+                    null, null);
+            notifications.notifyRole("CLUB_MANAGER", actor, notice);
+            if ("MEDICINE".equals(after.category())) {
+                notifications.notifyRole("VETERINARIAN", actor, notice);
+            }
         }
     }
 

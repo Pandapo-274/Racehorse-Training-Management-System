@@ -37,6 +37,7 @@ Thời lượng gợi ý cho Flow 4: **khoảng 5 phút** (Bước 1 khoảng 2,
 |---|---|---|---|
 | 1.1 | C - Vet | Mở **Feeding**, chỉ vào Air Groove: "Cám hỗn hợp 2 kg, sáng; alfalfa 0.5 kiện, tối - duyệt bởi Phạm Thu Hà" | Khẩu phần theo bữa, có người duyệt; mỗi dòng là một món trong kho, đơn vị lấy từ kho |
 | 1.2 | A - HLV | **Stable care**, form giao việc: chọn Daiwa Scarlet, Groom `binh.lv`, hôm nay, loại **Cleaning**, bấm giao | Chuông của B báo "New care tasks" |
+| 1.2b | C → A, B | (Sau bước 1.1, khi bác sĩ lưu khẩu phần Air Groove) | 🔔 **A** (HLV Thắng phụ trách Air Groove) và **B** (Bình, Groom có việc với Air Groove): *"Ration changed: Air Groove – Phạm Thu Hà: …"*; bấm vào mở bảng khẩu phần |
 | 1.3 | B - Groom | **Stable map**: sơ đồ chuồng theo dãy, mỗi ô có ngựa, khẩu phần hôm nay và việc của mình. Bấm xong **Feeding** của Symboli Rudolf | Việc chuyển sang Done kèm giờ |
 | 1.4 | D - Manager | **Supplies**, Yến mạch, **History**: dòng mới nhất là `CONSUME -3.5 kg "Feeding Symboli Rudolf"` của `binh.lv`, bên dưới là các ngày trước | Cho ăn **tự trừ kho** theo khẩu phần (cả timothy 0.5 kiện và cám 2.5 kg); sổ kho có đủ lịch sử |
 | 1.5 | B - Groom | **Incidents**: báo sự cố cho một ngựa: "Bỏ ăn, bụng chướng", mức HIGH, kèm ảnh | Bác sĩ, HLV và chủ ngựa nhận chuông; ca vào hàng chờ khám (nối sang Flow 3) |
@@ -49,16 +50,21 @@ Với mỗi luật: nói tên luật, thao tác, rồi chỉ vào kết quả.
 | # | Luật | Ai / thao tác | Kết quả mong đợi |
 |---|---|---|---|
 | 2.1 | **Thiếu hàng không chặn việc cho ăn** (ngựa không thể nhịn đói chỉ vì số trên sổ) | B: bấm xong **Feeding** của Vodka (cần 4 kg cà rốt, kho còn 3) | Việc vẫn Done; cà rốt về **0**; D nhận chuông **"Stock ran out … needed 4 kg, only 3 was in stock"** |
+| 2.1b | **HLV không ghi đè khẩu phần điều trị của bác sĩ khi ngựa đang ốm** | Cần một ngựa INJURED có khẩu phần do bác sĩ duyệt (bác sĩ đặt khẩu phần sau khi khám). **A**: Rations → Edit ngựa đó → Approve ration | Lỗi *"… is INJURED and its ration was set by the vet (Phạm Thu Hà). Ask the vet to change it"* |
 | 2.2 | **Bỏ đánh dấu trả lại đúng lượng đã lấy** (đọc từ sổ kho, không tính lại) | B: bấm lại Feeding của Vodka để bỏ đánh dấu | Cà rốt về **3** (không phải 4); sổ kho có dòng REVERSAL |
 | 2.3 | **Quá tải Groom chỉ cảnh báo, không chặn** (ngưỡng 12 việc/ngày) | A: giao Daiwa Scarlet **Cleaning + Bathing** hôm nay cho `nam.tq` (đang có 11 việc) | Tạo được, kèm cảnh báo "Warning: 13 open tasks on … (more than 12)" |
 | 2.4 | **Mỗi ngựa mỗi ngày chỉ một việc mỗi loại** (dữ liệu tương lai) | A: giao hàng loạt **Cleaning** cho cả 7 ngựa từ ngày mai tới D+5, cho `hieu.lm` | "14 created, 21 already planned and left as they were" (D+1..D+3 đã có sẵn) |
 | 2.5 | **Giao hàng loạt tối đa 14 ngày** | A: chọn "đến ngày" quá 14 ngày | Ô ngày không cho chọn quá (`max`); API trả 400 "Period too long" |
 | 2.6 | **Chuyển việc: cả hai Groom đều được báo** | A: chọn ngày mai, Hand over việc Feeding của Air Groove từ `binh.lv` sang `nam.tq` | B nhận "Task handed over", `nam.tq` nhận "New care tasks" |
+| 2.6b | **Groom quên bấm thì HLV xác nhận hộ, nhưng ghi rõ người xác nhận** | **A**: Daily tasks, ngày hôm nay → một việc "To do" → **Mark done** → OK | Status "Done hh:mm" kèm *"ticked by Nguyễn Đức Thắng"*; nếu là Feeding thì kho cũng bị trừ. **Reopen** để hoàn tác. Việc của hôm qua thì thành **Done late** |
 | 2.7 | **Việc đã qua ngày là bằng chứng, không xoá được**; việc tương lai xoá được | A: chọn ngày D-2: không còn nút Delete hay Hand over. Chọn ngày D+3: Delete một việc dọn chuồng | Quá khứ chỉ xem; tương lai xoá được |
 | 2.8 | **Việc không làm thành MISSED** (job 00:15 mỗi đêm báo HLV) | A: tab **Missed** | 3 việc bỏ lỡ trong 7 ngày, kèm Groom phụ trách; D-3 Air Groove hiện **Done late** khi chọn ngày D-3 |
+| 2.8b | **Hàng không tự sinh ra: đếm ra nhiều hơn sổ phải giải thích** | **B**: Count cỏ timothy, nhập 48 (sổ 47.5 vì mỗi bữa trừ 0.5 kiện) | Hiện ô *"Why is there more than on record?"*; chọn *"Taken by the system but not used"* → lưu; **D** nhận chuông *"Count higher than record"*; History ghi lý do. Nhắc: hàng mới về thì dùng **Restock** để có giá tiền |
 | 2.9 | **Không đổi đơn vị của món đang dùng trong khẩu phần** (đổi kg sang bao sẽ làm mọi bữa ăn lấy sai lượng) | D: sửa Yến mạch, đổi đơn vị `kg` thành `bao` | 409 "… ration line(s) measure Yến mạch in kg. Change those rations first" |
-| 2.10 | **Hàng hủy không vượt quá tồn kho** | C hoặc D: Throw away cà rốt 10 kg | 409 "Only 3 kg … in stock" |
+| 2.10 | **Hàng hủy không vượt quá tồn kho** | D (Manager): Throw away cà rốt 10 kg | 409 "Only 3 kg … in stock" |
 | 2.11 | **Kho thấp: chỉ báo một lần khi tụt dưới định mức, rồi nhắc trong bản tổng hợp mỗi sáng** | D: thẻ "Restock suggested", lọc Restock | Timothy và cà rốt nằm trong danh sách; Dexamethasone hiện hết hạn |
+| 2.12b | **Groom chủ động báo vấn đề vật tư (đề xuất bổ sung)** | **B**: **Supplies** → dòng Phenylbutazone → **Report** → "Damaged or spoiled", ghi chú → **Send report** | **D** (Manager) và **C** (bác sĩ) cùng có chuông *"Stock problem: Phenylbutazone"*; bấm vào mở trang Supplies. Kho không đổi |
+| 2.12c | **Không kê đơn thuốc đã hết hạn** (nối Flow 3) | **C**: Prescriptions → chọn thuốc | Dexamethasone hiện *"[Expired 2026-…]"*, bị làm mờ, không thêm vào đơn được |
 | 2.12 | **Thuốc là kho kiểm soát: Groom không được đếm** | B: **Supplies**: thức ăn và dụng cụ có nút **Count**, thuốc thì không. Count cỏ timothy, nhập 45 | Sổ kho có dòng ADJUST -3; thuốc chỉ bác sĩ hoặc Manager đếm (API trả 403 nếu Groom cố gửi) |
 Các luật sau chỉ chạy được qua API (giao diện chưa có nút hoặc đã ẩn sẵn, xem mục 5). Có thể nói miệng hoặc đưa vào slide:
 - Ngựa không ở chuồng (hồ sơ PEDIGREE, ngựa đã rút) không có khẩu phần, việc hay báo sự cố: 409.

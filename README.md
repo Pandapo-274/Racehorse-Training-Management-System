@@ -45,6 +45,9 @@ npm start
 ```
 
 ## Changelogs
+> ### `Nov 14, 2026`
+- `[07:36]` `tqt195` - Flow 4 (stable care and supplies): `Veterinarian` sees only medicine on the new `Medicine` page (stock, minimum, expiry) and can only `Report`; counting, restocking and throwing away stock is the `Club Manager`'s job (API refuses the vet with 403); vets now get the medicine low-stock bell and the medicine part of the 07:05 store check; an expired medicine cannot be prescribed (form greys it out, API 409); new `Report` button (`POST /api/supplies/{id}/report`) for Groom, Head Trainer and Vet to flag an item running low, damaged or expired (manager notified, vets too for medicine); a count higher than the record needs a reason (recount, returned, found, taken but not used, other) written to the ledger, and the manager is told when a groom counts more; ration changes notify the horse's Head Trainer (vet edit) or the vet who set the old ration (trainer edit, every vet if the horse is under medical watch) and the grooms caring for the horse; a Head Trainer cannot replace a vet's ration while the horse is INJURED or QUARANTINE; Head Trainer can `Mark done` / `Reopen` a groom's care task (today or yesterday, "ticked by"); bell notifications without a target now open the right page (care tasks, missed tasks, supplies, staff hand-overs); add `docs/FLOW4_GIAI_THICH.md` (Flow 4 explained) and `docs/TEST_CHECKLIST.md` (test checklist for the 5 flows)
+
 > ### `Nov 13, 2026`
 - `[21:37]` `DevilJack` - Update training flow business rule
 - `[19:33]` `DevilJack422` - Update training flow frontend

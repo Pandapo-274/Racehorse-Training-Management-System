@@ -822,6 +822,8 @@ function PrescribeDialog({ onClose, onDone }) {
               unit: found.unit || cm.unit,
               unitPrice: found.unitPrice || cm.unitPrice,
               currentQty: found.currentQty != null ? Number(found.currentQty) : 0,
+              expiryDate: found.expiryDate || null,
+              expired: !!found.expired,
             };
           }
           return { ...cm, currentQty: 0 };
@@ -836,6 +838,8 @@ function PrescribeDialog({ onClose, onDone }) {
               unit: s.unit || "unit",
               unitPrice: s.unitPrice || 0,
               currentQty: s.currentQty != null ? Number(s.currentQty) : 0,
+              expiryDate: s.expiryDate || null,
+              expired: !!s.expired,
               category: "Other",
             });
           }
@@ -957,7 +961,9 @@ function PrescribeDialog({ onClose, onDone }) {
     if (item) {
       if (item.unit) setDoseUnit(item.unit);
       if (!doseQty) setDoseQty("1");
-      if (item.currentQty <= 0) {
+      if (item.expired) {
+        setFieldNotice(`"${item.supplyName}" expired on ${item.expiryDate}. Report it from the Medicine page so the club manager replaces it.`);
+      } else if (item.currentQty <= 0) {
         setFieldNotice(`"${item.supplyName}" is currently out of stock (0 ${item.unit}). Cannot prescribe.`);
       }
     }
@@ -983,6 +989,11 @@ function PrescribeDialog({ onClose, onDone }) {
     );
 
     if (targetItem) {
+      // Thuốc hết hạn: backend cũng chặn (TreatmentService), chặn sớm ở đây cho rõ.
+      if (targetItem.expired) {
+        setFieldNotice(`"${targetItem.supplyName}" expired on ${targetItem.expiryDate}. Cannot add to prescription.`);
+        return;
+      }
       if (targetItem.currentQty <= 0) {
         setFieldNotice(`"${targetItem.supplyName}" is out of stock (0 ${targetItem.unit}). Cannot add to prescription.`);
         return;
@@ -1088,9 +1099,15 @@ function PrescribeDialog({ onClose, onDone }) {
         m.supplyName.toLowerCase().startsWith(item.name.toLowerCase())
       );
       if (targetItem) {
+        if (targetItem.expired) {
+          setError({
+            message: `"${targetItem.supplyName}" expired on ${targetItem.expiryDate}. Select another medicine, and report it from the Medicine page so the club manager replaces it.`,
+          });
+          return;
+        }
         if (targetItem.currentQty <= 0) {
           setError({
-            message: `"${targetItem.supplyName}" is out of stock (0 ${targetItem.unit}). Please restock or select another medicine.`,
+            message: `"${targetItem.supplyName}" is out of stock (0 ${targetItem.unit}). Select another medicine, or ask the club manager to restock (Report on the Medicine page).`,
           });
           return;
         }
@@ -1223,14 +1240,16 @@ function PrescribeDialog({ onClose, onDone }) {
               <option value="">Choose medicine ({medCatalog.length} medicines available)…</option>
               {medCatalog.map((m) => {
                 const isOutOfStock = m.currentQty <= 0;
+                const unusable = isOutOfStock || m.expired;
                 return (
                   <option
                     key={m.supplyName}
                     value={m.supplyName}
-                    disabled={isOutOfStock}
-                    style={isOutOfStock ? { color: "#9ca3af" } : {}}
+                    disabled={unusable}
+                    style={unusable ? { color: "#9ca3af" } : {}}
                   >
-                    {m.supplyName} · {isOutOfStock ? `[Out of stock - 0 ${m.unit}]` : `${m.currentQty} ${m.unit} in stock`}
+                    {m.supplyName} · {m.expired ? `[Expired ${m.expiryDate}]`
+                      : isOutOfStock ? `[Out of stock - 0 ${m.unit}]` : `${m.currentQty} ${m.unit} in stock`}
                   </option>
                 );
               })}
@@ -1311,7 +1330,8 @@ function PrescribeDialog({ onClose, onDone }) {
             className="vx-add-med-btn"
             disabled={
               (!chosenMedKey && !customMed.trim()) ||
-              (chosenMedKey && (medCatalog.find((m) => m.supplyName === chosenMedKey)?.currentQty ?? 1) <= 0)
+              (chosenMedKey && (medCatalog.find((m) => m.supplyName === chosenMedKey)?.currentQty ?? 1) <= 0) ||
+              (chosenMedKey && medCatalog.find((m) => m.supplyName === chosenMedKey)?.expired)
             }
             onClick={handleAddMedicine}
           >

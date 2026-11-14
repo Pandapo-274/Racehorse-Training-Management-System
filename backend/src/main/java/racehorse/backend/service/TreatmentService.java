@@ -126,13 +126,22 @@ public class TreatmentService {
             }
         }
 
+        /* Thuốc đã quá hạn dùng (SUPPLY_STOCK.expiry_date, V24) thì không được kê:
+           kho đã biết hạn và cảnh báo Manager / Vet mỗi sáng, nhưng trước đây
+           form kê đơn không hỏi đến nên vẫn trừ kho một lọ hết hạn. */
+        if (foundSupply != null && foundSupply.expired()) {
+            String msg = "Medicine \"" + foundSupply.supplyName() + "\" expired on " + foundSupply.expiryDate()
+                    + ". Ask the club manager to throw it away and restock before prescribing.";
+            throw new ApiException(HttpStatus.CONFLICT, msg, Map.of("supplyId", msg));
+        }
+
         /* Ràng buộc tồn kho: Thuốc phải còn hàng và đủ số lượng trong kho */
         if (foundSupply != null) {
             java.math.BigDecimal stock = foundSupply.currentQty() != null ? foundSupply.currentQty() : java.math.BigDecimal.ZERO;
             if (stock.compareTo(java.math.BigDecimal.ZERO) <= 0) {
                 throw new ApiException(HttpStatus.CONFLICT,
                         "Medicine \"" + foundSupply.supplyName() + "\" is out of stock (0 " + foundSupply.unit()
-                                + "). Please restock before prescribing.");
+                                + "). Ask the club manager to restock before prescribing.");
             }
             java.math.BigDecimal requested = raw.quantity() != null && raw.quantity().compareTo(java.math.BigDecimal.ZERO) > 0
                     ? raw.quantity() : java.math.BigDecimal.ONE;

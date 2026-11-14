@@ -2081,4 +2081,273 @@ class BusinessRulesTest {
         verify(notifications).notifyUser(eq(2), argThat(n ->
                 "TRAINING_PLAN_UPDATE_REJECTED".equals(n.type()) && n.message().contains("2 days")));
     }
+
+    // ---------------------------------------------------------------- Flow 4 + 3: thuốc trong kho
+
+    private static racehorse.backend.entity.SupplyModels.Supply stockItem(int id, String category, String qty,
+                                                                          String min, LocalDate expiry) {
+        BigDecimal q = new BigDecimal(qty);
+        BigDecimal m = new BigDecimal(min);
+        return new racehorse.backend.entity.SupplyModels.Supply(id, "Item " + id, category, "tube", m, q, "Store",
+                q.compareTo(m) < 0, 1, "Manager", Instant.now(), expiry,
+                expiry != null && expiry.isBefore(TODAY), new BigDecimal("1000"));
+    }
+
+    @Test
+    void expiredMedicineCannotBePrescribed() {
+        TreatmentRepository treatments = mock(TreatmentRepository.class);
+        MedicalRecordRepository records = mock(MedicalRecordRepository.class);
+        racehorse.backend.repository.SupplyRepository supplies = mock(racehorse.backend.repository.SupplyRepository.class);
+        when(records.findById(1)).thenReturn(Optional.of(new MedicalRecordRow(1, 100, "Horse 100", VET.userId(),
+                "Vet", null, "EXAM", LocalDateTime.now(), "Colic", "INJURED", true, null, null, null)));
+        when(supplies.findById(9)).thenReturn(Optional.of(stockItem(9, "MEDICINE", "10", "2", TODAY.minusDays(1))));
+        TreatmentService service = new TreatmentService(treatments, records, mock(HorseRepository.class),
+                mock(UserRepository.class), supplies, null, null, null, null);
+
+        ApiException ex = expect(ApiException.class, 409, () -> service.prescribe(new racehorse.backend.dto.TreatmentRequest(
+                1, 9, null, BigDecimal.ONE, null, false, "1 tube", "daily", null, TODAY, TODAY.plusDays(3)), VET, "ip"));
+        assertTrue(ex.getMessage().contains("expired"), ex.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(treatments);
+    }
+
+    @Test
+    void medicineDroppingBelowMinimumAlsoWarnsTheVets() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(repo.findById(9)).thenReturn(Optional.of(stockItem(9, "MEDICINE", "12", "10", null)),
+                Optional.of(stockItem(9, "MEDICINE", "8", "10", null)));
+        when(repo.setQty(eq(9), any(), anyInt())).thenReturn(Optional.of(new BigDecimal[] {
+                new BigDecimal("12"), new BigDecimal("8")}));
+        SupplyService service = new SupplyService(repo, mock(UserRepository.class), notifications);
+
+        service.count(9, new BigDecimal("8"), MANAGER, "ip");
+
+        verify(notifications).notifyRole(eq("CLUB_MANAGER"), eq(MANAGER), any());
+        verify(notifications).notifyRole(eq("VETERINARIAN"), eq(MANAGER), any());
+    }
+
+    @Test
+    void feedDroppingBelowMinimumWarnsOnlyTheManager() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(repo.findById(4)).thenReturn(Optional.of(stockItem(4, "FEED", "12", "10", null)),
+                Optional.of(stockItem(4, "FEED", "8", "10", null)));
+        when(repo.setQty(eq(4), any(), anyInt())).thenReturn(Optional.of(new BigDecimal[] {
+                new BigDecimal("12"), new BigDecimal("8")}));
+        SupplyService service = new SupplyService(repo, mock(UserRepository.class), notifications);
+
+        service.count(4, new BigDecimal("8"), GROOM, "ip");
+
+        verify(notifications).notifyRole(eq("CLUB_MANAGER"), eq(GROOM), any());
+        verify(notifications, never()).notifyRole(eq("VETERINARIAN"), any(), any());
+    }
+
+    @Test
+    void morningCheckGivesTheVetsTheMedicinePartOnly() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        when(repo.dueForReminder(TODAY, 30)).thenReturn(List.of(
+                stockItem(4, "FEED", "3", "10", null),
+                stockItem(9, "MEDICINE", "5", "2", TODAY.minusDays(2))));
+        SupplyService service = new SupplyService(repo, mock(UserRepository.class), notifications);
+
+        assertEquals(2, service.sendDailyDigest(TODAY));
+
+        verify(notifications).notifyRole(eq("CLUB_MANAGER"), eq(null), argThat(n ->
+                n.message().contains("Item 4") && n.message().contains("Item 9")));
+        verify(notifications).notifyRole(eq("VETERINARIAN"), eq(null), argThat(n ->
+                n.message().contains("Item 9") && !n.message().contains("Item 4")));
+    }
+
+    @Test
+    void groomReportGoesToTheManagerAndForMedicineToTheVets() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        UserRepository users = mock(UserRepository.class);
+        when(repo.findById(9)).thenReturn(Optional.of(stockItem(9, "MEDICINE", "3", "2", null)));
+        when(repo.findById(4)).thenReturn(Optional.of(stockItem(4, "FEED", "30", "10", null)));
+        when(users.findById(anyInt())).thenReturn(Optional.empty());
+        SupplyService service = new SupplyService(repo, users, notifications);
+
+        String medicine = service.report(9, new racehorse.backend.entity.SupplyModels.ProblemReport(
+                "DAMAGED", null, "Hai tuýp bị nứt"), GROOM, "ip");
+        assertTrue(medicine.contains("veterinarians"), medicine);
+        verify(notifications).notifyRole(eq("VETERINARIAN"), eq(GROOM), argThat(n ->
+                n.type().equals("SUPPLY_REPORTED") && n.message().contains("damaged")));
+
+        String feed = service.report(4, new racehorse.backend.entity.SupplyModels.ProblemReport(
+                "LOW", new BigDecimal("50"), null), GROOM, "ip");
+        assertTrue(!feed.contains("veterinarians"), feed);
+        verify(notifications, org.mockito.Mockito.times(2)).notifyRole(eq("CLUB_MANAGER"), eq(GROOM), any());
+        verify(repo, never()).setQty(anyInt(), any(), anyInt());
+    }
+
+    @Test
+    void otherProblemNeedsANote() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        when(repo.findById(4)).thenReturn(Optional.of(stockItem(4, "FEED", "30", "10", null)));
+        SupplyService service = new SupplyService(repo, mock(UserRepository.class), mock(NotificationService.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.report(4,
+                new racehorse.backend.entity.SupplyModels.ProblemReport("OTHER", null, "  "), GROOM, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("note"), ex.getFieldErrors().toString());
+    }
+
+    // ---------------------------------------------------------------- Flow 4: ai được báo khi khẩu phần đổi
+
+    private static racehorse.backend.entity.UserRecord staff(int id, String role, String name) {
+        return new racehorse.backend.entity.UserRecord(id, "u" + id, "x", name, "u" + id + "@x", "ACTIVE", role,
+                null, false, null);
+    }
+
+    private static CareModels.FeedingItem rationLine(int horseId, Integer approvedBy) {
+        return new CareModels.FeedingItem(1, horseId, "Horse " + horseId, "A-1", "MORNING", "Oats",
+                new BigDecimal("3"), "kg", approvedBy, "Someone", null, 4);
+    }
+
+    /** Ration service with one FEED item #4, horse #100 (trainer #2) in the given state, the old ration
+        approved by `approvedBy`, and groom #5 caring for the horse. */
+    private static CareService rationService(CareRepository care, NotificationService notifications,
+                                             String horseStatus, Integer approvedBy) {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, horseStatus, TODAY.minusYears(4), "MARE", TRAINER.userId(), "Trainer")));
+        UserRepository users = mock(UserRepository.class);
+        when(users.findById(VET.userId())).thenReturn(Optional.of(staff(VET.userId(), "VETERINARIAN", "Vet Ha")));
+        when(users.findById(TRAINER.userId())).thenReturn(Optional.of(staff(TRAINER.userId(), "HEAD_TRAINER", "Trainer Thang")));
+        SupplyService supplies = mock(SupplyService.class);
+        when(supplies.find(4)).thenReturn(Optional.of(stockItem(4, "FEED", "100", "10", null)));
+        when(care.findFeeding(100)).thenReturn(approvedBy == null ? List.of() : List.of(rationLine(100, approvedBy)));
+        when(care.groomsCaringFor(eq(100), any())).thenReturn(List.of(GROOM.userId()));
+        return new CareService(care, horses, mock(TrainingSessionRepository.class), users, notifications,
+                supplies, 1, 12);
+    }
+
+    private static CareModels.RationRequest oneLineRation() {
+        return new CareModels.RationRequest(List.of(
+                new CareModels.RationItem("MORNING", 4, null, new BigDecimal("2.5"), null, null)));
+    }
+
+    @Test
+    void vetChangingARationTellsTheHorsesTrainerOtherVetsAndItsGrooms() {
+        CareRepository care = mock(CareRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        CareService service = rationService(care, notifications, "ELIGIBLE", TRAINER.userId());
+
+        service.replaceRation(100, oneLineRation(), VET, "ip");
+
+        verify(notifications).notifyUser(eq(TRAINER.userId()), argThat(n -> n.type().equals("RATION_CHANGED")));
+        verify(notifications).notifyRole(eq("VETERINARIAN"), eq(VET), argThat(n -> n.type().equals("RATION_CHANGED")));
+        verify(notifications).notifyUser(eq(GROOM.userId()), argThat(n -> n.type().equals("RATION_CHANGED")));
+    }
+
+    @Test
+    void trainerCannotReplaceAVetsRationWhileTheHorseIsInjured() {
+        CareRepository care = mock(CareRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        CareService service = rationService(care, notifications, "INJURED", VET.userId());
+
+        ApiException ex = expect(ApiException.class, 409, () -> service.replaceRation(100, oneLineRation(), TRAINER, "ip"));
+        assertTrue(ex.getMessage().contains("Ask the vet"), ex.getMessage());
+        verify(care, never()).deleteRation(anyInt());
+        org.mockito.Mockito.verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void trainerReplacingAVetsRationOnAHealthyHorseTellsThatVetAndTheGrooms() {
+        CareRepository care = mock(CareRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        CareService service = rationService(care, notifications, "ELIGIBLE", VET.userId());
+
+        service.replaceRation(100, oneLineRation(), TRAINER, "ip");
+
+        verify(notifications).notifyUser(eq(VET.userId()), argThat(n -> n.message().startsWith("Trainer Thang")));
+        verify(notifications).notifyUser(eq(GROOM.userId()), any());
+        verify(notifications, never()).notifyRole(eq("VETERINARIAN"), any(), any());
+        verify(notifications, never()).notifyUser(eq(TRAINER.userId()), any());
+    }
+
+    @Test
+    void trainerChangingHisOwnRationOnAHorseUnderWatchTellsEveryVet() {
+        CareRepository care = mock(CareRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        CareService service = rationService(care, notifications, "MONITOR", TRAINER.userId());
+
+        service.replaceRation(100, oneLineRation(), TRAINER, "ip");
+
+        verify(care).deleteRation(100);
+        verify(notifications).notifyRole(eq("VETERINARIAN"), eq(TRAINER), any());
+        verify(notifications).notifyUser(eq(GROOM.userId()), any());
+    }
+
+    @Test
+    void trainerMayStillChangeHisOwnRationOfAnInjuredHorse() {
+        CareRepository care = mock(CareRepository.class);
+        CareService service = rationService(care, mock(NotificationService.class), "INJURED", TRAINER.userId());
+
+        service.replaceRation(100, oneLineRation(), TRAINER, "ip");
+
+        verify(care).deleteRation(100);
+    }
+
+    // ---------------------------------------------------------------- Flow 4: đếm ra nhiều hơn sổ
+
+    private static SupplyService countService(racehorse.backend.repository.SupplyRepository repo,
+                                              NotificationService notifications, String before, String after) {
+        when(repo.findById(4)).thenReturn(Optional.of(stockItem(4, "FEED", before, "10", null)),
+                Optional.of(stockItem(4, "FEED", after, "10", null)));
+        when(repo.setQty(eq(4), any(), anyInt())).thenReturn(Optional.of(new BigDecimal[] {
+                new BigDecimal(before), new BigDecimal(after)}));
+        return new SupplyService(repo, mock(UserRepository.class), notifications);
+    }
+
+    @Test
+    void countHigherThanTheRecordNeedsAReason() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        SupplyService service = countService(repo, mock(NotificationService.class), "47.5", "48");
+        // Both attempts are refused, so the record stays 47.5 for each of them.
+        when(repo.findById(4)).thenReturn(Optional.of(stockItem(4, "FEED", "47.5", "10", null)));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.count(4, new BigDecimal("48"), null, null, GROOM, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("reason"), ex.getFieldErrors().toString());
+        ApiException other = expect(ApiException.class, 400, () -> service.count(4, new BigDecimal("48"), "OTHER", " ", GROOM, "ip"));
+        assertTrue(other.getFieldErrors().containsKey("note"), other.getFieldErrors().toString());
+        verify(repo, never()).setQty(anyInt(), any(), anyInt());
+    }
+
+    @Test
+    void groomCountingMoreWithAReasonIsLoggedAndToldToTheManager() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        SupplyService service = countService(repo, notifications, "47.5", "48");
+
+        service.count(4, new BigDecimal("48"), "NOT_USED", null, GROOM, "ip");
+
+        verify(repo).insertMovement(eq(4), eq("ADJUST"), any(), any(), any(), any(),
+                argThat(r -> r.contains("taken by the system but not used")), eq(GROOM.userId()));
+        verify(notifications).notifyRole(eq("CLUB_MANAGER"), eq(GROOM), argThat(n -> n.type().equals("SUPPLY_COUNT_UP")));
+    }
+
+    @Test
+    void managerCountingMoreWithAReasonIsNotToldToHimself() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        SupplyService service = countService(repo, notifications, "40", "45");
+
+        service.count(4, new BigDecimal("45"), "RECOUNT", null, MANAGER, "ip");
+
+        verify(notifications, never()).notifyRole(any(), any(), argThat(n -> n.type().equals("SUPPLY_COUNT_UP")));
+    }
+
+    @Test
+    void countLowerThanTheRecordNeedsNoReason() {
+        racehorse.backend.repository.SupplyRepository repo = mock(racehorse.backend.repository.SupplyRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        SupplyService service = countService(repo, notifications, "48", "45");
+
+        service.count(4, new BigDecimal("45"), null, null, GROOM, "ip");
+
+        verify(repo).insertMovement(eq(4), eq("ADJUST"), any(), any(), any(), any(), eq("Stock count"), eq(GROOM.userId()));
+        verify(notifications, never()).notifyRole(any(), any(), argThat(n -> n.type().equals("SUPPLY_COUNT_UP")));
+    }
 }

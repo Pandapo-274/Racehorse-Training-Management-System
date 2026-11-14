@@ -39,6 +39,10 @@ public class CareService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
     private static final Map<String, String> TASK_TEXT = Map.of(
             "FEEDING", "feeding", "CLEANING", "stall cleaning", "BATHING", "bathing", "ICE_BATH", "ice bath");
+    /** A Head Trainer may not replace a vet's ration while the horse is in this state. */
+    private static final java.util.Set<String> RATION_LOCKED_STATUSES = java.util.Set.of("INJURED", "QUARANTINE");
+    /** A Head Trainer's ration change on a horse in this state is told to every vet. */
+    private static final java.util.Set<String> MEDICAL_WATCH_STATUSES = java.util.Set.of("INJURED", "MONITOR", "QUARANTINE");
     /** Giao hàng loạt tối đa chừng này ngày một lần: đủ cho hai tuần, không lỡ tay tạo việc cả năm. */
     private static final int MAX_BULK_DAYS = 14;
 
@@ -89,7 +93,25 @@ public class CareService {
     @Transactional
     public List<CareModels.FeedingItem> replaceRation(int horseId, CareModels.RationRequest req,
                                                       AuthenticatedUser user, String ip) {
-        requireStabledHorse(horseId);
+        HorseResponse horse = requireStabledHorse(horseId);
+        /* Who approved the ration being replaced: a vet's ration is often a medical
+           diet (colic, treatment), so a Head Trainer replacing it is told to the vet,
+           and refused while the horse is INJURED or QUARANTINE. */
+        List<CareModels.FeedingItem> previous = care.findFeeding(horseId);
+        Map<Integer, String> previousVets = new LinkedHashMap<>();
+        for (CareModels.FeedingItem f : previous) {
+            if (f.approvedBy() != null && !previousVets.containsKey(f.approvedBy())) {
+                users.findById(f.approvedBy())
+                        .filter(u -> "VETERINARIAN".equals(u.role()))
+                        .ifPresent(u -> previousVets.put(u.userId(), u.fullName()));
+            }
+        }
+        if ("HEAD_TRAINER".equals(user.role()) && !previousVets.isEmpty()
+                && RATION_LOCKED_STATUSES.contains(horse.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is " + horse.status()
+                    + " and its ration was set by the vet (" + String.join(", ", previousVets.values())
+                    + "). Ask the vet to change it");
+        }
         Map<String, String> errors = new LinkedHashMap<>();
         List<CareModels.RationItem> lines = new ArrayList<>();
         for (int i = 0; i < req.items().size(); i++) {
@@ -116,7 +138,45 @@ public class CareService {
                         + " " + l.unit())
                 .reduce((a, b) -> a + "; " + b).orElse("");
         users.writeAudit(user.userId(), "FEEDING_PLAN_UPDATE", "HORSE", horseId, "SUCCESS", ip, detail);
+        notifyRationChanged(horse, detail, previousVets, user);
         return care.findFeeding(horseId);
+    }
+
+    /**
+     * Who hears about a new ration (never the person who saved it):
+     *  - a vet saved it: the horse's Head Trainer and the other vets;
+     *  - a Head Trainer saved it: the vet(s) who approved the ration it replaces,
+     *    or every vet when the horse is under medical watch (INJURED, MONITOR, QUARANTINE);
+     *  - always: the grooms with an open care task for this horse from today on,
+     *    since they are the ones feeding it.
+     */
+    private void notifyRationChanged(HorseResponse horse, String detail, Map<Integer, String> previousVets,
+                                     AuthenticatedUser user) {
+        String who = users.findById(user.userId()).map(u -> u.fullName()).orElse(user.username());
+        String text = who + ": " + (detail.isEmpty() ? "ration cleared" : detail) + ".";
+        Notice notice = new Notice("RATION_CHANGED", "Ration changed: " + horse.horseName(),
+                text.length() <= 500 ? text : text.substring(0, 497) + "...", Notice.HORSE, horse.horseId());
+        java.util.Set<Integer> told = new java.util.HashSet<>();
+        told.add(user.userId());
+        if ("VETERINARIAN".equals(user.role())) {
+            if (horse.trainerId() != null && told.add(horse.trainerId())) {
+                notifications.notifyUser(horse.trainerId(), notice);
+            }
+            notifications.notifyRole("VETERINARIAN", user, notice);
+        } else if (MEDICAL_WATCH_STATUSES.contains(horse.status())) {
+            notifications.notifyRole("VETERINARIAN", user, notice);
+        } else {
+            for (Integer vetId : previousVets.keySet()) {
+                if (told.add(vetId)) {
+                    notifications.notifyUser(vetId, notice);
+                }
+            }
+        }
+        for (Integer groomId : care.groomsCaringFor(horse.horseId(), LocalDate.now())) {
+            if (told.add(groomId)) {
+                notifications.notifyUser(groomId, notice);
+            }
+        }
     }
 
     /* ---------------- Việc trong ngày ---------------- */

@@ -224,6 +224,14 @@ public class CareRepository {
                 .query(CareRepository::mapTask).list();
     }
 
+    /** Grooms with an open care task for this horse from `from` on (told when its ration changes). */
+    public List<Integer> groomsCaringFor(int horseId, LocalDate from) {
+        return jdbc.sql("""
+                SELECT DISTINCT assigned_to FROM DAILY_TASK
+                WHERE horse_id = :h AND is_completed = 0 AND task_date >= :d
+                """).param("h", horseId).param("d", from).query(Integer.class).list();
+    }
+
     public int deleteOpenTask(int taskId) {
         return jdbc.sql("DELETE FROM DAILY_TASK WHERE task_id = :id AND is_completed = 0")
                 .param("id", taskId).update();

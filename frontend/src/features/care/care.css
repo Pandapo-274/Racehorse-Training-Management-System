@@ -254,3 +254,10 @@
   background: #fff;
 }
 .care-stock-table tbody tr.care-row--low td.hz-row-action { background: #fff7e3; }
+
+/* Row actions of the Stable care task table (Mark done / Reopen, Hand over, Delete):
+   link buttons have no margin, so without a gap they ran together ("Hand overDelete"). */
+.care-row-actions {
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  flex-wrap: wrap; gap: 6px 16px;
+}

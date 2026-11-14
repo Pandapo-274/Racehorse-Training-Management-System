@@ -187,10 +187,23 @@ export function updateSupply(id, body) {
   return authFetch(`/api/supplies/${id}`, { method: "PUT", body: JSON.stringify(body) });
 }
 
-export function countSupply(id, currentQty) {
+/**
+ * Why a count can be higher than the record. Stock does not appear by itself, so
+ * the backend (SupplyService.count) refuses a higher count without one of these;
+ * OTHER also needs a note. A lower count needs no reason.
+ */
+export const COUNT_UP_REASONS = {
+  RECOUNT: "Earlier count was wrong",
+  RETURNED: "Returned to the store",
+  FOUND: "Found misplaced",
+  NOT_USED: "Taken by the system but not used",
+  OTHER: "Something else",
+};
+
+export function countSupply(id, currentQty, reason = null, note = null) {
   return authFetch(`/api/supplies/${id}/count`, {
     method: "PUT",
-    body: JSON.stringify({ currentQty }),
+    body: JSON.stringify({ currentQty, reason, note }),
   });
 }
 
@@ -212,6 +225,22 @@ export function receiveSupply(id, payload, note) {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** What a groom can flag about an item (POST /api/supplies/{id}/report). */
+export const REPORT_REASONS = {
+  LOW: "Running low",
+  DAMAGED: "Damaged or spoiled",
+  EXPIRED: "Expired",
+  OTHER: "Something else",
+};
+
+/**
+ * Flag an item to the club manager (and the vets, for medicine). Does not change
+ * the quantity. body = { reason, qty?, note? }. Returns { message }.
+ */
+export function reportSupply(id, body) {
+  return authFetch(`/api/supplies/${id}/report`, { method: "POST", body: JSON.stringify(body) });
 }
 
 /** Stock thrown away; a reason is required. */

@@ -8,20 +8,22 @@
 // A task can be handed to another groom while it is open (#15). Assigning
 // more than the daily limit to one groom shows a warning but is not blocked.
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import FeedingBoard from "./FeedingBoard";
 import {
-  TASK_STATE, TASK_TEXT, TASK_TYPES, assignTasksBulk, deleteTask, formatClock, listGrooms, listMissedTasks,
-  listTasks, reassignTask, todayIso,
+  TASK_STATE, TASK_TEXT, TASK_TYPES, assignTasksBulk, completeTask, deleteTask, formatClock, listGrooms,
+  listMissedTasks, listTasks, reassignTask, todayIso, undoTask,
 } from "./careApi";
 import "./care.css";
 
 const EMPTY_FORM = { horseIds: [], assignedTo: "", taskTypes: [], note: "" };
 /** Same limit as the backend (CareService.MAX_BULK_DAYS). */
 const MAX_DAYS = 14;
+/** A task can be ticked (or reopened) on its day or this many days later: app.task.late-window-days. */
+const LATE_WINDOW_DAYS = 1;
 
 function addDays(iso, n) {
   const d = new Date(`${iso}T00:00:00`);
@@ -238,6 +240,31 @@ function DailyTasks() {
     }
   };
 
+  /* The Head Trainer ticks for a groom who forgot (backend allows HEAD_TRAINER and
+     records who ticked: "ticked by ..."). Same window as the groom: the task's day
+     or up to LATE_WINDOW_DAYS later. A FEEDING task takes the ration from stock,
+     exactly as when the groom ticks it, so ask first. */
+  const toggleDone = async (t) => {
+    const what = `${TASK_TEXT[t.taskType]} for ${t.horseName}`;
+    const question = t.completed
+      ? `Reopen "${what}"?` + (t.taskType === "FEEDING" ? " The ration taken from stock is given back." : "")
+      : `Mark "${what}" as done on behalf of ${t.assignedToName}?`
+        + (t.taskType === "FEEDING" ? " The day's ration is taken from stock." : "");
+    if (!window.confirm(question)) return;
+    setBusyId(t.taskId);
+    setActionError("");
+    setActionInfo("");
+    try {
+      const updated = t.completed ? await undoTask(t.taskId) : await completeTask(t.taskId);
+      setTasks((old) => old.map((x) => (x.taskId === t.taskId ? updated : x)));
+      setActionInfo(t.completed ? `${what} reopened.` : `${what} marked as done.`);
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const remove = async (t) => {
     if (!window.confirm(`Delete "${TASK_TEXT[t.taskType]}" for ${t.horseName}?`)) return;
     setBusyId(t.taskId);
@@ -251,6 +278,8 @@ function DailyTasks() {
       setBusyId(null);
     }
   };
+
+  const tickable = date <= today && date >= addDays(today, -LATE_WINDOW_DAYS);
 
   return (
     <>
@@ -325,19 +354,27 @@ function DailyTasks() {
                       )}
                     </td>
                     <td className="hz-row-action">
-                      {!t.completed && date >= today && handing !== t.taskId && (
-                        <button type="button" className="care-link-btn"
-                          disabled={busyId === t.taskId} onClick={() => { setHanding(t.taskId); setHandTo(""); }}>
-                          Hand over
-                        </button>
-                      )}
-                      {/* A missed task of an earlier day stays on record (backend refuses the delete). */}
-                      {!t.completed && date >= today && (
-                        <button type="button" className="care-link-btn care-link-btn--danger"
-                          disabled={busyId === t.taskId} onClick={() => remove(t)}>
-                          Delete
-                        </button>
-                      )}
+                      <div className="care-row-actions">
+                        {tickable && handing !== t.taskId && (
+                          <button type="button" className="care-link-btn"
+                            disabled={busyId === t.taskId} onClick={() => toggleDone(t)}>
+                            {t.completed ? "Reopen" : "Mark done"}
+                          </button>
+                        )}
+                        {!t.completed && date >= today && handing !== t.taskId && (
+                          <button type="button" className="care-link-btn"
+                            disabled={busyId === t.taskId} onClick={() => { setHanding(t.taskId); setHandTo(""); }}>
+                            Hand over
+                          </button>
+                        )}
+                        {/* A missed task of an earlier day stays on record (backend refuses the delete). */}
+                        {!t.completed && date >= today && (
+                          <button type="button" className="care-link-btn care-link-btn--danger"
+                            disabled={busyId === t.taskId} onClick={() => remove(t)}>
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -403,8 +440,16 @@ function MissedTasks() {
   );
 }
 
+const TABS = ["tasks", "rations", "missed"];
+
 export default function StableCarePage() {
-  const [tab, setTab] = useState("tasks");
+  // ?tab=missed: the "Missed care tasks" notification opens the Missed tab directly.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => (TABS.includes(searchParams.get("tab")) ? searchParams.get("tab") : "tasks"));
+  useEffect(() => {
+    const wanted = searchParams.get("tab");
+    if (TABS.includes(wanted)) setTab(wanted);
+  }, [searchParams]);
   return (
     <HorseShell title="Stable care" subtitle="Daily care tasks for the grooms and approved rations">
       <div className="hz-tabs" role="tablist">

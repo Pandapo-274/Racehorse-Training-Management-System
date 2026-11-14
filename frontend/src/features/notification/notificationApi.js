@@ -38,11 +38,64 @@ export function markAllRead() {
  * ------------------------------------------------------------------ */
 
 /**
+ * Thông báo không trỏ tới một entity (targetEntity null) - tin tóm tắt, tin về
+ * kho, về nhân sự - thì chọn trang theo LOẠI thông báo và vai trò người xem.
+ * Trước đây những tin này trả null, nên bấm vào chỉ đánh dấu đã đọc, không mở
+ * trang nào. Tên loại là tham số đầu của new Notice(...) ở backend.
+ */
+const PAGE_BY_TYPE = {
+  // Flow 4: giao việc chăm sóc (giao hàng loạt không gắn ngựa) và việc bỏ lỡ.
+  DAILY_TASK_ASSIGNED: { GROOM: "/groom/stable" },
+  DAILY_TASK_REASSIGNED: { GROOM: "/groom/stable" },
+  DAILY_TASK_MISSED: { HEAD_TRAINER: "/trainer/stable-care?tab=missed" },
+  // Flow 4: kho (thiếu, hết, nhập hàng, tổng hợp 07:05) - gửi cho Club Manager.
+  SUPPLY_LOW: { CLUB_MANAGER: "/manager/supplies", VETERINARIAN: "/veterinarian/supplies" },
+  SUPPLY_SHORTFALL: { CLUB_MANAGER: "/manager/supplies", VETERINARIAN: "/veterinarian/supplies" },
+  SUPPLY_RESTOCKED: { CLUB_MANAGER: "/manager/supplies", VETERINARIAN: "/veterinarian/supplies" },
+  SUPPLY_DIGEST: { CLUB_MANAGER: "/manager/supplies", VETERINARIAN: "/veterinarian/supplies" },
+  SUPPLY_REPORTED: { CLUB_MANAGER: "/manager/supplies", VETERINARIAN: "/veterinarian/supplies" },
+  SUPPLY_COUNT_UP: { CLUB_MANAGER: "/manager/supplies" },
+  // Flow 4: khẩu phần đổi - mở trang khẩu phần của từng vai trò (thông báo có gắn ngựa).
+  RATION_CHANGED: {
+    GROOM: "/groom/feeding",
+    HEAD_TRAINER: "/trainer/stable-care?tab=rations",
+    VETERINARIAN: "/veterinarian/feeding",
+  },
+  // Nhân sự: đổi HLV, chuyển việc khi một người bị khoá, ca y tế trả về hàng chờ.
+  TRAINER_ASSIGNED: { GROOM: "/groom" },
+  TRAINER_LEFT: { GROOM: "/groom" },
+  TRAINING_SESSION_UNASSIGNED: { GROOM: "/groom" },
+  GROOM_ASSIGNED: { HEAD_TRAINER: "/trainer/schedule" },
+  SESSIONS_NEED_GROOM: { HEAD_TRAINER: "/trainer/schedule" },
+  OWNER_SUSPENDED: { HEAD_TRAINER: "/trainer/horses" },
+  WORK_HANDED_OVER: { GROOM: "/groom", HEAD_TRAINER: "/trainer/schedule", VETERINARIAN: "/veterinarian" },
+  CASES_BACK_IN_QUEUE: { VETERINARIAN: "/veterinarian" },
+  HORSE_TRANSFERRED: { HORSE_OWNER: "/horse-owner/horses" },
+  STAFF_ROLE_CHANGED: "/profile",
+  TEMP_PASSWORD_SET: "/change-password",
+};
+
+function pageByType(n, role) {
+  const entry = PAGE_BY_TYPE[n?.type];
+  if (!entry) return null;
+  return typeof entry === "string" ? entry : entry[role] || null;
+}
+
+/**
  * Đường dẫn của trang mà thông báo này nói tới, theo vai trò người đang xem.
  * Trả null nếu không có trang nào phù hợp - khi đó bấm vào chỉ đánh dấu đã đọc.
  */
 export function notificationTarget(n, user) {
   const role = user?.role;
+  /* Việc chăm sóc: Groom cần chỗ để làm việc (Stable map), không phải hồ sơ
+     ngựa, kể cả khi thông báo có gắn con ngựa. */
+  if (role === "GROOM" && (n?.type === "DAILY_TASK_ASSIGNED" || n?.type === "DAILY_TASK_REASSIGNED")) {
+    return "/groom/stable";
+  }
+  /* Khẩu phần đổi: mở bảng khẩu phần (ai cũng cần xem khẩu phần mới), không phải hồ sơ ngựa. */
+  if (n?.type === "RATION_CHANGED" && pageByType(n, role)) {
+    return pageByType(n, role);
+  }
   /* Thông báo nhắc lịch phòng ngừa là tin tóm tắt cho cả đàn nên không trỏ tới
      một entity nào (targetEntity null); nhận ra nó bằng loại thông báo. */
   if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED") {
@@ -104,7 +157,7 @@ export function notificationTarget(n, user) {
       if (role === "HEAD_TRAINER") return "/trainer/training-plans";
       return null;
     default:
-      return null;
+      return pageByType(n, role);
   }
 }
 

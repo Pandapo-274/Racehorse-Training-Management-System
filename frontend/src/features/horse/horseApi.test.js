@@ -115,4 +115,37 @@ describe("notificationTarget", () => {
     expect(notificationTarget(n, { role: "HORSE_OWNER" })).toBe("/horse-owner/horses/5");
     expect(notificationTarget(n, { role: "CLUB_MANAGER" })).toBe("/manager/horses/5");
   });
+
+  test("a care task opens the groom's stable map, with or without a horse attached", () => {
+    const bulk = { type: "DAILY_TASK_ASSIGNED", targetEntity: null, targetId: null };
+    const single = { type: "DAILY_TASK_ASSIGNED", targetEntity: "HORSE", targetId: 6 };
+    const handedOver = { type: "DAILY_TASK_REASSIGNED", targetEntity: "HORSE", targetId: 6 };
+    expect(notificationTarget(bulk, { role: "GROOM" })).toBe("/groom/stable");
+    expect(notificationTarget(single, { role: "GROOM" })).toBe("/groom/stable");
+    expect(notificationTarget(handedOver, { role: "GROOM" })).toBe("/groom/stable");
+  });
+
+  test("notices without a target open a page chosen by their type", () => {
+    const missed = { type: "DAILY_TASK_MISSED", targetEntity: null };
+    expect(notificationTarget(missed, { role: "HEAD_TRAINER" })).toBe("/trainer/stable-care?tab=missed");
+    expect(notificationTarget({ type: "SUPPLY_SHORTFALL" }, { role: "CLUB_MANAGER" })).toBe("/manager/supplies");
+    expect(notificationTarget({ type: "SUPPLY_DIGEST" }, { role: "CLUB_MANAGER" })).toBe("/manager/supplies");
+    expect(notificationTarget({ type: "WORK_HANDED_OVER" }, { role: "VETERINARIAN" })).toBe("/veterinarian");
+    expect(notificationTarget({ type: "TEMP_PASSWORD_SET" }, { role: "GROOM" })).toBe("/change-password");
+    expect(notificationTarget({ type: "SUPPLY_REPORTED" }, { role: "CLUB_MANAGER" })).toBe("/manager/supplies");
+    expect(notificationTarget({ type: "SUPPLY_COUNT_UP" }, { role: "CLUB_MANAGER" })).toBe("/manager/supplies");
+    expect(notificationTarget({ type: "SUPPLY_LOW" }, { role: "VETERINARIAN" })).toBe("/veterinarian/supplies");
+  });
+
+  test("a ration change opens the rations page of each role", () => {
+    const n = { type: "RATION_CHANGED", targetEntity: "HORSE", targetId: 6 };
+    expect(notificationTarget(n, { role: "GROOM" })).toBe("/groom/feeding");
+    expect(notificationTarget(n, { role: "HEAD_TRAINER" })).toBe("/trainer/stable-care?tab=rations");
+    expect(notificationTarget(n, { role: "VETERINARIAN" })).toBe("/veterinarian/feeding");
+  });
+
+  test("an unknown notice without a target still only marks as read", () => {
+    expect(notificationTarget({ type: "SOMETHING_NEW" }, { role: "GROOM" })).toBeNull();
+    expect(notificationTarget({ type: "SUPPLY_LOW" }, { role: "HORSE_OWNER" })).toBeNull();
+  });
 });
