@@ -18,6 +18,14 @@ import racehorse.backend.repository.HorseRequestRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Nghiệp vụ yêu cầu đăng ký ngựa (V5). Luật chính:
+ *   - Một chủ không có hai yêu cầu PENDING trùng tên ngựa (kiểm ở đây + UX_HREQ_open trong DB).
+ *   - Tuổi phải hợp lệ cho ngựa ACADEMY (HorsePolicy.ageProblem), cha mẹ khai phải đúng luật phả hệ.
+ *   - Duyệt bắt buộc có mã đăng ký; ngựa ACADEMY bắt buộc có chuồng.
+ *   - Mọi bước "đổi trạng thái" dùng UPDATE ... WHERE status = 'PENDING' để hai người bấm cùng lúc
+ *     không cùng thắng (người thua nhận 409 "already handled").
+ */
 @Service
 public class HorseRequestService {
 
@@ -38,6 +46,8 @@ public class HorseRequestService {
      * Chủ ngựa gửi yêu cầu
      * ------------------------------------------------------------------ */
 
+    // Không có @Transactional: INSERT, audit và thông báo mỗi câu tự commit riêng. Nếu một bước sau
+    // lỗi thì yêu cầu vẫn đã được lưu (không gây sai dữ liệu nghiêm trọng vì chỉ là lời đề nghị).
     public HorseRequestRow submit(SubmitRequest raw, AuthenticatedUser me, String ip) {
         String name = raw.horseName().trim();
 
@@ -108,6 +118,8 @@ public class HorseRequestService {
     @Transactional
     public HorseRequestRow approve(int requestId, ReviewRequest review,
                                    AuthenticatedUser me, String ip) {
+        // Cả approve chạy trong MỘT giao dịch: tạo HORSE, gán HLV, đánh dấu APPROVED, audit, thông
+        // báo. Nếu markReviewed trả 0 (ai đó vừa xử lý) thì ném lỗi -> rollback luôn con ngựa vừa tạo.
         HorseRequestRow req = getOrThrow(requestId);
         requirePending(req);
 
@@ -126,6 +138,9 @@ public class HorseRequestService {
                     Map.of("stallNo", "Assign a stall"));
         }
 
+        // Dựng HorseRequest (DTO nội bộ) từ dữ liệu chủ khai + mã/chuồng Manager cấp. weight = null:
+        // cân nặng chỉ do bác sĩ ghi lúc khám. Tên đầy đủ racehorse.backend.dto.HorseRequest để khỏi
+        // nhầm với chữ "request" của yêu cầu đăng ký.
         racehorse.backend.dto.HorseRequest newHorse = new racehorse.backend.dto.HorseRequest(
                 req.ownerId(),
                 req.sireId(), req.damId(),   // V41: parents from the papers, checked again by create()

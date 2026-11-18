@@ -2,6 +2,12 @@ import { useNavigate } from "react-router-dom";
 import "./landing.css";
 import { formatStat, useClubStats } from "./clubStatsApi";
 
+/*
+ * Trang chủ công khai "/" (chưa cần đăng nhập): giới thiệu CLB, dải ba con số thật (useClubStats), các thẻ
+ * giới thiệu luồng nghiệp vụ (flows) và nút Đăng nhập / Đăng ký.
+ * flows: dữ liệu ba thẻ giới thiệu. Trường route hiện không được dùng (thẻ không bấm được; "/head-trainer"
+ * cũng không phải route có thật - trang của HLV là /trainer). Chỉ hai nút Login / Register điều hướng.
+ */
 const flows = [
   {
     number: "01",

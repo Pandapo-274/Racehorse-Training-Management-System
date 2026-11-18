@@ -17,6 +17,7 @@ import java.time.LocalDate;
  * do học viện xếp. Nhận hai thứ đó từ chủ ngựa là để người ngoài tự đặt số
  * hiệu trong sổ của học viện.
  */
+// Body của POST /api/horse-requests (chỉ HORSE_OWNER). ownerId lấy từ token.
 public record SubmitRequest(
         @NotBlank(message = "Horse name is required")
         @Size(max = 100, message = "Horse name must be at most 100 characters")

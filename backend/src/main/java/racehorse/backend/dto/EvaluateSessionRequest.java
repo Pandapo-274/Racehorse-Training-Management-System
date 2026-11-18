@@ -10,6 +10,11 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
+/*
+ * Body của PUT /api/sessions/{id}/evaluation (UC12, Head Trainer nhận xét buổi tập).
+ * Các trường Integer/BigDecimal/Boolean dùng kiểu "bọc" (wrapper) thay cho int/boolean để
+ * có thể là null = không nhập. @Min/@Max bỏ qua giá trị null, chỉ @NotNull mới bắt buộc.
+ */
 /** Số liệu thực tế + điểm phong độ + nhận xét sau ca tập. recoveryHeartRate, peakVelocity, remarks, status là tuỳ chọn. */
 public record EvaluateSessionRequest(
         @NotNull(message = "Actual distance is required")
@@ -53,6 +58,8 @@ public record EvaluateSessionRequest(
         @Size(max = 500, message = "Video URL must be at most 500 characters")
         String videoUrl
 ) {
+    // Constructor phụ (9 tham số) giữ cho code/test cũ chưa biết trialRun và videoUrl vẫn
+    // biên dịch được: hai trường mới được điền null.
     public EvaluateSessionRequest(
             Integer actualDistance, Integer durationMinutes, Integer avgHeartRate,
             Integer peakHeartRate, Integer recoveryHeartRate, BigDecimal peakVelocity,

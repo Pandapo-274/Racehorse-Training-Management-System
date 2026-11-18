@@ -57,6 +57,18 @@ import racehorse.backend.security.AuthenticatedUser;
  * approves the entry; refunded if the club cancels the race or the horse is
  * withdrawn on or before the entry deadline, kept if withdrawn after it.
  */
+/*
+ * Vòng đời một suất đăng ký (state tính trong RaceRepository.stateOf):
+ *
+ *   HLV đề xuất (POST /api/races) --> PENDING_APPROVAL (chờ chủ ngựa)
+ *       chủ duyệt  --> UPCOMING (trước ngày đua) --qua ngày đua--> AWAITING_RESULT --nhập kết quả--> FINISHED
+ *       chủ từ chối (lý do tuỳ chọn) --> REJECTED (HLV có thể đề xuất lại: reinstate dùng lại dòng cũ)
+ *       chủ chưa duyệt khi hết hạn đăng ký --> EXPIRED (không duyệt được nữa)
+ *   bất kỳ lúc nào trước khi có kết quả: HLV rút / CLB huỷ giải --> SCRATCHED
+ *
+ * Mọi bước đổi trạng thái đều là UPDATE có điều kiện (approval_status / result) để hai người
+ * bấm cùng lúc không cùng thắng.
+ */
 @Service
 public class RaceService {
 
@@ -130,6 +142,8 @@ public class RaceService {
         }
         HorseResponse h = horses.findById(e.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + e.horseId() + " not found"));
+        // Kiểm lại toàn bộ điều kiện của ngựa ngay lúc chủ duyệt (giữa lúc đề xuất và lúc duyệt ngựa có thể
+        // vừa bị khoá tập, bị thương, có báo cáo sự cố).
         Check c = check(h, race);
         if (!c.problems.isEmpty()) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -267,6 +281,8 @@ public class RaceService {
      * the horses they may enter (managedBy).
      */
     public List<RaceModels.Candidate> candidates(Integer raceId, AuthenticatedUser user) {
+        // Lấy ngựa ACADEMY còn ở CLB mà người gọi phụ trách (managedBy: HLV chỉ thấy ngựa của mình), kèm danh sách
+        // lý do chặn (problems) và cảnh báo (warnings) cho từng con.
         RaceModels.RaceEvent race = raceId == null ? null : requireRace(raceId);
         List<RaceModels.Candidate> out = new ArrayList<>();
         for (HorseResponse h : horses.findActive()) {
@@ -289,6 +305,7 @@ public class RaceService {
 
     @Transactional
     public RaceModels.RaceEvent createRace(RaceModels.RaceEventRequest r, AuthenticatedUser user, String ip) {
+        // Chuẩn hoá tên: bỏ khoảng trắng thừa giữa các từ, để "Tracen  Cup" và "Tracen Cup" là một.
         String name = r.raceName().trim().replaceAll("\\s+", " ");
         if (races.existsByName(name)) {
             throw new ApiException(HttpStatus.CONFLICT, "A race with name '" + name + "' already exists",
@@ -338,6 +355,7 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " already has results and cannot be cancelled");
         }
         String why = reason.trim();
+        // Khoá dòng RACE trước khi huỷ để không ai đăng ký thêm vào giải đang bị huỷ.
         races.lockRace(raceId);
         if (races.cancelRace(raceId, why) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This race has just been changed by someone else");
@@ -373,6 +391,9 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Entries for " + race.raceName() + " closed on " + race.entryDeadline().format(DAY));
         }
+        // Thứ tự kiểm khi đăng ký: giải còn OPEN, chưa chạy, chưa quá hạn đăng ký -> ngựa qua check() ->
+        // chưa có suất (hoặc suất cũ đã rút / bị từ chối thì dùng lại) -> không chạy giải khác cùng ngày ->
+        // giải chưa đầy (khoá dòng RACE để đếm chính xác).
         Check c = check(h, race);
         if (!c.problems.isEmpty()) {
             throw new ApiException(HttpStatus.CONFLICT, c.problems.get(0));
@@ -459,6 +480,7 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "The race is on " + e.raceDate().format(DAY) + ". Record the result after it has run");
         }
+        // change = đã có kết quả trước đó (đây là SỬA). locked = đã quá cửa sổ sửa (mặc định 7 ngày sau ngày đua).
         boolean change = e.result() != null;
         boolean locked = change && LocalDate.now().isAfter(e.raceDate().plusDays(resultEditWindowDays));
         String why = blankToNull(r.reason());
@@ -571,6 +593,8 @@ public class RaceService {
     }
 
     public RaceModels.Summary summary(int year) {
+        // Tổng hợp thành tích cả CLB trong một năm: đếm theo state, theo result, cộng tiền thưởng, rồi gom theo
+        // từng ngựa (chỉ tính suất RAN_OR_WILL_RUN: FINISHED / UPCOMING / AWAITING_RESULT) và xếp theo tiền thưởng giảm dần.
         List<RaceModels.Entry> all = races.find(year, null, null);
         Map<Integer, int[]> counts = new LinkedHashMap<>();       // entries, wins, places
         Map<Integer, BigDecimal> prizes = new LinkedHashMap<>();
@@ -624,6 +648,7 @@ public class RaceService {
     /* ---------------- helper ---------------- */
 
     /** Blocking problems (first one is shown) and warnings that do not block. */
+    // Record private lồng trong service: chỉ dùng nội bộ để trả hai danh sách cùng lúc.
     private record Check(List<String> problems, List<String> warnings) {
     }
 
@@ -636,6 +661,11 @@ public class RaceService {
      * list them all.
      */
     private Check check(HorseResponse h, RaceModels.RaceEvent race) {
+        // Điều kiện CHẶN: PEDIGREE, đã rút, thiếu ngày sinh, ngoài tuổi đua 2..10, sức khoẻ khác ELIGIBLE, đang bị
+        // khoá tập, còn báo cáo sự cố mở, chưa có hoặc quá hạn tiêm phòng, không có lượt chạy thử hoàn thành trong
+        // app.race.trial-window-days (30), chạy giải khác cách dưới app.race.min-rest-days (14).
+        // (Từ bản sửa Flow 5, thiếu tiêm phòng / chạy thử chuyển từ cảnh báo sang chặn; danh sách warnings hiện
+        // không còn mục nào được thêm, chỉ giữ lại để không đổi khuôn API.)
         List<String> problems = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (!HorsePolicy.ACADEMY.equals(HorsePolicy.normalizeType(h.recordType()))) {

@@ -21,6 +21,7 @@ public class TrainingSessionRepository {
         this.jdbc = jdbc;
     }
 
+    // Ngữ cảnh của một giai đoạn khi xếp lịch. Constructor phụ (không có targetVelocity) cho code cũ.
     public record PhaseContext(int phaseId, int planId, String planStatus, int horseId,
             Integer distance, BigDecimal targetVelocity, LocalDate startDate, LocalDate endDate) {
         public PhaseContext(int phaseId, int planId, String planStatus, int horseId,
@@ -60,6 +61,8 @@ public class TrainingSessionRepository {
     }
 
     /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không, hoặc là Groom phụ trách giáo án của Trainer. */
+    // Groom "thuộc" HLV nếu trainer_id = HLV, HOẶC đang được giao một giáo án do HLV tạo/phụ trách
+    // (trường hợp Groom đã chuyển đội nhưng còn giáo án cũ).
     public boolean isGroomOfTrainer(int groomId, int trainerId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
@@ -80,6 +83,7 @@ public class TrainingSessionRepository {
                 .query(Integer.class).single() > 0;
     }
 
+    // SELECT dùng chung cho mọi câu đọc buổi tập; alert_count đếm số cảnh báo của buổi bằng subquery.
     private static final String SELECT_SESSION = """
             SELECT s.session_id, s.phase_id, ph.phase_no, ph.phase_name, s.horse_id, h.horse_name,
                    s.assigned_to, u.full_name AS assigned_to_name, s.session_date,
@@ -127,6 +131,7 @@ public class TrainingSessionRepository {
                 .optional();
     }
 
+    // Lọc động theo các tham số không null. activeHorsesOnly: bỏ ngựa đã rút (dùng cho Groom).
     public List<TrainingSessionResponse> findAll(Integer horseId, String status,
                                                  Integer assignedTo, Integer ownerId,
                                                  boolean activeHorsesOnly) {
@@ -197,6 +202,8 @@ public class TrainingSessionRepository {
                 .update();
     }
 
+    // "AND status = 'SCHEDULED'" trong UPDATE: hai người bấm Start cùng lúc thì chỉ một người thành
+    // công (người kia nhận 0 dòng -> 409). Các hàm mark... bên dưới dùng cùng kỹ thuật.
     public int markRunning(int sessionId) {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION
@@ -251,6 +258,7 @@ public class TrainingSessionRepository {
     }
 
     /** V37: Tìm các buổi RUNNING đã quá thời lượng dự kiến (session_date + planned_duration <= hiện tại). */
+    // DATEADD(MINUTE, planned_duration, session_date) = giờ kết thúc dự kiến của buổi.
     public List<TrainingSessionResponse> findOverdueRunningSessions(LocalDateTime now) {
         return jdbc.sql(SELECT_SESSION + """
                  WHERE s.status = 'RUNNING'

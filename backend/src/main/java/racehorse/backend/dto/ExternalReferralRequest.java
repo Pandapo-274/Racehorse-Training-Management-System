@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
+// Body của POST /api/external-referrals (Veterinarian chuyển ngựa đi bệnh viện ngoài, V40).
+// reportId: báo cáo sự cố liên quan (tuỳ chọn). expectedReturn: ngày dự kiến ngựa về.
 public record ExternalReferralRequest(
         @NotNull(message = "Horse is required")
         Integer horseId,

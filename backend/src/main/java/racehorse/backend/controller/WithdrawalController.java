@@ -71,6 +71,7 @@ public class WithdrawalController {
     @RequireRole({"CLUB_MANAGER"})
     public WithdrawalRow approve(
             @PathVariable int id,
+            // required = false: duyệt có thể không gửi body (ghi chú không bắt buộc khi duyệt).
             @Valid @RequestBody(required = false) WithdrawalReviewRequest review,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {

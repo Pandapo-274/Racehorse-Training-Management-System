@@ -7,6 +7,7 @@ public final class Text {
     }
 
     /** Cắt cho vừa cột: NOTIFICATION.message chỉ chứa 500 ký tự, vượt là SQL báo lỗi cắt chuỗi. */
+    // Vd. clip(chuỗi 600 ký tự, 500) -> 497 ký tự đầu + "...". null giữ nguyên null.
     public static String clip(String s, int max) {
         if (s == null || s.length() <= max) return s;
         return s.substring(0, max - 3) + "...";

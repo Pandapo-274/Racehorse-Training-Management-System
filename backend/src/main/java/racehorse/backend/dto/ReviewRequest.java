@@ -14,6 +14,7 @@ import racehorse.backend.service.HorseRequestService;
  *
  * V37: trainerId cho phép Club Manager điều phối ngựa ngay cho một Head Trainer.
  */
+// Body của PUT /api/horse-requests/{id}/approve và /reject (chỉ CLUB_MANAGER).
 public record ReviewRequest(
         @Size(max = 30, message = "Registration code must be at most 30 characters")
         String registrationCode,

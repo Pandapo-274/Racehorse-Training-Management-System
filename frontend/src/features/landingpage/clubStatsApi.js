@@ -7,6 +7,7 @@
 // nhập, nên gọi bằng fetch thường, không cần token.
 import { useEffect, useState } from "react";
 
+// fetch thường (không phải authFetch): endpoint nằm trong PUBLIC_PATHS của WebConfig, không cần JWT.
 export function getClubStats(signal) {
   return fetch("/api/public/club-stats", { signal }).then((res) => {
     if (!res.ok) throw new Error(`Request failed (HTTP ${res.status})`);
@@ -19,6 +20,8 @@ export function getClubStats(signal) {
  * đang tải hay không gọi được backend. Lỗi thì im lặng: đây chỉ là số giới
  * thiệu, không đáng chặn người dùng đăng nhập.
  */
+// Custom hook (tên bắt đầu bằng "use"): gọi API một lần khi component gắn vào màn hình (mảng phụ thuộc
+// rỗng []), hàm cleanup ctrl.abort() huỷ request nếu người dùng rời trang trước khi có kết quả.
 export function useClubStats() {
   const [stats, setStats] = useState(null);
 

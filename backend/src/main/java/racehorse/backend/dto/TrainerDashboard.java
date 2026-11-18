@@ -13,6 +13,8 @@ import java.util.List;
  * trường gì nếu không đọc hết query. Record khai báo hợp đồng ngay tại đây,
  * frontend đọc là biết.
  */
+// Kết quả GET /api/trainer/dashboard (TrainerDashboardService). Chỉ số thể lực (fitnessIndex)
+// tính từ nhịp tim hồi phục của các buổi tập - xem công thức trong TrainerDashboardService.
 public final class TrainerDashboard {
 
     private TrainerDashboard() {

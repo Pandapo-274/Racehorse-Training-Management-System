@@ -12,6 +12,9 @@ import { authFetch } from "../auth/authService";
  * Returns { items, nextBeforeId, summary } (summary only on the first page).
  */
 export function getAuditLogs(filters = {}, beforeId, signal) {
+  // URLSearchParams tự mã hoá ký tự đặc biệt; chỉ thêm tham số có giá trị.
+  // Phân trang kiểu keyset: beforeId = nextBeforeId của trang trước, backend lọc "log_id < beforeId".
+  // Nhanh hơn OFFSET và không trùng/sót dòng khi có nhật ký mới chèn vào trong lúc đang xem.
   const params = new URLSearchParams();
   if (filters.since) params.set("since", filters.since.toISOString());
   if (filters.until) params.set("until", filters.until.toISOString());
@@ -36,6 +39,7 @@ export const PERIODS = [
   { key: "ALL", label: "All time", hours: null },
 ];
 
+// Mốc bắt đầu của khoảng thời gian = bây giờ trừ số giờ; "ALL" (hours null) trả null = không lọc since.
 export function periodStart(key, now = new Date()) {
   const p = PERIODS.find((x) => x.key === key);
   return p?.hours ? new Date(now.getTime() - p.hours * 3600 * 1000) : null;
@@ -181,12 +185,15 @@ const DENIED_TEXT = {
 export function toActionText(code, result) {
   if (!code) return "—";
   if (code.startsWith("ACCESS ")) return "Blocked: no permission";
+  // Hành động bị từ chối (DENIED): dùng câu riêng nếu có, không thì gọi đệ quy lấy câu thường rồi thêm
+  // "Blocked: " phía trước (chữ đầu viết thường lại).
   if (result === "DENIED") {
     if (DENIED_TEXT[code]) return DENIED_TEXT[code];
     const text = toActionText(code);
     return `Blocked: ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
   }
   if (ACTION_TEXT[code]) return ACTION_TEXT[code];
+  // Các mã có phần biến đổi sau dấu ":" (id, giá trị cũ->mới, quyết định...): tách phần đuôi để dựng câu.
   if (code.startsWith("STAFF_ASSIGN_TRAINER:")) {
     return code.endsWith(":NONE") ? "Removed a groom from their Head Trainer" : "Assigned a groom to a Head Trainer";
   }
@@ -233,6 +240,7 @@ const TARGET_TEXT = {
 };
 
 /** Screens behind each API path, for "Blocked: no permission" rows. */
+// find() ở describeLog lấy tiền tố khớp ĐẦU TIÊN trong danh sách này.
 const API_AREAS = [
   ["/api/staff", "staff accounts"],
   ["/api/audit-logs", "the audit log"],
@@ -263,6 +271,8 @@ const METHOD_VERB = { GET: "open", POST: "create in", PUT: "change", PATCH: "cha
  * Returns { main, extra } - extra is shown smaller under main.
  */
 export function describeLog(r) {
+  // Dòng "ACCESS <METHOD> <path>" do AuthInterceptor ghi khi chặn request (thiếu quyền): tách method + path,
+  // dịch thành câu dễ hiểu ("Tried to change training plans without permission").
   if (r.action && r.action.startsWith("ACCESS ")) {
     const [method, path = ""] = r.action.slice(7).split(" ");
     const area = API_AREAS.find(([prefix]) => path.startsWith(prefix));
@@ -272,6 +282,8 @@ export function describeLog(r) {
       extra: `${method} ${path}`,
     };
   }
+  // Hành động thường: ưu tiên tên đối tượng (targetName - backend JOIN sẵn tên ngựa, tên người...), không có
+  // thì hiện "Loại #id"; detail (backend ghi lúc writeAudit) hiện thành dòng nhỏ bên dưới.
   const kind = TARGET_TEXT[r.targetEntity] || r.targetEntity;
   let main;
   if (!r.targetEntity) main = "";
@@ -304,6 +316,8 @@ export function formatFullTime(iso) {
 
 /** "Just now", "5 min ago", "3 h ago", "2 d ago". */
 export function formatAgo(iso, now = Date.now()) {
+  // Khác timeAgo của notificationApi: đọc thẳng new Date(iso) vì giờ audit là Instant đã có "Z".
+  // Math.max(0, ...) tránh ra số âm khi đồng hồ máy người xem chạy chậm hơn máy chủ.
   const t = iso ? new Date(iso).getTime() : NaN;
   if (Number.isNaN(t)) return "";
   const s = Math.max(0, Math.round((now - t) / 1000));

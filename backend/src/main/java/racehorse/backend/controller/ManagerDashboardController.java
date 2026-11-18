@@ -23,6 +23,7 @@ public class ManagerDashboardController {
     @GetMapping
     @RequireRole({"CLUB_MANAGER"})
     public ManagerDashboard.Response get(
+            // Service kẹp weeks trong khoảng 4..26.
             @RequestParam(defaultValue = "" + ManagerDashboardService.DEFAULT_WEEKS) int weeks) {
         return service.load(weeks);
     }

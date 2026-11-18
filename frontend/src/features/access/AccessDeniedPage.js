@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import "./access-denied.css";
 
+// Trang /access-denied: handleAuthError() chuyển người dùng tới đây khi backend trả 403 (sai vai trò),
+// và RoleRoute trong App.js cũng chuyển tới đây khi vai trò trong localStorage không khớp route.
 export default function AccessDeniedPage() {
   const navigate = useNavigate();
 

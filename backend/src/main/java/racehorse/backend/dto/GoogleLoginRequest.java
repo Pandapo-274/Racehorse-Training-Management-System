@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
  * idToken: chuỗi "credential" mà Google trả cho frontend sau khi người dùng chọn tài khoản.
  * roleName: tuỳ chọn, CHỈ dùng khi đây là lần đầu người này vào hệ thống (tạo tài khoản mới). Mặc định HORSE_OWNER.
  */
+// Body của POST /api/auth/google (công khai). @Size(max = 4096) chặn chuỗi rác quá dài
+// trước khi gửi sang Google kiểm tra.
 public record GoogleLoginRequest(
         @NotBlank(message = "Google token is required")
         @Size(max = 4096, message = "Google token is invalid")

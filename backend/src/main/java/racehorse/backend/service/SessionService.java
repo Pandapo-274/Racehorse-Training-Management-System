@@ -18,6 +18,17 @@ import racehorse.backend.repository.SessionRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Nhận xét buổi tập (UC12) và hạn nhận xét 48 giờ (V37).
+ *
+ * review_status của một buổi: NONE (chưa kết thúc) -> PENDING (đã kết thúc, chờ HLV) ->
+ *   REVIEWED   khi HLV gửi đánh giá (evaluate);
+ *   ARCHIVED_AUTO khi quá 48 giờ mà HLV chưa đánh giá: hệ thống tự viết "báo cáo sơ bộ" từ số liệu
+ *              Groom đã gửi, báo chủ ngựa (ghi rõ KHÔNG phải nhận xét chính thức) và báo HLV.
+ *              HLV vẫn đánh giá lại được sau đó (lúc đó review_status thành REVIEWED).
+ * processOverdueReviews được gọi mỗi lần đọc danh sách / chi tiết và mỗi phút bởi
+ * MissedTaskJob.runPeriodicTrainingChecks.
+ */
 @Service
 public class SessionService {
 
@@ -36,6 +47,8 @@ public class SessionService {
     private final HorseRepository horseRepository;
 
     /** Constructor cho unit test sẵn có. */
+    // Ba constructor (overload) để các unit test cũ vẫn dựng được service với ít phụ thuộc hơn;
+    // các phụ thuộc thiếu là null và code kiểm "!= null" trước khi dùng.
     public SessionService(SessionRepository sessions, UserRepository users) {
         this(sessions, users, null, null, null);
     }
@@ -59,6 +72,7 @@ public class SessionService {
     }
 
     public List<SessionResponse> list(String status, Integer horseId, int limit, AuthenticatedUser user) {
+        // Dọn buổi tập quá giờ và nhận xét quá hạn trước khi trả danh sách.
         if (trainingSessionService != null) {
             trainingSessionService.processOverdueSessions();
         }
@@ -123,6 +137,7 @@ public class SessionService {
             }
         }
 
+        // Chỉ chấm được buổi đã kết thúc (COMPLETED / STOPPED_EARLY).
         if (!EVALUATABLE.contains(current.status())) {
             String message = switch (current.status()) {
                 case "CANCELLED" -> "This session was cancelled, it cannot be evaluated";
@@ -131,6 +146,7 @@ public class SessionService {
             };
             throw new ApiException(HttpStatus.CONFLICT, message);
         }
+        // Kiểm logic số liệu: đỉnh >= trung bình, nhịp tim hồi phục <= đỉnh, link video phải là http(s).
         if (req.peakHeartRate() != null && req.avgHeartRate() != null && req.peakHeartRate() < req.avgHeartRate()) {
             throw fieldError("peakHeartRate", "Peak heart rate cannot be lower than average heart rate");
         }
@@ -152,6 +168,8 @@ public class SessionService {
 
         boolean wasArchivedAuto = "ARCHIVED_AUTO".equals(current.reviewStatus());
 
+        // saveEvaluation có điều kiện "AND status = <trạng thái vừa đọc>": nếu buổi tập vừa đổi trạng
+        // thái (vd. đang bị dừng) trong lúc HLV điền form thì trả 0 -> 409.
         if (sessions.saveEvaluation(sessionId, req, current.status(), finalStatus, me == null ? 0 : me.userId()) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session changed while you were evaluating it. Reload and try again");
@@ -194,6 +212,8 @@ public class SessionService {
                 throw new ApiException(HttpStatus.FORBIDDEN, "This session belongs to a horse not assigned to you");
             }
         }
+        // Không có cột riêng: đánh dấu bằng cách gắn chữ "[SUBMITTED_TO_VET]" vào remarks
+        // (frontend lọc chữ này khi hiển thị nhận xét).
         sessions.markSubmittedToVet(sessionId);
 
         users.writeAudit(me == null ? null : me.userId(),
@@ -222,6 +242,9 @@ public class SessionService {
      */
     @Transactional
     public int processOverdueReviews() {
+        // Lưu ý múi giờ: cutoff tính bằng LocalDateTime.now() (giờ máy chủ, vd. UTC+7) trong khi
+        // ended_at được ghi bằng SYSUTCDATETIME() (UTC). Trên máy giờ Việt Nam, buổi tập sẽ bị lưu
+        // trữ tự động sớm hơn khoảng 7 giờ so với mốc 48 giờ danh nghĩa.
         LocalDateTime cutoff = LocalDateTime.now().minusHours(REVIEW_DEADLINE_HOURS);
         List<SessionResponse> overdue = sessions.findOverduePendingReviews(cutoff);
         if (overdue == null || overdue.isEmpty()) {
@@ -229,6 +252,8 @@ public class SessionService {
         }
         int processed = 0;
         for (SessionResponse s : overdue) {
+            // Thiếu số liệu thì điền giá trị dự phòng (cự ly dự kiến hoặc 1000 m, thời lượng dự kiến
+            // hoặc 60 phút, đánh giá FAIR) chỉ để báo cáo sơ bộ có đủ trường.
             int actualDist = s.actualDistance() != null ? s.actualDistance()
                     : (s.plannedDistance() != null && s.plannedDistance() > 0 ? s.plannedDistance() : 1000);
             int dur = s.durationMinutes() != null ? s.durationMinutes()

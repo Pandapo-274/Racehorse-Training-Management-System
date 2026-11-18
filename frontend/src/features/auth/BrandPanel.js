@@ -1,6 +1,8 @@
 // src/features/auth/BrandPanel.js
 import { formatStat, useClubStats } from "../landingpage/clubStatsApi";
 
+// Khung thương hiệu bên trái của trang Đăng nhập / Đăng ký: logo, khẩu hiệu và ba con số thật của CLB.
+// Dùng chung ở LoginPage và RegisterPage. Chưa tải xong (club = null) thì formatStat hiện "—".
 export default function BrandPanel() {
   // Số thật từ GET /api/public/club-stats (xem clubStatsApi.js).
   const club = useClubStats();

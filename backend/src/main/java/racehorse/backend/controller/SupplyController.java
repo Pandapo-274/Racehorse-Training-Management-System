@@ -36,6 +36,16 @@ import racehorse.backend.service.SupplyService;
  *  - Groom chủ động báo một món (sắp hết, hỏng, hết hạn): POST /{id}/report,
  *    chuông cho Manager (thuốc: cả bác sĩ). Không đổi số lượng.
  */
+/*
+ *   GET  /api/supplies?area=&category=&lowOnly=  danh sách (mọi nhân sự)
+ *   POST /api/supplies                           thêm món (Manager)
+ *   PUT  /api/supplies/{id}                      sửa danh mục, không đổi số lượng (Manager)
+ *   PUT  /api/supplies/{id}/count                kiểm đếm (Manager; Groom không đếm thuốc)
+ *   POST /api/supplies/{id}/receive              nhập hàng (Manager)
+ *   POST /api/supplies/{id}/waste                huỷ hàng (Manager)
+ *   POST /api/supplies/{id}/report               báo sắp hết / hỏng / hết hạn (Groom, HLV, Vet)
+ *   GET  /api/supplies/{id}/movements            100 biến động gần nhất (Manager, HLV)
+ */
 @RestController
 @RequestMapping("/api/supplies")
 public class SupplyController {

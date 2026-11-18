@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.dto.IncidentReportResponse;
 
 /** Chỉ nói chuyện với DB, không chứa logic nghiệp vụ. */
+// SQL cho INCIDENT_REPORT (báo cáo sự cố) và các thao tác dừng buổi tập đi kèm.
 @Repository
 public class IncidentRepository {
 
@@ -53,6 +54,7 @@ public class IncidentRepository {
             LEFT JOIN APP_USER hb ON hb.user_id = r.handover_by
             """;
 
+    // Hằng chuỗi nối vào SQL: "báo cáo còn mở" = chưa khám xong (PENDING hoặc RECEIVED).
     static final String OPEN_STATUSES = "('PENDING', 'RECEIVED')";
 
     private final JdbcClient jdbc;
@@ -105,6 +107,7 @@ public class IncidentRepository {
         return markStopped(sessionId, null);
     }
 
+    // COALESCE(:reason, early_stop_reason): không truyền lý do thì giữ lý do cũ (nếu có).
     public int markStopped(int sessionId, String earlyStopReason) {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION
@@ -136,6 +139,7 @@ public class IncidentRepository {
                 .single();
     }
 
+    // Báo cáo "đứng riêng": không gắn buổi tập (session_id NULL) - báo tại chuồng, hoặc mở từ vet call.
     public int insertStandaloneReport(int horseId, int reporterId, String symptoms,
                                       String description, String urgency, String photoUrl) {
         return jdbc.sql("""
@@ -162,6 +166,9 @@ public class IncidentRepository {
 
     public List<IncidentReportResponse> search(List<String> statuses, Integer horseId, Integer reporterId,
                                                Integer ownerId, boolean urgentFirst, int limit) {
+        // Tự dựng danh sách tham số :s0, :s1... cho mệnh đề IN (cách viết tay; tham số đặt tên của Spring cũng
+        // tự mở rộng được một List thành IN (...), xem SupplyRepository.markReminded).
+        // Chỉ hàng chờ còn mở mới lọc ngựa đang ở CLB; lịch sử (EXAMINED/DISMISSED) giữ cả ngựa đã rút.
         StringBuilder sql = new StringBuilder(SELECT_REPORT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();
         if (!statuses.isEmpty()) {
@@ -194,6 +201,7 @@ public class IncidentRepository {
         return jdbc.sql(sql.toString()).params(params).query(IncidentRepository::map).list();
     }
 
+    // IncidentGuard và RaceService dùng: ngựa còn báo cáo mở nào không (lấy báo cáo gấp nhất).
     public Optional<OpenReport> findOpenReport(int horseId) {
         return jdbc.sql("""
                 SELECT TOP 1 report_id, urgency, status FROM INCIDENT_REPORT
@@ -221,6 +229,8 @@ public class IncidentRepository {
                 .list();
     }
 
+    // Điều kiện "status = 'PENDING' AND session_id IS NOT NULL": chỉ huỷ được báo cáo sinh từ buổi tập dừng
+    // và khi bác sĩ chưa nhận ca. Các hàm mark... bên dưới đều có điều kiện trạng thái để chống hai người cùng làm.
     public int markDismissed(int reportId, int trainerId, String reason) {
         return jdbc.sql("""
                 UPDATE INCIDENT_REPORT

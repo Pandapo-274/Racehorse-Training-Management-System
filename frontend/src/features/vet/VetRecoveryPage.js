@@ -40,14 +40,17 @@ import {
   createMedicalRecord,
 } from "./vetApi";
 
+// Năm bước hiển thị trên thanh tiến trình (chỉ số 0..4 khớp giá trị stageOf trả về).
 const STAGES = ["Examine", "Treatment", "Light work", "Rating", "Healthy"];
 
+// Ba loại chăm sóc định kỳ: trang hiện ngày hẹn kế tiếp (nextDueDate) của từng loại, lấy từ hồ sơ khám.
 const REMINDERS = [
   ["VACCINATION", "Vaccination"],
   ["DEWORMING", "Deworming"],
   ["FARRIER", "Farrier"],
 ];
 
+// Trang /veterinarian/recovery[/:horseId]. Chưa chọn ngựa -> VetHorsePicker; key = horseId để đổi ngựa thì dựng lại.
 export default function VetRecoveryPage() {
   const { horseId } = useParams();
   if (!horseId) return <VetHorsePicker mode="recovery" />;
@@ -55,6 +58,8 @@ export default function VetRecoveryPage() {
 }
 
 /** Determine recovery stage based on actual entity states */
+// Giai đoạn suy ra từ dữ liệu thật (không lưu trong DB): ELIGIBLE = 4 Healthy; mọi chấn thương đã RECOVERED và hết
+// thuốc = 3 Rating; chấn thương mở đều PARTIAL và hết thuốc = 2 Light work; còn chấn thương mở / còn thuốc = 1 Treatment.
 function stageOf(horse, injuries, activeTreatments = []) {
   if (horse.status === "ELIGIBLE") return 4;
   const open = injuries.filter((i) => i.status !== "RECOVERED");
@@ -64,6 +69,7 @@ function stageOf(horse, injuries, activeTreatments = []) {
   return 0;
 }
 
+// Câu mô tả dưới thanh tiến trình theo giai đoạn (thuốc đang dùng, mức khoá...).
 function captionOf(stage, open, activeTreatments = [], activeLock = null, lightWorkInfo = null) {
   switch (stage) {
     case 4:
@@ -85,6 +91,7 @@ function captionOf(stage, open, activeTreatments = [], activeLock = null, lightW
   }
 }
 
+// Bỏ các nhãn kỹ thuật ("[Recovery Session]", "[SUBMITTED_TO_VET]"...) khỏi nhận xét buổi tập trước khi hiển thị.
 function cleanSessionRemarks(remarks) {
   if (!remarks) return "";
   return remarks
@@ -94,6 +101,12 @@ function cleanSessionRemarks(remarks) {
     .trim();
 }
 
+/*
+ * Trang theo dõi hồi phục của một ngựa. Tải song song: hồ sơ ngựa, chấn thương, hồ sơ khám, lệnh khoá, báo cáo sự cố
+ * còn mở, đơn thuốc, 10 buổi tập gần nhất (để chấm các buổi hồi phục HLV gửi lên).
+ * Bốn hộp thoại tương ứng bốn chuyển bước: LightWorkDialog (1 -> 2), RatingDialog (2 -> 3), RelapseDialog (tái phát,
+ * quay về 1) và ConfirmDialog (3 -> 4, xác nhận hồi phục).
+ */
 function RecoveryView({ horseId }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -138,6 +151,7 @@ function RecoveryView({ horseId }) {
     return () => ctrl.abort();
   }, [horseId, navigate, reload]);
 
+  // view: mọi số liệu đã tính sẵn cho phần hiển thị (giai đoạn, chấn thương mở, thuốc đang dùng, khoá đang có...).
   const view = useMemo(() => {
     if (!data) return null;
     const { horse, injuries, records, locks, reports, treatments } = data;
@@ -219,6 +233,7 @@ function RecoveryView({ horseId }) {
     };
   }, [data]);
 
+  // Sau một thao tác: đóng mọi hộp thoại, giữ kết quả để hiện, tăng reload để tải lại toàn bộ.
   const handleActionDone = useCallback((res) => {
     setDialog(false);
     setLightWorkDialog(false);
@@ -669,6 +684,7 @@ function RecoveryView({ horseId }) {
 
 /* ---------- Modal 1: Light Work Evaluation ---------- */
 
+// Chuyển sang tập nhẹ: chấn thương mở -> PARTIAL, khoá -> HEAVY_WORK_ONLY, và ghi hồ sơ khám "Light work clearance".
 function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
   const [findings, setFindings] = useState("Swelling resolved, pain on palpation significantly reduced, sound at walk and easy trot.");
   const [protocol, setProtocol] = useState("Protocol B: Controlled walking (15 min) & light trotting (max 800m), HR ceiling 130 bpm");
@@ -687,6 +703,9 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
     setBusy(true);
     setError(null);
     try {
+      // Ba bước gọi API tuần tự, không gộp một giao dịch. Chữ "Light work clearance" / "Light work protocol:" ghi ở đây chính
+      // là thứ SchedulePage dò bằng regex để cho phép tạo buổi hồi phục, và VetPrescriptionPage dùng để loại khỏi danh sách
+      // lần khám cần kê đơn - đổi câu chữ thì phải sửa cả hai nơi.
       // 1. Advance open injuries to PARTIAL
       await Promise.all(
         openInjuries.map((i) => updateInjuryStatus(i.injuryId, "PARTIAL"))
@@ -840,6 +859,7 @@ function LightWorkDialog({ horse, openInjuries, onClose, onDone }) {
 
 /* ---------- Modal 2: Fitness Rating & Assessment ---------- */
 
+// Chấm thể lực: chấn thương mở -> RECOVERED và ghi hồ sơ khám "Fitness Rating: điểm/100 - dáng đi".
 function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
   const [fitnessScore, setFitnessScore] = useState(80);
   const [gaitAssessment, setGaitAssessment] = useState("Grade 0: Completely sound, clean symmetrical trot, no lameness");
@@ -1012,6 +1032,7 @@ function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
 
 /* ---------- Modal 3: Relapse / Return to Treatment ---------- */
 
+// Tái phát: các chấn thương được chọn quay về TREATING, khoá nâng lại FULL, ghi hồ sơ khám INJURED kèm số ngày nghỉ.
 function RelapseDialog({ horse, injuries, onClose, onDone }) {
   // Only active / in-progress injuries can experience relapse (PARTIAL or newly marked TREATING)
   const eligibleInjuries = (injuries || []).filter((i) => i.status !== "RECOVERED");
@@ -1201,6 +1222,11 @@ function RelapseDialog({ horse, injuries, onClose, onDone }) {
 
 /* ---------- Modal 4: Final Clearance & Release Training Lock ---------- */
 
+/*
+ * Xác nhận hồi phục (UC18): bác sĩ phải đánh dấu từng chấn thương mở là đã lành và trả lời từng báo cáo sự cố còn
+ * mở; không được khi ngựa còn đơn thuốc đang dùng. Gửi POST /api/recovery-confirmations: backend trong một giao dịch
+ * đóng chấn thương, đóng báo cáo, gỡ khoá và đặt ELIGIBLE (hồi phục sớm hơn expected_rest_days bắt buộc có notes).
+ */
 function ConfirmDialog({ horse, openInjuries, openReports, hasActiveTreatment, hasLock, onClose, onDone }) {
   const navigate = useNavigate();
   const [picked, setPicked] = useState(() => new Set());

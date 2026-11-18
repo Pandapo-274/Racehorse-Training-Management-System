@@ -16,6 +16,8 @@ import { ApiError, authFetch, getToken } from "../auth/authService";
  * Rations
  * ------------------------------------------------------------------ */
 
+// GET /api/feeding?horseId=: khẩu phần (bảng FEEDING_SCHEDULE) theo bữa MORNING / NOON / EVENING; mỗi dòng trỏ tới
+// một món FEED trong kho. Không truyền horseId = mọi ngựa người gọi được xem.
 export function listFeeding(horseId, signal) {
   const q = horseId ? `?horseId=${horseId}` : "";
   return authFetch(`/api/feeding${q}`, { signal });
@@ -23,6 +25,9 @@ export function listFeeding(horseId, signal) {
 
 /** Replaces the whole ration of one horse; the caller becomes the approver. */
 export function saveRation(horseId, items) {
+  // Thay TOÀN BỘ khẩu phần: backend kiểm từng dòng trước rồi mới xoá khẩu phần cũ và ghi khẩu phần mới.
+  // Ngựa INJURED / QUARANTINE có khẩu phần do bác sĩ đặt thì Head Trainer không sửa được (409, CareService).
+  // Người liên quan nhận thông báo RATION_CHANGED.
   return authFetch(`/api/feeding/horse/${horseId}`, {
     method: "PUT",
     body: JSON.stringify({ items }),
@@ -41,6 +46,8 @@ export function listTasks({ date, horseId } = {}, signal) {
   return authFetch(`/api/daily-tasks${q ? `?${q}` : ""}`, { signal });
 }
 
+// POST /api/daily-tasks (Head Trainer): giao một hoặc nhiều loại việc (taskTypes) của một ngựa trong một ngày
+// cho một Groom.
 export function assignTasks({ horseId, assignedTo, taskDate, taskTypes, note }) {
   return authFetch("/api/daily-tasks", {
     method: "POST",
@@ -59,6 +66,8 @@ export function assignTasksBulk({ horseIds, assignedTo, fromDate, toDate, taskTy
   });
 }
 
+// Tick hoàn thành / mở lại. Việc FEEDING khi tick sẽ trừ kho theo khẩu phần (CONSUME), mở lại thì hoàn
+// (REVERSAL) - xem SupplyService.
 export function completeTask(id) {
   return authFetch(`/api/daily-tasks/${id}/complete`, { method: "PUT" });
 }
@@ -84,6 +93,8 @@ export function listMissedTasks({ from, to } = {}, signal) {
   return authFetch(`/api/daily-tasks/missed${q ? `?${q}` : ""}`, { signal });
 }
 
+// state do backend tính khi đọc (CareRepository.stateOf): DONE_LATE = tick sau ngày của việc;
+// MISSED = đã qua ngày mà chưa tick; OPEN = chưa tick và chưa qua ngày.
 export const TASK_STATE = {
   OPEN: { label: "Open", tone: "neutral" },
   DONE: { label: "Done", tone: "good" },
@@ -110,6 +121,8 @@ export function listGrooms(signal) {
  * uploadHorsePhoto in horseApi.js.
  */
 export async function fileIncident({ horseId, symptoms, description, urgency, photo }) {
+  // Tên từng phần (horseId, symptoms, urgency, description, photo) phải khớp @RequestParam của
+  // IncidentFilingController. Báo cáo mới ở trạng thái PENDING, mọi bác sĩ được báo.
   const body = new FormData();
   body.append("horseId", horseId);
   body.append("symptoms", symptoms);
@@ -155,6 +168,8 @@ export const URGENCY = {
   LOW: { label: "Routine", tone: "neutral", hint: "When available" },
 };
 
+// Vòng đời báo cáo sự cố: PENDING (chờ bác sĩ nhận) -> RECEIVED (một bác sĩ nhận ca) -> EXAMINED (đã khám);
+// hoặc DISMISSED (báo động giả, có lý do). Khi còn PENDING/RECEIVED, IncidentGuard chặn ngựa tập.
 export const INCIDENT_STATUS = {
   PENDING: { label: "Waiting for a vet", tone: "warning" },
   RECEIVED: { label: "Vet on the case", tone: "serious" },
@@ -163,6 +178,7 @@ export const INCIDENT_STATUS = {
 };
 
 /** Same check as the backend (ImageFiles): only JPEG, PNG, WebP up to 2 MB. */
+// Ở đây chỉ kiểm theo file.type (đơn giản hơn profileApi); backend vẫn kiểm lại bằng magic bytes (ImageFiles).
 export const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -170,6 +186,7 @@ export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
  * Supplies
  * ------------------------------------------------------------------ */
 
+// GET /api/supplies: tồn kho (SUPPLY_STOCK). lowOnly = chỉ mặt hàng dưới định mức. Bác sĩ chỉ thấy MEDICINE.
 export function listSupplies({ area, category, lowOnly } = {}, signal) {
   const p = new URLSearchParams();
   if (area) p.set("area", area);
@@ -200,6 +217,8 @@ export const COUNT_UP_REASONS = {
   OTHER: "Something else",
 };
 
+// Kiểm đếm: gửi số thực tế; backend ghi dòng ADJUST vào sổ kho bằng phần chênh lệch. Số cao hơn sổ phải có
+// reason trong COUNT_UP_REASONS (OTHER cần thêm note).
 export function countSupply(id, currentQty, reason = null, note = null) {
   return authFetch(`/api/supplies/${id}/count`, {
     method: "PUT",
@@ -209,6 +228,9 @@ export function countSupply(id, currentQty, reason = null, note = null) {
 
 /** A delivery into the store / restock supply. */
 export function receiveSupply(id, payload, note) {
+  // Hai kiểu gọi: receiveSupply(id, { qty, note, unitPrice, unit, area }) hoặc receiveSupply(id, qty, note).
+  // Lưu ý: SupplyRepository.addWithDetails nhận unit và area nhưng câu UPDATE hiện chỉ cập nhật số lượng
+  // và đơn giá, nên hai trường này không được lưu.
   let body;
   if (typeof payload === 'object' && payload !== null) {
     body = {
@@ -244,6 +266,7 @@ export function reportSupply(id, body) {
 }
 
 /** Stock thrown away; a reason is required. */
+// Huỷ hàng hỏng / hết hạn: dòng WASTE trong sổ kho, trừ tồn, bắt buộc lý do.
 export function wasteSupply(id, qty, reason) {
   return authFetch(`/api/supplies/${id}/waste`, {
     method: "POST",
@@ -251,6 +274,7 @@ export function wasteSupply(id, qty, reason) {
   });
 }
 
+// Sổ kho của một mặt hàng (SUPPLY_MOVEMENT, V21): mỗi thay đổi số lượng là một dòng (xem MOVEMENT_TEXT).
 export function listMovements(id, signal) {
   return authFetch(`/api/supplies/${id}/movements`, { signal });
 }
@@ -297,6 +321,7 @@ export function todayIso() {
 }
 
 /** "A-06" -> "A". Horses without a stall go to "—". */
+// Mã chuồng dạng <dãy><số> ("A-06"): lấy phần chữ đầu để gom ngựa theo dãy chuồng trên Stable map.
 export function stallBlock(stallNo) {
   if (!stallNo) return "—";
   const m = /^([A-Za-z]+)/.exec(stallNo);

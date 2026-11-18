@@ -104,6 +104,7 @@ public class InjuryMarkerService {
         users.writeAudit(vet.userId(), "INJURY_UNMARKED", "INJURY", injuryId, "SUCCESS", ip);
     }
 
+    // Đổi trạng thái dấu (TREATING / PARTIAL / RECOVERED). RECOVERED thì repository tự ghi recovered_at.
     @Transactional
     public void updateStatus(int injuryId, String status, AuthenticatedUser vet, String ip) {
         if (status == null || !List.of("TREATING", "PARTIAL", "RECOVERED").contains(status.trim().toUpperCase())) {

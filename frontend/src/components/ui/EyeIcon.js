@@ -1,6 +1,8 @@
 // src/components/ui/EyeIcon.js
 // Con mắt cho nút hiện/ẩn mật khẩu. `off` = mắt gạch chéo (mật khẩu đang hiện,
 // bấm để ẩn). Dùng currentColor để màu đổi theo CSS của nút.
+// SVG vẽ tay: path = hình con mắt, circle = con ngươi; off = true vẽ thêm đường chéo M4 4 -> 20 20.
+// aria-hidden: biểu tượng chỉ để trang trí, nhãn đọc cho trình đọc màn hình nằm ở nút bọc ngoài (TextField).
 export default function EyeIcon({ off = false }) {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"

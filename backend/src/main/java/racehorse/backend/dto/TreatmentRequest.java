@@ -5,6 +5,13 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/*
+ * Body của POST /api/treatments (chỉ VETERINARIAN) -> TreatmentService.prescribe.
+ *   supplyId có giá trị: thuốc lấy từ kho -> trừ kho (SUPPLY_MOVEMENT) theo quantity, đơn giá
+ *                       lấy từ kho; thuốc hết hạn bị từ chối 409.
+ *   supplyId null      : thuốc mua ngoài -> nhập medicineName và unitPrice.
+ *   requiresConsent    : điều trị lớn -> chờ chủ ngựa đồng ý (WAITING_CONSENT).
+ */
 public record TreatmentRequest(
 
         @NotNull(message = "Medical record is required")

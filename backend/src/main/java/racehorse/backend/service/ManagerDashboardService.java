@@ -19,6 +19,11 @@ import org.springframework.stereotype.Service;
 import racehorse.backend.dto.ManagerDashboard;
 
 /** Trang "Club overview" của Club Manager: mọi số liệu đọc thẳng từ database. */
+/*
+ * Một lần gọi trả cả trang: 4 ô số (ngựa, giáo án ACTIVE, ngựa bị khoá, chi phí quý này, tiền thưởng
+ * năm nay), biểu đồ km tập theo tuần, biểu đồ sức khoẻ, và tối đa 8 việc đang chờ (kèm tổng số việc).
+ * Dùng JdbcTemplate với tham số "?" theo vị trí.
+ */
 @Service
 public class ManagerDashboardService {
 
@@ -46,6 +51,7 @@ public class ManagerDashboardService {
     /* ------------------------------------------------------------------ */
 
     private ManagerDashboard.Summary loadSummary(LocalDate today) {
+        // Quý hiện tại: (tháng - 1) / 3 = 0..3; ngày đầu quý = tháng quarter*3 + 1.
         int quarter = (today.getMonthValue() - 1) / 3;
         LocalDate quarterStart = LocalDate.of(today.getYear(), quarter * 3 + 1, 1);
         LocalDate seasonStart = LocalDate.of(today.getYear(), 1, 1);
@@ -139,6 +145,7 @@ public class ManagerDashboardService {
      * việc của vai trò khác mà Manager cần biết. Sự cố và cảnh báo của ngựa đã
      * rút không tính: không ai còn xử lý chúng nữa.
      */
+    // (UNION ALL ghép 5 loại việc thành một danh sách cùng cột: đăng ký, rút ngựa, vật tư, sự cố, cảnh báo.)
     private static final String OPEN_ITEMS = """
             SELECT 'REGISTRATION' AS kind, N'Horse registration request' AS item,
                    'Club Manager' AS role_name, q.horse_name, q.created_at,

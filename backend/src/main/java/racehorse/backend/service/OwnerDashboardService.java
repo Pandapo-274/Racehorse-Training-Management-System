@@ -55,6 +55,7 @@ public class OwnerDashboardService {
         this.jdbc = jdbc;
     }
 
+    // period: LAST_90_DAYS (mặc định) | THIS_YEAR | ALL - khoảng thời gian của bảng chi phí và tiền thưởng.
     public OwnerDashboard.Response load(int ownerId, String period) {
         String safePeriod = period == null ? DEFAULT_PERIOD : period.trim().toUpperCase();
         if (!PERIODS.contains(safePeriod)) {
@@ -72,6 +73,7 @@ public class OwnerDashboardService {
     /* ------------------------------------------------------------------ */
 
     private OwnerDashboard.Summary summarize(List<OwnerDashboard.HorseCard> horses) {
+        // Thể lực trung bình của các con có số liệu; -1 làm giá trị tạm khi không con nào có (đổi thành null).
         Integer avgFitness = (int) Math.round(horses.stream()
                 .map(OwnerDashboard.HorseCard::fitness)
                 .filter(Objects::nonNull)
@@ -279,6 +281,8 @@ public class OwnerDashboardService {
      * Chi phí (EXPENSE_LOG) và tiền thưởng (RACE_REGISTRATION) theo từng con.
      * Dòng nào không có số liệu vẫn hiện, giá trị 0, để bảng luôn đủ hạng mục.
      */
+    // Lưu ý: cột của bảng là các ngựa đang ở CLB (lấy từ loadHorses), nên chi phí và tiền thưởng của ngựa đã rút
+    // không hiện trong bảng này dù câu SQL bên dưới có tính tới chúng.
     private OwnerDashboard.Costs loadCosts(int ownerId, List<OwnerDashboard.HorseCard> horses, String period) {
         LocalDate today = LocalDate.now();
         LocalDate from = switch (period) {
@@ -311,6 +315,7 @@ public class OwnerDashboardService {
                 """;
 
         // category -> horseId -> số tiền
+        // Kết quả SQL dạng (ngựa, hạng mục, tiền) được xoay thành ma trận hạng mục x ngựa để vẽ bảng.
         Map<String, Map<Integer, BigDecimal>> matrix = new HashMap<>();
         jdbc.query(sql, rs -> {
             matrix.computeIfAbsent(rs.getString("category"), k -> new HashMap<>())

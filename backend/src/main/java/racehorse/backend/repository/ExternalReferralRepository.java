@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.dto.ExternalReferralRequest;
 import racehorse.backend.dto.ExternalReferralResponse;
 
+// SQL cho EXTERNAL_REFERRAL (phiếu chuyển viện ngoài).
 @Repository
 public class ExternalReferralRepository {
 

@@ -47,6 +47,7 @@ function HorseshoeIcon() {
   );
 }
 
+// Sidebar riêng của dashboard Manager (các trang con dùng HorseShell); mục menu lấy từ NavItems theo vai trò.
 function ManagerSidebar() {
   const navigate = useNavigate();
   /* Không còn gọi getUser ở đây nữa: ProfileCard tự đọc người đang đăng nhập. */
@@ -94,6 +95,7 @@ function ManagerSidebar() {
   );
 }
 
+// Ô số liệu: nhãn + giá trị + dòng phụ.
 function StatCard({ value, label, type }) {
   return (
     <div className={`manager-stat-card ${type}`}>
@@ -103,6 +105,7 @@ function StatCard({ value, label, type }) {
   );
 }
 
+// Biểu đồ cột km tập theo tuần; chiều cao mỗi cột = km / tuần cao nhất (max) theo phần trăm.
 function WorkloadChart({ points }) {
   const max = Math.max(0, ...points.map((p) => Number(p.km) || 0));
 
@@ -144,6 +147,8 @@ function WorkloadChart({ points }) {
   );
 }
 
+// Biểu đồ vòng (donut) sức khoẻ đàn: vẽ bằng CSS conic-gradient, mỗi trạng thái một cung theo tỉ lệ số ngựa.
+// percent = tỉ lệ ngựa ELIGIBLE hiển thị ở giữa vòng.
 function HealthCard({ health }) {
   const total = health.reduce((sum, h) => sum + h.count, 0);
   const healthy = health.find((h) => h.status === "ELIGIBLE")?.count || 0;
@@ -196,6 +201,7 @@ function HealthCard({ health }) {
   );
 }
 
+// Danh sách "việc đang chờ" (tối đa 8, kèm tổng): dòng nào có trang xử lý (openItemLink) thì bấm được.
 function OpenItems({ items, total }) {
   const navigate = useNavigate();
 
@@ -269,6 +275,11 @@ function OpenItems({ items, total }) {
   );
 }
 
+/*
+ * Trang /manager (Club overview). Một lời gọi GET /api/manager/dashboard trả về: summary (các ô số), workload
+ * (km theo tuần), health (đếm theo trạng thái), openItems + openItemCount (việc đang chờ). Cách tính từng số
+ * nằm ở service/ManagerDashboardService.java (backend).
+ */
 export default function ManagerDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);

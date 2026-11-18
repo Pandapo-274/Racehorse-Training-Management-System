@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /** Lý do dừng buổi tập. Không có lý do thì không cho dừng: bác sĩ cần biết ngựa bị gì. */
+// Body của PUT /api/training-sessions/{id}/stop (Groom hoặc HLV dừng buổi vì ngựa bất thường).
+// Kết quả: buổi tập STOPPED_EARLY + một INCIDENT_REPORT gắn session_id để bác sĩ khám.
 public record StopSessionRequest(
         @NotBlank(message = "Symptoms are required")
         @Size(max = 255, message = "Symptoms must be at most 255 characters")

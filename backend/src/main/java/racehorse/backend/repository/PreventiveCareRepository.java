@@ -50,6 +50,7 @@ public class PreventiveCareRepository {
      * ba ô NEVER và chúng luôn nằm ở đầu danh sách (hồ sơ càng cũ càng "cấp"),
      * che mất đúng những con ngựa thật đang cần việc.
      */
+    // (CROSS JOIN (VALUES ...) AS t(care_type) = bảng tạm 3 dòng ngay trong câu SQL; mỗi ngựa x 3 loại = 3 ô.)
     private static final String SELECT_BOARD = """
             SELECT h.horse_id, h.owner_id, h.horse_name, h.registration_code, h.stall_no, h.created_at,
                    t.care_type,
@@ -83,6 +84,7 @@ public class PreventiveCareRepository {
     }
 
     /** Dòng thô từ database, chưa phân loại. Service quyết OVERDUE hay DUE_SOON. */
+    // Record khai báo trong repository vì chỉ là dữ liệu thô nội bộ giữa repository và service.
     public record PreventiveCareRow(
             int horseId, int ownerId, String horseName, String registrationCode, String stallNo,
             LocalDateTime horseCreatedAt, String careType,

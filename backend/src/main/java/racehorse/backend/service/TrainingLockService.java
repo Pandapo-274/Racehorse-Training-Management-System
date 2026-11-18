@@ -187,6 +187,7 @@ public class TrainingLockService {
         return released;
     }
 
+    // Dùng ở màn hồi phục: đã có lệnh ACTIVE thì chỉ đổi mức; chưa có thì ra lệnh mới qua issue().
     @Transactional
     public TrainingLockRow setLockLevel(int horseId, String lockLevel, AuthenticatedUser user, String ip) {
         if (lockLevel == null || (!"FULL".equalsIgnoreCase(lockLevel.trim()) && !"HEAVY_WORK_ONLY".equalsIgnoreCase(lockLevel.trim()))) {
@@ -228,6 +229,8 @@ public class TrainingLockService {
 
     /* ------------------------------------------------------------------ */
 
+    // Gom lỗi: ngựa đã rút, đã có lệnh ACTIVE (kèm tên người ra lệnh), chấn thương căn cứ không thuộc ngựa
+    // này hoặc đã lành.
     private void validate(TrainingLockRequest r, HorseResponse horse) {
         Map<String, String> errors = new HashMap<>();
         // Ngựa đã rút không còn ở học viện nên không có gì để khoá.

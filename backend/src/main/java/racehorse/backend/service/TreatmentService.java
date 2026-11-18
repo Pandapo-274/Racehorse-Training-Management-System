@@ -48,11 +48,14 @@ public class TreatmentService {
     private final TrainingLockRepository locks;
     private final racehorse.backend.service.SupplyService supplyService;
 
+    // Constructor 4 tham số cho unit test: các phụ thuộc kho/chi phí/thông báo là null và bị bỏ qua.
     public TreatmentService(TreatmentRepository treatments, MedicalRecordRepository records,
                             HorseRepository horses, UserRepository users) {
         this(treatments, records, horses, users, null, null, null, null, null);
     }
 
+    // @Lazy trên SupplyService: Spring tiêm một proxy và chỉ dựng SupplyService thật khi lần đầu được dùng.
+    // Kỹ thuật này thường dùng để tránh lỗi phụ thuộc vòng (A cần B, B cần A) lúc khởi động.
     @org.springframework.beans.factory.annotation.Autowired
     public TreatmentService(TreatmentRepository treatments, MedicalRecordRepository records,
                             HorseRepository horses, UserRepository users,
@@ -84,6 +87,13 @@ public class TreatmentService {
 
         validate(raw);
 
+        /*
+         * Tìm thuốc trong kho để trừ kho và lấy đơn giá:
+         *   1. có supplyId: lấy đúng món đó (phải là MEDICINE);
+         *   2. không có: tìm món MEDICINE trùng tên (không phân biệt hoa thường);
+         *   3. vẫn không có: tìm gần đúng (tên chứa nhau, hoặc chứa từ đầu tiên của tên kho).
+         * Không tìm thấy thì coi là thuốc mua ngoài (không trừ kho).
+         */
         String medName = raw.medicineName();
         java.math.BigDecimal unitPrice = raw.unitPrice();
         Integer supplyId = raw.supplyId();
@@ -152,12 +162,15 @@ public class TreatmentService {
             }
         }
 
+        // requiresConsent = true -> WAITING_CONSENT: chờ chủ ngựa đồng ý (PUT /{id}/consent hoặc /reject-consent).
         String consentStatus = Boolean.TRUE.equals(raw.requiresConsent()) ? "WAITING_CONSENT" : "NOT_REQUIRED";
         int treatmentId = treatments.insert(raw, supplyId, medName, unitPrice, consentStatus);
 
+        // Ghi chi phí MEDICAL cho chủ ngựa (quantity x unitPrice) và trừ kho (SUPPLY_MOVEMENT CONSUME).
         autoRecordMedicalExpense(raw, medName, unitPrice, vet.userId());
         deductMedicineSupply(raw, supplyId, treatmentId, vet);
 
+        // Luật nghiệp vụ: kê đơn cho ngựa đang ELIGIBLE thì chuyển ngựa sang INJURED (đang điều trị).
         records.findById(raw.recordId()).ifPresent(rec -> {
             horses.findById(rec.horseId()).ifPresent(h -> {
                 if ("ELIGIBLE".equals(h.status())) {
@@ -198,6 +211,9 @@ public class TreatmentService {
         return treatments.findByRecord(recordId);
     }
 
+    // (Javadoc ngay dưới đây thuộc về end() bên dưới, bị đặt lệch chỗ. Lưu ý thêm: @Transactional trên một
+    // method private không có tác dụng - Spring chỉ chặn được lời gọi public qua proxy - nhưng method này
+    // vẫn chạy trong giao dịch của prescribe() vì được gọi từ bên trong nó.)
     /**
      * Kết thúc một mục điều trị hôm nay.
      *
@@ -279,6 +295,8 @@ public class TreatmentService {
     }
 
     public TreatmentRow end(int treatmentId, AuthenticatedUser vet, String ip) {
+        // Không có @Transactional: mỗi câu UPDATE tự commit. Sau khi kết thúc, nếu ngựa không còn đơn nào và
+        // không bị khoá tập thì được đưa từ INJURED/MONITOR về ELIGIBLE (đường thứ hai về ELIGIBLE, ngoài UC18).
         TreatmentRow current = treatments.findById(treatmentId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Treatment #" + treatmentId + " does not exist"));
@@ -356,6 +374,8 @@ public class TreatmentService {
         return new ApiException(HttpStatus.BAD_REQUEST, message, Map.of(field, message));
     }
 
+    // Trừ kho: ưu tiên SupplyService.consume (ghi đủ sổ biến động và cảnh báo hết hàng); nếu không có
+    // (unit test) thì tự trừ bằng repository.
     private void deductMedicineSupply(TreatmentRequest raw, Integer supplyId, int treatmentId, AuthenticatedUser vet) {
         if (supplyId == null || raw.quantity() == null || raw.quantity().compareTo(java.math.BigDecimal.ZERO) <= 0) {
             return;

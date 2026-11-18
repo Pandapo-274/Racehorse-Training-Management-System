@@ -19,6 +19,18 @@ import racehorse.backend.repository.AlertRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Sinh và xử lý cảnh báo vượt ngưỡng (THRESHOLD_ALERT).
+ *
+ * Luồng một lần đo (recordVitals):
+ *   1. Kiểm Groom đúng người được giao, buổi đang RUNNING, có ít nhất một chỉ số.
+ *   2. Cập nhật peak/avg nhịp tim và peak vận tốc của buổi tập.
+ *   3. Nhịp tim > heart_rate_ceiling của giai đoạn  -> cảnh báo HEART_RATE.
+ *      Vận tốc > velocity_ceiling của buổi (V47) hoặc app.alert.velocity-max (18 m/s) -> cảnh báo VELOCITY.
+ *   4. Mức độ theo % vượt ngưỡng: >= 10% HIGH, >= 5% MEDIUM, còn lại LOW.
+ *   5. Chống ngập cảnh báo: trong 60 giây, cùng buổi + cùng loại chỉ tạo cảnh báo mới khi mức độ TĂNG.
+ *   6. Chỉ mức HIGH mới gửi chuông (HLV phụ trách + mọi bác sĩ).
+ */
 @Service
 public class AlertService {
 
@@ -79,6 +91,7 @@ public class AlertService {
             alerts.updatePeakVelocity(sessionId, req.velocity());
         }
 
+        // Ví dụ: ceiling 200 bpm, đo được 222 bpm -> vượt 11% -> HIGH.
         Integer ceiling = ctx.heartRateCeiling();
         VitalsResult heart = null;
         if (hr != null) {
@@ -89,6 +102,8 @@ public class AlertService {
         }
         BigDecimal speedLimit = ctx.velocityCeiling() != null ? ctx.velocityCeiling() : velocityMax;
         if (req.velocity() != null && req.velocity().compareTo(speedLimit) > 0) {
+            // Nhịp tim dùng cho VitalsResult khi chỉ gửi vận tốc: lấy nhịp tim đo được, hoặc ngưỡng,
+            // hoặc 120 làm giá trị hiển thị mặc định.
             int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
             VitalsResult speed = raise(me, ctx.horseId(), sessionId, effectiveHr, ceiling, VELOCITY, speedLimit, req.velocity(),
                     "High speed alert", req.velocity().toPlainString() + " m/s, limit is "
@@ -107,6 +122,7 @@ public class AlertService {
     private VitalsResult raise(AuthenticatedUser me, int horseId, int sessionId, int hr, Integer ceiling, String metric,
                                BigDecimal limit, BigDecimal actual, String title, String detail) {
         String severity = severityFor(actual.doubleValue(), limit.doubleValue());
+        // open = mức độ của cảnh báo chưa xử lý gần nhất cùng loại trong 60 giây qua (nếu có).
         Optional<String> open = alerts.latestOpenSeverity(sessionId, metric, DEDUPE_SECONDS);
         String msg = "VELOCITY".equals(metric)
                 ? (actual.toPlainString() + " m/s is over the " + limit.toPlainString() + " m/s limit")
@@ -146,6 +162,8 @@ public class AlertService {
     /** Head Trainer ghi lại đã xử lý thế nào. STOP_SESSION thì ca tập bị dừng luôn. */
     @Transactional
     public AlertResponse resolve(AuthenticatedUser me, int alertId, ResolveAlertRequest req, String ip) {
+        // STOP_SESSION: dừng buổi tập và mở báo cáo sự cố (IncidentService.stopFromAlert).
+        // REDUCE_INTENSITY: báo Groom đang dắt ngựa. CONTINUE: chỉ ghi lại, không báo ai.
         /* Gọi bác sĩ phải kèm lý do để bác sĩ trả lời được: đi qua
            POST /api/alerts/{id}/vet-call (VetCallService), không qua đây. */
         if ("VET_CALLED".equals(req.actionTaken())) {

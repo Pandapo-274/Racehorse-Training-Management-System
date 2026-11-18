@@ -9,6 +9,8 @@ import racehorse.backend.dto.HealthOverviewResponse;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.HealthService;
 
+// UC13 - bảng sức khoẻ đàn ngựa (trang Herd health của bác sĩ). GET /api/health/overview?status=
+// trả số đếm theo trạng thái và từng ô chuồng (HealthOverviewResponse).
 @RestController
 @RequestMapping("/api/health")
 public class HealthController {

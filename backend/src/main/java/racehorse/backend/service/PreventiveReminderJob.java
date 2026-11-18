@@ -28,6 +28,8 @@ import racehorse.backend.dto.PreventiveReminderResult;
  * /api/preventive-care/reminders/run) là đường bù, và vì service idempotent nên bấm
  * thừa cũng không gửi trùng.
  */
+// Ghi chú: chú thích trên viết khi project chưa có job nào; nay BackendApplication đã có @EnableScheduling
+// và còn MissedTaskJob, SupplyDigestJob, TreatmentReminderService... Khai báo lặp lại ở đây vô hại.
 @Component
 @EnableScheduling
 public class PreventiveReminderJob {

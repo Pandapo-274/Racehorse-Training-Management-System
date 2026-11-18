@@ -4,6 +4,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/*
+ * Một đơn thuốc / lần điều trị (bảng TREATMENT) đã ghép tên ngựa.
+ *   active      - đơn còn hiệu lực (chưa tới end_date), tính lúc đọc.
+ *   totalCost   - quantity x unitPrice, sinh chi phí MEDICAL cho chủ ngựa.
+ *   requiresConsent / consentStatus - điều trị lớn phải được chủ ngựa đồng ý
+ *                 (NOT_REQUIRED | WAITING_CONSENT | CONSENTED | REJECTED).
+ */
 public record TreatmentRow(
         int treatmentId,
         int recordId,

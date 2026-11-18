@@ -22,6 +22,7 @@ import racehorse.backend.service.OwnerDashboardService;
  * ở trang Costs; báo cáo của chủ ngựa (OwnerDashboardService) và thẻ chi phí
  * trên trang tổng quan của Manager đọc lại đúng bảng này.
  */
+// Dùng bởi ExpenseService/ExpenseController (Club Manager) và OwnerExpenseController (chủ ngựa).
 public final class ExpenseModels {
 
     private ExpenseModels() {
@@ -51,6 +52,11 @@ public final class ExpenseModels {
                               BigDecimal total, int count, boolean truncated) {
     }
 
+    /*
+     * Body của POST /api/expenses. @Digits(integer = 10, fraction = 2) khớp kiểu cột
+     * DECIMAL(12,2): tối đa 10 chữ số phần nguyên, 2 chữ số thập phân. @PastOrPresent:
+     * không ghi chi phí cho ngày trong tương lai.
+     */
     public record ExpenseRequest(
             @NotNull(message = "Choose a horse")
             Integer horseId,

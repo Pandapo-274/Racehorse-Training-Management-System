@@ -1,3 +1,14 @@
+/*
+ * src/features/trainer/TrainingPlanPage.js - trang /trainer/training-plans (giáo án huấn luyện, UC9, Flow 2).
+ * Ba khu vực trên cùng một trang:
+ *   1. Form tạo giáo án: ngựa (chỉ ngựa ELIGIBLE/MONITOR được giao cho HLV này, chưa có giáo án đang mở), Groom
+ *      (tối đa 2 giáo án mở mỗi Groom - V42), tên, ngày bắt đầu/kết thúc, các giai đoạn (Base / Build / Peak...)
+ *      mỗi giai đoạn có cự ly, mặt sân, số buổi/tuần, trần nhịp tim, khoảng nghỉ tối thiểu, vận tốc mục tiêu.
+ *      Bản nháp form được lưu tạm trong sessionStorage để không mất khi tải lại trang.
+ *   2. Danh sách giáo án (lọc theo trạng thái) với nút đổi trạng thái: gửi chủ duyệt, kích hoạt, tạm dừng,
+ *      tiếp tục, kết thúc, xoá.
+ *   3. Xem chi tiết / sửa một giáo án; sửa giáo án đã APPROVED/ACTIVE/PAUSED phải chờ chủ ngựa duyệt (V47).
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
 import { useNavigate } from "react-router-dom";
@@ -18,11 +29,13 @@ import {
 import "./trainer.css";
 import "./training-plan.css";
 
+// Sinh id tạm (chỉ dùng ở frontend làm key cho React) cho mỗi giai đoạn mới thêm vào form.
 let phaseIdCounter = 1;
 function generatePhaseId() {
   return `phase-${Date.now()}-${phaseIdCounter++}`;
 }
 
+// Giai đoạn mặc định khi mở form lần đầu. Mặt sân mặc định DIRT.
 const initialPhases = [
   {
     id: "init-phase-1",
@@ -104,6 +117,7 @@ function TrainerSidebar({ active, onSignOut }) {
   );
 }
 
+// Ngày "yyyy-mm-dd" -> "17 Nov 2026" (thêm T00:00:00 để đọc theo giờ địa phương).
 function dateLabel(value) {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
@@ -116,6 +130,7 @@ function dateLabel(value) {
     });
 }
 
+// Trạng thái -> hậu tố lớp CSS ("PENDING_APPROVAL" -> "pending_approval" rồi ký tự lạ thành "-").
 function statusClass(status) {
   return String(status || "DRAFT")
     .toLowerCase()
@@ -139,10 +154,12 @@ function emptyPhase(index, startDate, endDate) {
   };
 }
 
+// Ô trống -> null (backend hiểu là không đặt), có giá trị -> số.
 function optionalNumber(value) {
   return value === "" || value == null ? null : Number(value);
 }
 
+// Bản nháp form tạo giáo án trong sessionStorage (mất khi đóng tab). Lỗi đọc/ghi (vd. bộ nhớ đầy) bị bỏ qua.
 const DRAFT_KEY = "tracen_training_plan_draft";
 
 function loadDraft() {
@@ -167,6 +184,7 @@ function clearDraft() {
   } catch {}
 }
 
+// Đổi lỗi từng ô của backend ("phases[1].startDate") thành câu dễ đọc ("Phase 2 start date: ...").
 function formatPlanErrors(err) {
   if (!err) return "";
   const friendlyField = (field) => {
@@ -208,6 +226,11 @@ function formatPlanErrors(err) {
   return err.message || "Could not save training plan.";
 }
 
+/*
+ * State: horses / plans / grooms (dữ liệu tải về), các ô của form tạo (horseId, groomId, planName, startDate, endDate,
+ * phases), viewingPlan (giáo án đang xem chi tiết), editingPlan + edit... (form sửa), deleteConfirm (ConfirmModal xoá).
+ * savedDraft: bản nháp đọc từ sessionStorage một lần lúc mở trang để điền lại form.
+ */
 export default function TrainingPlanPage() {
   const navigate = useNavigate();
   const savedDraft = useMemo(() => loadDraft(), []);
@@ -245,6 +268,7 @@ export default function TrainingPlanPage() {
   const [editError, setEditError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, plan: null });
 
+  // Mỗi lần một ô trong form tạo đổi thì lưu lại bản nháp.
   useEffect(() => {
     saveDraft({
       horseId,
@@ -256,6 +280,8 @@ export default function TrainingPlanPage() {
     });
   }, [horseId, groomId, planName, startDate, endDate, phases]);
 
+  // Tải song song ngựa, giáo án, Groom. Lọc ngựa lập được giáo án; bỏ lựa chọn ngựa / Groom trong bản nháp nếu chúng
+  // không còn hợp lệ (ngựa đã có giáo án mở, Groom đã đủ giáo án).
   const load = useCallback(
     async (signal) => {
       setLoading(true);
@@ -330,6 +356,7 @@ export default function TrainingPlanPage() {
     [plans, filter],
   );
 
+  // Mở chi tiết một giáo án (GET /api/training-plans/{id}: kèm giai đoạn và bản sửa đang chờ duyệt).
   const handleViewPlan = async (plan) => {
     setViewingLoading(true);
     setViewingPlan(plan);
@@ -345,6 +372,7 @@ export default function TrainingPlanPage() {
     }
   };
 
+  // Chép giáo án vào form sửa (Groom, tên, các giai đoạn giữ phaseId để backend biết giai đoạn nào sửa / thêm / xoá).
   const startEditing = (plan) => {
     setEditingPlan(plan);
     setEditGroomId(plan.groomId ? String(plan.groomId) : "");
@@ -367,6 +395,7 @@ export default function TrainingPlanPage() {
     setEditError("");
   };
 
+  // Gửi bản sửa (updateTrainingPlan). Giáo án DRAFT / PENDING_APPROVAL được sửa thẳng; đã duyệt thì thành bản chờ duyệt.
   const handleUpdateSubmit = async (e) => {
     e.preventDefault();
     if (!editingPlan) return;
@@ -412,6 +441,8 @@ export default function TrainingPlanPage() {
     }
   };
 
+  // Sửa / thêm / xoá giai đoạn trong form tạo: tối đa 12 giai đoạn, giai đoạn mới lấy sẵn ngày của giáo án;
+  // phải còn ít nhất 1 giai đoạn, xoá xong thì đánh số lại các tên dạng "Phase N".
   const updatePhase = (index, field, value) =>
     setPhases((current) =>
       current.map((phase, i) =>
@@ -442,6 +473,8 @@ export default function TrainingPlanPage() {
       });
     });
 
+  // Tạo giáo án: kiểm ở trình duyệt (có ngựa, ngựa chưa có giáo án mở, có Groom, ngày hợp lệ, các giai đoạn) rồi
+  // createTrainingPlan -> giáo án DRAFT; xoá bản nháp sau khi tạo thành công.
   const submit = async (event) => {
     event.preventDefault();
     setError("");
@@ -510,6 +543,7 @@ export default function TrainingPlanPage() {
     }
   };
 
+  // Đổi trạng thái (changeTrainingPlanStatus). DRAFT -> PENDING_APPROVAL = gửi chủ ngựa duyệt.
   const updateStatus = async (plan, status) => {
     setError("");
     setNotice("");
@@ -531,6 +565,7 @@ export default function TrainingPlanPage() {
     }
   };
 
+  // Xoá: mở ConfirmModal; confirmDeletePlan mới thật sự gọi DELETE.
   const deletePlan = (plan) => {
     setDeleteConfirm({ isOpen: true, plan });
   };

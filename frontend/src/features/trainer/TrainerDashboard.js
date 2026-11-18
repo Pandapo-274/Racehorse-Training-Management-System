@@ -23,6 +23,11 @@ import NotificationBell from "../notification/NotificationBell";
 // Các thao tác tìm kiếm/lọc/chọn ngựa được xử lý giống màn /trainer/horses:
 // dữ liệu được lấy một lần từ API, sau đó lọc tại client để phản hồi tức thì.
 
+/*
+ * Trang /trainer (dashboard Head Trainer). Bố cục: sidebar | header | biểu đồ thể lực theo tuần (FitnessChart,
+ * RANGE_OPTIONS = 4/8/12 tuần) | cảnh báo chưa xử lý (AlertsCard) | bảng ngựa (HorsesTable, tìm kiếm + lọc trạng thái).
+ * Dữ liệu: TrainerDashboardService - chỉ ngựa Club Manager đã giao cho HLV này (V37).
+ */
 const RANGE_OPTIONS = [4, 8, 12];
 const STATUS_FILTERS = [
   { value: "ALL", label: "All" },
@@ -53,6 +58,7 @@ function HorseshoeIcon() {
   );
 }
 
+// Sidebar của Head Trainer (menu từ NavItems theo vai trò, thẻ hồ sơ, nút đăng xuất).
 function TrainerSidebar({ user, onSignOut }) {
 
   return (
@@ -93,6 +99,7 @@ function TrainerSidebar({ user, onSignOut }) {
   );
 }
 
+// Biểu đồ cột thể lực trung bình theo tuần (dữ liệu đã đổi qua toChartData trong dashboardApi.js); nút chọn 4/8/12 tuần.
 function FitnessChart({ data, weeks, onWeeksChange, loading }) {
   const max = data.length ? Math.max(...data.map((item) => item.value), 1) : 1;
 
@@ -159,6 +166,7 @@ function FitnessChart({ data, weeks, onWeeksChange, loading }) {
   );
 }
 
+// Thẻ cảnh báo ngưỡng chưa xử lý (nhịp tim / vận tốc vượt ngưỡng trong buổi tập); bấm một cảnh báo mở hồ sơ ngựa.
 function AlertsCard({ alerts, onHorseClick }) {
   return (
     <div className="trainer-card alerts-card" id="open-alerts">
@@ -206,6 +214,7 @@ function AlertsCard({ alerts, onHorseClick }) {
   );
 }
 
+// Đổi chip trạng thái (toStatusChip) sang khoá của bộ lọc: ACTIVE / READY / LOCKED / MONITOR.
 function getVisibleStatus(horse) {
   const status = toStatusChip(horse);
   if (status.cls === "active") return "ACTIVE";
@@ -214,6 +223,7 @@ function getVisibleStatus(horse) {
   return "MONITOR";
 }
 
+// Bảng ngựa: lọc theo trạng thái và tìm theo tên, mã, giai đoạn, sức khoẻ; bấm một dòng mở hồ sơ ngựa.
 function HorsesTable({
   horses,
   query,
@@ -374,6 +384,7 @@ export default function TrainerDashboard() {
 
   const user = getUser();
 
+  // load(weeks): tải lại dashboard khi đổi số tuần của biểu đồ (effect phụ thuộc weeks).
   const load = useCallback(
     (w, signal) => {
       setLoading(true);

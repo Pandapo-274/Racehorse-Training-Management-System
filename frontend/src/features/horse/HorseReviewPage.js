@@ -1,4 +1,10 @@
 // src/features/horse/HorseReviewPage.js
+/*
+ * Trang /manager/horse-requests: Club Manager duyệt yêu cầu đăng ký ngựa do chủ ngựa gửi (HORSE_REQUEST).
+ * Duyệt = cấp mã đăng ký (registrationCode) + xếp chuồng (stallNo, trừ hồ sơ PEDIGREE) + tuỳ chọn gán Head
+ * Trainer. Backend (HorseRequestService.approve) gọi HorseService.create để tạo hồ sơ HORSE trong cùng giao dịch.
+ * Từ chối bắt buộc ghi lý do (note). Đây là con đường DUY NHẤT để một con ngựa vào hệ thống.
+ */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
@@ -8,6 +14,8 @@ import {
 } from "./horseApi";
 import { listRequests, approveRequest, rejectRequest, toRequestStatus } from "./horseRequestApi";
 
+// Một dòng yêu cầu đang chờ, mỗi dòng có ô nhập riêng (mã, chuồng, HLV, ghi chú) và state riêng.
+// trainers: danh sách Head Trainer đang hoạt động để chọn; onDone: báo trang cha tải lại.
 function PendingRow({ row, trainers, onDone }) {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
@@ -18,11 +26,14 @@ function PendingRow({ row, trainers, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Hồ sơ PEDIGREE chỉ để làm cha mẹ / tổ tiên trong phả hệ: không ở CLB nên không cần chuồng, không có HLV.
   const pedigreeOnly = row.recordType === "PEDIGREE";
   const stage = toStage({ recordType: row.recordType, dateOfBirth: row.dateOfBirth });
   const age = toAge(row.dateOfBirth);
   const ageWarning = ageProblem(row.recordType, row.dateOfBirth);
 
+  // Khung chạy chung cho duyệt / từ chối: khoá nút, gọi API, lỗi từng ô (mã trùng, chuồng đã có ngựa...) gắn
+  // vào đúng ô nhờ fieldErrors, thành công thì onDone() tải lại danh sách.
   const run = async (fn) => {
     setBusy(true);
     setError("");
@@ -150,6 +161,7 @@ export default function HorseReviewPage() {
   const [trainers, setTrainers] = useState([]);
   const [error, setError] = useState("");
 
+  // Tải song song danh sách yêu cầu và danh sách HLV; lỗi khi tải HLV không chặn trang (.catch(() => [])).
   const load = useCallback(
     (signal) => {
       setError("");
@@ -176,6 +188,7 @@ export default function HorseReviewPage() {
     return () => ctrl.abort();
   }, [load]);
 
+  // Chặn trên giao diện nếu không phải Manager (backend vẫn trả 403 cho API duyệt).
   if (!canReviewRequests(user)) {
     return (
       <HorseShell title="Horse registrations">

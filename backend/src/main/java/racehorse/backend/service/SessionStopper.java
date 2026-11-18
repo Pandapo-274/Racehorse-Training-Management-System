@@ -29,6 +29,7 @@ public class SessionStopper {
     }
 
     /** @return số buổi đã bị dừng. */
+    // Gọi từ TrainingLockService.issue. markStopped là UPDATE có điều kiện status = 'RUNNING'.
     public int stopRunningSessions(int horseId, String horseName, String lockLevel, String reason,
                                    AuthenticatedUser issuer, String ip) {
         int stopped = 0;

@@ -8,6 +8,9 @@
 import { authFetch } from "../auth/authService";
 import { getHorseBasePath, parseServerTime } from "../horse/horseApi";
 
+// Tiền tố chung của mọi endpoint thông báo (NotificationController). Mỗi thông báo backend trả về có dạng
+// NotificationRow: { notificationId, type, title, message, targetEntity, targetId, createdAt, readAt, read }.
+// Dùng ở NotificationBell.js (chuông trên header của 5 dashboard).
 const API = "/api/notifications";
 
 /* ------------------------------------------------------------------ *
@@ -25,10 +28,13 @@ export async function getUnreadCount(signal) {
   return body?.count ?? 0;
 }
 
+// PUT /api/notifications/{id}/read: đánh dấu một thông báo đã đọc (câu UPDATE chỉ khớp thông báo của chính
+// người đang đăng nhập, nên không thể đánh dấu hộ người khác).
 export function markRead(id) {
   return authFetch(`${API}/${id}/read`, { method: "PUT" });
 }
 
+// PUT /api/notifications/read-all: đánh dấu đã đọc mọi thông báo của người đang đăng nhập.
 export function markAllRead() {
   return authFetch(`${API}/read-all`, { method: "PUT" });
 }
@@ -75,6 +81,8 @@ const PAGE_BY_TYPE = {
   TEMP_PASSWORD_SET: "/change-password",
 };
 
+// Tra bảng PAGE_BY_TYPE: giá trị là chuỗi (mọi vai trò mở cùng một trang) hoặc object { VAI_TRÒ: trang }.
+// Vai trò không có trong object -> null (bấm chỉ đánh dấu đã đọc).
 function pageByType(n, role) {
   const entry = PAGE_BY_TYPE[n?.type];
   if (!entry) return null;
@@ -87,6 +95,8 @@ function pageByType(n, role) {
  */
 export function notificationTarget(n, user) {
   const role = user?.role;
+  // Thứ tự các nhánh dưới đây quan trọng: luật theo LOẠI thông báo (type) được xét trước, rồi mới tới
+  // luật theo entity (switch ở cuối). Nhánh nào return trước thì thắng.
   /* Việc chăm sóc: Groom cần chỗ để làm việc (Stable map), không phải hồ sơ
      ngựa, kể cả khi thông báo có gắn con ngựa. */
   if (role === "GROOM" && (n?.type === "DAILY_TASK_ASSIGNED" || n?.type === "DAILY_TASK_REASSIGNED")) {
@@ -98,6 +108,7 @@ export function notificationTarget(n, user) {
   }
   /* Thông báo nhắc lịch phòng ngừa là tin tóm tắt cho cả đàn nên không trỏ tới
      một entity nào (targetEntity null); nhận ra nó bằng loại thông báo. */
+  // (Ghi chú ngay trên thực ra nói về PREVENTIVE_CARE_DUE ở dưới; khối if này xử lý thông báo giải đua.)
   if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED") {
     if (role === "HORSE_OWNER") return "/horse-owner/races";
     if (role === "HEAD_TRAINER") return "/trainer/races";
@@ -109,6 +120,8 @@ export function notificationTarget(n, user) {
     if (role === "VETERINARIAN") return `/veterinarian/recovery/${n.targetId}`;
     if (role === "HEAD_TRAINER") return "/trainer/session-review";
   }
+  // Head Trainer: thông báo về khoá tập, sức khoẻ, buổi tập đều mở Lịch tập (/trainer/schedule) - nơi HLV
+  // xử lý hệ quả (đổi lịch, gán Groom...), kể cả khi thông báo trỏ tới con ngựa.
   if (role === "HEAD_TRAINER") {
     if (
       n?.type === "TRAINING_LOCK_ISSUED" ||
@@ -123,6 +136,8 @@ export function notificationTarget(n, user) {
       return "/trainer/schedule";
     }
   }
+  // Còn lại: chọn trang theo loại entity thông báo trỏ tới; không khớp entity nào (targetEntity null hoặc
+  // loại khác) thì thử bảng PAGE_BY_TYPE theo loại thông báo.
   switch (n?.targetEntity) {
     case "HORSE":
       if (role === "HEAD_TRAINER") return "/trainer/schedule";
@@ -171,12 +186,14 @@ export function notificationTarget(n, user) {
  * Nam mọi thông báo sẽ trông như cũ hơn 7 tiếng. Thêm "Z" để đọc đúng là UTC.
  */
 function parseUtc(iso) {
+  // Uỷ quyền cho parseServerTime trong horseApi.js - chỉ một chỗ duy nhất xử lý giờ UTC không kèm múi giờ.
   return parseServerTime(iso);
 }
 
 /** "Just now", "5 min ago", "3 h ago", "2 d ago", rồi tới ngày cụ thể. */
 export function timeAgo(iso, now = Date.now()) {
   const d = parseUtc(iso);
+  // now truyền vào được (để test với một thời điểm cố định); mặc định là thời điểm hiện tại tính bằng ms.
   if (!d) return "";
   const minutes = Math.floor((now - d.getTime()) / 60000);
   if (minutes < 1) return "Just now";

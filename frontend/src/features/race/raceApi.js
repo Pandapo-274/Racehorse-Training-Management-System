@@ -11,6 +11,7 @@
 //   POST /api/races                  enter a horse in a race (Head Trainer)
 //   PUT  /api/races/{id}/result      record the result (Head Trainer, Club Manager)
 //   PUT  /api/races/{id}/scratch     withdraw from a race before it runs (Head Trainer)
+// Ngoài ra (V28): PUT /api/races/{id}/approve và /reject - chủ ngựa duyệt / từ chối suất HLV đề xuất.
 //
 // Prize money is paid to the horse's owner. It is not club revenue; the system
 // does not model training fees or commission.
@@ -28,6 +29,7 @@ export function listYears(signal) {
   return authFetch("/api/races/years", { signal });
 }
 
+// Không truyền raceId: backend trả các ngựa HLV phụ trách kèm problems (lý do chặn) và warnings (hiện luôn rỗng).
 export function listCandidates(raceId, signal) {
   return authFetch(`/api/races/candidates${raceId ? `?raceId=${raceId}` : ""}`, { signal });
 }
@@ -48,6 +50,9 @@ export function getSummary(year, signal) {
   return authFetch(`/api/races/summary?year=${year}`, { signal });
 }
 
+// POST /api/races: HLV đề xuất -> suất ở PENDING_OWNER chờ chủ ngựa duyệt. RaceService.check kiểm toàn bộ
+// điều kiện (tuổi 2..10, ELIGIBLE, không khoá, có và chưa quá hạn tiêm phòng, có chạy thử trong 30 ngày, nghỉ 14 ngày
+// giữa hai giải, giải chưa đầy...). HLV chỉ đề xuất / rút ngựa mình phụ trách (hoặc ngựa chưa giao cho ai).
 export function registerRace({ horseId, raceId, note }) {
   return authFetch("/api/races", {
     method: "POST",
@@ -65,6 +70,7 @@ export function recordResult(id, { result, prizeMoney, note, finishPosition, fin
 
 /** "1:58.4" or "118.4" (seconds) -> 118400 ms. Returns null for empty, NaN for bad input. */
 export function parseRaceTime(text) {
+  // Regex: phần "phút:" tuỳ chọn, rồi giây có thể kèm tối đa 3 chữ số thập phân. "1:58.4" -> 1*60 + 58.4 giây.
   const t = (text || "").trim();
   if (!t) return null;
   const m = /^(?:(\d+):)?(\d+(?:\.\d{1,3})?)$/.exec(t);
@@ -87,6 +93,7 @@ export function ordinal(n) {
   return `${n}${s}`;
 }
 
+// Chủ ngựa duyệt: backend kiểm lại toàn bộ điều kiện và ghi lệ phí giải vào EXPENSE_LOG (V36).
 export function approveEntry(id) {
   return authFetch(`/api/races/${id}/approve`, {
     method: "PUT",
@@ -100,6 +107,7 @@ export function rejectEntry(id, reason) {
   });
 }
 
+// Rút trước hoặc đúng hạn đăng ký -> hoàn lệ phí (huỷ dòng chi phí); rút sau hạn -> giữ phí.
 export function scratchEntry(id, reason) {
   return authFetch(`/api/races/${id}/scratch`, {
     method: "PUT",
@@ -138,6 +146,8 @@ export const STATE_TEXT = {
  * state is SCRATCHED, and used to show as "Pending Owner".
  */
 export function toEntryChip(entry) {
+  // state do backend tính khi đọc (RaceRepository.stateOf) từ result, approval_status và ngày đua; chip đi theo
+  // state (không theo approvalStatus) để đề xuất đã rút / quá hạn hiện đúng SCRATCHED / EXPIRED.
   if (entry.state === "FINISHED" && RESULT_TEXT[entry.result]) return RESULT_TEXT[entry.result];
   return STATE_TEXT[entry.state] || { label: entry.state || "—", tone: "neutral" };
 }
@@ -186,6 +196,8 @@ export function formatPrize(amount) {
 /** raceDate is a LocalDate "2026-11-26". Parsed as a local date, not UTC. */
 export function formatRaceDate(iso) {
   if (!iso) return "—";
+  // Tách "2026-11-26" thành số rồi new Date(y, m - 1, d): tháng trong JS đếm từ 0, và cách này tạo ngày theo giờ
+  // địa phương (new Date("2026-11-26") sẽ hiểu là UTC).
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }

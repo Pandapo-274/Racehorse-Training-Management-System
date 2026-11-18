@@ -37,6 +37,10 @@ public class AuditLogRepository {
      *
      * Chỉ nối điều kiện khi có giá trị, cùng cách TrainingSessionRepository.findAll.
      */
+    // Dựng câu SQL động bằng StringBuilder: chỉ nối điều kiện khi bộ lọc có giá trị. Giá trị
+    // luôn đi qua params (không nối chuỗi trực tiếp) nên vẫn an toàn trước SQL injection.
+    // CASE a.target_entity ... tra tên đối tượng (tên người, tên ngựa, tên giáo án) để trang
+    // Audit Log hiện "Symboli Rudolf" thay vì "HORSE #12".
     public List<AuditLog.Row> search(Filter f, int limit) {
         StringBuilder sql = new StringBuilder("""
                 SELECT TOP (:limit)
@@ -127,6 +131,7 @@ public class AuditLogRepository {
         return Timestamp.valueOf(LocalDateTime.ofInstant(i, ZoneOffset.UTC));
     }
 
+    // Escape các ký tự đặc biệt của LIKE (\ % _ [) để người dùng gõ "_" được hiểu là chữ "_".
     private static String escapeLike(String s) {
         return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("[", "\\[");
     }

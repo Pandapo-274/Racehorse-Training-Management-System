@@ -76,6 +76,8 @@ export function changePassword({ currentPassword, newPassword }) {
  * Quên và đặt lại mật khẩu - không cần đăng nhập
  * ------------------------------------------------------------------ */
 
+// POST JSON không gắn token. Lỗi được gói thành ApiError giống authFetch để trang hiển thị cùng một kiểu
+// (err.message, err.fieldErrors cho từng ô).
 async function publicPost(url, payload) {
   const res = await fetch(url, {
     method: "POST",
@@ -114,6 +116,8 @@ export function forgotPassword(email) {
   return publicPost("/api/auth/forgot-password", { email: email.trim() });
 }
 
+// token lấy từ link trong email (/reset-password?token=...). Backend chỉ lưu SHA-256 của token (lộ DB cũng
+// không dùng được link), hạn 30 phút, dùng một lần; đặt lại xong mọi phiên đăng nhập cũ bị huỷ.
 export function resetPassword({ token, newPassword }) {
   return publicPost("/api/auth/reset-password", { token, newPassword });
 }

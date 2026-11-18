@@ -33,15 +33,25 @@ import racehorse.backend.security.RequireRole;
 @Service
 public class PermissionService {
 
+    // AntPathMatcher so mẫu đường dẫn kiểu Spring ("/api/horses/{id}", "/api/**").
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 
     private final RequestMappingHandlerMapping mappings;
 
+    // RequestMappingHandlerMapping là bean nội bộ của Spring MVC, giữ bảng "URL -> method
+    // controller". @Qualifier chọn đúng bean tên requestMappingHandlerMapping (Spring có nhiều
+    // bean cùng kiểu).
     public PermissionService(
             @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mappings) {
         this.mappings = mappings;
     }
 
+    /*
+     * Kết quả có hai phần:
+     *   functions - các dòng trong PermissionCatalog, mỗi dòng kèm map vai trò -> ALL/OWN;
+     *   endpoints - danh sách mọi API thật (method, path, PUBLIC/SIGNED_IN/ROLES).
+     * Trang PermissionsPage.js của frontend chỉ hiện phần functions cho Club Manager.
+     */
     public PermissionMatrix.Response load() {
         List<PermissionMatrix.EndpointRow> endpoints = scanEndpoints();
 

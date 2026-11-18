@@ -29,6 +29,8 @@ import "../password/password.css"; // cho .pw-link-btn trên nút Change passwor
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^(\+?[0-9]{9,15})?$/;
 
+// Kiểm ba ô trước khi gửi, trả { tênÔ: câu lỗi }. (Mật khẩu hiện tại khi đổi email không kiểm ở đây:
+// backend đòi và trả lỗi errors.currentPassword nếu thiếu/sai.)
 function validate(form) {
   const e = {};
 
@@ -72,8 +74,18 @@ function Avatar({ url, fullName, size = "lg" }) {
   );
 }
 
+/*
+ * Trang /profile (mọi vai trò). Ba phần:
+ *   1. Ảnh đại diện: chọn file -> checkAvatar (kích thước, magic bytes) -> POST /api/profile/avatar.
+ *      Ảnh lưu ngay khi upload xong, không cần bấm Save.
+ *   2. Thông tin: họ tên, email, số điện thoại -> PUT /api/profile. Đổi email phải nhập mật khẩu hiện tại.
+ *   3. Thông tin chỉ đọc: vai trò, trạng thái tài khoản, ngày tham gia; link sang /change-password.
+ * Sau mỗi lần lưu, adopt() đổ dữ liệu máy chủ trả về vào form và updateStoredUser() cập nhật localStorage
+ * để sidebar / ProfileCircle hiện ngay tên và ảnh mới.
+ */
 export default function ProfilePage() {
   const navigate = useNavigate();
+  // useRef giữ tham chiếu tới <input type="file"> ẩn; nút "Change photo" gọi fileInput.current.click().
   const fileInput = useRef(null);
 
   const [profile, setProfile] = useState(null);
@@ -116,6 +128,7 @@ export default function ProfilePage() {
     [adopt, navigate]
   );
 
+  // Tải hồ sơ khi mở trang. AbortController huỷ request nếu người dùng rời trang trước khi có kết quả.
   useEffect(() => {
     const ctrl = new AbortController();
     load(ctrl.signal);
@@ -207,6 +220,7 @@ export default function ProfilePage() {
   const emailChanging =
     !!profile && form.email.trim().toLowerCase() !== (profile.email || "").toLowerCase();
 
+  // dirty = form khác dữ liệu đã lưu: nút "Save changes" chỉ bật khi có thay đổi.
   const dirty =
     profile &&
     (form.fullName !== (profile.fullName || "") ||

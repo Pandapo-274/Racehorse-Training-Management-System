@@ -12,6 +12,8 @@ import racehorse.backend.security.RequireRole;
  * backend chạy, không gõ tay. Nhờ vậy trang luôn khớp với thứ hệ thống thực
  * sự chặn: ai sửa @RequireRole thì ma trận tự đổi theo.
  */
+// Kết quả GET /api/permissions (chỉ CLUB_MANAGER), do PermissionService dựng bằng cách quét
+// mọi controller và đọc @RequireRole qua reflection.
 public final class PermissionMatrix {
 
     private PermissionMatrix() {

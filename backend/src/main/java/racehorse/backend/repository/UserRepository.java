@@ -7,6 +7,10 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.entity.UserRecord;
 import racehorse.backend.security.AuthInterceptor;
 
+/*
+ * Truy vấn bảng APP_USER (+ ROLE) và ghi AUDIT_LOG. Đây là repository được dùng nhiều
+ * nhất: hầu như service nào cũng gọi users.writeAudit(...) sau mỗi thao tác quan trọng.
+ */
 /** Chỉ nói chuyện với DB, không chứa logic nghiệp vụ. */
 @Repository
 public class UserRepository {
@@ -17,6 +21,7 @@ public class UserRepository {
         this.jdbc = jdbc;
     }
 
+    // Phần SELECT dùng chung cho findByLogin/findById; nối thêm WHERE ở từng hàm.
     private static final String SELECT_USER = """
             SELECT u.user_id, u.username, u.password_hash, u.full_name, u.email, u.status,
                    u.avatar_url, u.must_change_password, u.locked_until, r.role_name
@@ -29,6 +34,8 @@ public class UserRepository {
         return t == null ? null : t.toInstant(java.time.ZoneOffset.UTC);
     }
 
+    // RowMapper: đổi một dòng ResultSet thành UserRecord. rowNum không dùng nhưng bắt buộc
+    // có trong chữ ký hàm (functional interface RowMapper<T>).
     private static UserRecord mapUser(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
         return new UserRecord(rs.getInt("user_id"), rs.getString("username"),
                 rs.getString("password_hash"), rs.getString("full_name"),
@@ -78,6 +85,8 @@ public class UserRepository {
      * at the same moment both count. Returns the lock time (UTC) if this try
      * locked the account, else null.
      */
+    // CASE WHEN trong UPDATE: tăng bộ đếm; nếu đủ max thì đặt locked_until = bây giờ + m phút
+    // và đếm lại từ 0. OUTPUT INSERTED.* trả về giá trị SAU khi cập nhật.
     public java.time.Instant recordFailedLogin(int userId, int max, int lockMinutes) {
         return jdbc.sql("""
                 UPDATE APP_USER
@@ -103,6 +112,7 @@ public class UserRepository {
                 .update();
     }
 
+    // Hàm cũ (trước V39) - AuthInterceptor nay dùng findAccessState thay vì gọi hàm này.
     public boolean mustChangePassword(int userId) {
         return jdbc.sql("SELECT must_change_password FROM APP_USER WHERE user_id = :id")
                 .param("id", userId)
@@ -168,6 +178,15 @@ public class UserRepository {
                 .single();
     }
 
+    /*
+     * writeAudit: ghi một dòng AUDIT_LOG. Tham số:
+     *   userId       - ai làm (null nếu chưa xác định, vd. đăng nhập sai username)
+     *   action       - tên hành động, vd. "LOGIN", "APPROVE_HORSE_REQUEST"
+     *   targetEntity - loại đối tượng bị tác động, vd. "HORSE", "APP_USER"
+     *   targetId     - id đối tượng
+     *   result       - "SUCCESS" hoặc "DENIED"
+     *   ip           - IP người gọi
+     */
     public void writeAudit(Integer userId, String action, String targetEntity,
                            Integer targetId, String result, String ip) {
         writeAudit(userId, action, targetEntity, targetId, result, ip, null);

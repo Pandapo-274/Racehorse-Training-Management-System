@@ -25,6 +25,7 @@ const MAX_DAYS = 14;
 /** A task can be ticked (or reopened) on its day or this many days later: app.task.late-window-days. */
 const LATE_WINDOW_DAYS = 1;
 
+// Cộng n ngày vào chuỗi "yyyy-mm-dd" theo giờ địa phương (thêm "T00:00:00" không có "Z" để không lệch ngày).
 function addDays(iso, n) {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + n);
@@ -38,6 +39,8 @@ function addDays(iso, n) {
  * is the first day; "Until" is the last (at most 14 days). A horse that already
  * has that kind of task on a day is skipped, not handed to the new groom.
  */
+// Props: date (ngày bắt đầu, là ngày đang chọn ở danh sách việc), horses, grooms, onAssigned (tải lại danh sách).
+// State: form (ngựa / Groom / loại việc / ghi chú đã chọn), until (ngày cuối), info (kết quả: tạo / bỏ qua bao nhiêu).
 function AssignForm({ date, horses, grooms, onAssigned }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -50,6 +53,7 @@ function AssignForm({ date, horses, grooms, onAssigned }) {
   // A new first day moves the period with it.
   useEffect(() => setUntil(date), [date]);
 
+  // Các hàm toggle thêm / bỏ một phần tử trong mảng đã chọn (ô tick nhiều lựa chọn).
   const toggleType = (t) =>
     setForm((f) => ({
       ...f,
@@ -64,6 +68,8 @@ function AssignForm({ date, horses, grooms, onAssigned }) {
   const toggleAll = () =>
     setForm((f) => ({ ...f, horseIds: allChosen ? [] : horses.map((h) => h.horseId) }));
 
+  // Kiểm ở trình duyệt (có chọn đủ, khoảng ngày <= MAX_DAYS) rồi POST /api/daily-tasks/bulk. Backend trả
+  // { created, skipped, notes }: việc đã có trong ngày bị bỏ qua; notes = cảnh báo vượt hạn mức việc/ngày của Groom.
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -175,6 +181,11 @@ function AssignForm({ date, horses, grooms, onAssigned }) {
   );
 }
 
+/*
+ * Tab "Daily tasks": danh sách việc của một ngày (chọn ngày ở trên), form giao việc hàng loạt (AssignForm), và trên
+ * từng việc: Hand over (giao cho Groom khác khi việc còn mở), tick hộ Groom, xoá việc.
+ * Ngựa và danh sách Groom chỉ tải một lần; danh sách việc tải lại khi đổi ngày hoặc reloadKey tăng.
+ */
 function DailyTasks() {
   const navigate = useNavigate();
   const today = todayIso();
@@ -220,6 +231,8 @@ function DailyTasks() {
   const [handTo, setHandTo] = useState("");
   const [actionInfo, setActionInfo] = useState("");
 
+  // Giao lại việc đang mở cho Groom khác (PUT /api/daily-tasks/{id}/assignee); backend trả việc mới trong created[0]
+  // và cảnh báo (warnings) nếu Groom nhận đã quá nhiều việc trong ngày.
   const handOver = async (t) => {
     if (!handTo) return;
     setBusyId(t.taskId);
@@ -265,6 +278,7 @@ function DailyTasks() {
     }
   };
 
+  // Xoá việc (chỉ việc của hôm nay trở đi, backend kiểm lại). (Hai hàm này vẫn dùng window.confirm.)
   const remove = async (t) => {
     if (!window.confirm(`Delete "${TASK_TEXT[t.taskType]}" for ${t.horseName}?`)) return;
     setBusyId(t.taskId);
@@ -388,6 +402,7 @@ function DailyTasks() {
   );
 }
 
+// Tab "Missed": việc của những ngày trước chưa ai tick (GET /api/daily-tasks/missed, mặc định 7 ngày), gom theo Groom.
 function MissedTasks() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(null);
@@ -440,6 +455,7 @@ function MissedTasks() {
   );
 }
 
+// Ba tab của trang /trainer/stable-care; ?tab= trên URL (từ thông báo) chọn tab mở sẵn.
 const TABS = ["tasks", "rations", "missed"];
 
 export default function StableCarePage() {

@@ -29,6 +29,15 @@ import racehorse.backend.service.HorseAdminService;
 import racehorse.backend.service.HorsePhotoService;
 import racehorse.backend.service.HorseService;
 
+/*
+ * Hồ sơ ngựa (UC7 xem/sửa, UC8 sinh hiệu, phả hệ, ảnh), tiền tố /api/horses.
+ * Ba service phía sau:
+ *   HorseService       - xem, sửa thông tin, phả hệ, sinh hiệu, mã đăng ký/chuồng/HLV phụ trách
+ *   HorsePhotoService  - tải / gỡ ảnh ngựa
+ *   HorseAdminService  - chuyển chủ, nhận lại ngựa đã rút
+ * Các GET không gắn @RequireRole (ai đăng nhập cũng gọi được), nhưng HorseService.checkCanView
+ * chặn chủ ngựa xem ngựa không phải của mình, và list() trả danh sách khác nhau theo vai trò.
+ */
 @RestController
 @RequestMapping("/api/horses")
 public class HorseController {
@@ -71,6 +80,7 @@ public class HorseController {
         return adminService.readmit(id, request.stallNo(), user, http.getRemoteAddr());
     }
 
+    // Body của PUT /{id}/owner. Annotation viết đầy đủ tên package vì file không import chúng.
     public record TransferRequest(
             @jakarta.validation.constraints.NotNull(message = "New owner is required") Integer ownerId,
             @jakarta.validation.constraints.NotBlank(message = "Reason is required")
@@ -158,6 +168,8 @@ public class HorseController {
 
     @GetMapping
     public List<HorseResponse> list(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        // GET /api/horses - danh sách tuỳ vai trò: chủ ngựa thấy ngựa của mình, Groom thấy ngựa còn ở
+        // CLB, HLV thấy ngựa được giao, Manager/Vet thấy tất cả.
         return horseService.list(user);
     }
 
@@ -169,6 +181,7 @@ public class HorseController {
 
     @GetMapping("/{id}/pedigree")
     public PedigreeNode pedigree(@PathVariable int id,
+                                 // ?generations=N (mặc định 3, service kẹp trong 1..5).
                                  @RequestParam(defaultValue = "3") int generations,
                                  @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return horseService.getPedigree(id, generations, user);

@@ -12,6 +12,17 @@ import racehorse.backend.service.NotificationService;
  * targetEntity / targetId: thứ thông báo nói đến, để frontend mở đúng trang.
  * Để cả hai null nếu thông báo không trỏ tới đâu.
  */
+/*
+ * Ví dụ dùng trong service (gọi SAU writeAudit, bên trong cùng giao dịch):
+ *   notifications.notifyUser(ownerId, new Notice("HORSE_REQUEST_APPROVED",
+ *           "Registration approved", "Your horse X is now registered",
+ *           Notice.HORSE, horseId));
+ * Nếu giao dịch rollback thì thông báo cũng biến mất theo (cùng một transaction).
+ * Các hằng số bên dưới là giá trị hợp lệ của NOTIFICATION.target_entity (CK_NOTIF_target).
+ * Riêng SUPPLY KHÔNG có trong CHECK constraint và hiện không được code nào dùng: thông
+ * báo về kho đang gửi với target null. Nếu ai đó dùng Notice.SUPPLY làm target thì câu
+ * INSERT sẽ bị CK_NOTIF_target chặn (phải thêm migration mở rộng constraint trước).
+ */
 public record Notice(String type, String title, String message,
                      String targetEntity, Integer targetId) {
 

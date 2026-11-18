@@ -18,6 +18,16 @@ import racehorse.backend.repository.MedicalRecordRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * UC14 - ghi lần khám. Những gì một lần khám có thể làm, trong MỘT giao dịch:
+ *   1. INSERT MEDICAL_RECORD;
+ *   2. nếu khám cho một báo cáo sự cố: đóng báo cáo (EXAMINED) - ngựa thoát khỏi IncidentGuard;
+ *   3. nếu có healthStatus (MONITOR / INJURED / QUARANTINE): cập nhật HORSE.status;
+ *   4. nếu có cân nặng: cập nhật HORSE.weight (đường duy nhất đổi cân nặng);
+ *   5. audit; nếu trạng thái thật sự đổi thì báo chủ + HLV, và cảnh báo rủi ro đăng ký giải.
+ * KHÔNG đặt được ELIGIBLE ở đây: đưa ngựa về khoẻ chỉ qua xác nhận hồi phục (HealthClearanceService),
+ * nơi bắt buộc mọi chấn thương đã lành.
+ */
 @Service
 public class MedicalRecordService {
 
@@ -55,6 +65,7 @@ public class MedicalRecordService {
         HorseResponse horse = horses.findById(raw.horseId())
                 .orElseThrow(() -> fieldError("horseId", "Horse #" + raw.horseId() + " does not exist"));
 
+        // recordType bỏ trống = EXAM (khám bệnh).
         String recordType = (raw.recordType() == null || raw.recordType().isBlank())
                 ? DEFAULT_TYPE : raw.recordType();
 
@@ -134,6 +145,7 @@ public class MedicalRecordService {
         }
     }
 
+    // Gom mọi lỗi theo ô rồi ném một lần (400 kèm map lỗi).
     private void validate(MedicalExamRequest r, HorseResponse horse, String recordType) {
         Map<String, String> errors = new HashMap<>();
 

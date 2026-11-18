@@ -19,6 +19,8 @@ import {
 } from "./horseApi";
 import { listRequests, submitRequest, cancelRequest, toRequestStatus } from "./horseRequestApi";
 
+// Giá trị ban đầu của form. recordType mặc định ACADEMY (ngựa vào CLB huấn luyện); PEDIGREE = chỉ khai báo
+// để làm cha mẹ trong phả hệ.
 const EMPTY = {
   horseName: "", breed: "", horseGender: "", dateOfBirth: "", color: "", note: "",
   recordType: "ACADEMY", sireId: "", damId: "",
@@ -30,6 +32,7 @@ function todayIso() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// Kiểm ở trình duyệt, cùng luật với backend (độ dài, ngày sinh không ở tương lai, tuổi theo loại hồ sơ).
 function validate(form) {
   const e = {};
   if (!form.horseName.trim()) e.horseName = "Tell us the horse's name";
@@ -62,6 +65,11 @@ function Field({ id, label, error, hint, children }) {
   );
 }
 
+/*
+ * Trang /horse-owner/request của chủ ngựa: phần trên là form gửi yêu cầu đăng ký (POST /api/horse-requests),
+ * phần dưới là danh sách yêu cầu đã gửi với trạng thái PENDING / APPROVED / REJECTED / CANCELLED.
+ * Yêu cầu còn PENDING thì chủ tự huỷ được (PUT /api/horse-requests/{id}/cancel), không cần Manager.
+ */
 export default function HorseRequestPage() {
   const navigate = useNavigate();
   const dialog = useAppDialog();
@@ -81,6 +89,7 @@ export default function HorseRequestPage() {
     listParentCandidates(ctrl.signal).then((h) => setHerd(h || [])).catch(() => {});
     return () => ctrl.abort();
   }, []);
+  // useMemo: chỉ lọc lại danh sách cha / mẹ khi herd đổi, không lọc lại ở mỗi lần render.
   const sires = useMemo(() => herd.filter((h) => SIRE_GENDERS.has(h.horseGender)), [herd]);
   const dams = useMemo(() => herd.filter((h) => DAM_GENDERS.has(h.horseGender)), [herd]);
 
@@ -110,6 +119,7 @@ export default function HorseRequestPage() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
+  // Gửi yêu cầu: validate -> submitRequest -> xoá form và tải lại danh sách. Manager nhận thông báo HORSE_REQUEST.
   const submit = async (e) => {
     e.preventDefault();
 

@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
  * ownerName và reviewerName ghép sẵn từ APP_USER để màn hình không phải gọi
  * thêm một vòng nữa chỉ để đổi id thành tên.
  */
+// Hậu tố "Row" trong dự án = một dòng đọc từ DB (thường là kết quả JOIN) do RowMapper
+// trong repository dựng ra, dùng để trả thẳng về frontend.
 public record HorseRequestRow(
         int requestId,
         int ownerId, String ownerName,

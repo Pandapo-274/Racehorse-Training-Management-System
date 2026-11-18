@@ -16,6 +16,8 @@ import {
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
 
+// Một dòng yêu cầu đang chờ: ô ghi chú + hai nút Approve / Reject. Mỗi dòng có state riêng (note, busy...)
+// nên xử lý dòng này không ảnh hưởng dòng khác. onDone(kết quả) báo trang cha tải lại danh sách.
 function PendingRow({ row, horseBase, onDone }) {
   const navigate = useNavigate();
   const dialog = useAppDialog();
@@ -40,6 +42,8 @@ function PendingRow({ row, horseBase, onDone }) {
     }
   };
 
+  // Duyệt: xác nhận lần hai với con số cụ thể (scheduledSessions, openPlans, chuồng) do backend tính sẵn,
+  // rồi PUT /api/horse-withdrawals/{id}/approve - WithdrawalService.approve làm mọi việc trong một giao dịch.
   const approve = async () => {
     setNoteError("");
     const confirmed = await dialog.confirm({
@@ -110,6 +114,8 @@ function PendingRow({ row, horseBase, onDone }) {
   );
 }
 
+// Trang /manager/withdrawals: tải mọi yêu cầu, tách nhóm đang chờ (PendingRow) và lịch sử đã xử lý.
+// results giữ dòng kết quả của yêu cầu vừa xử lý (dòng đó đã rời danh sách chờ).
 export default function WithdrawalReviewPage() {
   const navigate = useNavigate();
   const user = getUser();

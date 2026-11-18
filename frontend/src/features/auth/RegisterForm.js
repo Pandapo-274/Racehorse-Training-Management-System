@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import { ApiError } from "./authService";
 import { registerAccount } from "./registerService";
 
+// Giá trị ban đầu của form đăng ký (UC1). Chỉ tạo được tài khoản HORSE_OWNER; nhân viên do Club Manager tạo.
 const EMPTY = {
   fullName: "", username: "", email: "", phone: "", password: "", repeatPassword: "",
 };
@@ -43,6 +44,11 @@ function validate(f) {
   return e;
 }
 
+/*
+ * Form đăng ký chủ ngựa. validate() chạy trước ở trình duyệt (cùng luật với RegisterRequest.java), sau đó
+ * registerAccount() gửi POST /api/auth/register. Thành công thì lưu kết quả vào "created" để hiện màn hình
+ * "đã tạo tài khoản" (không tự đăng nhập). Lỗi 400/409 từ backend được gắn vào đúng ô (fieldErrors).
+ */
 export default function RegisterForm() {
   const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY);
@@ -59,6 +65,7 @@ export default function RegisterForm() {
     setSubmitError("");
   };
 
+  // async/await: đợi Promise của registerAccount; mọi lỗi (mạng hoặc HTTP) rơi vào catch.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError("");
@@ -70,6 +77,7 @@ export default function RegisterForm() {
     try {
       setCreated(await registerAccount(form));
     } catch (err) {
+      // Không phải ApiError = fetch không tới được máy chủ (backend chưa chạy, mất mạng).
       if (!(err instanceof ApiError)) {
         setSubmitError("Cannot reach the server. Check that the backend is running and try again.");
       } else if (err.status === 409 || err.status === 400) {

@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
  * cùng một kiểu để mô hình vẽ được bệnh sử - chỗ nào hay chấn thương lặp lại
  * chỉ thấy được khi vẽ cả dấu cũ.
  */
+// Dùng cho UC15 (đánh dấu chấn thương trên hình ngựa): InjuryMarkerController trả danh
+// sách dấu của một con ngựa, frontend vẽ chấm tại (coordinateX, coordinateY).
 public record InjuryMarkerRow(
         int injuryId,
         int recordId,

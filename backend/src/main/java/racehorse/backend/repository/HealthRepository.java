@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import racehorse.backend.dto.HorseHealthItem;
 
+// SQL cho bảng sức khoẻ (UC13). Chỉ tính ngựa ACADEMY còn ở CLB (bỏ PEDIGREE và ngựa đã rút).
 @Repository
 public class HealthRepository {
 
@@ -28,6 +29,7 @@ public class HealthRepository {
      * con "ELIGIBLE" mà bác sĩ không bao giờ khám được.
      */
     public Map<String, Integer> countByStatus() {
+        // Khởi tạo đủ 4 trạng thái bằng 0 trước, để trạng thái không có con nào vẫn hiện "0" trên màn hình.
         Map<String, Integer> result = new LinkedHashMap<>();
         for (String s : List.of("ELIGIBLE", "MONITOR", "INJURED", "QUARANTINE")) result.put(s, 0);
         jdbc.sql("SELECT status, COUNT(*) AS cnt FROM HORSE "

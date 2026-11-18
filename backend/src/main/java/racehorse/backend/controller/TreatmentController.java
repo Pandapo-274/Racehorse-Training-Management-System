@@ -30,6 +30,15 @@ import racehorse.backend.service.TreatmentService;
  * người thật sự cho thuốc theo đơn và chủ ngựa có quyền biết ngựa mình đang
  * dùng gì - nhưng kê thuốc thì chỉ người khám.
  */
+/*
+ *   POST /api/treatments                   bác sĩ kê đơn (gắn với một lần khám)
+ *   GET  /api/treatments?horseId=          đơn của một ngựa (kể cả đã hết hạn)
+ *   GET  /api/treatments/active            mọi đơn đang dùng trên toàn đàn (nhân sự chuồng trại)
+ *   GET  /api/treatments/by-record/{id}    đơn theo một lần khám
+ *   PUT  /api/treatments/{id}/consent      chủ ngựa đồng ý điều trị lớn
+ *   PUT  /api/treatments/{id}/reject-consent chủ ngựa từ chối điều trị lớn
+ *   PUT  /api/treatments/{id}/end          bác sĩ kết thúc đơn hôm nay
+ */
 @RestController
 @RequestMapping("/api/treatments")
 public class TreatmentController {
@@ -75,6 +84,8 @@ public class TreatmentController {
     @GetMapping("/active")
     @RequireRole({"VETERINARIAN", "HEAD_TRAINER", "GROOM", "CLUB_MANAGER"})
     public List<TreatmentRow> listActive() {
+        // Mở danh sách đơn đang dùng cũng là lúc chạy luôn hai việc nhắc của TreatmentReminderService
+        // (ngoài lịch chạy 6 giờ một lần), để bác sĩ thấy thông báo mới ngay.
         reminders.checkCompletedTreatments();
         reminders.checkWaitingIncidentReports();
         return service.listActive();
@@ -88,6 +99,7 @@ public class TreatmentController {
         return service.listForRecord(recordId, user);
     }
 
+    // (Javadoc ngay dưới đây thuộc về endpoint /end ở cuối file; endpoint này là chủ ngựa ĐỒNG Ý điều trị.)
     /** Kết thúc một mục điều trị hôm nay. Không có đường xoá - xem TreatmentService.end. */
     @PutMapping("/{id}/consent")
     @RequireRole({"HORSE_OWNER"})

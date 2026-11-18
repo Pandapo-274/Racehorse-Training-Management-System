@@ -24,9 +24,12 @@ import racehorse.backend.config.WebConfig;
 @RequestMapping("/api/public/club-stats")
 public class ClubStatsController {
 
+    // Record khai báo ngay trong controller vì chỉ dùng ở đây.
     public record ClubStats(int horsesInTraining, int activePlans, int racesThisSeason, int season) {
     }
 
+    // Controller này gọi JdbcTemplate trực tiếp (không qua service/repository) vì chỉ có một câu
+    // SQL đọc ba con số; dùng "?" (tham số theo vị trí) thay cho ":ten" của JdbcClient.
     private final JdbcTemplate jdbc;
 
     public ClubStatsController(JdbcTemplate jdbc) {

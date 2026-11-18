@@ -49,6 +49,7 @@ public class TrainerDashboardController {
     @GetMapping
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
     public TrainerDashboard.Response get(
+            // defaultValue = "" + DEFAULT_WEEKS: annotation chỉ nhận hằng chuỗi, nên ghép "" với hằng số int.
             @RequestParam(defaultValue = "" + DEFAULT_WEEKS) int weeks,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         int safeWeeks = Math.max(1, Math.min(MAX_WEEKS, weeks));

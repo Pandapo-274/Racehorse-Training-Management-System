@@ -10,6 +10,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /** Kiểu dữ liệu của chức năng vật tư (SUPPLY_STOCK). */
+// Kho vật tư (Flow 4): SupplyService/SupplyController dùng các record này. Mọi thay đổi số
+// lượng đều ghi một dòng SUPPLY_MOVEMENT (sổ biến động) kèm theo.
 public final class SupplyModels {
 
     private SupplyModels() {
@@ -98,6 +100,13 @@ public final class SupplyModels {
      * A shelf count. Stock does not appear by itself, so a count HIGHER than the
      * record needs a reason (and a note for OTHER); a lower or equal count does not
      * (wear and loss are normal). See SupplyService.count.
+     */
+    /*
+     * Ý nghĩa các lý do khi đếm ra NHIỀU hơn sổ sách:
+     *   RECOUNT  - lần đếm trước đếm sai     RETURNED - có người trả lại
+     *   FOUND    - tìm thấy hàng thất lạc   NOT_USED - đã lấy nhưng không dùng
+     *   OTHER    - lý do khác (bắt buộc ghi note)
+     * Kết quả ghi thành SUPPLY_MOVEMENT loại ADJUST.
      */
     public record CountRequest(
             @NotNull(message = "Quantity is required") @DecimalMin(value = "0", message = "Quantity cannot be negative")

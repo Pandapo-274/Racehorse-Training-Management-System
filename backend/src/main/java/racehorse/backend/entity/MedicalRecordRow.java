@@ -12,6 +12,8 @@ import racehorse.backend.dto.HorseResponse;
  * gọi thêm một vòng nữa chỉ để đổi id thành tên - cùng cách HorseResponse làm
  * với ownerName.
  */
+// recordType: EXAM | VACCINATION | DEWORMING | FARRIER. healthStatus: kết luận sức khoẻ
+// của lần khám (ELIGIBLE | MONITOR | INJURED | QUARANTINE), cũng được ghi vào HORSE.status.
 public record MedicalRecordRow(
         int recordId,
         int horseId, String horseName,

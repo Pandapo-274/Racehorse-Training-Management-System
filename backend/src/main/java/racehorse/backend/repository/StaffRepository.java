@@ -60,6 +60,8 @@ public class StaffRepository {
             LEFT JOIN APP_USER tr ON tr.user_id = u.trainer_id
             """;
 
+    // Đọc một dòng của SELECT_STAFF thành StaffRow. getObject(..., Integer.class) để giữ được
+    // null (getInt sẽ trả 0 khi cột NULL).
     private static StaffRow map(ResultSet rs, int rowNum) throws SQLException {
         return new StaffRow(
                 rs.getInt("user_id"),
@@ -115,6 +117,8 @@ public class StaffRepository {
                          END,
                          role_name
                 """)
+                // Lambda RowMapper: với mỗi vai trò, lọc danh sách everyone (đã đọc ở trên) lấy
+                // những người cùng vai trò. Hai câu SQL thay vì một câu cho mỗi vai trò.
                 .query((rs, n) -> {
                     String roleName = rs.getString("role_name");
                     return new StaffGroup(
@@ -146,6 +150,8 @@ public class StaffRepository {
      * lịch từ hôm nay trở đi. Buổi SCHEDULED của ngày đã qua không tính: không
      * ai giao lại được một buổi trong quá khứ.
      */
+    // CAST(GETDATE() AS DATE) = đầu ngày hôm nay theo giờ máy SQL Server (giờ địa phương), khớp
+    // với session_date vốn là giờ địa phương người dùng nhập.
     public int countOpenAssignments(int userId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM TRAINING_SESSION
@@ -248,6 +254,8 @@ public class StaffRepository {
     }
 
     /** V37: Đếm số Groom đang ACTIVE được gán cho một Head Trainer (trừ excludeUserId nếu đang cập nhật). */
+    // Mẹo "(:excludeId IS NULL OR ...)": một câu SQL dùng được cho cả hai trường hợp
+    // có và không có id cần loại trừ.
     public int countActiveGroomsOfTrainer(int trainerId, Integer excludeUserId) {
         return jdbc.sql("""
                 SELECT COUNT(*)
@@ -424,6 +432,8 @@ public class StaffRepository {
      */
     public List<StaffRow> handoverCandidates(String roleName, int excludeId, Integer trainerId) {
         String sameTeam = trainerId == null ? "" : " AND u.trainer_id = :trainer";
+        // Câu SQL dựng có điều kiện: chỉ thêm "AND u.trainer_id = :trainer" khi có trainerId.
+        // param(...) trả về StatementSpec để nối tiếp; gán lại q = q.param(...) cho rõ ràng.
         var q = jdbc.sql(SELECT_STAFF
                         + " WHERE r.role_name = :role AND u.status = 'ACTIVE' AND u.user_id <> :id"
                         + sameTeam + " ORDER BY u.full_name")
@@ -515,6 +525,7 @@ public class StaffRepository {
                 .single();
     }
 
+    // Tiện ích cho các câu COUNT chỉ có một tham số :id.
     private int count(String sql, int id) {
         return jdbc.sql(sql).param("id", id).query(Integer.class).single();
     }

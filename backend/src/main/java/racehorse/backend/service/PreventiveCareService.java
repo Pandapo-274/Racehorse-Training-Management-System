@@ -100,6 +100,7 @@ public class PreventiveCareService {
      * One care type of one horse, without the owner check of forHorse - for
      * other services (race eligibility, #3). Empty if the type is unknown.
      */
+    // Dùng bởi RaceService để cảnh báo khi đăng ký giải (vd. tiêm phòng quá hạn / chưa từng tiêm).
     public java.util.Optional<PreventiveCareItem> statusOf(int horseId, String careType) {
         LocalDate today = LocalDate.now();
         return care.findByHorse(horseId).stream()
@@ -119,6 +120,7 @@ public class PreventiveCareService {
      * hạn chưa" là một câu hỏi về lúc đọc màn hình, trả lời lại mỗi lần tải
      * trang. Lẫn hai loại này là nguồn của những lỗi rất khó nhìn ra.
      */
+    // ChronoUnit.DAYS.between(a, b): số ngày từ a tới b (âm nếu b ở trước a).
     private static PreventiveCareItem classify(PreventiveCareRow r, LocalDate today, int window) {
         Integer daysUntilDue = r.nextDueDate() == null
                 ? null

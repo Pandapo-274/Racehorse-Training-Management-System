@@ -15,12 +15,27 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Phát hành và kiểm tra JWT. Token được KÝ (chống sửa), không MÃ HOÁ: đừng nhét dữ liệu nhạy cảm vào. */
+/*
+ * JWT (JSON Web Token) gồm 3 phần base64url nối bằng dấu chấm: header.payload.signature.
+ * Payload hệ thống này phát ra, ví dụ:
+ *   { "jti": "6f1c...", "sub": "12", "username": "anh.dq", "role": "HEAD_TRAINER",
+ *     "iat": 1763350000, "exp": 1763378800 }
+ * Chữ ký HS256 = HMAC-SHA256(header.payload, JWT_SECRET). Ai không có JWT_SECRET thì
+ * không thể tạo/sửa token hợp lệ, nên backend tin được role trong token mà không cần
+ * lưu "phiên đăng nhập" phía server (stateless). Nhược điểm của stateless: muốn thu
+ * hồi token trước hạn phải có danh sách đen (TokenBlacklist + APP_USER.tokens_valid_after).
+ */
 @Service
 public class JwtService {
 
     private final SecretKey key;
     private final long expirationMinutes;
 
+    /*
+     * JWT_SECRET đọc từ backend/.env (thiếu biến này backend không khởi động được vì
+     * ${app.jwt.secret} không có giá trị mặc định). HS256 đòi khoá tối thiểu 256 bit
+     * = 32 byte, nên kiểm tra độ dài ngay khi khởi động để báo lỗi rõ ràng.
+     */
     public JwtService(@Value("${app.jwt.secret}") String secret,
                       @Value("${app.jwt.expiration-minutes:480}") long expirationMinutes) {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
@@ -31,6 +46,8 @@ public class JwtService {
         this.expirationMinutes = expirationMinutes;
     }
 
+    // Gọi khi đăng nhập thành công (AuthService.login, GoogleAuthService). Kết quả gửi về
+    // frontend, frontend lưu vào localStorage "token" và gắn vào mọi request sau đó.
     public String generate(int userId, String username, String role) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -61,6 +78,7 @@ public class JwtService {
         }
     }
 
+    // Trả về cho frontend trong LoginResponse (expiresIn) để biết token sống bao lâu.
     public long expiresInSeconds() {
         return expirationMinutes * 60;
     }

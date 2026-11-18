@@ -179,6 +179,8 @@ public class InjuryRepository {
      * cùng khép một chấn thương thì người sau nhận 0 dòng và service biết là
      * mình đến muộn.
      */
+    // (Javadoc ngay trên thuộc về markRecovered bên dưới: updateStatus không có điều kiện status <> 'RECOVERED'.
+    // CASE WHEN: đặt RECOVERED thì ghi recovered_at, trạng thái khác thì xoá recovered_at về NULL.)
     public int updateStatus(int injuryId, String status) {
         return jdbc.sql("""
                 UPDATE INJURY

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.dto.EvaluateSessionRequest;
 import racehorse.backend.dto.SessionResponse;
 
+// SQL cho màn nhận xét buổi tập (UC12) và hạn nhận xét 48 giờ.
 @Repository
 public class SessionRepository {
 
@@ -62,6 +63,8 @@ public class SessionRepository {
                 rs.getObject("auto_reviewed_at", LocalDateTime.class));
     }
 
+    // OFFSET 0 ROWS FETCH NEXT n ROWS ONLY = cú pháp SQL Server để lấy n dòng đầu (như LIMIT).
+    // limit là int đã kẹp 1..200 ở service nên nối thẳng vào chuỗi là an toàn.
     public List<SessionResponse> search(String status, Integer horseId, int limit, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();
@@ -103,6 +106,8 @@ public class SessionRepository {
     /**
      * Lưu kết quả đánh giá của Head Trainer (bao gồm cả khi xem xét lại từ khu lưu trữ ARCHIVED_AUTO).
      */
+    // CASE WHEN :trialRun ...: chỉ đổi is_trial_run / video_url khi client gửi trialRun; không gửi thì
+    // giữ nguyên giá trị cũ. review_status = 'REVIEWED' đánh dấu đã có nhận xét chính thức.
     public int saveEvaluation(int sessionId, EvaluateSessionRequest r, String expectedStatus, String finalStatus,
                               int evaluatorId) {
         return jdbc.sql("""
@@ -151,6 +156,7 @@ public class SessionRepository {
     /**
      * V37: Tạo báo cáo sơ bộ tự động từ chỉ số Groom đã nhập và chuyển vào khu lưu trữ (ARCHIVED_AUTO).
      */
+    // ISNULL(cột, giá trị mới): chỉ điền khi cột đang trống, không ghi đè số liệu Groom đã gửi.
     public int markAutoArchived(int sessionId, int actualDistance, int durationMinutes,
                                 Integer avgHeartRate, String evaluation, String autoRemarks) {
         return jdbc.sql("""

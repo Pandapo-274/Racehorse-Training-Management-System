@@ -43,6 +43,13 @@ function BellIcon() {
   );
 }
 
+/*
+ * Props: className (lớp CSS của dashboard đang dùng). State:
+ *   open    - bảng thông báo đang mở hay không
+ *   unread  - số chưa đọc (hiện chấm đỏ khi > 0)
+ *   items   - danh sách 20 thông báo mới nhất (chỉ tải khi mở bảng)
+ * wrapRef bọc cả nút và bảng, để biết cú bấm chuột nằm trong hay ngoài (bấm ngoài thì đóng).
+ */
 export default function NotificationBell({ className = "" }) {
   const navigate = useNavigate();
   const wrapRef = useRef(null);
@@ -66,6 +73,8 @@ export default function NotificationBell({ className = "" }) {
     [navigate]
   );
 
+  // Hỏi số chưa đọc ngay khi gắn component, rồi mỗi POLL_MS (chỉ khi tab đang hiển thị) và mỗi khi cửa sổ
+  // được focus lại. Cleanup huỷ request, dừng setInterval và gỡ listener khi component bị gỡ.
   useEffect(() => {
     const controller = new AbortController();
     refreshCount(controller.signal);
@@ -119,6 +128,8 @@ export default function NotificationBell({ className = "" }) {
     };
   }, [open]);
 
+  // Bấm một thông báo: đánh dấu đã đọc ngay trên giao diện (optimistic update), gửi PUT sau, rồi chuyển tới
+  // trang mà notificationTarget() chọn theo loại thông báo và vai trò.
   const openItem = (n) => {
     if (!n.read) {
       // Cập nhật giao diện trước, gửi sau: người dùng đang rời trang, không
@@ -134,6 +145,7 @@ export default function NotificationBell({ className = "" }) {
     }
   };
 
+  // "Mark all as read": cũng cập nhật giao diện trước rồi mới gửi PUT /api/notifications/read-all.
   const readAll = () => {
     setItems((list) => list.map((x) => ({ ...x, read: true })));
     setUnread(0);

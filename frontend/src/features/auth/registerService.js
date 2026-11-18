@@ -11,6 +11,7 @@ import { authFetch } from "./authService";
 export const SELF_SERVICE_ROLE = "HORSE_OWNER";
 
 /** Thành công: 201 { userId, username, fullName, email, roleName, status }. Lỗi: throw ApiError. */
+// Gọi bằng authFetch dù chưa có token: lúc đó authFetch đơn giản không gắn header Authorization.
 export function registerAccount(form) {
   return authFetch("/api/auth/register", {
     method: "POST",

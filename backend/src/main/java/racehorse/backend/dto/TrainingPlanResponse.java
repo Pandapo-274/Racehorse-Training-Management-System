@@ -5,6 +5,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+// Chi tiết một giáo án (GET /api/training-plans/{id}) kèm danh sách giai đoạn và bản sửa
+// đang chờ duyệt (nếu có). Các constructor phụ phục vụ các câu SQL không đọc đủ cột.
 public record TrainingPlanResponse(
         int planId, int horseId, String horseName, Integer groomId, String groomName,
         String planName, LocalDate startDate, LocalDate endDate, String status,
@@ -33,6 +35,7 @@ public record TrainingPlanResponse(
     }
 
     /** Record bất biến nên muốn gắn thêm danh sách giai đoạn thì phải tạo bản mới. */
+    // Kiểu "wither": trả về bản sao với một trường thay đổi, vì record không có setter.
     public TrainingPlanResponse withPhases(List<Phase> newPhases) {
         return new TrainingPlanResponse(planId, horseId, horseName, groomId, groomName, planName, startDate, endDate,
                 status, createdBy, createdByName, createdAt, ownerNote, ownerReviewedAt, newPhases, pendingUpdate);
@@ -48,6 +51,7 @@ public record TrainingPlanResponse(
                         Integer heartRateCeiling, LocalDate startDate, LocalDate endDate,
                         Integer minGapMinutes, BigDecimal targetVelocity) {}
 
+    // Bản sửa đang chờ chủ ngựa duyệt, đọc ra từ cột pending_update_json (JSON -> record).
     public record PendingUpdate(String status, LocalDateTime requestedAt, Integer groomId,
                                 String groomName, String planName,
                                 List<TrainingPlanRequest.PhaseRequest> phases) {}

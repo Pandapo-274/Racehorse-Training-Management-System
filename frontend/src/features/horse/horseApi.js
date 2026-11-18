@@ -1,6 +1,16 @@
 // src/features/horse/horseApi.js
+/*
+ * Module API + tiện ích hiển thị cho tính năng ngựa (dùng ở mọi vai trò).
+ * Phần 1: các hàm gọi /api/horses/... (bọc authFetch, trả Promise JSON).
+ * Phần 2: các luật nhỏ chép từ backend (canEditHorse, ageProblem, AGE_RULES, SIRE_GENDERS...) để giao diện
+ *         ẩn/khoá nút trước khi gửi. Backend vẫn kiểm lại; đổi luật ở HorsePolicy.java thì đổi cả ở đây.
+ * Phần 3: bảng nhãn hiển thị (STATUS_TEXT, GENDER_TEXT, ...) và hàm định dạng ngày giờ, cân nặng.
+ * Quy ước CLAUDE.md: thêm giá trị enum mới để hiển thị thì thêm vào các bảng ở đây, không viết thẳng vào JSX.
+ * Tham số "signal" (AbortController.signal) cho phép huỷ request khi component bị gỡ khỏi màn hình.
+ */
 import { ApiError, authFetch, getToken } from "../auth/authService";
 
+// Ảnh ngựa dùng chung luật kiểm file với ảnh đại diện (đọc magic bytes ở trình duyệt).
 export { checkAvatar as checkHorsePhoto } from "../profile/profileApi";
 
 const API = "/api/horses";
@@ -82,6 +92,8 @@ export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+// Không dùng authFetch vì body là FormData: trình duyệt phải tự đặt Content-Type multipart kèm "boundary";
+// authFetch sẽ đặt "application/json" làm hỏng request.
 export async function uploadHorsePhoto(id, file) {
   const body = new FormData();
   body.append("file", file);
@@ -113,6 +125,7 @@ export function removeHorsePhoto(id) {
   return authFetch(`${API}/${id}/photo`, { method: "DELETE" });
 }
 
+// Các hàm can.../get...Path: quyết định hiện nút nào và đi trang nào theo vai trò (chỉ là tiện lợi giao diện).
 export function canEditHorse(user, horse) {
   return !!user && !!horse && user.role === "HORSE_OWNER" && horse.ownerId === user.userId;
 }
@@ -121,6 +134,7 @@ export function canReviewRequests(user) {
   return !!user && (user.role === "CLUB_MANAGER");
 }
 
+// (Lưu ý: App.js không khai báo /trainer/horse-requests; HLV hiện không có trang duyệt yêu cầu.)
 export function getRequestsPath(user) {
   return user?.role === "HEAD_TRAINER" ? "/trainer/horse-requests" : "/manager/horse-requests";
 }
@@ -144,6 +158,7 @@ export function getHorseBasePath(user) {
   return paths[user?.role] || "/login";
 }
 
+// Nhãn + tông màu cho trạng thái sức khoẻ. tone được dùng làm hậu tố lớp CSS (vd. chip--good, chip--critical).
 const STATUS_TEXT = {
   ELIGIBLE:   { label: "Healthy", tone: "good",   hint: "Cleared as healthy by the vet" },
   MONITOR:    { label: "Monitor",    tone: "warning",  hint: "Needs watching" },
@@ -176,6 +191,7 @@ export function canRequestWithdrawal(user, horse) {
   return canEditHorse(user, horse) && !isPedigreeOnly(horse) && !isWithdrawn(horse);
 }
 
+// Phải giống HorsePolicy.java: FOAL_BELOW = 2, RACING_MAX_AGE = 10, CLUB_MAX_AGE = 25.
 export const AGE_RULES = { foalBelow: 2, racingMax: 10, clubMax: 25 };
 
 export const RECORD_TYPES = {
@@ -187,6 +203,7 @@ export function isPedigreeOnly(horse) {
   return horse?.recordType === "PEDIGREE";
 }
 
+// Nhóm tuổi tính ngay trên trình duyệt từ ngày sinh (không lưu trong DB), giống backend.
 export function toStage(horse) {
   if (isPedigreeOnly(horse)) {
     return { key: "PEDIGREE", label: "Pedigree only", tone: "neutral",
@@ -239,6 +256,7 @@ export function toGender(g) {
   return GENDER_TEXT[g] || "—";
 }
 
+// Giống HorseService.SIRE_GENDERS / DAM_GENDERS: lọc ô chọn cha / mẹ theo giới tính.
 export const SIRE_GENDERS = new Set(["COLT", "STALLION"]);
 export const DAM_GENDERS = new Set(["FILLY", "MARE"]);
 
@@ -283,6 +301,11 @@ export function formatDate(iso) {
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/*
+ * Giờ hệ thống từ backend (created_at, issued_at...) là UTC nhưng KHÔNG kèm múi giờ ("2026-11-17T03:00:00").
+ * new Date(chuỗi không múi giờ) sẽ hiểu là giờ địa phương -> lệch 7 tiếng ở Việt Nam. Vì vậy thêm "Z"
+ * (UTC) khi chuỗi chưa có múi giờ. Chuỗi đã có "Z" hoặc "+07:00" (Instant) thì giữ nguyên.
+ */
 export function parseServerTime(iso) {
   if (!iso) return null;
   const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
@@ -290,6 +313,7 @@ export function parseServerTime(iso) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// local = true cho giờ người dùng NHẬP (sessionDate, examDate): đó là giờ địa phương, không thêm "Z".
 export function formatDateTime(iso, { local = false } = {}) {
   if (!iso) return "—";
   const d = local ? new Date(iso) : parseServerTime(iso) || new Date(NaN);

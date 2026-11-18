@@ -34,6 +34,15 @@ import racehorse.backend.service.HorseService;
  * ownerId luôn lấy từ token, không nhận từ client, nên không ai gửi yêu cầu
  * thay người khác được.
  */
+/*
+ * Ghi chú cập nhật: chú thích trên nhắc HorseController.create, nhưng endpoint POST /api/horses
+ * đã bị bỏ; HorseService.create giờ chỉ được gọi nội bộ từ HorseRequestService.approve.
+ *
+ * Vòng đời một yêu cầu (bảng HORSE_REQUEST):
+ *   PENDING --(Manager duyệt: cấp mã đăng ký + chuồng [+ HLV])--> APPROVED (tạo dòng HORSE)
+ *   PENDING --(Manager từ chối, bắt buộc lý do)----------------> REJECTED
+ *   PENDING --(chủ ngựa tự huỷ)--------------------------------> CANCELLED
+ */
 @RestController
 @RequestMapping("/api/horse-requests")
 public class HorseRequestController {

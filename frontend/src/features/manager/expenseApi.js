@@ -5,6 +5,7 @@
 
 import { authFetch } from "../auth/authService";
 
+// Re-export: trang Costs import toCostLabel / formatMoney từ đây, nhưng định nghĩa thật nằm ở horseOwnerApi.
 export { toCostLabel, formatMoney } from "../horse-owner/horseOwnerApi";
 
 const API = "/api/expenses";
@@ -13,6 +14,8 @@ const API = "/api/expenses";
 export const EXPENSE_CATEGORIES = ["FEEDING", "MEDICAL", "TRAINING", "OTHER"];
 
 /** Mọi tham số đều tuỳ chọn. from / to dạng yyyy-mm-dd, tính cả hai đầu. */
+// GET /api/expenses?horseId=&category=&from=&to= (CLUB_MANAGER). Chỉ trả các dòng chưa huỷ
+// (ExpenseRepository lọc "cancelled_at IS NULL").
 export function listExpenses({ horseId, category, from, to, signal } = {}) {
   const qs = new URLSearchParams();
   if (horseId) qs.set("horseId", horseId);
@@ -23,6 +26,8 @@ export function listExpenses({ horseId, category, from, to, signal } = {}) {
   return authFetch(query ? `${API}?${query}` : API, { signal });
 }
 
+// POST /api/expenses: ghi một khoản chi tay. Number(...) đổi chuỗi từ ô nhập sang số trước khi gửi.
+// Backend chặn: số tiền < 1, ngựa PEDIGREE, ngày sau khi ngựa đã rút, ngày trước khi ngựa sinh.
 export function createExpense({ horseId, category, amount, expenseDate, note }) {
   return authFetch(API, {
     method: "POST",
@@ -41,6 +46,8 @@ export function createExpense({ horseId, category, amount, expenseDate, note }) 
  * so the reason is required - it is the only explanation the ledger will have.
  */
 export function deleteExpense(id, reason) {
+  // DELETE thực chất là "huỷ mềm" (đặt cancelled_at). Lý do đi qua query string vì body của DELETE không
+  // chắc được trình duyệt/proxy chuyển đi; encodeURIComponent mã hoá dấu cách, tiếng Việt, "&"...
   return authFetch(`${API}/${id}?reason=${encodeURIComponent(reason)}`, { method: "DELETE" });
 }
 
@@ -62,6 +69,7 @@ export const EXPENSE_PERIODS = {
 };
 
 /** { from, to } của một khoảng; ALL trả về hai giá trị null. */
+// Các mốc tính theo giờ máy người dùng: quý = tháng đầu quý (0, 3, 6, 9); 90 ngày gồm cả hôm nay (lùi 89).
 export function periodRange(key, now = new Date()) {
   const to = isoDate(now);
   switch (key) {

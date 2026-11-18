@@ -32,6 +32,27 @@ import racehorse.backend.repository.TrainingSessionRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Nghiệp vụ buổi tập (UC10, Flow 2). Vòng đời một buổi:
+ *
+ *   SCHEDULED --start (đúng ngày, từ giờ đã hẹn)--> RUNNING --finish đúng/quá giờ--> COMPLETED
+ *       |                                              |--finish sớm (kèm lý do)----> STOPPED_EARLY
+ *       |                                              |--stop vì ngựa bất thường---> STOPPED_EARLY (+ báo cáo sự cố)
+ *       +--cancel / quá khung giờ mà chưa start / giáo án kết thúc / ngựa bị rút--> CANCELLED
+ *
+ * Sau khi kết thúc: review_status = PENDING, HLV có 48 giờ để nhận xét (SessionService).
+ *
+ * Luật xếp lịch (create / reschedule):
+ *   - Giáo án phải ACTIVE; ngày buổi tập nằm trong khoảng ngày của giai đoạn, không ở quá khứ.
+ *   - Ngựa phải tập được (checkHorseCanTrain): không phải PEDIGREE, chưa rút, không bị khoá FULL,
+ *     khoá HEAVY_WORK_ONLY thì cự ly <= app.lock.light-work-max-distance, sức khoẻ ELIGIBLE/MONITOR,
+ *     không còn báo cáo sự cố mở (IncidentGuard).
+ *   - Groom phải ACTIVE và thuộc đội của HLV.
+ *   - Thời lượng 15..720 phút, chia hết cho 5, không kéo sang ngày hôm sau.
+ *   - checkSlot: mỗi ngựa tối đa 1 buổi/ngày, không chồng giờ, cách buổi khác ít nhất min_gap_minutes
+ *     của giai đoạn (mặc định 90 phút); Groom không bị trùng giờ và không đang chạy buổi khác;
+ *     không vượt sessions_per_week của giai đoạn.
+ */
 @Service
 public class TrainingSessionService {
 
@@ -47,6 +68,7 @@ public class TrainingSessionService {
     public static final int MAX_DURATION_MINUTES = 720; // 12 tiếng
 
     /** Danh mục lý do kết thúc sớm chuẩn cho Groom chọn. */
+    // Mã lý do -> chữ hiển thị. Frontend gửi mã (vd. "HORSE_FATIGUED"), DB lưu chữ hiển thị.
     private static final Map<String, String> EARLY_STOP_REASONS = Map.of(
             "TARGET_REACHED", "Target fitness reached",
             "HORSE_FATIGUED", "Horse fatigued",
@@ -72,7 +94,9 @@ public class TrainingSessionService {
     public TrainingSessionService(TrainingSessionRepository repository, TrainingPlanRepository planRepository,
             HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
             UserRepository userRepository, NotificationService notifications, IncidentGuard incidentGuard,
-            @Value("${app.lock.light-work-max-distance:1200}") int lightWorkMaxDistance) {
+            // @Value("${...:800}"): đọc app.lock.light-work-max-distance (application.properties đặt 800),
+            // thiếu dòng cấu hình thì cũng dùng 800. Nhãn trên giao diện (vetApi.js, VetExaminationPage.js) ghi 800 m.
+            @Value("${app.lock.light-work-max-distance:800}") int lightWorkMaxDistance) {
         this.repository = repository;
         this.planRepository = planRepository;
         this.horseRepository = horseRepository;
@@ -84,6 +108,7 @@ public class TrainingSessionService {
     }
 
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
+    // Bản không lọc theo HLV (giữ cho code cũ).
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms() {
         return repository.findActiveGrooms();
     }
@@ -105,6 +130,7 @@ public class TrainingSessionService {
         if (user != null && !"HEAD_TRAINER".equals(user.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can schedule training sessions");
         }
+        // PhaseContext: giai đoạn + trạng thái giáo án + ngựa + cự ly + vận tốc mục tiêu + khoảng ngày.
         TrainingSessionRepository.PhaseContext ctx = repository.findPhaseContext(r.phaseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Phase #" + r.phaseId() + " not found"));
@@ -142,6 +168,8 @@ public class TrainingSessionService {
         }
         checkSlot(ctx, r.assignedTo(), r.sessionDate(), duration, 0);
 
+        // Hai phiên bản insert (có / không có remarks). Thời lượng và ngưỡng vận tốc ghi bằng câu
+        // UPDATE riêng ngay sau đó (cột planned_duration có DEFAULT 60 trong DB).
         int id = (r.remarks() != null && !r.remarks().isBlank())
                 ? repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned, r.remarks())
                 : repository.insert(ctx.phaseId(), ctx.horseId(), r.assignedTo(), r.sessionDate(), planned);
@@ -168,6 +196,9 @@ public class TrainingSessionService {
      */
     @Transactional
     public TrainingSessionResponse start(int sessionId, AuthenticatedUser user, String ip) {
+        // Thứ tự kiểm khi bấm Start: vai trò -> đúng Groom -> đang SCHEDULED -> đúng NGÀY -> đã tới
+        // GIỜ hẹn -> chưa quá khung giờ (quá thì tự huỷ) -> giáo án ACTIVE -> ngựa tập được -> ngựa
+        // và Groom không đang có buổi RUNNING khác -> UPDATE có điều kiện status = 'SCHEDULED'.
         if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can start a training session");
         }
@@ -244,6 +275,8 @@ public class TrainingSessionService {
                     "Only a RUNNING session can be finished (currently " + s.status() + ")");
         }
 
+        // Kết thúc trước giờ dự kiến (session_date + planned_duration) được tính là kết thúc sớm,
+        // dù frontend không gửi cờ earlyStop.
         int plannedDuration = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
         LocalDateTime plannedEnd = s.sessionDate().plusMinutes(plannedDuration);
         boolean isBeforePlannedEnd = LocalDateTime.now().isBefore(plannedEnd);
@@ -277,6 +310,7 @@ public class TrainingSessionService {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Please select a reason for ending the session early",
                         Map.of("earlyStopReason", "Select a reason for early termination"));
             }
+            // Lý do lạ (không có trong bảng) vẫn được lưu nguyên văn.
             String reasonLabel = EARLY_STOP_REASONS.getOrDefault(rawReason.toUpperCase(Locale.ROOT), rawReason);
             if (reasonLabel.length() > 255) {
                 reasonLabel = reasonLabel.substring(0, 255);
@@ -317,6 +351,8 @@ public class TrainingSessionService {
      */
     @Transactional
     public int processOverdueSessions() {
+        // Hai việc: (1) buổi RUNNING đã hết thời lượng -> tự COMPLETED và báo HLV nhận xét;
+        // (2) buổi SCHEDULED đã qua cả khung giờ mà chưa start -> tự CANCELLED.
         LocalDateTime now = LocalDateTime.now();
         int count = 0;
         List<TrainingSessionResponse> overdueRunning = repository.findOverdueRunningSessions(now);
@@ -344,9 +380,11 @@ public class TrainingSessionService {
     }
 
     public List<TrainingSessionResponse> list(Integer horseId, String status, AuthenticatedUser user) {
+        // Mỗi lần mở danh sách đều dọn buổi quá giờ trước, để màn hình luôn đúng trạng thái.
         processOverdueSessions();
         Integer assignedTo = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
+        // Groom chỉ thấy lịch của ngựa còn ở CLB (ngựa đã rút bị ẩn).
         boolean activeHorsesOnly = assignedTo != null;
         List<TrainingSessionResponse> all = repository.findAll(horseId, status, assignedTo, ownerId, activeHorsesOnly);
         // V37: Head Trainer chỉ thấy lịch tập của những ngựa Club Manager giao cho mình.
@@ -400,6 +438,8 @@ public class TrainingSessionService {
         Map<String, String> errors = new LinkedHashMap<>();
         validateGroomAssignee(request.assignedTo(), user, errors);
 
+        // Chỉ kiểm "không ở quá khứ" khi giờ thật sự đổi: đổi Groom cho buổi sắp diễn ra hôm nay
+        // vẫn được dù giờ hẹn đã qua vài phút.
         boolean timeChanged = !request.sessionDate().equals(current.sessionDate());
         validateSessionTimeAndDuration(request.sessionDate(), duration, ctx, timeChanged, errors);
 
@@ -410,6 +450,7 @@ public class TrainingSessionService {
                     errors);
         }
 
+        // excludeId = sessionId: không so trùng giờ với chính buổi đang sửa.
         checkSlot(ctx, request.assignedTo(), request.sessionDate(), duration, sessionId);
 
         int updated = repository.updateSchedule(
@@ -494,6 +535,8 @@ public class TrainingSessionService {
     }
 
     private void checkCanAct(TrainingSessionResponse s, AuthenticatedUser user) {
+        // Kiểm quyền theo dữ liệu: Groom chỉ thao tác buổi được giao cho mình; chủ ngựa chỉ xem buổi
+        // của ngựa mình. HLV và Manager không bị giới hạn ở đây.
         if ("GROOM".equals(user.role()) && s.assignedTo() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This session is not assigned to you");
         }
@@ -562,6 +605,7 @@ public class TrainingSessionService {
      */
     private void checkSlot(TrainingSessionRepository.PhaseContext ctx, int groomId,
                            LocalDateTime when, int plannedDuration, int excludeId) {
+        // Lấy giai đoạn hiện tại để biết min_gap_minutes và sessions_per_week.
         TrainingPlanResponse.Phase phase = planRepository.findPhases(ctx.planId()).stream()
                 .filter(p -> p.phaseId() == ctx.phaseId())
                 .findFirst().orElse(null);
@@ -575,6 +619,7 @@ public class TrainingSessionService {
             int sDur = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
             LocalDateTime sStart = s.sessionDate();
             LocalDateTime sEnd = sStart.plusMinutes(sDur);
+            // Hai khoảng [when, newEnd) và [sStart, sEnd) chồng nhau khi when < sEnd và sStart < newEnd.
             boolean overlaps = when.isBefore(sEnd) && sStart.isBefore(newEnd);
 
             if (OPEN.contains(s.status()) && tooClose(s.sessionDate(), when, horseGap)) {
@@ -593,6 +638,7 @@ public class TrainingSessionService {
                         + ". A horse cannot have 2 sessions on the same day");
             }
         }
+        // Vòng thứ hai: lịch của Groom (findAll lọc theo assignedTo = groomId).
         for (TrainingSessionResponse s : repository.findAll(null, null, groomId, null, false)) {
             if (s.sessionId() == excludeId || !OPEN.contains(s.status())) continue;
 
@@ -611,6 +657,7 @@ public class TrainingSessionService {
             }
         }
 
+        // Đếm buổi của giai đoạn này trong tuần (thứ Hai -> Chủ nhật) chứa ngày xếp lịch.
         Integer perWeek = phase == null ? null : phase.sessionsPerWeek();
         if (perWeek != null) {
             LocalDate monday = when.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -633,6 +680,8 @@ public class TrainingSessionService {
     }
 
     private HorseResponse checkHorseCanTrain(int horseId, Integer plannedDistance) {
+        // Kiểm "ngựa có được tập không" dùng chung cho create, start, reschedule. Ném 409 với câu
+        // lý do cụ thể ngay ở điều kiện đầu tiên thất bại.
         HorseResponse horse = horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this phase not found"));
         String typeProblem = HorsePolicy.trainingProblem(horse.recordType());

@@ -15,8 +15,10 @@ import {
 } from "./auditLogApi";
 import "./audit-log.css";
 
+// Bộ lọc ban đầu: 7 ngày gần nhất, mọi kết quả, mọi nhóm hành động, mọi người dùng.
 const EMPTY_FILTERS = { period: "7D", result: "", action: "", user: "" };
 
+// Ba ô số an toàn trong 24 giờ (backend chỉ gửi summary ở trang đầu).
 function SummaryTiles({ summary, onShowDenied }) {
   if (!summary) return null;
   const tiles = [
@@ -43,6 +45,8 @@ function SummaryTiles({ summary, onShowDenied }) {
   );
 }
 
+// Bảng nhật ký: thời gian, người làm (kèm vai trò), hành động (toActionText), mô tả (describeLog), kết quả.
+// Dòng DENIED được tô nổi bật.
 function LogTable({ items }) {
   return (
     <div className="al-scroll">
@@ -95,6 +99,10 @@ function LogTable({ items }) {
   );
 }
 
+/*
+ * Trang /manager/audit-log. Đọc GET /api/audit-logs theo bộ lọc, phân trang kiểu keyset bằng nút "Load more"
+ * (nextBeforeId). Không có nút sửa / xoá: nhật ký chỉ được ghi thêm (UserRepository.writeAudit ở backend).
+ */
 export default function AuditLogPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -107,6 +115,8 @@ export default function AuditLogPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   // Gõ tên thì đợi một nhịp rồi mới lọc, khỏi gọi API theo từng phím.
+  // Debounce: mỗi lần gõ thì huỷ hẹn giờ cũ và hẹn lại 350 ms; chỉ khi ngừng gõ đủ lâu filters.user mới đổi
+  // và effect tải dữ liệu bên dưới mới chạy.
   useEffect(() => {
     const t = setTimeout(() => setFilters((f) => (f.user === userInput.trim() ? f : { ...f, user: userInput.trim() })), 350);
     return () => clearTimeout(t);
@@ -119,6 +129,7 @@ export default function AuditLogPage() {
     user: f.user,
   });
 
+  // Đổi bộ lọc -> tải lại trang đầu (beforeId = null), xoá danh sách cũ để hiện "đang tải".
   useEffect(() => {
     const ctrl = new AbortController();
     setError("");
@@ -137,6 +148,7 @@ export default function AuditLogPage() {
     return () => ctrl.abort();
   }, [filters, navigate, reloadKey]);
 
+  // Tải trang kế: nối thêm vào cuối danh sách đang có.
   const loadMore = () => {
     setLoadingMore(true);
     getAuditLogs(query(filters), nextBeforeId)
@@ -150,6 +162,7 @@ export default function AuditLogPage() {
       .finally(() => setLoadingMore(false));
   };
 
+  // set("period") trả về hàm onChange cho ô chọn tương ứng (hàm sinh hàm, đỡ viết 4 handler giống nhau).
   const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const filtered = filters.result || filters.action || filters.user || filters.period !== EMPTY_FILTERS.period;
 

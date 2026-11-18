@@ -20,6 +20,14 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.SessionService;
 
+/*
+ * UC12 - nhận xét buổi tập, tiền tố /api/sessions (khác /api/training-sessions của UC10: cùng bảng
+ * TRAINING_SESSION nhưng nhìn từ góc "chấm điểm sau buổi tập").
+ *   GET  /                  danh sách để chấm (lọc status, horseId; tối đa 200)
+ *   GET  /{id}              chi tiết một buổi
+ *   PUT  /{id}/evaluation   HLV ghi số liệu thực tế + đánh giá POOR/FAIR/GOOD/EXCELLENT + nhận xét
+ *   POST /{id}/submit-to-vet HLV gửi số liệu buổi tập hồi phục cho bác sĩ chấm
+ */
 @RestController
 @RequestMapping("/api/sessions")
 public class SessionController {

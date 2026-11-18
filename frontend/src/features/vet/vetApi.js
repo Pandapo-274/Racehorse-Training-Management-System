@@ -9,8 +9,10 @@
 import { authFetch } from "../auth/authService";
 import { listHorses, getHorse } from "../horse/horseApi";
 
+// Re-export: các trang của bác sĩ import listHorses / getHorse từ vetApi cho gọn, định nghĩa thật ở horseApi.js.
 export { listHorses, getHorse };
 
+// Hàm tắt cho POST JSON (đỡ lặp { method, body: JSON.stringify } ở mỗi hàm bên dưới).
 const post = (url, body) =>
   authFetch(url, { method: "POST", body: JSON.stringify(body) });
 
@@ -41,6 +43,7 @@ export function listAllIncidentReportsForHorse(horseId, signal) {
   return authFetch(`/api/incident-reports?status=ALL&horseId=${horseId}&limit=200`, { signal });
 }
 
+// (Docblock "Báo cáo còn mở... của MỘT con ngựa" ở phía trên thực ra mô tả hàm này.)
 export function listOpenReportsForHorse(horseId, signal) {
   return authFetch(`/api/incident-reports?status=OPEN&horseId=${horseId}`, { signal });
 }
@@ -60,6 +63,8 @@ export function listVeterinarians(signal) {
 }
 
 /** PUT /api/incident-reports/{id}/handover: bàn giao ca cho bác sĩ khác hoặc trả về queue. */
+// body: { targetVetId, handoverNotes }. targetVetId = id bác sĩ nhận ca mới; null = trả ca về hàng chờ chung
+// (PENDING). handoverNotes bắt buộc (tình trạng ngựa, thuốc đã dùng, lưu ý theo dõi).
 export function handoverIncidentReport(reportId, body) {
   return authFetch(`/api/incident-reports/${reportId}/handover`, {
     method: "PUT",
@@ -70,6 +75,8 @@ export function handoverIncidentReport(reportId, body) {
 /* ---------- V40: Ca chuyển viện ngoài (External Hospital Referral) ---------- */
 
 /** GET /api/external-referrals?status=&horseId= */
+// Chuyển viện ngoài (V40): ngựa được đưa tới bệnh viện thú y bên ngoài; khi về (discharge) bác sĩ ghi kết quả
+// và backend có thể đặt lại sức khoẻ ELIGIBLE (ExternalReferralService.discharge).
 export function listExternalReferrals(params = {}, signal) {
   const q = new URLSearchParams();
   if (params.horseId) q.set("horseId", params.horseId);
@@ -93,6 +100,7 @@ export function dischargeExternalReferral(referralId, body) {
 }
 
 /** Mức khẩn cấp của báo cáo. cls là lớp CSS của chip trong vet.css. */
+// Lưu ý: HIGH và MEDIUM đang cùng nhãn "Soon" (cùng màu); chỉ LOW là "Routine".
 const URGENCY = {
   HIGH: { label: "Soon", cls: "soon" },
   MEDIUM: { label: "Soon", cls: "soon" },
@@ -116,6 +124,9 @@ export function listMedicalRecords(horseId, signal) {
 }
 
 /** POST /api/medical-records (chỉ VETERINARIAN). */
+// body: horseId, reportId? (khám cho báo cáo sự cố nào), recordType, examDate, diagnosis, healthStatus
+// (MONITOR | INJURED | QUARANTINE; trả về ELIGIBLE phải qua confirmRecovery), injuryConfirmed, expectedRestDays,
+// nextDueDate, notes. Backend cập nhật HORSE.status và đóng báo cáo sự cố (EXAMINED) trong cùng giao dịch.
 export function createMedicalRecord(body) {
   return post("/api/medical-records", body);
 }
@@ -136,6 +147,8 @@ export function listLocksForHorse(horseId, signal) {
 }
 
 /** POST /api/training-locks (VETERINARIAN, HEAD_TRAINER, CLUB_MANAGER). */
+// body: { horseId, injuryId?, reason, lockLevel: FULL | HEAVY_WORK_ONLY }. Mỗi ngựa chỉ một khoá ACTIVE
+// (UX_LOCK_active). Ngựa đang có buổi RUNNING bị khoá thì backend dừng buổi đó (sessionStopper).
 export function issueLock(body) {
   return post("/api/training-locks", body);
 }
@@ -158,6 +171,8 @@ export function updateLockLevel(horseId, lockLevel) {
 }
 
 /** POST /api/recovery-confirmations (chỉ VETERINARIAN): khép chấn thương + mở khoá + ELIGIBLE. */
+// Xác nhận hồi phục (UC18): trong một giao dịch, đóng chấn thương, mở mọi khoá dựa trên nó, đặt ELIGIBLE.
+// Hồi phục sớm hơn expected_rest_days bắt buộc ghi notes (lưu vào audit detail).
 export function confirmRecovery(body) {
   return post("/api/recovery-confirmations", body);
 }
@@ -195,6 +210,9 @@ export function listTreatmentsForHorse(horseId, signal) {
 }
 
 /** POST /api/treatments (chỉ VETERINARIAN). Kê theo một lần khám (recordId). */
+// body (TreatmentRequest): recordId, supplyId (thuốc MEDICINE trong kho, chưa hết hạn), medicineName, quantity,
+// unitPrice, dosage, frequency, instruction, startDate... Backend trừ kho (CONSUME) và ghi chi phí MEDICAL
+// (số lượng × đơn giá) vào EXPENSE_LOG.
 export function createTreatment(body) {
   return post("/api/treatments", body);
 }
@@ -208,6 +226,7 @@ export function endTreatment(id) {
  * Từ vựng hiển thị
  * ------------------------------------------------------------------ */
 
+// Ánh xạ HORSE.status -> hậu tố lớp CSS của sơ đồ chuồng; trạng thái lạ rơi về "monitor".
 const BOARD_STATUS = {
   ELIGIBLE: "fit",
   MONITOR: "monitor",
@@ -233,9 +252,10 @@ export function statusLabel(status) {
 
 export const LOCK_LEVELS = [
   { value: "FULL", label: "Full lock", hint: "No training at all" },
-  /* Khớp app.lock.light-work-max-distance (mặc định 1200 m) ở backend:
-     buổi tập có cự ly dự kiến tới mức đó vẫn được xếp và bắt đầu. */
-  { value: "HEAVY_WORK_ONLY", label: "Heavy work only", hint: "Light work only: sessions up to 1,200 m" },
+  /* Khớp app.lock.light-work-max-distance (800 m, application.properties) ở backend:
+     buổi tập có cự ly dự kiến tới mức đó vẫn được xếp và bắt đầu. Đổi con số ở backend thì sửa cả nhãn này
+     và hai nhãn trong VetExaminationPage.js. */
+  { value: "HEAVY_WORK_ONLY", label: "Heavy work only", hint: "Light work only: sessions up to 800 m" },
 ];
 
 export function lockLevelLabel(level) {
@@ -256,6 +276,7 @@ export function careTypeLabel(type) {
 }
 
 /** careStatus của backend -> chữ và tông màu (red | pink | gold | green | muted). */
+// Thứ tự ưu tiên khi hiển thị: OVERDUE (quá hạn) > NEVER (chưa từng làm) > DUE_SOON > UNSCHEDULED > OK.
 const CARE_STATUS = {
   OVERDUE: { label: "Overdue", tone: "red" },
   NEVER: { label: "Never done", tone: "pink" },
@@ -305,6 +326,8 @@ export function todayInputValue(d = new Date()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Ngày giờ địa phương dạng "yyyy-MM-ddTHH:mm:ss" KHÔNG kèm múi giờ - đúng kiểu LocalDateTime backend nhận.
+// (Không dùng toISOString() vì nó đổi sang UTC, lệch 7 tiếng.)
 function localDateTime(d) {
   return `${todayInputValue(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
@@ -334,6 +357,7 @@ export function formatShortDate(iso) {
 }
 
 export function normalizeDate(d) {
+  // Jackson có thể trả LocalDate dạng mảng [2026, 9, 13] (khi không bật định dạng chuỗi); hàm này chấp nhận cả hai.
   if (!d) return null;
   if (Array.isArray(d)) {
     return `${d[0]}-${String(d[1]).padStart(2, "0")}-${String(d[2]).padStart(2, "0")}`;
@@ -368,6 +392,7 @@ export function daysSince(iso) {
  * ------------------------------------------------------------------ */
 
 /** ApiError -> { message, details[] } để hiện một khối lỗi duy nhất. */
+// Gom message chung + lỗi từng ô (fieldErrors) thành một khối; bỏ dòng trùng với message.
 export function describeError(err) {
   const message = err?.message || "Something went wrong";
   const details = Object.values(err?.fieldErrors || {}).filter(
@@ -376,6 +401,7 @@ export function describeError(err) {
   return { message, details };
 }
 /** GET /api/expenses?category=MEDICAL: Thống kê chi phí thuốc & chữa trị cho bác sĩ thú y. */
+// ExpenseController cho VETERINARIAN đọc danh sách (chỉ CLUB_MANAGER được ghi). Dùng ở VetPrescriptionPage.
 export function listMedicalExpenses(signal) {
   return authFetch("/api/expenses?category=MEDICAL", { signal });
 }

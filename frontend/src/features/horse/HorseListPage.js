@@ -16,6 +16,13 @@ import {
 } from "./horseApi";
 import { listTrainingPlans } from "../trainer/trainingPlanApi";
 
+/*
+ * Trang danh sách ngựa, dùng chung cho mọi vai trò (/manager/horses, /trainer/horses, /veterinarian/horses,
+ * /groom/horses, /horse-owner/horses). Backend tự lọc theo vai trò (HorseService.list): chủ ngựa chỉ thấy ngựa
+ * của mình, Head Trainer chỉ thấy ngựa được giao, Groom thấy ngựa đang ở CLB.
+ * Bộ lọc: ô tìm kiếm (tên, mã, chủ, chuồng, HLV), nhóm tuổi (stage), sức khoẻ, ACTIVE/WITHDRAWN, có/không HLV.
+ * Head Trainer còn tải thêm giáo án để hiện giáo án hiện tại của từng ngựa.
+ */
 export default function HorseListPage() {
   const navigate = useNavigate();
   const user = getUser();
@@ -37,6 +44,7 @@ export default function HorseListPage() {
   const [activity, setActivity] = useState("ALL");
   const [trainerFilter, setTrainerFilter] = useState("ALL");
 
+  // load tải danh sách ngựa (và giáo án nếu là HLV) song song bằng Promise.all.
   const load = useCallback(
     (signal) => {
       setLoading(true);
@@ -58,6 +66,7 @@ export default function HorseListPage() {
     [navigate, isTrainer]
   );
 
+  // Map horseId -> giáo án nên hiện: ưu tiên giáo án chưa kết thúc hơn giáo án COMPLETED / CANCELLED.
   const plansByHorseId = useMemo(() => {
     const map = new Map();
     (trainerPlans || []).forEach((p) => {
@@ -76,6 +85,8 @@ export default function HorseListPage() {
     return () => ctrl.abort();
   }, [load]);
 
+  // visible: danh sách sau khi áp mọi bộ lọc; useMemo chỉ tính lại khi dữ liệu hoặc bộ lọc đổi.
+  // healthApplies(h): hồ sơ PEDIGREE / ngựa đã rút không có trạng thái sức khoẻ, nên lọc sức khoẻ bỏ qua chúng.
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (horses || []).filter((h) => {

@@ -5,6 +5,7 @@ import { getUser } from "../auth/authService";
 import HorseShell from "../horse/HorseShell";
 import FeedingBoard from "./FeedingBoard";
 
+// Trang /groom/feeding và /veterinarian/feeding: bọc FeedingBoard trong HorseShell; editable = true khi là bác sĩ.
 export default function FeedingPage() {
   const editable = getUser()?.role === "VETERINARIAN";
   return (

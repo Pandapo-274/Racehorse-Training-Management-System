@@ -46,6 +46,20 @@ import racehorse.backend.security.AuthenticatedUser;
  * thì chủ ngựa và Head Trainer nhận tin "cleared to train" trong khi xếp lịch,
  * bấm Start, đăng ký giải đều bị từ chối.
  */
+/*
+ * Ghi chú cập nhật: chú thích trên nói đây là chỗ DUY NHẤT đặt ELIGIBLE; code hiện tại còn hai đường
+ * khác: TreatmentService.end (hết đơn thuốc, không bị khoá) và ExternalReferralService.discharge (xuất
+ * viện với postDischargeStatus = ELIGIBLE).
+ *
+ * Thứ tự trong confirm():
+ *   1. ngựa chưa ELIGIBLE, không còn đơn thuốc đang dùng;
+ *   2. lọc trùng danh sách chấn thương / báo cáo bác sĩ khai, kiểm chúng thuộc đúng ngựa này;
+ *   3. khép các chấn thương khai (RECOVERED) và đóng các báo cáo khai (EXAMINED);
+ *   4. SAU đó mới kiểm: còn chấn thương mở hoặc báo cáo chờ khám -> lỗi (rollback cả bước 3);
+ *   5. xác nhận sớm hơn số ngày nghỉ dự kiến thì bắt buộc ghi notes (vào audit);
+ *   6. gỡ mọi lệnh khoá, ghi bản khám ELIGIBLE, UPDATE HORSE ... WHERE status <> 'ELIGIBLE' (chống hai
+ *      bác sĩ xác nhận cùng lúc), audit, báo chủ + HLV.
+ */
 @Service
 public class HealthClearanceService {
 
@@ -180,6 +194,7 @@ public class HealthClearanceService {
            chấn thương gần nhất). Xác nhận sớm hơn vẫn được, vì bác sĩ có thể có lý
            do chuyên môn, nhưng phải ghi lý do vào notes, và lý do vào audit. */
         String earlyNote = null;
+        // records.findByHorse trả mới nhất trước, nên findFirst() = lần khám xác nhận chấn thương gần nhất.
         java.time.LocalDate restUntil = records.findByHorse(horse.horseId()).stream()
                 .filter(r -> r.injuryConfirmed() && r.expectedRestDays() != null)
                 .findFirst()

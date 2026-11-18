@@ -24,6 +24,9 @@ const API = "/api/profile";
  * Đọc và sửa hồ sơ
  * ------------------------------------------------------------------ */
 
+// GET /api/profile: hồ sơ của CHÍNH người đang đăng nhập. Backend xác định người dùng từ JWT, không có id
+// trên URL, nên không thể đọc hồ sơ người khác qua endpoint này. Kết quả là ProfileResponse
+// (fullName, email, phone, role, status, avatarUrl, createdAt...).
 export function getProfile(signal) {
   return authFetch(API, { signal });
 }
@@ -33,6 +36,9 @@ export function getProfile(signal) {
  * trò hay khoá tài khoản là việc của Manager, không phải của chính người dùng.
  */
 export function updateProfile({ fullName, email, phone, currentPassword }) {
+  // PUT /api/profile. trim() bỏ khoảng trắng đầu/cuối; phone rỗng gửi null để DB lưu NULL.
+  // currentPassword chỉ bị đòi khi đổi email: email là kênh nhận link đặt lại mật khẩu, nên đổi nó phải
+  // chứng minh là chủ tài khoản.
   return authFetch(API, {
     method: "PUT",
     body: JSON.stringify({
@@ -62,8 +68,11 @@ export const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // khớp MAX_AVATAR_BYTES bên
  * một tiêu chuẩn thì hai bên không bao giờ bất đồng.
  */
 async function detectImageType(file) {
+  // Đọc 12 byte đầu của file (file.slice + arrayBuffer, không cần tải cả file vào bộ nhớ):
+  //   JPEG: FF D8 FF      PNG: 89 'P' 'N' 'G' 0D 0A 1A 0A      WebP: 'RIFF' ? ? ? ? 'WEBP'
   const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
 
+  // is(offset, ...bytes): so từng byte tại vị trí offset; byte viết dạng số (0xff) hoặc ký tự ("P" -> mã ASCII).
   const is = (offset, ...bytes) =>
     bytes.every((b, i) => head[offset + i] === (typeof b === "string" ? b.charCodeAt(0) : b));
 
@@ -90,6 +99,7 @@ export async function checkAvatar(file) {
 
 /** POST multipart. Tên phần phải đúng là "file" - khớp @RequestParam bên controller. */
 export async function uploadAvatar(file) {
+  // FormData = thân request dạng multipart/form-data; trình duyệt tự sinh header Content-Type kèm boundary.
   const body = new FormData();
   body.append("file", file);
 
@@ -100,6 +110,8 @@ export async function uploadAvatar(file) {
 
   const res = await fetch(`${API}/avatar`, { method: "POST", headers, body });
 
+  // Lỗi: cố đọc JSON {status, message, errors} của GlobalExceptionHandler; thân không phải JSON thì dùng câu
+  // mặc định. Gói thành ApiError để handleAuthError xử lý 401/403 giống mọi lời gọi khác.
   if (!res.ok) {
     let payload = null;
     try {
@@ -114,6 +126,7 @@ export async function uploadAvatar(file) {
     );
   }
 
+  // Thành công: backend trả ProfileResponse mới (có avatarUrl mới) để trang cập nhật ảnh ngay.
   return res.json();
 }
 
@@ -121,6 +134,7 @@ export async function uploadAvatar(file) {
  * Hiển thị
  * ------------------------------------------------------------------ */
 
+// Nhãn hiển thị cho 5 mã vai trò (ROLE.role_name trong DB).
 const ROLE_LABEL = {
   CLUB_MANAGER: "Club Manager",
   HEAD_TRAINER: "Head Trainer",
@@ -140,6 +154,7 @@ export function toAccountStatus(status) {
     : { label: "Active", tone: "good", hint: "" };
 }
 
+// Ngày tạo tài khoản dạng "17 November 2026". createdAt là Instant (có "Z") nên new Date() đọc đúng múi giờ.
 export function formatJoined(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -148,6 +163,8 @@ export function formatJoined(iso) {
     : d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 }
 
+// Chữ viết tắt cho avatar: hai từ ĐẦU của họ tên ("Trần Minh Hoà" -> "TM").
+// (Khác initialsOf trong staffApi.js lấy hai từ CUỐI -> "MH".)
 export function toInitials(fullName) {
   if (!fullName) return "??";
   return fullName.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();

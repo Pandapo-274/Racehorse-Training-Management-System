@@ -23,9 +23,22 @@ import racehorse.backend.repository.HorseVitalsRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Nghiệp vụ hồ sơ ngựa (Flow 1). Các luật chính:
+ *   - Ai xem được ngựa nào: checkCanView (chủ ngựa chỉ ngựa của mình), list() lọc theo vai trò.
+ *   - Chủ ngựa chỉ sửa tên, giống, giới tính, ngày sinh, màu và điền cha/mẹ còn trống
+ *     (updateByOwner). Giới tính và ngày sinh bị KHOÁ khi ngựa đã có con hoặc đã có buổi tập.
+ *   - Phả hệ hợp lệ (checkParent): cha phải là COLT/STALLION, mẹ là FILLY/MARE, sinh trước con ít
+ *     nhất FOAL_BELOW (2) năm, không phải chính nó, không tạo vòng lặp tổ tiên.
+ *   - Club Manager sửa mã đăng ký, chuồng, HLV phụ trách (updateIdentity) và sửa cha mẹ đã có
+ *     (correctParents, bắt buộc lý do).
+ *   - HLV phụ trách không vượt hạn mức max_horses (validateTrainerLimit).
+ */
 @Service
 public class HorseService {
 
+    // GELDING (ngựa thiến) không thể làm cha nên không có trong SIRE_GENDERS. Frontend có bản sao
+    // SIRE_GENDERS / DAM_GENDERS trong horseApi.js để lọc danh sách chọn.
     private static final Set<String> SIRE_GENDERS = Set.of("COLT", "STALLION");
     private static final Set<String> DAM_GENDERS = Set.of("FILLY", "MARE");
 
@@ -34,11 +47,14 @@ public class HorseService {
     private final UserRepository userRepository;
     private final NotificationService notifications;
 
+    // Constructor 3 tham số: dùng trong unit test (BusinessRulesTest) không cần NotificationService.
+    // Khi đó notifications = null nên các chỗ gửi thông báo đều kiểm "if (notifications == null)".
     public HorseService(HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
                         UserRepository userRepository) {
         this(horseRepository, vitalsRepository, userRepository, null);
     }
 
+    // @Autowired chỉ rõ cho Spring dùng constructor này khi class có nhiều constructor.
     @Autowired
     public HorseService(HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
                         UserRepository userRepository, NotificationService notifications) {
@@ -50,6 +66,7 @@ public class HorseService {
 
     @Transactional
     public HorseResponse create(HorseRequest raw, AuthenticatedUser user, String ip) {
+        // Chỉ được gọi nội bộ từ HorseRequestService.approve (không còn POST /api/horses).
         HorseRequest request = normalize(raw);
         validate(request, 0);
         validateTypeRules(request);
@@ -81,6 +98,7 @@ public class HorseService {
         if (horseRepository.existsByRegistrationCode(code, horseId)) {
             errors.put("registrationCode", "This registration code is already in use");
         }
+        // Hồ sơ PEDIGREE và ngựa đã rút không có chuồng, không có HLV; ngựa CLB đang ở thì bắt buộc có chuồng.
         boolean pedigree = HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(current.recordType()));
         if (stall != null && (pedigree || current.isWithdrawn())) {
             errors.put("stallNo", pedigree ? "A pedigree record has no stall" : "A withdrawn horse has no stall");
@@ -221,6 +239,8 @@ public class HorseService {
         checkParentReachable(request.sireId(), current.sireId(), "sireId", user.userId(), errors);
         checkParentReachable(request.damId(), current.damId(), "damId", user.userId(), errors);
 
+        // Khoá giới tính / ngày sinh khi ngựa đã có con hoặc đã tập: đổi lúc đó sẽ làm sai luật
+        // phả hệ của con và số liệu huấn luyện đã ghi.
         boolean pedigreeChanged = !java.util.Objects.equals(current.horseGender(), request.horseGender())
                 || !java.util.Objects.equals(current.dateOfBirth(), request.dateOfBirth());
         if (pedigreeChanged) {
@@ -368,6 +388,8 @@ public class HorseService {
     }
 
     /** generations = số đời tổ tiên cần lấy, kẹp trong khoảng 1 đến 5. */
+    // Đọc mọi tổ tiên bằng MỘT câu SQL đệ quy (findAncestors), cho vào Map theo id, rồi dựng cây
+    // trong Java bằng buildNode (đệ quy) - tránh gọi DB một lần cho mỗi nút.
     public PedigreeNode getPedigree(int horseId, int generations, AuthenticatedUser user) {
         checkCanView(getOrThrow(horseId), user);
         int depth = Math.max(1, Math.min(generations, 5));
@@ -398,6 +420,7 @@ public class HorseService {
 
     // ---------- helper ----------
 
+    // Dựng chuỗi "name: A -> B; dob: ..." chỉ gồm các trường thay đổi, ghi vào AUDIT_LOG.detail.
     private static String changes(HorseResponse before, HorseUpdateRequest after) {
         StringBuilder sb = new StringBuilder();
         java.util.function.BiConsumer<String, Object[]> diff = (name, v) -> {
@@ -415,6 +438,7 @@ public class HorseService {
         return sb.length() == 0 ? null : (sb.length() > 500 ? sb.substring(0, 500) : sb.toString());
     }
 
+    // Không có "private" = package-private: HorsePhotoService (cùng package) gọi được.
     HorseResponse getOrThrow(int horseId) {
         return horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse not found: #" + horseId));
@@ -473,6 +497,8 @@ public class HorseService {
         }
     }
 
+    // Chủ ngựa chỉ được chọn cha/mẹ là hồ sơ PEDIGREE hoặc ngựa của chính mình (không lấy ngựa của
+    // người khác làm cha mẹ). Giữ nguyên cha/mẹ đang có thì không kiểm.
     private void checkParentReachable(Integer parentId, Integer currentId, String field, int ownerId,
                                       Map<String, String> errors) {
         if (parentId == null || parentId.equals(currentId) || errors.containsKey(field)) return;
@@ -484,6 +510,7 @@ public class HorseService {
         });
     }
 
+    // Luật sinh học của phả hệ, thêm lỗi vào errors (không ném ngay) để báo một lần mọi ô sai.
     private void checkParent(Integer parentId, String field, String label,
                              Set<String> allowedGenders, int selfId, java.time.LocalDate childDob,
                              Map<String, String> errors) {

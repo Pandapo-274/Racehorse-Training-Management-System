@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.entity.Notice;
 import racehorse.backend.entity.NotificationRow;
 
+// SQL cho bảng NOTIFICATION (V12). Mọi câu đọc/sửa đều lọc theo user_id của người gọi.
 @Repository
 public class NotificationRepository {
 
@@ -72,6 +73,7 @@ public class NotificationRepository {
      * IDENTITY bắt đầu từ 1 nên 0 không trùng ai, và tránh phải gửi NULL rồi
      * viết thêm nhánh "IS NULL OR" trong SQL.
      */
+    // INSERT ... SELECT: chèn nhiều dòng (mỗi người một dòng) trong MỘT câu SQL, thay vì vòng lặp.
     public int insertForRole(String role, int excludeUserId, Notice n) {
         return jdbc.sql("""
                 INSERT INTO NOTIFICATION (user_id, notif_type, title, message,
@@ -122,6 +124,7 @@ public class NotificationRepository {
      * @return 1 nếu là thông báo của người này, 0 nếu không phải (hoặc không có).
      *         Đọc lại một thông báo đã đọc vẫn trả 1 và giữ nguyên read_at cũ.
      */
+    // COALESCE(read_at, SYSUTCDATETIME()): giữ thời điểm đọc lần đầu nếu đã đọc rồi.
     public int markRead(int notificationId, int userId) {
         return jdbc.sql("""
                 UPDATE NOTIFICATION

@@ -8,6 +8,12 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { approveEntry, errorText, formatPrize, formatRaceDate, listRaces, rejectEntry, toEntryChip } from "./raceApi";
 import "./race.css";
 
+/*
+ * Trang /horse-owner/races. Danh sách suất đua của ngựa mình (GET /api/races, backend lọc theo chủ), lọc theo ngựa.
+ * Suất HLV đề xuất (PENDING_OWNER) có hai nút: Approve (PUT /api/races/{id}/approve - backend kiểm lại điều kiện
+ * và ghi lệ phí giải vào chi phí; quá hạn đăng ký thì không duyệt được) và Reject (lý do tuỳ chọn, rejectNotes giữ
+ * lý do theo từng suất).
+ */
 export default function OwnerRacesPage() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState(null);
@@ -32,6 +38,7 @@ export default function OwnerRacesPage() {
     return () => ctrl.abort();
   }, [navigate, reloadKey]);
 
+  // Danh sách ngựa (không trùng) rút ra từ các suất đua, cho ô lọc theo ngựa.
   const horses = useMemo(() => {
     const m = new Map();
     for (const e of entries || []) m.set(e.horseId, e.horseName);

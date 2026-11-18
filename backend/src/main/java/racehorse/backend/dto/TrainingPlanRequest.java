@@ -15,6 +15,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+/*
+ * Body của POST /api/training-plans (UC9, Head Trainer tạo giáo án). Một giáo án gồm 1-12
+ * giai đoạn (PhaseRequest). @Valid trước List làm Spring kiểm cả từng PhaseRequest bên trong.
+ * groomId: Groom được giao (phải thuộc HLV này, mỗi Groom tối đa 2 giáo án chưa xong - V42).
+ * Giáo án mới luôn ở DRAFT; HLV gửi duyệt -> chủ ngựa duyệt -> HLV kích hoạt.
+ */
 public record TrainingPlanRequest(
         @NotNull(message = "Horse is required") Integer horseId,
         @NotNull(message = "Assigned groom is required") Integer groomId,
@@ -33,6 +39,8 @@ public record TrainingPlanRequest(
     }
 
     /** phase_no không nằm ở đây: service tự đánh số 1, 2, 3 theo thứ tự trong danh sách. */
+    // phaseId: null khi tạo mới; có giá trị khi sửa giáo án (giữ giai đoạn cũ thay vì tạo lại,
+    // để các buổi tập đã gắn vào giai đoạn đó không bị mất).
     public record PhaseRequest(
             Integer phaseId,
             @NotBlank(message = "Phase name is required")
@@ -67,6 +75,8 @@ public record TrainingPlanRequest(
      * Cập nhật giáo án: Chỉ cho phép cập nhật groom phụ trách và nội dung các phase.
      * Thông tin chính của plan như horseId, startDate, endDate được giữ nguyên từ plan gốc.
      */
+    // Body khi sửa giáo án đang chạy: bản sửa được lưu tạm (pending_update_json, V47) và chờ
+    // chủ ngựa duyệt (PUT /{id}/update-review); quá 2 ngày không duyệt thì tự từ chối.
     public record Update(
             @NotNull(message = "Assigned groom is required") Integer groomId,
             @Size(max = 150, message = "Plan name must be at most 150 characters") String planName,
@@ -79,6 +89,7 @@ public record TrainingPlanRequest(
      * Head Trainer đổi trạng thái. Không có APPROVED: chỉ chủ ngựa duyệt
      * được (OwnerReview), Head Trainer không tự đánh dấu là đã duyệt.
      */
+    // Body của PUT /api/training-plans/{id}/status.
     public record StatusChange(
             @NotBlank(message = "Status is required")
             @Pattern(regexp = "PENDING_APPROVAL|ACTIVE|PAUSED|COMPLETED",
@@ -86,6 +97,8 @@ public record TrainingPlanRequest(
     ) {}
 
     /** Chủ ngựa duyệt hoặc từ chối giáo án. Từ chối thì bắt buộc ghi lý do. */
+    // Body của PUT /api/training-plans/{id}/owner-review: approve=true -> APPROVED,
+    // approve=false -> về DRAFT kèm note.
     public record OwnerReview(
             @NotNull(message = "Decision is required") Boolean approve,
             @Size(max = 500, message = "Note must be at most 500 characters") String note

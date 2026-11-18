@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ROLE_NAV, isNavActive, navTarget } from "./roleNav";
 
+// Component trả về một MẢNG <button> (không bọc thẻ cha), để đặt thẳng vào <nav> của từng sidebar.
 export default function NavItems({ role, prefix, icon, badges = {} }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();

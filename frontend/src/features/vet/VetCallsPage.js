@@ -40,6 +40,7 @@ function UrgencyPill({ urgency }) {
   return <i className={`vcall-pill vcall-pill--${String(urgency).toLowerCase()}`}>{urgencyLabel(urgency)}</i>;
 }
 
+// Một component cho hai route: có :callId -> chi tiết một ca (VetCallDetail), không có -> hàng chờ (VetCallQueue).
 export default function VetCallsPage() {
   const { callId } = useParams();
   return callId ? <VetCallDetail callId={callId} /> : <VetCallQueue />;
@@ -47,6 +48,7 @@ export default function VetCallsPage() {
 
 /* ---------------- hàng chờ ---------------- */
 
+// calledAt là Instant (có "Z") nên new Date() đọc đúng giờ; so ngày/tháng/năm theo giờ máy bác sĩ.
 function isCallToday(c) {
   const dateStr = c.calledAt || c.createdAt;
   if (!dateStr) return false;
@@ -60,6 +62,7 @@ function isCallToday(c) {
   );
 }
 
+// Hàng chờ: tải 40 ca gần nhất và hỏi lại mỗi POLL_MS (10 giây). Mặc định chỉ hiện ca hôm nay (filterToday).
 function VetCallQueue() {
   const navigate = useNavigate();
   const [calls, setCalls] = useState(null);
@@ -92,6 +95,7 @@ function VetCallQueue() {
   const todayCalls = allCalls.filter(isCallToday);
   const displayedCalls = filterToday ? todayCalls : allCalls;
 
+  // Ca chờ trả lời sắp theo mức khẩn cấp (HIGH > MEDIUM > LOW), cùng mức thì mới nhất trước.
   const urgencyWeight = { HIGH: 3, MEDIUM: 2, LOW: 1 };
   const pending = displayedCalls
     .filter((c) => c.status === "PENDING")
@@ -180,6 +184,7 @@ function VetCallQueue() {
   );
 }
 
+// Một dòng trong hàng chờ: ngựa, buổi tập, mức khẩn cấp, giờ gọi; bấm để mở chi tiết.
 function CallRow({ call, onOpen }) {
   const pending = call.status === "PENDING";
   return (
@@ -211,6 +216,7 @@ function VetCallDetail({ callId }) {
   const [justAnswered, setJustAnswered] = useState(false);
   const [examInfo, setExamInfo] = useState({ loading: true, isExamined: false, record: null, report: null });
 
+  // Tải chi tiết ca (GET /api/vet-calls/{id}): cảnh báo gốc, dấu hiệu HLV ghi, buổi tập, câu trả lời nếu đã có.
   useEffect(() => {
     const ctrl = new AbortController();
     setError("");
@@ -227,6 +233,7 @@ function VetCallDetail({ callId }) {
   // Chuông mở ca khác trong lúc đang xem một ca: bỏ thông báo "đã gửi" của ca cũ.
   useEffect(() => setJustAnswered(false), [callId]);
 
+  // Sau khi trả lời EMERGENCY_STOP, ca có reportId: tải thêm hồ sơ khám và báo cáo sự cố để biết ngựa đã được khám chưa.
   useEffect(() => {
     if (!call?.horseId) return;
     const ctrl = new AbortController();
@@ -410,6 +417,8 @@ function VetCallDetail({ callId }) {
   );
 }
 
+// Form trả lời (chỉ khi ca còn PENDING): chọn một trong VET_DECISIONS, dặn dò (instructions), thuốc (bắt buộc với
+// TREAT_ON_SITE). Gửi PUT /api/vet-calls/{id}/answer; người thứ hai trả lời cùng ca nhận 409.
 function AnswerForm({ call, onAnswered, onStale }) {
   const navigate = useNavigate();
   const [decision, setDecision] = useState(call.urgency === "HIGH" ? "" : "CONTINUE_LIGHT");

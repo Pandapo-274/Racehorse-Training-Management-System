@@ -13,6 +13,7 @@ import racehorse.backend.entity.AuditLog;
 import racehorse.backend.exception.ApiException;
 import racehorse.backend.repository.AuditLogRepository;
 
+// Kiểm và chuẩn hoá bộ lọc của trang Audit Log rồi gọi AuditLogRepository.search.
 @Service
 public class AuditLogService {
 
@@ -36,6 +37,7 @@ public class AuditLogService {
                         Map.of("result", "Must be SUCCESS or DENIED"));
             }
         }
+        // Giới hạn số dòng mỗi trang trong khoảng 1..200, mặc định 50.
         int n = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
         AuditLogRepository.Filter f = new AuditLogRepository.Filter(
                 parseInstant("since", since), parseInstant("until", until), res,
@@ -48,6 +50,7 @@ public class AuditLogService {
             rows = rows.subList(0, n);
             next = rows.get(n - 1).logId();
         }
+        // Ba số an toàn 24 giờ chỉ tính ở trang đầu tiên (không có beforeId).
         AuditLog.Summary summary = beforeId == null ? repository.summary() : null;
         return new AuditLog.Page(rows, next, summary);
     }

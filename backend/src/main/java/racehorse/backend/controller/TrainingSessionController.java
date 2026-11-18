@@ -25,6 +25,20 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.TrainingSessionService;
 
+/*
+ * UC10 - buổi tập (TRAINING_SESSION), tiền tố /api/training-sessions.
+ *   POST /                  HLV xếp lịch một buổi tập cho một giai đoạn của giáo án ACTIVE
+ *   GET  /                  danh sách (Groom chỉ thấy buổi của mình, chủ ngựa chỉ ngựa của mình)
+ *   GET  /assignees         Groom trong đội HLV để chọn khi xếp lịch
+ *   GET  /{id}              chi tiết
+ *   PUT  /{id}/start        Groom/HLV bắt đầu: SCHEDULED -> RUNNING
+ *   PUT  /{id}/finish       kết thúc: RUNNING -> COMPLETED (hoặc STOPPED_EARLY nếu sớm hơn giờ dự kiến)
+ *   PUT  /{id}/schedule     HLV đổi giờ / Groom / thời lượng của buổi SCHEDULED
+ *   PUT  /{id}/cancel       HLV hoặc Manager huỷ buổi SCHEDULED
+ * Gửi nhịp tim/vận tốc trong lúc tập: POST /api/sessions/{id}/vitals (AlertController).
+ * Dừng vì ngựa bất thường: PUT /api/training-sessions/{id}/stop (IncidentController).
+ * Nhận xét sau buổi tập: PUT /api/sessions/{id}/evaluation (SessionController).
+ */
 @RestController
 @RequestMapping("/api/training-sessions")
 public class TrainingSessionController {
@@ -88,6 +102,7 @@ public class TrainingSessionController {
     @PutMapping("/{id}/finish")
     @RequireRole({ "GROOM", "HEAD_TRAINER" })
     public TrainingSessionResponse finish(@PathVariable int id,
+            // required = false: kết thúc bình thường có thể không gửi body.
             @RequestBody(required = false) FinishSessionRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {

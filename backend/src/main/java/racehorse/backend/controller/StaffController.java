@@ -33,6 +33,21 @@ import racehorse.backend.service.StaffService;
 /**
  * UC19 - the club manager's Staff screen.
  */
+/*
+ * Trang Staff của Club Manager (mọi endpoint đều @RequireRole CLUB_MANAGER):
+ *   GET  /api/staff                 - danh sách tài khoản, nhóm theo vai trò
+ *   GET  /api/staff/{id}/team       - Groom và ngựa của một Head Trainer (popup)
+ *   POST /api/staff                 - tạo tài khoản nhân viên / chủ ngựa (mật khẩu tạm)
+ *   PUT  /api/staff/{id}/status     - khoá / mở khoá (kèm người nhận bàn giao việc)
+ *   PUT  /api/staff/{id}/role       - đổi vai trò giữa HLV / Vet / Groom
+ *   GET  /api/staff/{id}/open-work  - việc dang dở của người sắp bị khoá / đổi vai trò
+ *   PUT  /api/staff/{id}            - sửa họ tên, email, điện thoại
+ *   PUT  /api/staff/{id}/password   - đặt mật khẩu tạm mới
+ *   PUT  /api/staff/{id}/trainer    - gán / gỡ Groom cho một Head Trainer (V37)
+ *   PUT  /api/staff/{id}/max-horses - hạn mức ngựa của Head Trainer (V37)
+ * Các record request (ContactRequest, CreateRequest...) khai báo ngay trong controller vì
+ * chỉ dùng ở đây.
+ */
 @RestController
 @RequestMapping("/api/staff")
 public class StaffController {
@@ -48,6 +63,7 @@ public class StaffController {
     @GetMapping
     @RequireRole({"CLUB_MANAGER"})
     public List<StaffGroup> list() {
+        // Ngoại lệ hiếm hoi: gọi thẳng repository vì chỉ là đọc danh sách, không có luật nghiệp vụ.
         return repository.findAllGrouped();
     }
 
@@ -144,6 +160,7 @@ public class StaffController {
     @RequireRole({"CLUB_MANAGER"})
     public StaffRow assignTrainer(
             @PathVariable int id,
+            // Không có @Valid và body có thể là null: trainerId = null nghĩa là gỡ Groom khỏi đội.
             @RequestBody TrainerAssignRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {

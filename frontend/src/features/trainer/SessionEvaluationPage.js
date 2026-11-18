@@ -1,3 +1,10 @@
+/*
+ * src/features/trainer/SessionEvaluationPage.js - trang /trainer/session-review (Head Trainer đánh giá buổi tập).
+ * Trái: danh sách buổi đã chạy (COMPLETED / STOPPED_EARLY) với bộ lọc NEEDS_REVIEW / REVIEWED / ARCHIVED / RECOVERY /
+ * theo xếp loại. Phải: form đánh giá buổi đang chọn - số liệu thực tế, xếp loại POOR..EXCELLENT, nhận xét, đánh dấu
+ * chạy thử + link video. Lưu = PUT /api/sessions/{id}/evaluation; chủ ngựa thấy đánh giá trên trang của họ.
+ * Hạn đánh giá 48 giờ sau khi buổi kết thúc; quá hạn backend tự chuyển reviewStatus = ARCHIVED_AUTO.
+ */
 import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
@@ -89,6 +96,9 @@ function statusLabel(status) {
   return String(status || "UNKNOWN").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+// Huy hiệu hạn đánh giá: đã lưu trữ tự động / đã gửi / còn bao nhiêu giờ trong 48 giờ (đỏ khi còn <= 12 giờ).
+// Lưu ý: endedAt là giờ UTC không kèm múi giờ nhưng được đọc bằng new Date() (hiểu là giờ địa phương), nên số giờ
+// còn lại hiển thị lệch múi giờ (7 giờ ở Việt Nam).
 function computeReviewDeadlineBadge(session) {
   if (!session) return null;
   if (session.reviewStatus === "ARCHIVED_AUTO") {
@@ -121,6 +131,7 @@ function computeReviewDeadlineBadge(session) {
   };
 }
 
+// Giá trị ban đầu của form: lấy số đã có của buổi; chưa có thì dùng số dự kiến (planned...) làm gợi ý.
 function emptyForm(session) {
   return {
     actualDistance: session?.actualDistance ?? session?.plannedDistance ?? "",
@@ -150,6 +161,7 @@ export default function SessionEvaluationPage() {
   const [sendingToVet, setSendingToVet] = useState(false);
   const [sentToVetList, setSentToVetList] = useState([]);
 
+  // Tải danh sách; giữ buổi đang chọn nếu vẫn còn, không thì chọn buổi đầu tiên chưa được đánh giá.
   const loadSessions = useCallback(async (signal) => {
     setError("");
     try {
@@ -199,6 +211,7 @@ export default function SessionEvaluationPage() {
     [sessions]
   );
 
+  // Lọc ở trình duyệt theo bộ lọc đang chọn, sắp mới nhất trước.
   const visibleSessions = useMemo(
     () =>
       sessions
@@ -229,6 +242,7 @@ export default function SessionEvaluationPage() {
     setNotice("");
   };
 
+  // Ô trống được thay bằng số đã có / số dự kiến; videoUrl chỉ gửi khi là lượt chạy thử.
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!selectedSession) return;
@@ -260,6 +274,7 @@ export default function SessionEvaluationPage() {
     }
   };
 
+  // Buổi hồi phục: gửi số liệu cho bác sĩ chấm (POST submit-to-vet); sentToVetList nhớ các buổi đã gửi trong phiên.
   const handleSendToVet = async () => {
     if (!selectedSession) return;
     setSendingToVet(true);

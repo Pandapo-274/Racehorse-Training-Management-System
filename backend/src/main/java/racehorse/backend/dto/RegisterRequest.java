@@ -6,6 +6,13 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /** Dữ liệu client gửi lên khi đăng ký. Validate ngay tại cửa vào. */
+/*
+ * Body của POST /api/auth/register (công khai). AuthService chỉ cho tự đăng ký vai trò
+ * HORSE_OWNER; tài khoản nhân viên do Club Manager tạo ở trang Staff (StaffController
+ * dùng cùng bộ luật kiểm tra này cho username/mật khẩu).
+ * Username: 3-50 ký tự, chỉ chữ, số, dấu chấm và gạch dưới. Phone: rỗng hoặc 9-15 chữ số,
+ * có thể có dấu + ở đầu.
+ */
 public record RegisterRequest(
         @NotBlank(message = "Username is required")
         @Size(min = 3, max = 50, message = "Username must be 3-50 characters")

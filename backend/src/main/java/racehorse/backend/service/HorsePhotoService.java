@@ -45,6 +45,8 @@ public class HorsePhotoService {
         this.photoDir = Path.of(uploadDir).toAbsolutePath().normalize().resolve("horses");
     }
 
+    // Cùng quy trình với ProfileService.uploadAvatar: kiểm quyền chủ -> kiểm kích thước -> nhận
+    // dạng ảnh bằng magic bytes -> ghi file tên ngẫu nhiên -> cập nhật DB -> xoá ảnh cũ.
     public HorseResponse upload(int horseId, MultipartFile file, AuthenticatedUser user, String ip) {
         HorseResponse horse = requireOwner(horseId, user);
 

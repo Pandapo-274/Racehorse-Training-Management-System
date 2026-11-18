@@ -21,6 +21,7 @@ import racehorse.backend.entity.StaffRow;
  * An empty members list is a valid and meaningful state: "no veterinarians
  * yet" is something a staff screen needs to show.
  */
+// Kết quả GET /api/staff: danh sách các nhóm, mỗi nhóm một vai trò.
 public record StaffGroup(
         String roleName,
         String roleLabel,

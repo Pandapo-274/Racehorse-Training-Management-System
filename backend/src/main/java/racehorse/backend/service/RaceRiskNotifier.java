@@ -42,6 +42,9 @@ public class RaceRiskNotifier {
      * @param what what just happened, written to follow "but": e.g.
      *             "has just been locked from training (FULL)".
      */
+    // Ghi chú: "every Head Trainer" ở chú thích trên đã cũ - notifyHorseWatchers hiện chỉ báo HLV phụ trách
+    // ngựa (nếu target là HORSE). Gọi từ: TrainingLockService, MedicalRecordService, IncidentService,
+    // IncidentFilingService, ExternalReferralService.
     public void warn(int horseId, String horseName, int ownerId, AuthenticatedUser actor, String what) {
         // Đề xuất còn chờ chủ duyệt cũng báo: chủ sắp phải quyết định cho một con ngựa vừa có vấn đề.
         List<RaceModels.Entry> upcoming = races.find(null, horseId, null).stream()

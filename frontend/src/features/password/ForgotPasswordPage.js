@@ -19,6 +19,9 @@ export default function ForgotPasswordPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(null);
 
+  // Gửi email -> POST /api/auth/forgot-password. Thành công thì "sent" giữ câu trả lời của backend (luôn cùng
+  // một câu dù email có tài khoản hay không) và trang chuyển sang màn hình "đã gửi".
+  // "return setError(...)" vừa đặt lỗi vừa thoát hàm sớm.
   const submit = async (e) => {
     e.preventDefault();
 

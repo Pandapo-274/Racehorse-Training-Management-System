@@ -26,6 +26,7 @@ function todayIso() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// validate(form, horse, id): kiểm tên, độ dài, ngày sinh, tuổi theo loại hồ sơ, cha mẹ khác nhau...
 function validate(form, horse, selfId) {
   const e = {};
   if (!form.horseName.trim()) e.horseName = "Name is required";
@@ -45,6 +46,7 @@ function validate(form, horse, selfId) {
   return e;
 }
 
+// Đổi form (toàn chuỗi) sang body JSON: chuỗi rỗng -> null, id cha mẹ -> số.
 function toPayload(form) {
   const n = (v) => (String(v).trim() === "" ? null : Number(v));
   const s = (v) => (v.trim() === "" ? null : v.trim());
@@ -70,6 +72,13 @@ function Field({ id, label, error, hint, children }) {
   );
 }
 
+/*
+ * Trang sửa ngựa (/horse-owner/horses/:id/edit). useParams() đọc :id từ URL.
+ * load: tải song song hồ sơ ngựa và ứng viên cha mẹ (với chủ ngựa: hồ sơ PEDIGREE của CLB + ngựa của mình,
+ * truyền id để backend loại chính con ngựa này).
+ * submit: PUT /api/horses/{id}; backend (HorsePolicy) kiểm lại: cha mẹ phải sinh trước con ít nhất FOAL_BELOW năm,
+ * giới tính / ngày sinh / cha mẹ bị khoá khi ngựa đã có con hoặc đã có buổi tập.
+ */
 export default function HorseFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -138,6 +147,7 @@ export default function HorseFormPage() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
+  // Lưu xong quay về trang chi tiết ngựa; replace: true để Back không quay lại form.
   const submit = async (e) => {
     e.preventDefault();
     const found = validate(form, horse, id);
@@ -174,6 +184,7 @@ export default function HorseFormPage() {
     await runPhoto(() => uploadHorsePhoto(id, file));
   };
 
+  // Khung chung cho upload / gỡ ảnh: chỉ cập nhật photoUrl trong state, không tải lại cả trang.
   const runPhoto = async (action) => {
     setPhotoBusy(true);
     setPhotoError("");
@@ -202,6 +213,7 @@ export default function HorseFormPage() {
     );
   }
 
+  // Chỉ chủ của con ngựa mới sửa được (canEditHorse); backend cũng kiểm và trả 403 cho người khác.
   if (!canEditHorse(user, horse)) {
     return (
       <HorseShell title="Edit horse">

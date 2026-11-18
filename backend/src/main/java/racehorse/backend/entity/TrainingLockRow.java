@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
  * injuryBodyLocation kèm theo để màn hình nói được "khoá vì gân chi trước
  * trái" thay vì "khoá vì chấn thương #7".
  */
+// lockLevel: FULL (cấm mọi buổi tập) | HEAVY_WORK_ONLY (chỉ cấm buổi nặng; buổi có cự ly
+// <= app.lock.light-work-max-distance vẫn được tập). status: ACTIVE | RELEASED.
 public record TrainingLockRow(
         int lockId,
         int horseId,

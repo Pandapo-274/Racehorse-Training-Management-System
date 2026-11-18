@@ -23,6 +23,8 @@ import racehorse.backend.service.MedicalRecordService;
  *
  * KHÔNG có healthStatus = 'ELIGIBLE': xem ghi chú trong MedicalRecordService.
  */
+// Body của POST /api/medical-records (UC14, chỉ VETERINARIAN) -> MedicalRecordService.log.
+// @Future: ngày phải ở sau hôm nay. @PastOrPresent: không ghi lần khám ở tương lai.
 public record MedicalExamRequest(
 
         @NotNull(message = "Horse is required")

@@ -77,12 +77,14 @@ public class PreventiveReminderService {
     public PreventiveReminderResult run(Integer actorId, String ip) {
         LocalDate today = LocalDate.now();
 
+        // Lấy danh sách ứng viên từ chính bảng UC17 (một bộ phân loại duy nhất), chỉ giữ OVERDUE / DUE_SOON / NEVER.
         List<PreventiveCareItem> candidates = care
                 .board(PreventiveCareService.DEFAULT_DUE_WITHIN_DAYS, false)
                 .items().stream()
                 .filter(i -> REMIND_STATUSES.contains(i.careStatus()))
                 .toList();
 
+        // sent = sổ đã nhắc (V17); shouldRemind quyết định ô nào cần nhắc hôm nay.
         Map<ReminderKey, LocalDate> sent = logs.findAll();
         List<PreventiveCareItem> toRemind = candidates.stream()
                 .filter(i -> shouldRemind(i, sent, today))
@@ -105,6 +107,8 @@ public class PreventiveReminderService {
             }
         }
 
+        // Phần thứ hai (không qua sổ V17): nhắc riêng chủ ngựa khi còn 3/2/1/0 ngày tới hạn, hoặc đã quá hạn
+        // (quá hạn thì tối đa một lần mỗi 7 ngày - hasOverdueNotificationRecently).
         // Notify horse owners for due soon (3, 2, 1 days or today) and overdue
         int ownersNotified = 0;
         for (PreventiveCareItem item : candidates) {

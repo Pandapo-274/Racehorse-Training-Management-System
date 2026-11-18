@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /** Một lần gọi bác sĩ, kèm cảnh báo gốc và câu trả lời (nếu đã có). Giờ là UTC. */
+// Kết quả GET /api/vet-calls, GET /api/vet-calls/{callId} và các thao tác gọi/trả lời.
+// alertId null khi cuộc gọi do Groom tạo lúc dừng buổi vì chấn thương (V38).
 public record VetCallResponse(
         int callId,
         Integer alertId,

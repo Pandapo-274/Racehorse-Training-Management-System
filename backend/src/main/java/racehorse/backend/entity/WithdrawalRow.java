@@ -10,6 +10,8 @@ import java.time.LocalDateTime;
  * giáo án. Với yêu cầu đã duyệt, con số thật nằm ở cancelledSessions và
  * endedPlans (ghi lúc duyệt).
  */
+// Dùng cho trang Withdrawals (Club Manager duyệt) và panel rút ngựa trên trang chi tiết
+// ngựa (chủ ngựa xem trạng thái yêu cầu của mình).
 public record WithdrawalRow(
         int withdrawalId,
         int horseId, String horseName, String registrationCode, String stallNo,

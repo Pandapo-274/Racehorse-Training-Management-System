@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.dto.SubmitRequest;
 import racehorse.backend.entity.HorseRequestRow;
 
+// SQL cho bảng HORSE_REQUEST. SELECT_ROW JOIN thêm tên chủ, người duyệt, tên cha và mẹ khai báo.
 @Repository
 public class HorseRequestRepository {
 
@@ -123,6 +124,7 @@ public class HorseRequestRepository {
      *
      * @return số dòng bị ảnh hưởng: 1 nếu thắng, 0 nếu người khác đã xử lý.
      */
+    // (Ghi chú: khối Javadoc ngay phía trên mô tả markReviewed ở cuối lớp, bị đặt lệch chỗ.)
     /**
      * Chủ ngựa huỷ yêu cầu của chính mình. Cùng điều kiện như markReviewed:
      * owner_id và status = 'PENDING' nằm ngay trong câu UPDATE, nên nếu

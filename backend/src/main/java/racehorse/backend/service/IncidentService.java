@@ -22,6 +22,13 @@ import racehorse.backend.repository.VetCallRepository;
 import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.util.Text;
 
+/*
+ * Vòng đời một báo cáo sự cố:
+ *   PENDING (chờ bác sĩ) --receive--> RECEIVED (bác sĩ đã nhận) --khám--> EXAMINED
+ *   PENDING --HLV dismiss (báo động giả, bắt buộc lý do)--> DISMISSED
+ *   RECEIVED --handover--> RECEIVED (bác sĩ khác) hoặc PENDING (về hàng chờ chung)
+ * Khi còn PENDING/RECEIVED, ngựa bị IncidentGuard chặn xếp lịch / Start buổi tập.
+ */
 @Service
 public class IncidentService {
 
@@ -92,6 +99,7 @@ public class IncidentService {
         return new StopSessionResponse(sessionId, "STOPPED_EARLY", report);
     }
 
+    // Gọi từ AlertService.resolve khi HLV chọn STOP_SESSION. Buổi không còn RUNNING thì không làm gì (null).
     @Transactional
     public Integer stopFromAlert(AuthenticatedUser trainer, int sessionId, String symptoms, String urgency,
                                  String ip) {
@@ -105,6 +113,8 @@ public class IncidentService {
 
     private int openStopReport(AuthenticatedUser user, IncidentRepository.SessionForStop s, String symptoms,
                                String description, String urgency, String ip) {
+        // Dùng chung cho stopSession và stopFromAlert: tạo báo cáo gắn session_id, tạo VET_CALL (V38) để hiện
+        // trong hàng chờ "Vet calls", báo bác sĩ, chủ ngựa, HLV, Groom và cảnh báo rủi ro đăng ký giải.
         int sessionId = s.sessionId();
         int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, urgency);
         users.writeAudit(user == null ? null : user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
@@ -151,6 +161,8 @@ public class IncidentService {
             case "ALL" -> List.of();
             default -> List.of(f);
         };
+        // Groom chỉ thấy báo cáo do mình gửi; chủ ngựa chỉ thấy báo cáo của ngựa mình.
+        // urgentFirst: hàng chờ còn mở xếp HIGH lên đầu; danh sách đã đóng xếp mới nhất trước.
         Integer reporterId = "GROOM".equals(user.role()) ? user.userId() : null;
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
         boolean urgentFirst = !"EXAMINED".equals(f) && !"DISMISSED".equals(f) && !"ALL".equals(f);
@@ -243,6 +255,7 @@ public class IncidentService {
                     "Only PENDING or RECEIVED cases can be handed over (currently " + r.status() + ")");
         }
 
+        // Ai được bàn giao: Club Manager (điều phối), bác sĩ đang giữ ca, hoặc bác sĩ tự nhận ca về mình.
         boolean isManager = "CLUB_MANAGER".equals(user.role());
         boolean isCurrentAssignee = r.receivedBy() != null && r.receivedBy().equals(user.userId());
         boolean isTakeover = req.targetVetId() != null && req.targetVetId().equals(user.userId());

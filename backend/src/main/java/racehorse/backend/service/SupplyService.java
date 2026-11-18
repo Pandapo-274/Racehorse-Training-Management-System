@@ -30,6 +30,18 @@ import racehorse.backend.security.AuthenticatedUser;
  *   WASTE     thrown away (spoiled, expired, broken)
  * The catalogue edit (PUT /{id}) no longer touches the quantity at all.
  */
+/*
+ * Tóm tắt luật kho (Flow 4):
+ *   - Mỗi thay đổi current_qty ghi đúng một dòng SUPPLY_MOVEMENT (sổ cái kho).
+ *   - Đếm ra NHIỀU hơn sổ sách bắt buộc chọn lý do (RECOUNT/RETURNED/FOUND/NOT_USED/OTHER + ghi chú);
+ *     không phải Manager đếm ra nhiều hơn thì báo Manager. Đếm ít hơn không cần lý do (hao hụt bình thường).
+ *   - Groom không đếm thuốc (thuốc là kho kiểm soát, chỉ Manager đếm).
+ *   - Không đổi đơn vị / loại của món đang được khẩu phần sử dụng.
+ *   - Một tên mỗi khu (V24). Chỉ thuốc có hạn dùng.
+ *   - Tụt dưới định mức lần đầu -> chuông "Restock suggested" (thuốc báo cả bác sĩ); mỗi sáng 07:05
+ *     SupplyDigestJob nhắc lại mọi món còn thiếu và thuốc sắp/đã hết hạn.
+ *   - Việc chăm sóc trừ kho không bao giờ chặn Groom: kho thiếu thì lấy hết phần còn lại và báo Manager.
+ */
 @Service
 public class SupplyService {
 
@@ -174,6 +186,7 @@ public class SupplyService {
         String moveReason = higher
                 ? "Stock count, more than record: " + COUNT_UP_TEXT.get(why) + (cleanNote == null ? "" : " - " + cleanNote)
                 : "Stock count";
+        // setQty trả {trước, sau}; delta = sau - trước ghi thành dòng ADJUST (âm hoặc dương).
         BigDecimal[] range = repo.setQty(id, qty, user.userId()).orElseThrow(() -> notFound(id));
         BigDecimal delta = range[1].subtract(range[0]);
         if (delta.signum() != 0) {
@@ -206,6 +219,8 @@ public class SupplyService {
         String unit = r.unit() != null && !r.unit().isBlank() ? r.unit().trim() : before.unit();
         String area = r.area() != null && !r.area().isBlank() ? r.area().trim() : before.area();
 
+        // Lưu ý: addWithDetails nhận unit và area nhưng câu SQL hiện chỉ cập nhật đơn giá (unit_price); đơn vị và
+        // khu vực của món KHÔNG đổi khi nhập hàng (biến unit/area ở trên chỉ dùng để viết lý do trong sổ).
         BigDecimal[] range = repo.addWithDetails(id, r.qty(), r.unitPrice(), r.unit(), r.area(), user.userId())
                 .orElseThrow(() -> notFound(id));
 

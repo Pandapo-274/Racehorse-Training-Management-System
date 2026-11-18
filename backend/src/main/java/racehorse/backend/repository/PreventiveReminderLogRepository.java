@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
  * Bảng nhỏ: tối đa số ngựa x 3 loại x 3 giai đoạn dòng, và có dọn theo ngày, nên
  * đọc cả bảng một lần mỗi lần chạy rẻ hơn hỏi từng ô một.
  */
+// Dùng bởi PreventiveReminderService.run: findAll() ở đầu lần chạy, markSent() cho từng ô vừa nhắc,
+// deleteOlderThan() để dọn sổ cũ hơn 400 ngày.
 @Repository
 public class PreventiveReminderLogRepository {
 

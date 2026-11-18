@@ -4,6 +4,7 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+// Các câu SQL cho đổi/đặt lại mật khẩu và bảng PASSWORD_RESET_TOKEN (V4).
 @Repository
 public class PasswordRepository {
 

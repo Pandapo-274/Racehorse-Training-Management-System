@@ -1,3 +1,14 @@
+/*
+ * src/features/trainer/SchedulePage.js - trang /trainer/schedule (Lịch tập theo tuần của Head Trainer, Flow 2).
+ * Lưới 7 ngày (thứ Hai -> Chủ nhật), mỗi ô là các buổi tập trong ngày (SessionCard). HLV:
+ *   - tạo buổi tập: chọn loại (thường / hồi phục) -> SessionModal -> POST /api/training-sessions
+ *     (body: phaseId, assignedTo = Groom, sessionDate, plannedDistance, plannedDuration, velocityCeiling, remarks);
+ *   - đổi giờ hoặc Groom của buổi SCHEDULED: PUT /api/training-sessions/{id}/schedule;
+ *   - huỷ buổi: PUT /api/training-sessions/{id}/cancel (hỏi xác nhận bằng ConfirmModal).
+ * Backend (TrainingSessionService.checkSlot) chặn: trùng giờ 90 phút với buổi khác của cùng ngựa / cùng Groom, vượt
+ * sessionsPerWeek của giai đoạn, ngựa bị khoá / chưa khám sự cố / đã rút, giáo án không ACTIVE...
+ * Lưu ý: trang này gọi authFetch trực tiếp với SESSION_API / PLAN_API thay vì qua một module *Api.js riêng.
+ */
 import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavItems from "../navigation/NavItems";
@@ -11,6 +22,7 @@ import "./schedule.css";
 const SESSION_API = "/api/training-sessions";
 const PLAN_API = "/api/training-plans";
 
+// Giá trị trống của form buổi tập. sessionDate dạng "yyyy-MM-ddTHH:mm" (ô <input type="datetime-local">).
 const EMPTY_FORM = {
   horseId: "",
   planId: "",
@@ -23,6 +35,7 @@ const EMPTY_FORM = {
   groomNotes: "",
 };
 
+// Các hàm ngày giờ thuần: khoá ngày "yyyy-mm-dd" theo giờ địa phương, thứ Hai của tuần, cộng ngày, định dạng hiển thị.
 function dateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -67,6 +80,8 @@ function formatTime(value) {
   return String(value).slice(11, 16);
 }
 
+// sessionDate là LocalDateTime (giờ địa phương, không múi giờ): cắt chuỗi để đưa vào ô datetime-local và thêm ":00"
+// giây khi gửi lên - không đổi qua Date / UTC nên không bị lệch giờ.
 function toLocalDateTimeInput(value) {
   if (!value) return "";
   return String(value).slice(0, 16);
@@ -77,6 +92,7 @@ function toApiDateTime(value) {
   return value.length === 16 ? `${value}:00` : value;
 }
 
+// Tính giờ kết thúc dự kiến = giờ bắt đầu + thời lượng; sameDay = false nếu buổi tập vắt sang ngày hôm sau (bị chặn).
 function computeEndInfo(sessionDateStr, plannedDurationStr) {
   if (!sessionDateStr) return null;
   const start = new Date(sessionDateStr);
@@ -92,6 +108,7 @@ function computeEndInfo(sessionDateStr, plannedDurationStr) {
   return { end, sameDay, endTimeText, dur };
 }
 
+// Câu lỗi để hiện: ghép các lỗi từng ô của backend nếu có, không thì message chung.
 function getErrorMessage(error) {
   if (error?.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return Object.values(error.fieldErrors).join(" ");
@@ -157,6 +174,7 @@ function ScheduleSidebar({ onSignOut }) {
   );
 }
 
+// Thẻ một buổi tập trong lưới; chỉ buổi SCHEDULED mới bấm để sửa. due = đã tới giờ mà chưa bắt đầu.
 function SessionCard({ session, onEdit, now }) {
   const canEdit = session.status === "SCHEDULED";
   const due = canEdit && session.sessionDate && new Date(session.sessionDate) <= now;
@@ -214,6 +232,7 @@ function SessionCard({ session, onEdit, now }) {
   );
 }
 
+// Hộp chọn loại buổi trước khi tạo: buổi tập thường hay buổi hồi phục (sau chấn thương, theo y lệnh của bác sĩ).
 function SessionTypeChoiceModal({ isOpen, onClose, onSelect }) {
   if (!isOpen) return null;
   return (
@@ -317,6 +336,12 @@ function SessionTypeChoiceModal({ isOpen, onClose, onSelect }) {
   );
 }
 
+/*
+ * Hộp thoại tạo / sửa buổi tập. Form và state nằm ở trang cha (SchedulePage), modal chỉ hiển thị và gọi lại.
+ * Buổi thường: chọn giáo án ACTIVE -> giai đoạn -> Groom -> giờ, cự ly, thời lượng, trần vận tốc (mặc định lấy từ giai đoạn).
+ * Buổi hồi phục: chọn ngựa -> modal tự tìm "y lệnh light work" trong hồ sơ khám và lệnh khoá HEAVY_WORK_ONLY của ngựa
+ * (recoveryDetails: protocol, maxHr, tần suất...). Không có y lệnh thì không cho tạo; cự ly tối đa 800 m.
+ */
 function SessionModal({
   form,
   setForm,
@@ -340,6 +365,7 @@ function SessionModal({
   );
   const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
 
+  // Mỗi ngựa có giáo án ACTIVE một lần (danh sách ngựa chọn được cho buổi hồi phục).
   const recoveryHorses = useMemo(() => {
     const seen = new Set();
     const list = [];
@@ -360,6 +386,7 @@ function SessionModal({
 
   const activeHorseId = form.horseId || (selectedPlan ? String(selectedPlan.horseId) : "");
 
+  // Chọn ngựa cho buổi hồi phục: điền sẵn giáo án, giai đoạn đầu tiên của giáo án và Groom của giáo án.
   const handleRecoveryHorseSelect = async (selectedHorseId) => {
     const horseEntry = recoveryHorses.find((h) => String(h.horseId) === String(selectedHorseId));
     if (!horseEntry) {
@@ -393,6 +420,8 @@ function SessionModal({
     }));
   };
 
+  // Đọc hồ sơ khám + vitals của ngựa để tìm y lệnh tập nhẹ. Đây là nhận diện bằng chữ (regex trên diagnosis / notes:
+  // "light work", "protocol:", "max HR", "max ... m"), nên phụ thuộc vào cách bác sĩ ghi chú.
   useEffect(() => {
     if (!isRecovery || !activeHorseId) {
       setRecoveryDetails(null);
@@ -506,6 +535,7 @@ function SessionModal({
     };
   }, [isRecovery, activeHorseId, setRecoveryDetails, setForm]);
 
+  // Danh sách Groom để chọn: thêm Groom của giáo án / của buổi đang sửa nếu họ không có trong danh sách assignees.
   const availableGrooms = useMemo(() => {
     const list = [...grooms];
     const ensureGroom = (id, name) => {
@@ -1000,6 +1030,11 @@ function SessionModal({
   );
 }
 
+/*
+ * State: sessions (mọi buổi của HLV), plans (giáo án ACTIVE), phases (giai đoạn của giáo án đang chọn trong form),
+ * grooms (Groom trong đội), weekStart (thứ Hai của tuần đang xem), form / editingSession / modalOpen (hộp thoại),
+ * isRecoverySession / recoveryDetails (buổi hồi phục), now (giờ hiện tại để đánh dấu buổi đã tới giờ), cancelConfirm.
+ */
 export default function SchedulePage() {
   const navigate = useNavigate();
 
@@ -1022,6 +1057,7 @@ export default function SchedulePage() {
   const [now, setNow] = useState(() => new Date());
   const [cancelConfirm, setCancelConfirm] = useState({ isOpen: false, session: null });
 
+  // Tải song song: buổi tập, giáo án ACTIVE, Groom có thể giao. silent = true khi tải ngầm (không hiện "đang tải").
   const loadData = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
@@ -1051,6 +1087,7 @@ export default function SchedulePage() {
     loadData();
   }, [loadData]);
 
+  // Mỗi 30 giây (khi không mở hộp thoại): cập nhật đồng hồ và tải ngầm để thấy buổi Groom vừa bắt đầu / kết thúc.
   useEffect(() => {
     if (modalOpen) return undefined;
     const timer = setInterval(() => {
@@ -1060,6 +1097,7 @@ export default function SchedulePage() {
     return () => clearInterval(timer);
   }, [loadData, modalOpen]);
 
+  // Đổi giáo án trong form thì tải các giai đoạn của nó (GET /api/training-plans/{id}).
   useEffect(() => {
     let cancelled = false;
 
@@ -1106,6 +1144,7 @@ export default function SchedulePage() {
     [weekStart],
   );
 
+  // Gom buổi tập (trừ CANCELLED) theo ngày "yyyy-mm-dd" của tuần đang xem, mỗi ngày sắp theo giờ.
   const sessionsByDay = useMemo(() => {
     const result = {};
 
@@ -1128,6 +1167,7 @@ export default function SchedulePage() {
     return result;
   }, [sessions, weekDays]);
 
+  // Mở hộp thoại tạo buổi. Chỉ có một giáo án ACTIVE thì chọn sẵn giáo án đó.
   const openCreateModal = async (recovery = false) => {
     setIsRecoverySession(Boolean(recovery));
     setEditingSession(null);
@@ -1196,6 +1236,9 @@ export default function SchedulePage() {
     setForm(EMPTY_FORM);
   };
 
+  // Kiểm ở trình duyệt: buổi hồi phục phải có y lệnh và <= 800 m; cự ly 1-5000 m; thời lượng 15-720 phút, bội số 5;
+  // không vắt sang ngày hôm sau. Sửa buổi chỉ gửi Groom, giờ, thời lượng. Buổi hồi phục ghi "[Recovery Session]" và
+  // y lệnh vào remarks (các trang khác nhận diện buổi hồi phục bằng chuỗi này).
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (isRecoverySession && !recoveryDetails?.hasVetOrder) {
@@ -1306,6 +1349,7 @@ export default function SchedulePage() {
     });
   };
 
+  // Huỷ buổi đã xác nhận: PUT /cancel, backend báo Groom được giao.
   const confirmCancelSession = async () => {
     const sessionToCancel = cancelConfirm.session;
     setCancelConfirm({ isOpen: false, session: null });

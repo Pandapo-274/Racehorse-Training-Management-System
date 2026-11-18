@@ -17,6 +17,13 @@ import racehorse.backend.security.AuthInterceptor;
 import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.service.PasswordService;
 
+/*
+ * Ba endpoint về mật khẩu (UC5), cùng tiền tố /api/auth:
+ *   PUT  /api/auth/change-password (cần token)  - đổi mật khẩu khi đang đăng nhập
+ *   POST /api/auth/forgot-password (công khai)  - xin link đặt lại mật khẩu qua email
+ *   POST /api/auth/reset-password  (công khai)  - dùng token trong link để đặt mật khẩu mới
+ * Hai đường công khai được liệt kê trong WebConfig.PUBLIC_PATHS.
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class PasswordController {

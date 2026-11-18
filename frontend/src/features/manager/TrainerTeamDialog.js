@@ -18,6 +18,8 @@ function Thumb({ src, name }) {
     : <span className="tt-thumb tt-thumb--text" aria-hidden="true">{initialsOf(name)}</span>;
 }
 
+// Props: row (dòng Head Trainer trên trang Staff), onClose. Tải GET /api/staff/{id}/team -> { trainer, grooms,
+// horses } và vẽ hai danh sách trong một hộp thoại (createPortal vào <body>). Escape để đóng.
 export default function TrainerTeamDialog({ row, focus = "grooms", onClose }) {
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);

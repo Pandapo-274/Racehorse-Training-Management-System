@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import racehorse.backend.dto.ProfileResponse;
 
+// SQL đọc/sửa hồ sơ cá nhân trên APP_USER (dùng bởi ProfileService).
 @Repository
 public class ProfileRepository {
 

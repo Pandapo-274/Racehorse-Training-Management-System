@@ -13,6 +13,8 @@ import org.springframework.stereotype.Repository;
 
 import racehorse.backend.entity.SupplyModels;
 
+// SQL cho kho (SUPPLY_STOCK) và sổ biến động (SUPPLY_MOVEMENT). Các hàm đổi số lượng dùng
+// "OUTPUT DELETED.current_qty, INSERTED.current_qty" để trả về số TRƯỚC và SAU trong cùng một câu UPDATE.
 @Repository
 public class SupplyRepository {
 
@@ -257,6 +259,7 @@ public class SupplyRepository {
     }
 
     /** Marks items as reminded today. The date guard makes a second run on the same day a no-op. */
+    // "IN (:ids)" với một List: tham số đặt tên của Spring tự mở rộng thành IN (?, ?, ?...).
     public int markReminded(List<Integer> ids, LocalDate today) {
         if (ids.isEmpty()) return 0;
         return jdbc.sql("""

@@ -9,6 +9,7 @@ import racehorse.backend.dto.HealthOverviewResponse;
 import racehorse.backend.exception.ApiException;
 import racehorse.backend.repository.HealthRepository;
 
+// Kiểm bộ lọc trạng thái rồi ghép số đếm (toàn đàn) + danh sách ngựa (theo bộ lọc).
 @Service
 public class HealthService {
 

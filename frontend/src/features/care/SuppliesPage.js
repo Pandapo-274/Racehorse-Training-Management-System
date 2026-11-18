@@ -22,6 +22,7 @@ import {
 } from "./careApi";
 import "./care.css";
 
+// Đơn giá hiển thị, vd. "25,000 VND / 1 kg"; chưa có giá thì "—".
 function formatSupplyPrice(price, unit) {
   if (!price || Number(price) <= 0) return "—";
   return `${Number(price).toLocaleString("en-US")} VND / 1 ${unit || "unit"}`;
@@ -41,12 +42,18 @@ const EMPTY = {
 };
 
 /** Days from today to an ISO date (negative = past). */
+// Đổi cả hai ngày sang mốc UTC nửa đêm rồi trừ, để số ngày không bị lệch vì giờ mùa hay múi giờ.
 function daysUntil(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   const [ty, tm, td] = todayIso().split("-").map(Number);
   return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86400000);
 }
 
+/*
+ * Form thêm / sửa một mặt hàng (chỉ Club Manager). item = null -> tạo mới (POST /api/supplies, currentQty là số
+ * lượng ban đầu, ghi thành dòng RECEIVE trong sổ kho); có item -> sửa danh mục (PUT /api/supplies/{id}),
+ * không đổi số lượng.
+ */
 function SupplyForm({ initial, areas, onSaved, onCancel }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(() =>
@@ -104,6 +111,7 @@ function SupplyForm({ initial, areas, onSaved, onCancel }) {
     }
   };
 
+  // Hàm dựng một ô nhập có nhãn + lỗi cho trường key (đỡ lặp JSX cho từng ô).
   const field = (id, label, input, key) => (
     <div className="hz-field">
       <label htmlFor={id}>{label}</label>
@@ -165,6 +173,7 @@ function ReportForm({ item, onDone, onCancel }) {
   const [busy, setBusy] = useState(false);
   const medicine = item.category === "MEDICINE";
 
+  // POST /api/supplies/{id}/report với lý do (REPORT_REASONS), số lượng tuỳ chọn và ghi chú. Không đổi tồn kho.
   const submit = async (e) => {
     e.preventDefault();
     if (!reason) {
@@ -239,6 +248,14 @@ function ReportForm({ item, onDone, onCancel }) {
 }
 
 /** Count the shelf, receive a delivery, record waste, or show the ledger of one item. */
+/*
+ * Thẻ thao tác trên một mặt hàng, theo kind:
+ *   "count"   - kiểm đếm: nhập số trên kệ; cao hơn sổ phải chọn lý do (COUNT_UP_REASONS)
+ *   "restock" / "receive" - nhập hàng: cộng thêm số lượng, tính tổng tiền theo đơn giá đang có
+ *   "waste"   - huỷ hàng hỏng: không vượt tồn kho, bắt buộc lý do
+ *   "history" - xem sổ kho (100 thay đổi gần nhất)
+ * onDone(mặt hàng sau khi lưu, câu thông báo) để trang cha cập nhật dòng đó.
+ */
 function StockAction({ kind, item, onDone, onCancel }) {
   const navigate = useNavigate();
   // A count starts from the number on record: the groom only changes it if the shelf differs.
@@ -302,6 +319,7 @@ function StockAction({ kind, item, onDone, onCancel }) {
   const fixedPrice = Number(item.unitPrice) || 0;
   const totalCost = qtyOk ? qtyNum * fixedPrice : 0;
 
+  // Kiểm ở trình duyệt theo từng loại thao tác, rồi gọi API tương ứng (count / receive / waste).
   const submit = async (e) => {
     e.preventDefault();
     if (!qtyOk) {
@@ -456,6 +474,13 @@ function StockAction({ kind, item, onDone, onCancel }) {
   );
 }
 
+/*
+ * Trang kho (/manager/supplies, /groom/supplies, /veterinarian/supplies). Lưu ý: App.js và roleNav.js không có
+ * /trainer/supplies, nên nhánh quyền của Head Trainer bên dưới hiện không dùng tới. Quyền theo vai trò
+ * (chỉ để ẩn nút; SupplyService ở backend mới là chốt): Manager làm mọi việc; Groom kiểm đếm (trừ thuốc) và báo
+ * vấn đề; Head Trainer xem sổ kho và báo vấn đề; bác sĩ chỉ thấy MEDICINE và báo vấn đề.
+ * action: thẻ StockAction / ReportForm đang mở; editing: SupplyForm đang mở ("new" hoặc mặt hàng).
+ */
 export default function SuppliesPage() {
   const navigate = useNavigate();
   const role = getUser()?.role;
@@ -496,11 +521,13 @@ export default function SuppliesPage() {
 
   const areas = useMemo(() => [...new Set((items || []).map((i) => i.area).filter(Boolean))].sort(), [items]);
   const lowCount = (items || []).filter((i) => i.needsRestock).length;
+  // Lọc ở trình duyệt theo khu vực, loại và "chỉ hàng cần nhập thêm" (needsRestock = dưới định mức).
   const shown = useMemo(() => (items || [])
     .filter((i) => !area || i.area === area)
     .filter((i) => !category || i.category === category)
     .filter((i) => !lowOnly || i.needsRestock), [items, area, category, lowOnly]);
 
+  // Thay (hoặc thêm) một mặt hàng trong danh sách bằng bản backend trả về, rồi sắp lại: hàng cần nhập lên đầu.
   const replace = (saved) =>
     setItems((old) => {
       const exists = old.some((i) => i.supplyId === saved.supplyId);

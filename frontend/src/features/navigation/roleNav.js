@@ -71,6 +71,7 @@ export const ROLE_NAV = {
 };
 
 /** Mục có đang là trang hiện tại không. */
+// Ví dụ: mục { path: "/trainer/horses" } active với "/trainer/horses" và "/trainer/horses/12".
 export function isNavActive(item, pathname) {
   if (!item.path || item.hash) return false;
   if (item.exact) return pathname === item.path;

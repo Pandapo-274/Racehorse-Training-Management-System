@@ -1,3 +1,10 @@
+/*
+ * src/features/trainer/LiveSessionMonitorPage.js - trang /trainer/live-session của Head Trainer (UC11, V27).
+ * Theo dõi trực tiếp: buổi tập đang RUNNING, cảnh báo ngưỡng (THRESHOLD_ALERT) do số đo của Groom sinh ra, báo cáo
+ * sự cố đang chờ bác sĩ, và các lần gọi bác sĩ (VET_CALL) kèm câu trả lời.
+ * Cập nhật bằng polling mỗi POLL_MS (4 giây): chỉ hỏi cảnh báo MỚI (afterId = alertId lớn nhất đã có).
+ * Với mỗi cảnh báo, HLV chọn: Continue / Reduce intensity / Stop session (PUT resolve) hoặc Call vet (VetCallDialog).
+ */
 import { useSignOutModal } from "../auth/SignOutModal";
 import { parseServerTime } from "../horse/horseApi";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -82,6 +89,7 @@ function LiveSessionSidebar({ onSignOut }) {
   );
 }
 
+// Giờ từ backend (UTC không múi giờ) -> "HH:mm" theo giờ máy, qua parseServerTime.
 function formatTime(value) {
   if (!value) return "—";
   const date = parseServerTime(value) || new Date(NaN); // triggeredAt là giờ UTC
@@ -90,6 +98,7 @@ function formatTime(value) {
     : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// Một dòng cảnh báo: chỉ số vượt ngưỡng, mức độ, giờ; cảnh báo còn mở có các nút xử lý.
 function AlertRow({ alert, busy, onResolve, onCallVet }) {
   const severity = toSeverity(alert.severity);
   return (
@@ -148,6 +157,7 @@ function VetCallDialog({ alert, onClose, onSent, navigate }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Bấm một gợi ý dấu hiệu (SIGN_SUGGESTIONS) thì nối vào ô "observations" (không thêm trùng).
   const addSign = (sign) =>
     setForm((old) => {
       const parts = old.observations.split(",").map((x) => x.trim()).filter(Boolean);
@@ -155,6 +165,7 @@ function VetCallDialog({ alert, onClose, onSent, navigate }) {
       return { ...old, observations: [...parts, sign].join(", ") };
     });
 
+  // POST /api/alerts/{id}/vet-call; thành công thì onSent(cuộc gọi) để trang cha cập nhật danh sách.
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -293,6 +304,8 @@ function VetCallCard({ call }) {
   );
 }
 
+// Đoán buổi tập hồi phục (sau chấn thương) theo dấu hiệu trong remarks / tên giai đoạn / cự ly ngắn.
+// (Backend không có cột riêng cho loại buổi này nên frontend nhận diện bằng chữ.)
 function isRecoverySession(session) {
   if (!session) return false;
   return Boolean(
@@ -302,6 +315,11 @@ function isRecoverySession(session) {
   );
 }
 
+/*
+ * State chính: alerts (cảnh báo), sessions (buổi RUNNING), incidents (báo cáo sự cố PENDING), vetCalls (10 lần gọi
+ * gần nhất), callingFor (cảnh báo đang mở form gọi bác sĩ), showHistory (xem cả cảnh báo đã xử lý - tắt polling),
+ * latestAlertId (useRef: nhớ id lớn nhất mà không gây render lại), sessionFilter (tất cả / thường / hồi phục).
+ */
 export default function LiveSessionMonitorPage() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
@@ -332,6 +350,8 @@ export default function LiveSessionMonitorPage() {
     if (!handleAuthError(err, navigate)) setError(err.message || "Unable to load live session data.");
   }, [navigate]);
 
+  // Tải đầy đủ lần đầu (và khi bật/tắt lịch sử). Mỗi nguồn có .catch riêng trả [] để một nguồn lỗi không làm trống
+  // cả trang.
   const loadInitial = useCallback(async (signal, includeHistory) => {
     setError("");
     try {
@@ -374,6 +394,8 @@ export default function LiveSessionMonitorPage() {
     return () => controller.abort();
   }, [loadInitial, showHistory]);
 
+  // Polling: setInterval gọi poll mỗi 4 giây; cờ cancelled tránh setState sau khi effect đã dọn. Cảnh báo mới được
+  // gộp vào danh sách cũ bằng Map theo alertId (không trùng), sắp mới nhất trước.
   useEffect(() => {
     if (showHistory) return undefined;
     let cancelled = false;
@@ -414,6 +436,7 @@ export default function LiveSessionMonitorPage() {
     return () => { cancelled = true; clearInterval(timer); };
   }, [showHistory, navigate]);
 
+  // Xử lý cảnh báo (CONTINUE / REDUCE_INTENSITY / STOP_SESSION). STOP_SESSION: backend dừng buổi và báo Groom.
   const handleResolve = async (alert, actionTaken) => {
     setBusyAlertId(alert.alertId);
     setActionError("");
@@ -429,6 +452,7 @@ export default function LiveSessionMonitorPage() {
     }
   };
 
+  // Kết thúc buổi bình thường từ màn HLV (PUT /finish) -> COMPLETED, chấm điểm sau ở Session review.
   const handleFinish = async (session) => {
     if (!window.confirm(`Finish the session with ${session.horseName || `horse #${session.horseId}`}?`)) return;
     setFinishingId(session.sessionId);
@@ -467,6 +491,7 @@ export default function LiveSessionMonitorPage() {
     }
   };
 
+  // Sau khi gọi bác sĩ: thêm cuộc gọi lên đầu khung "Vet calls" và coi cảnh báo đó là đã xử lý (VET_CALLED).
   const handleVetCallSent = (call) => {
     setCallingFor(null);
     setVetCalls((current) => [call, ...current.filter((c) => c.callId !== call.callId)]);
@@ -477,6 +502,7 @@ export default function LiveSessionMonitorPage() {
       : current.filter((item) => item.alertId !== call.alertId));
   };
 
+  // Thông báo VET_CALL dẫn HLV tới /trainer/live-session#vet-calls: hook này cuộn tới phần tử có id tương ứng.
   useScrollToHash(!loading);
 
   const { requestSignOut, modalElement } = useSignOutModal(navigate);

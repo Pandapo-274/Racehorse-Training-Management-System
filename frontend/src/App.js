@@ -1,3 +1,17 @@
+/*
+ * ROUTER DUY NHẤT của frontend (react-router-dom v7). Mọi đường dẫn (URL) đều khai báo ở đây:
+ *   <BrowserRouter>  dùng History API của trình duyệt (URL đẹp, không có dấu #).
+ *   <Routes>         chọn <Route> đầu tiên khớp với URL hiện tại.
+ *   <Route path element> path có thể có tham số (":id"), đọc bằng useParams() trong trang.
+ *   <Navigate to>    chuyển hướng (replace = không để lại lịch sử để bấm Back).
+ *
+ * Quy ước đường dẫn theo vai trò: /manager/..., /trainer/..., /veterinarian/..., /groom/..., /horse-owner/...
+ * Nhiều trang được dùng lại cho nhiều vai trò (HorseListPage, HorseDetailPage, SuppliesPage, RacesPage,
+ * FeedingPage) - trang tự đọc vai trò người dùng để hiện đúng nút.
+ *
+ * Bảo mật: RoleRoute chỉ là lớp TIỆN LỢI trên giao diện (đọc user trong localStorage, ai cũng sửa được).
+ * Cơ chế thực thi thật là @RequireRole + AuthInterceptor ở backend: API sai vai trò luôn trả 403.
+ */
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import LoginPage from "./features/auth/LoginPage";
 import AccessDeniedPage from "./features/access/AccessDeniedPage";
@@ -47,6 +61,8 @@ import OwnerRacesPage from "./features/race/OwnerRacesPage";
    loại guard thứ hai. Backend lấy userId từ token nên không có /profile/:id:
    một người chỉ đọc và sửa được hồ sơ của chính họ. */
 const EVERY_ROLE = ["CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM", "HORSE_OWNER"];
+// RoleRoute: bọc một trang để (1) chưa đăng nhập -> /login, (2) đang dùng mật khẩu tạm -> /change-password,
+// (3) sai vai trò -> /access-denied, (4) đúng -> hiện trang (children).
 function RoleRoute({ roles, children }) {
   const user = getUser();
   const { pathname } = useLocation();
@@ -60,6 +76,8 @@ function RoleRoute({ roles, children }) {
   return children;
 }
 
+// /horses/:id là đường dẫn chung (thông báo chuông, link từ nơi khác): đổi sang đúng trang ngựa theo vai trò,
+// giữ nguyên query string (vd. ?tab=medical).
 function HorseRedirect() {
   const { id } = useParams();
   const location = useLocation();
@@ -101,6 +119,9 @@ export default function App() {
         <Route path="/change-password" element={<RoleRoute roles={EVERY_ROLE}><ChangePasswordPage /></RoleRoute>} />
 
         {/* Club Manager */}
+        {/* Năm trang dashboard (/manager, /trainer, /veterinarian, /groom, /horse-owner) không bọc RoleRoute:
+          * mỗi dashboard tự kiểm người dùng khi tải dữ liệu, và handleAuthError đưa người sai vai trò sang
+          * /access-denied khi backend trả 403. */}
         <Route path="/manager" element={<ManagerDashboard />} />
           {/* Manager chỉ xem ngựa và duyệt yêu cầu đăng ký, không tạo / sửa hồ sơ ngựa. */}
         <Route path="/manager/horse-requests" element={<RoleRoute roles={["CLUB_MANAGER"]}><HorseReviewPage /></RoleRoute>} />
@@ -182,6 +203,7 @@ export default function App() {
         {/* Chủ ngựa sửa thông tin cơ bản của ngựa mình (mã đăng ký và chuồng bị khoá). */}
         <Route path="/horse-owner/horses/:id/edit" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseFormPage /></RoleRoute>} />
 
+        {/* Đường dẫn không khớp route nào -> về trang đăng nhập. */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

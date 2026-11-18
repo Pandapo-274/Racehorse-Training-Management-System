@@ -32,6 +32,8 @@ public class IncidentFilingController {
         this.service = service;
     }
 
+    // Dùng @RequestParam / @RequestPart thay cho @RequestBody vì dữ liệu gửi dạng multipart/form-data
+    // (có file ảnh), không phải JSON. Service tự kiểm từng trường.
     @PostMapping(value = "/incident-reports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RequireRole({"GROOM", "HEAD_TRAINER"})
     public ResponseEntity<IncidentReportResponse> file(

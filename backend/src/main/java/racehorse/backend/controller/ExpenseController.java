@@ -28,6 +28,13 @@ import racehorse.backend.service.ExpenseService;
  * Chi phí nuôi ngựa. Chỉ Club Manager ghi và xem chi tiết; chủ ngựa xem bản
  * tổng hợp của ngựa mình ở GET /api/owner/dashboard.
  */
+/*
+ *   GET    /api/expenses?horseId=&category=&from=&to=&limit=  danh sách + tổng theo hạng mục
+ *   POST   /api/expenses                                       ghi chi phí (Club Manager)
+ *   DELETE /api/expenses/{id}?reason=                          HUỶ chi phí (không xoá dòng, V19)
+ * Chủ ngựa xem chi tiết chi phí của ngựa mình ở OwnerExpenseController (/api/owner/expenses).
+ * (Chú thích trên ghi "chỉ Club Manager xem", nhưng GET hiện mở cho cả VETERINARIAN.)
+ */
 @RestController
 @RequestMapping("/api/expenses")
 public class ExpenseController {

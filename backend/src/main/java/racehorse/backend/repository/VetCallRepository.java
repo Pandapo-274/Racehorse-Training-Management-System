@@ -16,6 +16,7 @@ import racehorse.backend.dto.VetCallResponse;
 @Repository
 public class VetCallRepository {
 
+    // LEFT JOIN THRESHOLD_ALERT vì cuộc gọi do Groom tạo (V38) không có cảnh báo (alert_id NULL).
     private static final String SELECT_CALL = """
             SELECT c.call_id, c.alert_id, c.session_id, s.status AS session_status,
                    c.horse_id, h.horse_name, h.stall_no, h.status AS horse_status,
@@ -73,6 +74,7 @@ public class VetCallRepository {
      * limit đã bị kẹp trong service nên nối thẳng vào chuỗi là an toàn.
      */
     public List<VetCallResponse> search(String status, int limit) {
+        // Sắp xếp: ca chờ trả lời lên trước; trong đó HIGH -> MEDIUM -> LOW; cùng mức thì chờ lâu nhất trước.
         String where = status == null ? "" : " WHERE c.status = :status";
         String order = " ORDER BY CASE c.status WHEN 'PENDING' THEN 0 ELSE 1 END,"
                 + " CASE WHEN c.status = 'PENDING' THEN CASE c.urgency WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END END,"
@@ -84,6 +86,7 @@ public class VetCallRepository {
         return spec.query(VetCallRepository::map).list();
     }
 
+    // Overload cũ (alertId kiểu int, không có reportId) chuyển sang bản đầy đủ bên dưới.
     public int insert(int alertId, int sessionId, int horseId, int calledBy, String reason,
                       String observations, String urgency, boolean sessionStopped) {
         return insert(Integer.valueOf(alertId), sessionId, horseId, calledBy, reason, observations, urgency,

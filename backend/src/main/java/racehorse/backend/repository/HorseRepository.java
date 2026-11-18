@@ -16,6 +16,8 @@ import racehorse.backend.dto.HorseUpdateRequest;
 import racehorse.backend.service.HorseService;
 import racehorse.backend.service.MedicalRecordService;
 
+// Mọi câu SQL trên bảng HORSE. SELECT_HORSE JOIN APP_USER hai lần: một lần lấy tên chủ (u),
+// một lần (LEFT JOIN, vì có thể NULL) lấy tên HLV phụ trách (tr).
 @Repository
 public class HorseRepository {
 
@@ -25,6 +27,7 @@ public class HorseRepository {
         this.jdbc = jdbc;
     }
 
+    // Một HLV kèm số ngựa đang quản lý và hạn mức, cho ô chọn HLV ở trang Club records.
     public record TrainerSummary(
             int userId,
             String username,
@@ -384,6 +387,11 @@ public class HorseRepository {
     public record PedigreeRow(int horseId, String horseName, String registrationCode,
                               String horseGender, Integer sireId, Integer damId) {}
 
+    /*
+     * CTE đệ quy (WITH tree AS (... UNION ALL ...)) của SQL Server: bắt đầu từ cha mẹ của horseId,
+     * mỗi vòng đi lên một đời. Nếu candidateId xuất hiện trong cây tổ tiên của horseId thì gán
+     * candidateId làm cha/mẹ sẽ tạo vòng lặp. depth < 50 là chốt an toàn chống lặp vô hạn.
+     */
     public boolean isAncestorOf(int candidateId, int horseId) {
         Integer hit = jdbc.sql("""
                 WITH tree AS (
@@ -407,6 +415,8 @@ public class HorseRepository {
         return hit != null;
     }
 
+    // Cùng kỹ thuật CTE đệ quy, dừng ở maxDepth đời; DISTINCT vì một tổ tiên có thể xuất hiện ở
+    // nhiều nhánh (vd. Sunday Silence vừa là ông nội vừa là ông ngoại).
     public List<PedigreeRow> findAncestors(int horseId, int maxDepth) {
         return jdbc.sql("""
                 WITH tree AS (

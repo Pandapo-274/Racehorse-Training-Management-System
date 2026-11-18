@@ -1,12 +1,14 @@
 // src/features/horse/horseRequestApi.js
 import { authFetch } from "../auth/authService";
 
+// Yêu cầu đăng ký ngựa (HORSE_REQUEST): chủ ngựa gửi / huỷ; Club Manager duyệt (cấp mã + chuồng) / từ chối.
 const API = "/api/horse-requests";
 
 export function listRequests(signal) {
   return authFetch(API, { signal });
 }
 
+// Chuỗi rỗng đổi thành null để backend lưu NULL (không lưu chuỗi trống).
 export function submitRequest(form) {
   return authFetch(API, {
     method: "POST",

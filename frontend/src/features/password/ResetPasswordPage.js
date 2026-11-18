@@ -18,6 +18,7 @@ import "./password.css";
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  // useSearchParams đọc query string của URL: /reset-password?token=abc -> token = "abc".
   const token = params.get("token") || "";
 
   const [form, setForm] = useState({ newPassword: "", confirmPassword: "" });
@@ -65,6 +66,8 @@ export default function ResetPasswordPage() {
     }
   };
 
+  // Hàm dựng khung chung (dải màu, BrandPanel, thẻ trắng) để ba trạng thái của trang dùng lại:
+  // thiếu token, biểu mẫu, và đã đặt lại xong.
   const shell = (children) => (
     <main className="auth">
       <div className="auth__band auth__band--teal" aria-hidden="true" />

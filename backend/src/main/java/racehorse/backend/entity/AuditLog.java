@@ -10,6 +10,16 @@ import java.util.List;
  * (SYSUTCDATETIME), nên đổi sang Instant ở backend để frontend new Date() đọc
  * đúng múi giờ mà không phải tự thêm "Z".
  */
+/*
+ * Mẫu "class chứa nhóm record": một class final, constructor private (không ai tạo
+ * được đối tượng AuditLog), bên trong là các record liên quan đến cùng một chức năng.
+ * Gọi từ chỗ khác bằng tên đầy đủ: AuditLog.Row, AuditLog.Page...
+ *
+ * Package "entity" trong dự án này KHÔNG phải entity JPA (dự án không dùng JPA/Hibernate).
+ * Đây chỉ là các record dữ liệu: repository đọc ResultSet từ JDBC rồi dựng record, service
+ * trả record ra controller, Jackson tự đổi record thành JSON (tên thành phần record = khoá
+ * JSON, vd. logId -> "logId").
+ */
 public final class AuditLog {
 
     private AuditLog() {
@@ -44,6 +54,8 @@ public final class AuditLog {
      * nextBeforeId: truyền lại làm beforeId để tải trang kế; null = hết.
      * summary: chỉ có ở trang đầu (khi không truyền beforeId).
      */
+    // Phân trang kiểu "keyset" (theo id) thay vì OFFSET: trang sau lấy các dòng có
+    // log_id < nextBeforeId, nên không bị trùng/sót dòng khi có nhật ký mới chèn vào giữa.
     public record Page(List<Row> items, Long nextBeforeId, Summary summary) {
     }
 }

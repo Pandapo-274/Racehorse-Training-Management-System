@@ -49,6 +49,7 @@ public class NotificationController {
         return Map.of("count", service.unreadCount(user));
     }
 
+    // 204 No Content: thành công nhưng không có body trả về.
     @PutMapping("/{id}/read")
     public ResponseEntity<Void> markRead(
             @PathVariable int id,

@@ -12,6 +12,19 @@ import racehorse.backend.repository.TrainingSessionRepository;
 /**
  * Scheduled background jobs for care tasks and training session automation.
  */
+/*
+ * Hai job chạy nền (cần @EnableScheduling ở BackendApplication):
+ *   runDaily (00:15 mỗi đêm, giờ Việt Nam - cron "0 15 0 * * *" = giây phút giờ ngày tháng thứ):
+ *     - đánh dấu việc chăm sóc hôm qua chưa làm là MISSED (CareService.stampMissed);
+ *     - kết thúc giáo án ACTIVE/PAUSED đã quá end_date;
+ *     - huỷ buổi SCHEDULED của ngày đã qua; đóng buổi RUNNING bị bỏ quên từ hôm trước.
+ *   runPeriodicTrainingChecks (mỗi 60 giây, fixedDelay = chờ 60s sau khi lần trước chạy xong):
+ *     - tự kết thúc buổi RUNNING hết giờ, tự huỷ buổi SCHEDULED quá khung giờ;
+ *     - lưu trữ tự động các buổi quá hạn nhận xét 48 giờ;
+ *     - tự từ chối bản sửa giáo án chờ chủ duyệt quá 2 ngày.
+ * Mỗi khối có try/catch riêng: một việc lỗi không chặn các việc còn lại, và lỗi chỉ ghi log.
+ * app.task.missed.enabled=false để tắt cả hai (vd. khi chạy test).
+ */
 @Component
 public class MissedTaskJob {
 

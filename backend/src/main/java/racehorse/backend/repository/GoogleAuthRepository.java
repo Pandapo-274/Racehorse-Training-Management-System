@@ -7,6 +7,20 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.entity.UserRecord;
 import racehorse.backend.service.GoogleAuthService;
 
+/*
+ * REPOSITORY = lớp duy nhất viết SQL. @Repository để Spring tạo bean và đổi lỗi JDBC thành
+ * DataAccessException (vd. DuplicateKeyException khi trùng UNIQUE).
+ *
+ * JdbcClient (Spring 6.1+) là API "fluent" bọc quanh JdbcTemplate:
+ *   jdbc.sql("... WHERE x = :name")   -> câu SQL với tham số đặt tên (:name)
+ *       .param("name", value)          -> gán giá trị (JDBC tự escape, chống SQL injection)
+ *       .query(Integer.class)          -> đọc cột đầu tiên thành Integer
+ *       .query((rs, n) -> new X(...))  -> RowMapper tự viết, đọc từng dòng ResultSet
+ *       .single() / .optional() / .list()  -> đúng 1 dòng / 0-1 dòng / nhiều dòng
+ *       .update()                      -> chạy INSERT/UPDATE/DELETE, trả số dòng bị ảnh hưởng
+ * Dự án KHÔNG dùng JPA/Hibernate: mọi câu SQL đều viết tay, dễ đọc và kiểm soát chính xác.
+ * Chuỗi """ ... """ là text block (Java 15+): chuỗi nhiều dòng, giữ nguyên xuống dòng.
+ */
 @Repository
 public class GoogleAuthRepository {
 
@@ -49,6 +63,7 @@ public class GoogleAuthRepository {
                 .update();
     }
 
+    // OUTPUT INSERTED.user_id: cú pháp SQL Server trả về id IDENTITY vừa sinh trong cùng câu INSERT.
     public int insertGoogleUser(int roleId, String username, String passwordHash,
                                 String fullName, String email, String sub) {
         return jdbc.sql("""

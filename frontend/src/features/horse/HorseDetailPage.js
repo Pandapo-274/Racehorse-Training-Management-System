@@ -23,6 +23,7 @@ import { listStaff } from "../manager/staffApi";
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
 
+// Bốn tab của trang chi tiết; ?tab=medical-history trên URL mở thẳng một tab (link từ thông báo, từ trang khác).
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "medical-history", label: "Medical History" },
@@ -30,6 +31,7 @@ const TABS = [
   { id: "vitals", label: "Vitals" },
 ];
 
+// Số đời tổ tiên chọn được khi xem phả hệ (gửi lên GET /api/horses/{id}/pedigree?generations=).
 const GENERATION_OPTIONS = [2, 3, 4];
 
 function Row({ label, children }) {
@@ -68,6 +70,8 @@ function IdentityForm({ horse, onSaved }) {
     return () => ctrl.abort();
   }, [stallAllowed, horse.trainerId]);
 
+  // PUT /api/horses/{id}/identity (Club Manager): đổi mã đăng ký, chuồng và HLV phụ trách. Backend kiểm mã / chuồng
+  // không trùng và hạn mức số ngựa của HLV (max_horses, V37); lỗi trả về từng ô.
   const save = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -166,6 +170,8 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
   const withdrawn = isWithdrawn(horse);
   const pedigree = isPedigreeOnly(horse);
 
+  // Danh sách chủ ngựa để chuyển: lấy nhóm HORSE_OWNER từ GET /api/staff, bỏ người bị khoá và chủ hiện tại.
+  // Biến alive tránh setState sau khi component đã bị gỡ (thay cho AbortController vì listStaff không nhận signal).
   useEffect(() => {
     if (withdrawn) return undefined;
     let alive = true;
@@ -199,6 +205,7 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
     }
   };
 
+  // Ngựa đã rút: thẻ này đổi thành form "nhận lại" (readmit) - cấp chuồng mới, activity_status về ACTIVE.
   if (withdrawn) {
     if (pedigree) return null;
     const readmit = async (e) => {
@@ -232,6 +239,7 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
     );
   }
 
+  // Chuyển chủ: hỏi xác nhận, rồi PUT chuyển chủ kèm lý do; cả hai chủ được báo.
   const transfer = async (e) => {
     e.preventDefault();
     const target = owners.find((o) => String(o.userId) === String(ownerId));
@@ -306,6 +314,7 @@ function ParentsForm({ horse, onSaved }) {
     return () => ctrl.abort();
   }, [horse.horseId]);
 
+  // Không cho chọn chính con ngựa làm cha mẹ; lọc cha theo SIRE_GENDERS, mẹ theo DAM_GENDERS (giống backend).
   const others = herd.filter((h) => h.horseId !== horse.horseId);
   const sires = others.filter((h) => SIRE_GENDERS.has(h.horseGender));
   const dams = others.filter((h) => DAM_GENDERS.has(h.horseGender));
@@ -368,6 +377,16 @@ function ParentsForm({ horse, onSaved }) {
   );
 }
 
+/*
+ * Trang chi tiết ngựa (/<vai trò>/horses/:id). Cấu trúc:
+ *   - header: tên, mã, giới tính, tuổi, chip nhóm tuổi / sức khoẻ / hoạt động, nút Edit (chỉ chủ ngựa);
+ *   - tab Overview: thông tin, HorseHealthPanel, HorseWithdrawalPanel, và với Manager: IdentityForm,
+ *     OwnershipForm, ParentsForm;
+ *   - tab Medical History: HorseMedicalHistoryTab;
+ *   - tab Pedigree: PedigreeTree (tải khi mở tab, tải lại khi đổi số đời);
+ *   - tab Vitals: VitalsPanel (tải một lần khi mở tab lần đầu).
+ * Quyền xem từng tab do canViewPedigree / canViewVitals (horseApi.js) quyết định trên giao diện.
+ */
 export default function HorseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -394,6 +413,8 @@ export default function HorseDetailPage() {
   const [vitals, setVitals] = useState(null);
   const [vitalsError, setVitalsError] = useState("");
 
+  // fail(set) trả về một hàm xử lý lỗi dùng trong .catch: bỏ qua AbortError, 401/403 thì chuyển trang,
+  // lỗi khác thì đặt vào state tương ứng (set). Gói bằng useCallback để làm phụ thuộc ổn định cho các effect.
   const fail = useCallback(
     (set) => (err) => {
       if (err.name === "AbortError") return;
@@ -412,6 +433,7 @@ export default function HorseDetailPage() {
     return () => ctrl.abort();
   }, [id, fail]);
 
+  // Phả hệ chỉ tải khi đang ở tab Pedigree (lazy load), tải lại khi đổi số đời.
   useEffect(() => {
     if (tab !== "pedigree") return undefined;
     const ctrl = new AbortController();
@@ -422,6 +444,7 @@ export default function HorseDetailPage() {
     return () => ctrl.abort();
   }, [tab, id, generations, fail]);
 
+  // Vitals tải một lần: đã có dữ liệu (vitals khác null) thì không gọi lại khi quay lại tab.
   useEffect(() => {
     if (tab !== "vitals" || vitals) return undefined;
     const ctrl = new AbortController();

@@ -41,6 +41,8 @@ function flatten(node, depth) {
   return out;
 }
 
+// root: cây { horseName, gender, sire, dam } do GET /api/horses/{id}/pedigree trả về (backend dựng bằng CTE
+// đệ quy). Ví dụ depth = 2 -> lưới 4 hàng: con ngựa chiếm 4 hàng, cha/mẹ mỗi người 2 hàng, ông bà mỗi người 1.
 export default function PedigreeTree({ root }) {
   if (!root) return null;
 

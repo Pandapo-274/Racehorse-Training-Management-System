@@ -36,6 +36,7 @@ public class AuditLogController {
         this.service = service;
     }
 
+    // @RequestParam(required = false): tham số query có thể vắng mặt (giá trị null).
     @GetMapping
     @RequireRole({"CLUB_MANAGER"})
     public AuditLog.Page search(

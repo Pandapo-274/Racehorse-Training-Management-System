@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 /** Một lần đo từ cảm biến/nhân viên trong lúc ngựa đang chạy. */
+// Body của POST /api/sessions/{sessionId}/vitals: Groom (hoặc HLV) gửi nhịp tim và/hoặc vận
+// tốc trong lúc buổi tập RUNNING. AlertService so với ngưỡng và tạo THRESHOLD_ALERT nếu vượt.
 public record VitalsRequest(
         @Min(value = 20, message = "Heart rate must be between 20 and 300")
         @Max(value = 300, message = "Heart rate must be between 20 and 300")

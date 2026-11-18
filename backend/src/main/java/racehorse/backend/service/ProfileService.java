@@ -21,6 +21,11 @@ import racehorse.backend.repository.ProfileRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.util.ImageFiles;
 
+/*
+ * UC4 - xem và sửa hồ sơ cá nhân, tải ảnh đại diện.
+ * Ảnh lưu trên đĩa tại <app.upload.dir>/avatars/<userId>-<uuid>.<ext>; DB chỉ lưu đường dẫn
+ * "/uploads/avatars/...". Trình duyệt tải ảnh qua ProfileWebConfig (/uploads/** -> thư mục).
+ */
 @Service
 public class ProfileService {
 
@@ -38,6 +43,8 @@ public class ProfileService {
         this.profiles = profiles;
         this.users = users;
         this.encoder = encoder;
+        // Path.of(...).toAbsolutePath().normalize(): đổi "uploads" thành đường dẫn tuyệt đối gọn
+        // (bỏ "./", "../"), rồi resolve("avatars") = thư mục con avatars.
         this.avatarDir = Path.of(uploadDir).toAbsolutePath().normalize().resolve("avatars");
     }
 
@@ -110,6 +117,7 @@ public class ProfileService {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store the uploaded file");
         }
 
+        // Thứ tự: ghi file trước -> cập nhật DB -> xoá ảnh cũ. Nếu DB lỗi thì xoá file mới ghi.
         String newUrl = AVATAR_URL_PREFIX + filename;
         Optional<String> oldUrl = profiles.findAvatarUrl(userId);
         try {
@@ -123,6 +131,8 @@ public class ProfileService {
         return getProfile(userId);
     }
 
+    // Chỉ xoá file nằm TRONG thư mục avatars (p.startsWith(avatarDir)): chặn trường hợp URL trong
+    // DB bị sửa thành "../../file-quan-trong" làm xoá nhầm file ngoài thư mục.
     private void deleteQuietly(String url) {
         try {
             String name = url.substring(url.lastIndexOf('/') + 1);

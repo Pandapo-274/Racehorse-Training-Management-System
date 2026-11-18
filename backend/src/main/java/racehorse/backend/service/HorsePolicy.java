@@ -21,6 +21,8 @@ import racehorse.backend.dto.HorseResponse;
  * trước ~10 tuổi), KHÔNG phải 10 đến 25 tuổi: khoảng đó là tuổi sinh sản chứ
  * không phải tuổi đua.
  */
+// Lớp tiện ích tĩnh (final + constructor private): không tạo đối tượng, chỉ gọi HorsePolicy.xxx(...).
+// Frontend chép lại các mốc này trong horseApi.js (AGE_RULES): đổi ở đây phải đổi cả ở đó.
 public final class HorsePolicy {
 
     public static final String ACADEMY = "ACADEMY";
@@ -42,10 +44,12 @@ public final class HorsePolicy {
 
     private HorsePolicy() {}
 
+    // Period.between(...).getYears(): số năm tròn giữa ngày sinh và hôm nay (tuổi thực).
     public static int ageOf(LocalDate dateOfBirth) {
         return Period.between(dateOfBirth, LocalDate.now()).getYears();
     }
 
+    // Giá trị lạ hoặc null đều coi là ACADEMY (mặc định an toàn).
     public static String normalizeType(String recordType) {
         return PEDIGREE.equals(recordType) ? PEDIGREE : ACADEMY;
     }
@@ -56,6 +60,7 @@ public final class HorsePolicy {
      * @return thông báo lỗi để gắn vào ô ngày sinh, hoặc null nếu hợp lệ.
      *         Loại PEDIGREE luôn hợp lệ (ngựa nào cũng có thể là tổ tiên).
      */
+    // (Ghi chú: khối Javadoc ngay phía trên mô tả ageProblem ở cuối lớp, bị đặt lệch chỗ.)
     /**
      * Hồ sơ PEDIGREE có được vào giáo án / buổi tập không.
      *

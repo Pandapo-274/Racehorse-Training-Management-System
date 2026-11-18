@@ -24,6 +24,7 @@ export function HorseshoeIcon() {
   );
 }
 
+// Sidebar của bác sĩ: logo, mục menu (NavItems theo vai trò VETERINARIAN), thẻ hồ sơ, nút đăng xuất.
 function VetSidebar({ active }) {
   const navigate = useNavigate();
 
@@ -64,6 +65,8 @@ function VetSidebar({ active }) {
   );
 }
 
+// Props: active (mục menu đang chọn), title / subtitle (tiêu đề header), query + onQueryChange (ô tìm kiếm trên header;
+// controlled = trang cha giữ giá trị), children (nội dung trang).
 export default function VetShell({
   active,
   title,

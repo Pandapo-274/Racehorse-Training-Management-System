@@ -33,11 +33,13 @@ public class ProfileController {
         this.profileService = profileService;
     }
 
+    // GET /api/profile - hồ sơ của chính mình (trang ProfilePage.js).
     @GetMapping
     public ProfileResponse get(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return profileService.getProfile(user.userId());
     }
 
+    // PUT /api/profile - sửa họ tên, email, số điện thoại (đổi email phải nhập mật khẩu hiện tại).
     @PutMapping
     public ProfileResponse update(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                   @Valid @RequestBody UpdateProfileRequest request,
@@ -45,6 +47,11 @@ public class ProfileController {
         return profileService.updateProfile(user.userId(), request, http.getRemoteAddr());
     }
 
+    /*
+     * POST /api/profile/avatar - tải ảnh đại diện. consumes = multipart/form-data: frontend gửi
+     * FormData có trường "file". required = false để tự báo lỗi "Image file is required" đúng
+     * khuôn ApiError thay vì để Spring trả lỗi mặc định khi thiếu file.
+     */
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ProfileResponse uploadAvatar(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                         @RequestParam(value = "file", required = false) MultipartFile file,
