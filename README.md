@@ -1,5 +1,5 @@
 # Racehorse-Training-Management-System
-### Last Commited: `Nov 18, 2026` at `09:18` by `tqt195`
+### Last Commited: `Nov 18, 2026` at `09:31` by `tqt195`
 
 ## Information
 > ### Version: `-`
@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > ### `Nov 18, 2026`
+- `[09:31]` `tqt195` - Only Confirm recovery sets a horse back to Eligible
 - `[09:18]` `tqt195` - Add code comments, set light-work limit to 800 m
 
 > ### `Nov 14, 2026`

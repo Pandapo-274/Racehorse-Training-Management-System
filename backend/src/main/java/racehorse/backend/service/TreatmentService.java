@@ -295,8 +295,8 @@ public class TreatmentService {
     }
 
     public TreatmentRow end(int treatmentId, AuthenticatedUser vet, String ip) {
-        // Không có @Transactional: mỗi câu UPDATE tự commit. Sau khi kết thúc, nếu ngựa không còn đơn nào và
-        // không bị khoá tập thì được đưa từ INJURED/MONITOR về ELIGIBLE (đường thứ hai về ELIGIBLE, ngoài UC18).
+        // Không có @Transactional: mỗi câu UPDATE tự commit. Kết thúc đơn KHÔNG đổi sức khoẻ của ngựa: theo đặc tả
+        // (4.4), chỉ xác nhận hồi phục (HealthClearanceService.confirm) mới đưa ngựa về ELIGIBLE.
         TreatmentRow current = treatments.findById(treatmentId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Treatment #" + treatmentId + " does not exist"));
@@ -310,16 +310,6 @@ public class TreatmentService {
         if (treatments.endToday(treatmentId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This treatment already ended on " + current.endDate());
-        }
-
-        int remainingTreatments = treatments.countActiveByHorse(current.horseId());
-        boolean hasLock = locks != null && locks.findActiveByHorse(current.horseId()).isPresent();
-        if (remainingTreatments == 0 && !hasLock) {
-            horses.findById(current.horseId()).ifPresent(h -> {
-                if ("INJURED".equals(h.status()) || "MONITOR".equals(h.status())) {
-                    records.updateHorseStatus(h.horseId(), "ELIGIBLE");
-                }
-            });
         }
 
         users.writeAudit(vet.userId(), "TREATMENT_END", "TREATMENT", treatmentId, "SUCCESS", ip);

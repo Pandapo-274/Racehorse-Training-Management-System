@@ -1777,6 +1777,25 @@ class BusinessRulesTest {
         verify(treatments, never()).endToday(anyInt());
     }
 
+    @Test
+    void endingTheLastTreatmentDoesNotMakeTheHorseEligible() {
+        // Đặc tả 2.2.1 / 4.4: chỉ xác nhận hồi phục mới đưa ngựa về ELIGIBLE; kết thúc đơn không đổi sức khoẻ.
+        TreatmentRepository treatments = mock(TreatmentRepository.class);
+        MedicalRecordRepository records = mock(MedicalRecordRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(treatments.findById(1)).thenReturn(Optional.of(new TreatmentRow(1, 1, 100, "Horse 100", "Bute", null,
+                null, null, TODAY.minusDays(3), TODAY.plusDays(4), false)));
+        when(treatments.endToday(1)).thenReturn(1);
+        when(treatments.countActiveByHorse(100)).thenReturn(0);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "INJURED", TODAY.minusYears(5), "COLT")));
+        TreatmentService service = new TreatmentService(treatments, records, horses, mock(UserRepository.class));
+
+        service.end(1, VET, "ip");
+
+        verify(treatments).endToday(1);
+        verify(records, never()).updateHorseStatus(anyInt(), any());
+    }
+
     // ---------------------------------------------------------------- Flow 1: phả hệ
 
     @Test

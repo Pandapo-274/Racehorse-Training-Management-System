@@ -47,9 +47,8 @@ import racehorse.backend.security.AuthenticatedUser;
  * bấm Start, đăng ký giải đều bị từ chối.
  */
 /*
- * Ghi chú cập nhật: chú thích trên nói đây là chỗ DUY NHẤT đặt ELIGIBLE; code hiện tại còn hai đường
- * khác: TreatmentService.end (hết đơn thuốc, không bị khoá) và ExternalReferralService.discharge (xuất
- * viện với postDischargeStatus = ELIGIBLE).
+ * Đúng với đặc tả (2.2.1, 4.4): đây là đường duy nhất về ELIGIBLE. Kết thúc đơn thuốc (TreatmentService.end)
+ * không đổi sức khoẻ, và xuất viện ngoài chỉ nhận INJURED / MONITOR.
  *
  * Thứ tự trong confirm():
  *   1. ngựa chưa ELIGIBLE, không còn đơn thuốc đang dùng;
