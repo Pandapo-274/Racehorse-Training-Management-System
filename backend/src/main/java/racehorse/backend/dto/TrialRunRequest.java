@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
  * trialRun = false : bỏ đánh dấu (link video, nếu có, bị xoá theo vì chỉ lượt chạy thử mới có video).
  * videoUrl bỏ trống / null = không có video (hoặc xoá video đang có).
  */
+// Body của PUT /api/sessions/{id}/trial-run (chỉ HEAD_TRAINER).
 public record TrialRunRequest(
         @NotNull(message = "trialRun is required")
         Boolean trialRun,

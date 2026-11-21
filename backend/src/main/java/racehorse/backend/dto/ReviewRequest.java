@@ -19,6 +19,7 @@ import racehorse.backend.service.HorseRequestService;
  * Không kiểm @NotBlank vì cùng record này dùng cho lệnh TỪ CHỐI;
  * {@link HorseRequestService} kiểm đúng nhánh.
  */
+// Body của PUT /api/horse-requests/{id}/approve và /reject (chỉ CLUB_MANAGER).
 public record ReviewRequest(
         @Size(max = 30, message = "Registration code must be at most 30 characters")
         String registrationCode,

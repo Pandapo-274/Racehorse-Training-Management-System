@@ -19,7 +19,10 @@ import racehorse.backend.repository.UserRepository;
 @Component
 public class TokenBlacklist {
 
+    // jti -> thời điểm token hết hạn. ConcurrentHashMap vì nhiều request (nhiều thread
+    // của Tomcat) đọc/ghi cùng lúc.
     private final Map<String, Instant> revoked = new ConcurrentHashMap<>();
+    // userId -> mốc cắt: token của user này có iat (issuedAt) trước mốc này đều vô hiệu.
     private final Map<Integer, Instant> sessionsRevokedBefore = new ConcurrentHashMap<>();
     private final UserRepository users;
 
@@ -27,6 +30,7 @@ public class TokenBlacklist {
         this.users = users;
     }
 
+    // Gọi từ AuthService.logout: thu hồi đúng một token (một thiết bị).
     public void revoke(String tokenId, Instant expiresAt) {
         Instant now = Instant.now();
         revoked.entrySet().removeIf(e -> e.getValue().isBefore(now)); // dọn token đã hết hạn
@@ -38,6 +42,7 @@ public class TokenBlacklist {
     }
 
     /** Đá văng mọi thiết bị đang đăng nhập của user này. */
+    // Gọi khi đổi/reset mật khẩu, đặt mật khẩu tạm, đổi role, khoá tài khoản.
     public void revokeAllSessions(int userId) {
         // JWT chỉ lưu thời điểm phát hành theo GIÂY nên mốc cũng cắt về giây để so sánh công bằng.
         Instant cutoff = Instant.now().truncatedTo(ChronoUnit.SECONDS);

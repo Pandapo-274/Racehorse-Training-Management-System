@@ -9,6 +9,7 @@ package racehorse.backend.dto;
  *    WEATHER_CONDITION, EQUIPMENT_ISSUE, INJURY hoặc chuỗi mô tả)
  *  - Bắt buộc Groom đã báo cáo cả 2 chỉ số Heart Rate và Speed ít nhất 1 lần trong buổi tập.
  */
+// Hai trường đều có thể null (body rỗng {}): TrainingSessionService coi null như false.
 public record FinishSessionRequest(
         Boolean earlyStop,
         String earlyStopReason

@@ -18,6 +18,8 @@ public class ProfileExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> tooLarge(MaxUploadSizeExceededException ex) {
+        // Giới hạn đặt trong application.properties: max-file-size=2MB, max-request-size=3MB.
+        // Lỗi xảy ra lúc Spring đọc multipart, trước khi vào controller upload ảnh.
         String msg = "File is too large (max 2 MB)";
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiError.of(413, msg, Map.of("file", msg)));

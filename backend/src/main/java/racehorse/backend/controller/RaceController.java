@@ -36,6 +36,7 @@ import racehorse.backend.service.RaceService;
  *  POST /api/races/events           create a race (Head Trainer, Club Manager)
  *  PUT  /api/races/events/{id}/cancel  cancel a race, scratching its entries (Club Manager)
  */
+// Ngoài bảng trên: PUT /api/races/{id}/approve và /reject - chủ ngựa duyệt / từ chối đề xuất đăng ký (V28).
 @RestController
 @RequestMapping("/api/races")
 public class RaceController {

@@ -32,6 +32,7 @@ function Row({ label, children }) {
   );
 }
 
+// Props: horse, user. isOwner: chủ ĐÚNG của con ngựa này (ownerId khớp), không chỉ là vai trò HORSE_OWNER.
 export default function HorseWithdrawalPanel({ horse, user }) {
   const navigate = useNavigate();
   const role = user?.role;
@@ -50,6 +51,7 @@ export default function HorseWithdrawalPanel({ horse, user }) {
   const [result, setResult] = useState(null);
   const dialog = useAppDialog();
 
+  // Tải lịch sử yêu cầu rút của con ngựa (chỉ chủ ngựa và Manager mới gọi được API này).
   const load = useCallback(
     (signal) => {
       if (!mayLoad) return;
@@ -76,6 +78,8 @@ export default function HorseWithdrawalPanel({ horse, user }) {
   // Ngựa còn ở học viện mà người xem không phải chủ hay manager: không có gì để nói.
   if (!withdrawn && !mayLoad) return null;
 
+  // Một ngựa có thể có nhiều yêu cầu theo thời gian; lấy yêu cầu đang chờ, yêu cầu đã duyệt và lần bị từ chối
+  // gần nhất để hiện đúng khối thông tin.
   const pending = (rows || []).find((r) => r.status === "PENDING");
   const approved = (rows || []).find((r) => r.status === "APPROVED");
   const lastClosed = (rows || []).find((r) => r.status === "REJECTED");
@@ -100,6 +104,7 @@ export default function HorseWithdrawalPanel({ horse, user }) {
     }
   };
 
+  // Gửi yêu cầu rút (POST /api/horse-withdrawals): lý do bắt buộc, tối đa REASON_MAX ký tự. Manager nhận thông báo.
   const submit = (e) => {
     e.preventDefault();
     const text = reason.trim();
@@ -119,6 +124,7 @@ export default function HorseWithdrawalPanel({ horse, user }) {
        `Could not send the withdrawal request for ${horse.horseName}`);
   };
 
+  // Huỷ yêu cầu đang chờ (chủ ngựa đổi ý): hỏi xác nhận bằng AppDialog trước khi gọi API.
   const cancel = async () => {
     if (!pending) return;
     const confirmed = await dialog.confirm({

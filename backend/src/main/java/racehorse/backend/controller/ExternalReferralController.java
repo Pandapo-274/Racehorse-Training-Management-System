@@ -23,6 +23,14 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.ExternalReferralService;
 
+/*
+ * Chuyển viện ngoài (V40/V46): bác sĩ chuyển ngựa tới bệnh viện bên ngoài khi vượt khả năng điều trị
+ * tại CLB, rồi ghi nhận ngựa xuất viện trở về.
+ *   POST /api/external-referrals                 tạo phiếu chuyển viện
+ *   GET  /api/external-referrals?horseId=&status= danh sách (đang nằm viện lên đầu)
+ *   GET  /api/external-referrals/{id}            chi tiết
+ *   PUT  /api/external-referrals/{id}/discharge  ngựa xuất viện về CLB
+ */
 @RestController
 @RequestMapping("/api/external-referrals")
 public class ExternalReferralController {

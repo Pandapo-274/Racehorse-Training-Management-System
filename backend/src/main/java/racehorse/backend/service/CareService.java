@@ -36,6 +36,7 @@ import racehorse.backend.security.AuthenticatedUser;
 @Service
 public class CareService {
 
+    // Định dạng ngày ngắn trong thông báo, vd. "17 Nov". TASK_TEXT: mã loại việc -> chữ đọc được.
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
     private static final Map<String, String> TASK_TEXT = Map.of(
             "FEEDING", "feeding", "CLEANING", "stall cleaning", "BATHING", "bathing", "ICE_BATH", "ice bath");
@@ -53,8 +54,10 @@ public class CareService {
     private final NotificationService notifications;
     private final SupplyService supplies;
     /** A task may still be ticked (or reopened) this many days after its day (#14). */
+    // app.task.late-window-days (mặc định 1): được đánh dấu xong trễ tối đa 1 ngày sau ngày của việc.
     private final int lateWindowDays;
     /** Above this many open tasks in one day, assigning more returns a warning (#15). */
+    // app.task.max-per-groom-per-day (mặc định 12): vượt số việc này trong một ngày thì cảnh báo (không chặn).
     private final int maxTasksPerGroom;
 
     public CareService(CareRepository care, HorseRepository horses, TrainingSessionRepository sessions,
@@ -112,6 +115,8 @@ public class CareService {
                     + " and its ration was set by the vet (" + String.join(", ", previousVets.values())
                     + "). Ask the vet to change it");
         }
+        // Kiểm từng dòng khẩu phần TRƯỚC khi xoá khẩu phần cũ: dòng phải trỏ tới một món FEED trong kho; tên và
+        // đơn vị lấy từ kho (withStock), bỏ qua giá trị client gửi.
         Map<String, String> errors = new LinkedHashMap<>();
         List<CareModels.RationItem> lines = new ArrayList<>();
         for (int i = 0; i < req.items().size(); i++) {
@@ -203,6 +208,7 @@ public class CareService {
         List<CareModels.Task> created = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         // LinkedHashSet: bỏ loại việc bị gửi trùng mà vẫn giữ thứ tự người dùng chọn.
+        // Bỏ qua (skipped) loại việc ngựa đã có trong ngày đó; không đổi người làm của việc có sẵn.
         for (String type : new LinkedHashSet<>(r.taskTypes())) {
             // Mỗi con ngựa mỗi ngày chỉ một việc mỗi loại: hai Groom cùng cho một con ăn là thừa.
             if (care.taskExists(r.horseId(), type, r.taskDate())) {
@@ -318,6 +324,8 @@ public class CareService {
      */
     @Transactional
     public CareModels.Task complete(int taskId, AuthenticatedUser user, String ip) {
+        // Thứ tự kiểm: đúng Groom (requireTask) -> không phải việc tương lai -> chưa quá hạn trễ -> UPDATE có điều
+        // kiện is_completed = 0 (bấm đúp không trừ kho hai lần) -> việc FEEDING thì trừ khẩu phần cả ngày.
         CareModels.Task t = requireTask(taskId, user);
         LocalDate today = LocalDate.now();
         if (t.taskDate().isAfter(today)) {
@@ -342,6 +350,7 @@ public class CareService {
 
     /** Takes the day's ration (all meals), grouped per stock item. Returns text for the audit. */
     private String consumeRation(CareModels.Task t, AuthenticatedUser user) {
+        // Gom theo món kho: cùng một món ở nhiều bữa thì trừ một lần với tổng số lượng.
         Map<Integer, BigDecimal> perSupply = new LinkedHashMap<>();
         List<String> unlinked = new ArrayList<>();
         for (CareModels.FeedingItem f : care.findFeeding(t.horseId())) {
@@ -385,6 +394,7 @@ public class CareService {
         }
         String detail = t.horseName() + " " + t.taskType() + " " + t.taskDate();
         if ("FEEDING".equals(t.taskType())) {
+            // Hoàn kho đúng số đã trừ, đọc từ sổ SUPPLY_MOVEMENT (không tính lại từ khẩu phần, vì khẩu phần có thể đã đổi).
             Map<Integer, BigDecimal> taken = supplies.netConsumedBy("DAILY_TASK", taskId);
             taken.forEach((supplyId, net) -> supplies.giveBack(supplyId, net, "DAILY_TASK", taskId,
                     "Task reopened: " + t.horseName(), user));

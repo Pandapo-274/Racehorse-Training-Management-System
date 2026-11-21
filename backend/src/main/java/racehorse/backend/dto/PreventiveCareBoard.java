@@ -13,6 +13,8 @@ import racehorse.backend.repository.HealthRepository;
  * "12 quá hạn" sẽ đổi theo bộ lọc người dùng đang bật, và một màn nhắc việc
  * mà con số cứ nhảy thì không nhắc được gì.
  */
+// Kết quả GET /api/preventive-care (UC17). counts: số ô theo careStatus
+// (NEVER, UNSCHEDULED, OVERDUE, DUE_SOON, OK).
 public record PreventiveCareBoard(
         Map<String, Integer> counts,
         List<PreventiveCareItem> items

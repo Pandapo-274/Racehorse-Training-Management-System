@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import racehorse.backend.dto.AlertResponse;
 import racehorse.backend.dto.SessionContext;
 
+// SQL cho THRESHOLD_ALERT và các chỉ số trực tiếp của buổi tập.
 @Repository
 public class AlertRepository {
 
@@ -61,6 +62,8 @@ public class AlertRepository {
     }
 
     /** Cập nhật nhịp tim đo được: tính trung bình cộng (avg_heart_rate) và cập nhật đỉnh (peak_heart_rate). */
+    // Tính trung bình cộng dồn trong SQL (V44): cộng thêm vào hr_reading_sum, tăng hr_reading_count,
+    // avg = sum / count. Một câu UPDATE nên không lệch khi hai lần gửi đến sát nhau.
     public void updatePeakHeartRate(int sessionId, int heartRate) {
         jdbc.sql("""
                 UPDATE TRAINING_SESSION
@@ -123,6 +126,8 @@ public class AlertRepository {
         return search(afterId, openOnly, limit, null);
     }
 
+    // afterId dùng cho polling: frontend nhớ alert_id lớn nhất đã có, lần sau chỉ hỏi những id lớn hơn.
+    // trainerId: HLV chỉ thấy cảnh báo của ngựa mình phụ trách.
     public List<AlertResponse> search(Integer afterId, boolean openOnly, int limit, Integer trainerId) {
         StringBuilder sql = new StringBuilder(SELECT_ALERT).append(" WHERE 1 = 1");
         Map<String, Object> params = new HashMap<>();

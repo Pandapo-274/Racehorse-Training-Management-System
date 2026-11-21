@@ -24,6 +24,19 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.TrainingPlanService;
 
+/*
+ * UC9 - giáo án huấn luyện (TRAINING_PLAN + PLAN_PHASE), tiền tố /api/training-plans.
+ *   POST   /                      HLV tạo giáo án (DRAFT)
+ *   GET    /grooms | /assignees   Groom trong đội HLV để chọn khi tạo giáo án
+ *   GET    /                      danh sách (lọc horseId, status; chủ ngựa chỉ thấy của mình)
+ *   GET    /{id}                  chi tiết kèm giai đoạn và bản sửa đang chờ duyệt
+ *   PUT    /{id}/owner-review     chủ ngựa duyệt / từ chối giáo án PENDING_APPROVAL
+ *   PUT    /{id}/update-review    chủ ngựa duyệt / từ chối BẢN SỬA của giáo án đã duyệt (V47)
+ *   PUT    /{id}/owner-feedback   chủ ngựa gửi nhận xét cho HLV
+ *   PUT|POST /{id}[/update]       HLV sửa Groom, tên và các giai đoạn
+ *   DELETE /{id}                  xoá giáo án chưa từng chạy
+ *   PUT    /{id}/status           HLV đổi trạng thái (gửi duyệt, kích hoạt, tạm dừng, kết thúc)
+ */
 @RestController
 @RequestMapping("/api/training-plans")
 public class TrainingPlanController {
@@ -59,6 +72,8 @@ public class TrainingPlanController {
         return service.list(horseId, status, user);
     }
 
+    // "{id:\\d+}" = biến đường dẫn có regex: chỉ khớp khi id toàn chữ số, để "/grooms" không bị hiểu
+    // nhầm là id.
     @GetMapping("/{id:\\d+}")
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
     public TrainingPlanResponse get(@PathVariable int id,
@@ -103,6 +118,8 @@ public class TrainingPlanController {
      * Cập nhật giáo án: Chỉ cập nhật nội dung các phase và groom.
      * Thông tin chính của plan như horseId, startDate, endDate được giữ nguyên.
      */
+    // @RequestMapping với nhiều URL và hai phương thức PUT/POST: chấp nhận nhiều cách gọi (giữ
+    // tương thích với các phiên bản frontend khác nhau) cho cùng một thao tác sửa giáo án.
     @RequestMapping(
             value = {"/{id}", "/{id:\\d+}", "/{id}/update", "/{id:\\d+}/update"},
             method = {RequestMethod.PUT, RequestMethod.POST}

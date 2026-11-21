@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /** HLV gọi bác sĩ từ một cảnh báo: thấy gì, gấp tới đâu, có dừng buổi tập ngay không. */
+// Body của POST /api/alerts/{alertId}/vet-call (chỉ HEAD_TRAINER) -> VetCallService.call.
 public record VetCallRequest(
         @NotBlank(message = "Tell the vet why you are calling")
         @Size(max = 500, message = "Reason must be at most 500 characters")

@@ -126,6 +126,7 @@ public class VetCallService {
         }
 
         // Tiếp tục nhẹ thì buổi tập giữ nguyên; hai quyết định còn lại đều dừng ngựa.
+        // Quyết định khác CONTINUE_LIGHT (TREAT_ON_SITE, EMERGENCY_STOP) đều dừng mọi buổi đang chạy của ngựa.
         if (!"CONTINUE_LIGHT".equals(decision)) {
             stopHorse(vet, call, decision, ip);
         }
@@ -139,6 +140,7 @@ public class VetCallService {
                 + (medication == null ? "" : " Medication: " + medication + ".");
         notifications.notifyUser(call.calledBy(), new Notice("VET_CALL_ANSWERED",
                 "Veterinarian answered: " + call.horseName(), clip(summary, 500), Notice.VET_CALL, callId));
+        // Báo thêm cho Groom của buổi tập (nếu Groom không phải chính người đã gọi).
         alerts.findSessionContext(call.sessionId()).filter(s -> s.assignedTo() != call.calledBy())
                 .ifPresent(s -> notifications.notifyUser(s.assignedTo(),
                 new Notice("VET_CALL_ANSWERED", "Vet instructions: " + call.horseName(), clip(summary, 500),
@@ -163,6 +165,7 @@ public class VetCallService {
      * và buổi này có thể đã có báo cáo cũ.
      */
     private String openExamination(AuthenticatedUser vet, VetCallResponse call, String instructions, String ip) {
+        // findOpenReport: báo cáo sự cố chưa EXAMINED của ngựa (nếu có) - dùng lại thay vì mở báo cáo thứ hai.
         var open = incidents.findOpenReport(call.horseId());
         int reportId;
         if (open.isPresent()) {

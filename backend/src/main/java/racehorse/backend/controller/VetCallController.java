@@ -21,6 +21,13 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.VetCallService;
 
+/*
+ * Gọi bác sĩ từ cảnh báo buổi tập (V27):
+ *   POST /api/alerts/{alertId}/vet-call   HLV gọi (lý do, dấu hiệu, mức khẩn, có dừng buổi tập không)
+ *   GET  /api/vet-calls?status=           danh sách (PENDING lên đầu, gấp nhất trước)
+ *   GET  /api/vet-calls/{callId}          chi tiết
+ *   PUT  /api/vet-calls/{callId}/answer   bác sĩ trả lời một lần
+ */
 @RestController
 @RequestMapping("/api")
 public class VetCallController {

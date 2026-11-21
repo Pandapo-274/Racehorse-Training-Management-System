@@ -16,6 +16,7 @@ import { toRoleLabel } from "../profile/profileApi";
 import { getPermissions, groupByArea, toAccess } from "./permissionsApi";
 import "./permissions.css";
 
+// Một ô của ma trận: "✓" (ALL), "Own" (chỉ dữ liệu của mình) hoặc "—" (không được phép).
 function AccessCell({ level }) {
   const a = toAccess(level);
   return (
@@ -25,6 +26,7 @@ function AccessCell({ level }) {
   );
 }
 
+// Bảng của một khu vực chức năng: mỗi hàng là một chức năng, mỗi cột là một vai trò.
 function AreaTable({ group, roles }) {
   return (
     <Card title={group.area} hint={`${group.rows.length} ${group.rows.length === 1 ? "function" : "functions"}`}>
@@ -50,6 +52,8 @@ function AreaTable({ group, roles }) {
   );
 }
 
+// Trang /manager/permissions: tải ma trận một lần, gom theo khu vực (groupByArea) rồi vẽ mỗi khu vực một bảng.
+// reloadKey: tăng lên để bắt effect chạy lại (nút "Try again" khi lỗi).
 export default function PermissionsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);

@@ -19,6 +19,7 @@ export default function HorsePhoto({ horse, className = "" }) {
     );
   }
 
+  // onError của <img> (bên dưới) đặt broken = true để chuyển sang khung chữ viết tắt.
   return (
     <img
       className={`hz-photo ${className}`}

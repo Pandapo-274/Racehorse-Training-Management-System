@@ -13,6 +13,7 @@ import {
 } from "./careApi";
 import "./care.css";
 
+// Form báo sự cố: chọn ngựa, triệu chứng (gợi ý STABLE_SYMPTOMS hoặc tự gõ), mô tả, mức khẩn cấp, ảnh tuỳ chọn.
 function ReportForm({ horses, initialHorseId, onFiled }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ horseId: initialHorseId || "", symptoms: "", description: "", urgency: "MEDIUM" });
@@ -22,6 +23,8 @@ function ReportForm({ horses, initialHorseId, onFiled }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Xem trước ảnh: URL.createObjectURL tạo đường dẫn tạm "blob:" tới file trong bộ nhớ trình duyệt;
+  // cleanup revokeObjectURL giải phóng bộ nhớ khi đổi ảnh hoặc rời trang.
   useEffect(() => {
     if (!photo) {
       setPreview("");
@@ -44,10 +47,13 @@ function ReportForm({ horses, initialHorseId, onFiled }) {
       setErrors((x) => ({ ...x, photo: "File is too large (max 2 MB)" }));
       return;
     }
+    // Cú pháp bỏ một khoá khỏi object: lấy "photo" ra (đặt tên _ignored) và giữ phần còn lại (...rest).
     setErrors(({ photo: _ignored, ...rest }) => rest);
     setPhoto(f);
   };
 
+  // Gửi multipart qua fileIncident (careApi.js). Thành công thì onFiled(báo cáo mới): trang cha chèn nó lên đầu
+  // danh sách và hiện dòng xác nhận, không cần tải lại.
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -140,6 +146,8 @@ function ReportForm({ horses, initialHorseId, onFiled }) {
   );
 }
 
+// Trang /groom/incidents: form ở trên, danh sách báo cáo của chính Groom ở dưới (backend chỉ trả báo cáo họ gửi).
+// ?horseId= trên URL chọn sẵn con ngựa (link "Report a problem" trên Stable map).
 export default function IncidentReportPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -165,6 +173,7 @@ export default function IncidentReportPage() {
     return () => ctrl.abort();
   }, [navigate, reloadKey]);
 
+  // Chỉ ngựa đang ở CLB (không phải PEDIGREE, chưa rút) mới chọn được trong form.
   const stabled = useMemo(
     () => (horses || [])
       .filter((h) => !isPedigreeOnly(h) && !isWithdrawn(h) && h.stallNo)

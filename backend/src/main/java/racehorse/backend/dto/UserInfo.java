@@ -1,6 +1,7 @@
 package racehorse.backend.dto;
 
 /** Thông tin user an toàn để trả cho frontend. Field "role" khớp với user.role mà frontend đang dùng. */
+// Phần "user" trong LoginResponse / GoogleLoginResponse và kết quả GET /api/auth/me.
 public record UserInfo(int userId, String username, String fullName, String email, String role,
                        /* Thiếu trường này là nguồn của lỗi "avatar đổi xong lại mất":
                           frontend lưu nguyên khối user trả về đây vào localStorage, nên

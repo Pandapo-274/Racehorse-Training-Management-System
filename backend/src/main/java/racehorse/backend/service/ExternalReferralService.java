@@ -22,6 +22,13 @@ import racehorse.backend.repository.TrainingLockRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Chuyển viện (một giao dịch): kiểm ngựa còn ở CLB và chưa nằm viện -> tạo phiếu -> ngựa INJURED ->
+ * khoá tập FULL (tạo mới hoặc nâng từ HEAVY_WORK_ONLY) -> đóng báo cáo sự cố liên quan -> cảnh báo
+ * rủi ro giải đua -> báo chủ, HLV, các bác sĩ -> audit.
+ * Xuất viện: phiếu DISCHARGED, đặt sức khoẻ theo postDischargeStatus (mặc định INJURED). Lệnh khoá
+ * KHÔNG tự gỡ ở đây: gỡ qua xác nhận hồi phục hoặc mở lệnh khoá.
+ */
 @Service
 public class ExternalReferralService {
 
@@ -168,6 +175,7 @@ public class ExternalReferralService {
 
     public List<ExternalReferralResponse> list(Integer horseId, String status, int limit, AuthenticatedUser user) {
         if ("HORSE_OWNER".equals(user.role())) {
+            // Chủ ngựa không truyền horseId: lấy hết rồi lọc ngựa của mình trong Java.
             if (horseId == null) {
                 // Return only owner's horses
                 return referrals.search(null, status, limit).stream()

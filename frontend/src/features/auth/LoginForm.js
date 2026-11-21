@@ -23,6 +23,17 @@ const GOOGLE_NOTICE = {
   },
 };
 
+/*
+ * Form đăng nhập (UC2). Luồng:
+ *   1. Người dùng gõ username + mật khẩu -> handleSubmit -> validate (chỉ kiểm ô trống) -> signInAs.
+ *   2. signInAs gọi login() trong authService: POST /api/auth/login, thành công thì authService lưu
+ *      token + user vào localStorage, rồi chuyển tới trang chủ theo vai trò (homeFor). replace: true để bấm
+ *      Back không quay lại trang đăng nhập.
+ *   3. Nút Google (GoogleLogin của @react-oauth/google) trả về credential (ID token của Google) ->
+ *      handleGoogle -> POST /api/auth/google. outcome REGISTERED / LINKED thì hiện lời nhắn trước khi vào.
+ * Lỗi (sai mật khẩu, tài khoản bị khoá, khoá tạm sau nhiều lần sai...) hiện ở submitError bằng câu backend trả.
+ * State: form (giá trị hai ô), errors (lỗi từng ô), loading (khoá nút khi đang gửi).
+ */
 export default function LoginForm() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
@@ -32,9 +43,11 @@ export default function LoginForm() {
   // Sau đăng nhập Google: { outcome, home } để hiện lời nhắn trước khi vào trang.
   const [googleDone, setGoogleDone] = useState(null);
 
+  // [e.target.name]: tên thuộc tính động - ô nhập có name="username" thì cập nhật form.username.
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
+  // Chỉ kiểm ô trống ở trình duyệt; đúng/sai mật khẩu là việc của backend.
   const validate = () => {
     const next = {};
     if (!form.username.trim()) next.username = "Please enter your username";
@@ -76,6 +89,7 @@ export default function LoginForm() {
     }
   };
 
+  // e.preventDefault(): chặn trình duyệt tự gửi form và tải lại trang (hành vi mặc định của <form>).
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validate()) signInAs(form.username.trim(), form.password);

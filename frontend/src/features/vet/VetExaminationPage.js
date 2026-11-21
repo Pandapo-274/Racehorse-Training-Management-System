@@ -1,4 +1,14 @@
 
+/*
+ * src/features/vet/VetExaminationPage.js - trang /veterinarian/examination[/:horseId] (khám ngựa, UC14-UC16).
+ * Một lần bấm Save có thể gồm ba bước, chạy tuần tự:
+ *   1. POST /api/medical-records (recordType EXAM): chẩn đoán, trạng thái sau khám, cân nặng, ghi chú, số ngày nghỉ;
+ *      mở từ hàng chờ (?reportId=) thì backend đóng báo cáo sự cố đó (EXAMINED).
+ *   2. Nếu xác nhận chấn thương: POST /api/injuries - điểm bấm trên mô hình ngựa 2D (toạ độ %) + vị trí + mức độ.
+ *   3. Nếu chọn "Save and lock": POST /api/training-locks (FULL hoặc HEAVY_WORK_ONLY).
+ * saved (useRef) nhớ bước nào đã thành công: lỗi ở bước sau thì bấm lại chỉ chạy lại bước hỏng, không tạo trùng hồ sơ.
+ * Ngoài ra: gỡ lệnh khoá đang có (releaseLock) và chuyển viện ngoài (ReferralModal, V40).
+ */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
@@ -41,6 +51,7 @@ const SHAPES = {
 };
 
 /** Vùng cơ thể gần đúng từ vị trí chạm. */
+// Đoán tên vùng cơ thể từ toạ độ bấm (0-100 theo chiều ngang / dọc): đầu, thân, chân trước / sau (trên / giữa / dưới).
 function guessBodyPart(x, y) {
   if (x >= 58 && y < 30) return "Head";
 
@@ -54,6 +65,7 @@ function guessBodyPart(x, y) {
   return "Trunk";
 }
 
+// Ghép vị trí hiển thị: "Left forelimb, upper"; đầu và thân không cần bên trái / phải.
 function composeLocation(part, side) {
   return /^(Head|Trunk)/.test(part)
     ? part
@@ -69,6 +81,7 @@ function swapSide(text, side) {
 const clamp = (n) => Math.min(100, Math.max(0, n));
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// Đổi một hình chữ nhật trong SHAPES thành thuộc tính của thẻ <rect> trong SVG.
 function rect({ x, y, w, h, r }) {
   return {
     x,
@@ -80,7 +93,9 @@ function rect({ x, y, w, h, r }) {
   };
 }
 
+// Mô hình ngựa 2D bằng SVG: bấm (hoặc dùng phím) để đặt điểm chấn thương; hiện cả các điểm chấn thương cũ.
 function HorseModel({ marker, existingMarkers = [], onMark }) {
+  // Toạ độ bấm đổi sang phần trăm của khung (không phụ thuộc kích thước hiển thị), làm tròn 2 chữ số.
   const handleClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
 
@@ -168,6 +183,8 @@ function HorseModel({ marker, existingMarkers = [], onMark }) {
 
 /* ---------- trang ---------- */
 
+// Không có :horseId -> danh sách chọn ngựa. key gồm horseId + reportId để đổi ngựa / báo cáo thì form được dựng lại
+// từ đầu (state cũ bị xoá).
 export default function VetExaminationPage() {
   const { horseId } = useParams();
   // Mở từ hàng chờ khám: khám này trả lời báo cáo sự cố đó (backend đóng báo cáo khi lưu).
@@ -198,12 +215,14 @@ function Field({ label, full, children }) {
 }
 
 
+// Ba lựa chọn khoá. "800 m" khớp app.lock.light-work-max-distance trong application.properties.
 const LOCK_SELECTION_OPTIONS = [
   { value: "FULL", label: "Full lock", hint: "No training at all" },
-  { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
+  { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 800 m" },
   { value: "NONE", label: "No lock", hint: "Normal training permitted" },
 ];
 
+// Hộp thoại chuyển viện ngoài: tên bệnh viện, lý do, mức khẩn cấp, ngày dự kiến trở về.
 function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, submitting }) {
   const [hospitalName, setHospitalName] = useState("");
   const [referralReason, setReferralReason] = useState(diagnosisDefault || report?.symptoms || "");
@@ -320,6 +339,10 @@ function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, sub
   );
 }
 
+/*
+ * Form khám của một ngựa. Props: horseId, reportId (nếu khám cho một báo cáo sự cố).
+ * Tải: hồ sơ ngựa, lệnh khoá, các điểm chấn thương cũ (và báo cáo sự cố nếu có reportId).
+ */
 function ExaminationForm({ horseId, reportId }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -370,6 +393,8 @@ function ExaminationForm({ horseId, reportId }) {
   const injuryConfirmed = confirmed === "yes";
   const activeLock = locks.find((l) => l.status === "ACTIVE") || null;
 
+  // Trạng thái sau khám: xác nhận chấn thương -> INJURED; không thì trạng thái bác sĩ chọn hoặc giữ trạng thái cũ.
+  // Lựa chọn khoá phụ thuộc vào đó: QUARANTINE bắt buộc FULL; INJURED không được "No lock".
   const effectivePostStatus = injuryConfirmed
     ? "INJURED"
     : (otherStatus || horse?.status || "ELIGIBLE");
@@ -383,12 +408,13 @@ function ExaminationForm({ horseId, reportId }) {
     if (effectivePostStatus === "INJURED") {
       return [
         { value: "FULL", label: "Full lock", hint: "No training at all" },
-        { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 1,200 m" },
+        { value: "HEAVY_WORK_ONLY", label: "No heavy work", hint: "Light work only: sessions up to 800 m" },
       ];
     }
     return LOCK_SELECTION_OPTIONS;
   })();
 
+  // Tự chỉnh mức khoá đang chọn khi trạng thái sau khám làm nó không còn hợp lệ.
   useEffect(() => {
     if (effectivePostStatus === "QUARANTINE" && lockLevel !== "FULL") {
       setLockLevel("FULL");
@@ -435,6 +461,7 @@ function ExaminationForm({ horseId, reportId }) {
   }, [horseId, navigate, reload]);
 
   // Di chuyển marker không ghi đè tên vùng đã được bác sĩ chỉnh sửa.
+  // Bấm trên mô hình: đặt điểm và tự điền vị trí đoán được (giữ bên trái / phải đang chọn).
   const handleTap = (x, y, moveOnly = false) => {
     setMarker({ x, y });
 
@@ -450,6 +477,7 @@ function ExaminationForm({ horseId, reportId }) {
     setBodyLocation((text) => swapSide(text, next));
   };
 
+  // Kiểm form trước khi gửi, trả mảng câu lỗi (rỗng = hợp lệ): chẩn đoán, ngày khám, cân nặng, điểm chấn thương...
   const validate = (withLock) => {
     const problems = [];
 
@@ -583,6 +611,7 @@ function ExaminationForm({ horseId, reportId }) {
       saved.current = { record: null, injury: null };
       setReload((r) => r + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    // Lỗi giữa chừng: nói rõ bước nào đã lưu (hồ sơ #id, điểm chấn thương #id) để bác sĩ biết bấm lại là an toàn.
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
 
@@ -604,6 +633,7 @@ function ExaminationForm({ horseId, reportId }) {
   };
 
 
+  // Tạo ca chuyển viện (POST /api/external-referrals) rồi về Herd health board kèm thông báo (location.state.notice).
   const handleReferralSubmit = async (data) => {
     setReferralSubmitting(true);
     try {
@@ -622,6 +652,8 @@ function ExaminationForm({ horseId, reportId }) {
     }
   };
 
+  // Gỡ lệnh khoá đang có (hỏi xác nhận). Lệnh dựa trên chấn thương chưa lành sẽ bị backend từ chối: phải dùng
+  // trang Recovery để xác nhận hồi phục.
   const handleRelease = async () => {
     if (!activeLock) return;
 

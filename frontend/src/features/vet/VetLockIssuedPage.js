@@ -22,12 +22,21 @@ import {
   lockLevelLabel,
 } from "./vetApi";
 
+// Cộng n ngày vào một ngày (để tính ngày dự kiến hết thời gian nghỉ = ngày khám + expectedRestDays).
 function addDays(iso, days) {
   const d = new Date(iso);
   d.setDate(d.getDate() + days);
   return d.toISOString();
 }
 
+/*
+ * Trang /veterinarian/examination/:horseId/lock-issued. location.state có thể chứa lock, record, injury, statusBefore.
+ * (Hiện không trang nào navigate tới đây: VetExaminationPage lưu xong chỉ hiện thông báo tại chỗ, nên trang này chỉ
+ * mở được bằng cách gõ URL và luôn đi nhánh tải lại từ API.) Thiếu state (tải lại trang) thì tìm lệnh khoá ACTIVE mới nhất và hồ sơ khám
+ * có xác nhận chấn thương gần nhất từ API.
+ * (Ghi chú đầu file nói backend không dừng buổi tập và không gửi thông báo đã cũ: TrainingLockService hiện dừng buổi
+ * RUNNING của ngựa (sessionStopper) và báo chủ ngựa + Head Trainer qua notifyHorseWatchers.)
+ */
 export default function VetLockIssuedPage() {
   const { horseId } = useParams();
   const { state } = useLocation();
@@ -106,6 +115,8 @@ export default function VetLockIssuedPage() {
       ? "cannot schedule any training for this horse"
       : "cannot schedule heavy work for this horse";
 
+  // Các bước "What the system did" theo dữ liệu thật: trạng thái sức khoẻ (trước -> sau), lệnh khoá còn hiệu lực hay
+  // đã gỡ, hồ sơ khám đã lưu, và dòng nhật ký (ai ra lệnh, lúc nào). .filter(Boolean) bỏ bước rỗng (không có hồ sơ).
   const steps = [
     {
       title: "Status updated",

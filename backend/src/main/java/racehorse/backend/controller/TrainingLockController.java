@@ -28,6 +28,13 @@ import racehorse.backend.service.TrainingLockService;
  * lệnh thì chỉ bác sĩ và quản lý. Xem ghi chú ở TrainingLockService về lý do
  * một chốt an toàn phải dễ bật và khó tắt.
  */
+/*
+ *   POST /api/training-locks                       ra lệnh khoá (Vet, HLV, Manager)
+ *   POST /api/training-locks/{id}/release          mở lệnh (chỉ Vet, Manager)
+ *   PUT  /api/training-locks/horse/{horseId}/level đổi mức khoá FULL <-> HEAVY_WORK_ONLY (hoặc tạo mới)
+ *   GET  /api/training-locks/active                mọi lệnh đang hiệu lực
+ *   GET  /api/training-locks?horseId=              lịch sử khoá của một ngựa
+ */
 @RestController
 @RequestMapping("/api/training-locks")
 public class TrainingLockController {

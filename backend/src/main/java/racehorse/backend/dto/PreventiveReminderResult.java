@@ -8,6 +8,7 @@ package racehorse.backend.dto;
  * vetsNotified = số bác sĩ nhận thông báo; 0 nghĩa là không có thông báo nào được gửi
  * (không có gì mới, hoặc không có bác sĩ nào đang ACTIVE).
  */
+// Trả về bởi POST /api/preventive-care/reminders/run (nút chạy tay của Vet/Manager).
 public record PreventiveReminderResult(
         int reminded,
         int overdue,

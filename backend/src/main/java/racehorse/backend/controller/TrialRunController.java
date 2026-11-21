@@ -16,6 +16,8 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.TrialRunService;
 
+// Một endpoint: PUT /api/sessions/{id}/trial-run (chỉ HEAD_TRAINER). Lượt chạy thử là buổi tập dùng
+// để thử sức ngựa trước giải đua; RaceService cảnh báo nếu ngựa chưa có lượt chạy thử gần đây.
 @RestController
 @RequestMapping("/api/sessions")
 public class TrialRunController {

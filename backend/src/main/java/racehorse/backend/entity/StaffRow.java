@@ -38,6 +38,8 @@ public record StaffRow(
         /** V37: Hạn mức ngựa tối đa Club Manager cấp cho Head Trainer này. */
         Integer maxHorses
 ) {
+    // Constructor phụ cho các câu SQL cũ không đọc các cột V37: điền giá trị mặc định
+    // (null / 0) cho trainerId, trainerName, groomCount, managedHorseCount, maxHorses.
     public StaffRow(
             int userId, String username, String fullName, String email, String phone,
             String roleName, String roleLabel, String status, String avatarUrl,

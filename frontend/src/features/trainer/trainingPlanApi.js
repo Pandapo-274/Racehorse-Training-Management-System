@@ -1,7 +1,14 @@
+/*
+ * Module API giáo án huấn luyện (UC9) cho Head Trainer: /api/training-plans (TrainingPlanController,
+ * TrainingPlanService). Dùng chủ yếu ở TrainingPlanPage.js và SchedulePage.js.
+ * Vòng đời: DRAFT -> PENDING_APPROVAL (chủ ngựa duyệt) -> APPROVED -> ACTIVE <-> PAUSED -> COMPLETED.
+ */
 import { authFetch } from "../auth/authService";
 
 const API = "/api/training-plans";
 
+// Nhận hai kiểu tham số để tương thích code cũ: listTrainingPlans(signal) hoặc
+// listTrainingPlans({ horseId, status, signal }). instanceof AbortSignal phân biệt hai kiểu.
 export function listTrainingPlans(opts = {}) {
   const isSignal = typeof AbortSignal !== "undefined" && opts instanceof AbortSignal;
   const signal = isSignal ? opts : opts?.signal;
@@ -14,6 +21,9 @@ export function listTrainingPlans(opts = {}) {
   return authFetch(`${API}${suffix ? `?${suffix}` : ""}`, { signal });
 }
 
+// GET /api/training-plans/grooms: Groom trong đội của HLV kèm số giáo án đang giữ (tối đa 2, V42) và cờ eligible.
+// Nếu rỗng hoặc lỗi thì thử /api/training-sessions/assignees và tự điền activePlanCount = 0, eligible = true
+// (dữ liệu dự phòng: backend vẫn kiểm lại giới hạn khi lưu giáo án).
 export async function listPlanGrooms(signal) {
   try {
     const res = await authFetch(`${API}/grooms`, { signal });
@@ -51,15 +61,20 @@ export function getTrainingPlan(id, signal) {
   return authFetch(`${API}/${id}`, { signal });
 }
 
+// POST: tạo giáo án mới ở trạng thái DRAFT; payload gồm horseId, groomId, tên, ngày bắt đầu/kết thúc và
+// danh sách giai đoạn (phases) với mục tiêu từng giai đoạn.
 export function createTrainingPlan(payload) {
   return authFetch(API, { method: "POST", body: JSON.stringify(payload) });
 }
 
 /** Chỉ giáo án DRAFT; backend trả 409 cho trạng thái khác. */
+// (Ghi chú trên chưa cập nhật: backend cho xoá DRAFT, PENDING_APPROVAL và APPROVED - TrainingPlanService.DELETABLE.)
 export function deleteTrainingPlan(id) {
   return authFetch(`${API}/${id}`, { method: "DELETE" });
 }
 
+// PUT /{id}/status: DRAFT -> PENDING_APPROVAL (gửi chủ duyệt), APPROVED -> ACTIVE, ACTIVE <-> PAUSED,
+// ACTIVE/PAUSED -> COMPLETED. Chuyển không hợp lệ hoặc vi phạm luật (khoá FULL, ngựa đã rút...) -> 409/400.
 export function changeTrainingPlanStatus(id, status) {
   return authFetch(`${API}/${id}/status`, {
     method: "PUT",
@@ -67,6 +82,8 @@ export function changeTrainingPlanStatus(id, status) {
   });
 }
 
+// Backend nhận cả PUT lẫn POST cho /{id} (@RequestMapping hai phương thức). Nếu PUT bị chặn (405, ví dụ do
+// proxy) thì gửi lại bằng POST. Giáo án đã APPROVED/ACTIVE/PAUSED: bản sửa chờ chủ ngựa duyệt (V47).
 export async function updateTrainingPlan(id, payload) {
   try {
     return await authFetch(`${API}/${id}`, {
@@ -84,6 +101,7 @@ export async function updateTrainingPlan(id, payload) {
   }
 }
 
+// Trùng tên với hàm trong ownerTrainingApi.js (cùng endpoint owner-feedback).
 export function sendOwnerFeedback(id, note) {
   return authFetch(`${API}/${id}/owner-feedback`, {
     method: "PUT",

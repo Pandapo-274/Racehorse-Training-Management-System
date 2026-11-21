@@ -7,6 +7,7 @@
 // ngựa người khác thì bị 403.
 import { authFetch } from "../auth/authService";
 
+// Cùng endpoint với Head Trainer; backend lọc theo vai trò người gọi.
 export function listMyPlans(signal) {
   return authFetch("/api/training-plans", { signal });
 }
@@ -25,6 +26,8 @@ export function listMySessions(signal) {
  * đang chờ. Từ chối thì bắt buộc ghi lý do (backend trả fieldErrors.note).
  */
 export function reviewPlan(planId, { approve, note }) {
+  // approve = true: PENDING_APPROVAL -> APPROVED (HLV kích hoạt sau). false: trả về DRAFT, lý do lưu vào
+  // owner_note để HLV sửa rồi gửi lại.
   return authFetch(`/api/training-plans/${planId}/owner-review`, {
     method: "PUT",
     body: JSON.stringify({ approve, note: note || null }),
@@ -35,6 +38,8 @@ export function reviewPlan(planId, { approve, note }) {
  * PUT /api/training-plans/{id}/update-review: chủ ngựa duyệt hoặc từ chối bản cập nhật giáo án.
  */
 export function reviewPlanUpdate(planId, { approve, note }) {
+  // Sửa giáo án đã APPROVED/ACTIVE/PAUSED không áp dụng ngay: bản sửa được lưu dạng JSON chờ chủ duyệt
+  // (quá 2 ngày tự bị từ chối - V47). Duyệt thì backend áp bản sửa vào giáo án.
   return authFetch(`/api/training-plans/${planId}/update-review`, {
     method: "PUT",
     body: JSON.stringify({ approve, note: note || null }),
@@ -56,6 +61,7 @@ export function sendOwnerFeedback(planId, note) {
  * đó), rồi đang chạy, tạm dừng, rồi mới nhất.
  */
 export function pickPlan(plans, horseId) {
+  // Thứ tự ưu tiên bằng chuỗi "||": find() trả undefined nếu không thấy, nên chuyển sang điều kiện kế tiếp.
   const mine = (plans || []).filter((p) => p.horseId === horseId);
   return mine.find((p) => p.status === "PENDING_APPROVAL")
     || mine.find((p) => p.status === "ACTIVE")
@@ -64,6 +70,8 @@ export function pickPlan(plans, horseId) {
     || null;
 }
 
+// Vòng đời giáo án (TrainingPlanService): DRAFT -> PENDING_APPROVAL -> APPROVED -> ACTIVE <-> PAUSED
+// -> COMPLETED; chủ từ chối thì về lại DRAFT.
 const PLAN_STATUS = {
   DRAFT: { label: "Draft", tone: "neutral" },
   PENDING_APPROVAL: { label: "Waiting for your approval", tone: "warning" },
@@ -91,6 +99,7 @@ export function toSessionStatus(s) {
 
 /** Giai đoạn đang diễn ra hôm nay (theo ngày máy). */
 export function isCurrentPhase(phase, today) {
+  // So chuỗi yyyy-mm-dd: thứ tự chữ cái trùng thứ tự ngày nên dùng <= được, không cần đổi sang Date.
   return phase.startDate <= today && today <= phase.endDate;
 }
 

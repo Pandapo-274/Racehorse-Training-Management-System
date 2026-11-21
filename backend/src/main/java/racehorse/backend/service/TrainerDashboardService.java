@@ -33,6 +33,7 @@ public class TrainerDashboardService {
      * Công thức chỉ số thể lực, dùng lại trong nhiều query.
      * Không để private: OwnerDashboardService dùng chung để hai màn ra cùng một con số.
      */
+    // Ví dụ: nhịp tim hồi phục 110 bpm -> (140 - 110) * 100 / 60 = 50 điểm.
     static final String FITNESS_EXPR = """
             CASE
                 WHEN s.recovery_heart_rate IS NULL THEN NULL
@@ -44,6 +45,7 @@ public class TrainerDashboardService {
 
     private static final DateTimeFormatter WEEK_LABEL = DateTimeFormatter.ofPattern("dd/MM");
 
+    // Service này dùng JdbcTemplate (API cũ hơn JdbcClient) với tham số "?" theo vị trí.
     private final JdbcTemplate jdbc;
 
     public TrainerDashboardService(JdbcTemplate jdbc) {
@@ -65,6 +67,8 @@ public class TrainerDashboardService {
                 loadOpenAlerts(t));
     }
 
+    // Thêm điều kiện "chỉ ngựa của HLV này" vào câu SQL. Nối số trực tiếp là an toàn vì t là Integer
+    // lấy từ token (không phải chuỗi người dùng nhập).
     private static String scope(Integer t) {
         return t == null ? "" : " AND h.trainer_id = " + t;
     }
@@ -72,6 +76,8 @@ public class TrainerDashboardService {
     /* ------------------------------------------------------------------ */
 
     private TrainerDashboard.Summary loadSummary(Integer t) {
+        // %1$s trong chuỗi = vị trí của tham số thứ nhất khi gọi .formatted(...): cùng một đoạn scope được
+        // chèn vào cả bốn subquery.
         String sql = """
                 SELECT
                     (SELECT COUNT(*) FROM HORSE h WHERE h.activity_status = 'ACTIVE' %1$s) AS total_horses,
@@ -111,6 +117,7 @@ public class TrainerDashboardService {
 
         // Truyen so am thay vi viet "-?" trong SQL: mot tham so dat ngay sau dau
         // tru la cho trinh phan tich cu phap de nham nhat.
+        // Lambda thứ hai là RowMapper; tham số cuối (-weeks) thay cho dấu "?" trong câu SQL.
         return jdbc.query(sql, (rs, n) -> {
             LocalDate weekStart = rs.getTimestamp("week_start").toLocalDateTime().toLocalDate();
             return new TrainerDashboard.FitnessPoint(

@@ -97,6 +97,7 @@ public class CareRepository {
             LEFT JOIN APP_USER c ON c.user_id = t.completed_by
             """;
 
+    // completed_at (UTC) đổi thành Instant để JSON có "Z"; state (OPEN/DONE/DONE_LATE/MISSED) tính bằng stateOf.
     private static CareModels.Task mapTask(ResultSet rs, int n) throws SQLException {
         LocalDateTime done = rs.getObject("completed_at", LocalDateTime.class);
         Instant doneAt = done == null ? null : done.toInstant(ZoneOffset.UTC);
@@ -179,6 +180,7 @@ public class CareRepository {
     }
 
     /** Reopens. A task whose day has passed goes straight back to missed. */
+    // Mở lại việc của ngày đã qua thì đánh dấu missed_at ngay (việc đó coi như bị lỡ).
     public int markUndone(int taskId, LocalDate today) {
         return jdbc.sql("""
                 UPDATE DAILY_TASK SET is_completed = 0, completed_at = NULL, completed_by = NULL,

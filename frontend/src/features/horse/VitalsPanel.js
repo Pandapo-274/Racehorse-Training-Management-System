@@ -95,6 +95,9 @@ function Stat({ label, value, unit }) {
   );
 }
 
+// vitals: kết quả GET /api/horses/{id}/vitals - { activeLock, latestSession, openAlerts, openInjuries }.
+// nothingWrong (không khoá, không chấn thương mở, không cảnh báo mở) thì hiện thêm chip "Nothing outstanding";
+// các thẻ chi tiết bên dưới vẫn hiện (ghi "None recorded").
 export default function VitalsPanel({ vitals }) {
   if (!vitals) return null;
 

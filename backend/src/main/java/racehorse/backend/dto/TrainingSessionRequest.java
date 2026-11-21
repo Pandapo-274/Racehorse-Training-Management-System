@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
  * V37: plannedDuration là thời lượng huấn luyện dự kiến (phút), tối đa 12 tiếng (720 phút),
  * mặc định 60 phút nếu không truyền.
  */
+// Body của POST /api/training-sessions (UC10, Head Trainer xếp lịch). TrainingSessionService
+// kiểm: không trùng giờ với buổi khác của ngựa/Groom, không vượt sessionsPerWeek, ngựa không
+// bị khoá FULL / không có sự cố mở, giáo án đang ACTIVE...
 public record TrainingSessionRequest(
         @NotNull(message = "Phase is required") Integer phaseId,
         @NotNull(message = "Assignee is required") Integer assignedTo,

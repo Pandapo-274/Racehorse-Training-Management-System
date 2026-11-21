@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import "./auth.css";
 import "./register.css";
 
+// Trang /register: BrandPanel + RegisterForm, cùng bố cục với LoginPage.
 export default function RegisterPage() {
   const navigate = useNavigate();
   return (

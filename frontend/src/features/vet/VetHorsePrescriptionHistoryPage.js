@@ -17,11 +17,13 @@ import {
 } from "./vetApi";
 import "./vet-care.css";
 
+// Tên hiển thị của một mục điều trị, liều + tần suất, và khoảng ngày ("đến khi tái khám" nếu chưa có ngày kết thúc).
 const treatmentTitle = (t) => t.medicineName || t.instruction || "Treatment";
 const dose = (t) => [t.dosage, t.frequency].filter(Boolean).join(" · ") || "—";
 const period = (t) =>
   `${formatDate(t.startDate)} → ${t.endDate ? formatDate(t.endDate) : "until review"}`;
 
+// Hộp thoại kết thúc một mục điều trị hôm nay (PUT /api/treatments/{id}/end). Không xoá: bệnh sử giữ nguyên.
 function EndDialog({ treatment, onClose, onDone }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
@@ -72,6 +74,11 @@ function EndDialog({ treatment, onClose, onDone }) {
   );
 }
 
+/*
+ * Trang /veterinarian/prescriptions/history/:horseId: toàn bộ lịch sử đơn thuốc của một ngựa.
+ * Tải ngựa + mọi mục điều trị; gom các mục thành "đơn" theo (recordId, ngày bắt đầu); lọc theo khoảng thời gian,
+ * trạng thái (đang dùng / đã kết thúc) và từ khoá; thẻ thống kê tính trên kết quả đã lọc.
+ */
 export default function VetHorsePrescriptionHistoryPage() {
   const { horseId } = useParams();
   const navigate = useNavigate();
@@ -96,6 +103,7 @@ export default function VetHorsePrescriptionHistoryPage() {
   const today = todayInputValue();
 
   // Load horse and treatments
+  // loadData trả về hàm huỷ (ctrl.abort), và effect bên dưới "return loadData()" để dùng nó làm cleanup.
   const loadData = useCallback(() => {
     if (!horseId) return;
     const ctrl = new AbortController();
@@ -125,6 +133,7 @@ export default function VetHorsePrescriptionHistoryPage() {
   }, [loadData, reload]);
 
   // Compute cutoff date based on timePreset
+  // Mốc ngày bắt đầu của bộ lọc thời gian (chuỗi yyyy-mm-dd theo giờ địa phương); "ALL" = không lọc.
   const cutoffDate = useMemo(() => {
     if (timePreset === "ALL") return null;
     const d = new Date();
@@ -141,6 +150,8 @@ export default function VetHorsePrescriptionHistoryPage() {
   }, [timePreset]);
 
   // Group treatments into Prescription Orders (grouped by startDate + recordId)
+  // Gom theo khoá recordId_startDate: các thuốc kê cùng một lần khám, cùng ngày bắt đầu thành một đơn;
+  // ngày kết thúc của đơn = ngày kết thúc muộn nhất trong các mục.
   const prescriptionGroups = useMemo(() => {
     if (!treatments) return [];
 

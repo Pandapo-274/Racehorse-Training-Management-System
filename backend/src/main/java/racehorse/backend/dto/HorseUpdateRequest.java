@@ -17,6 +17,8 @@ import java.time.LocalDate;
  *  - status: do bác sĩ thú y quyết định.
  * Vì record không có các trường này nên client có gửi lên cũng bị bỏ qua.
  */
+// Body của PUT /api/horses/{id} (chỉ HORSE_OWNER, và chỉ ngựa của chính mình - HorseService
+// kiểm). sireId/damId: chủ chỉ được điền cha/mẹ còn trống; sửa cha mẹ đã có là việc của Manager.
 public record HorseUpdateRequest(
         @NotBlank(message = "Name is required") @Size(max = 100) String horseName,
         @Size(max = 50) String breed,

@@ -7,6 +7,8 @@ import { authFetch } from "../auth/authService";
 const API = "/api/owner/dashboard";
 
 /** period: một trong các key của COST_PERIODS. */
+// Kết quả là record OwnerDashboard (dto/OwnerDashboard.java): thẻ từng ngựa (thông tin, khoá tập, điều trị,
+// km 7 ngày, giải sắp tới, biểu đồ thể lực, 5 chỉ số), bảng chi phí theo hạng mục × ngựa trong khoảng period.
 export function getOwnerDashboard(period, signal) {
   return authFetch(`${API}?period=${encodeURIComponent(period)}`, { signal });
 }
@@ -20,6 +22,7 @@ export function getOwnerDashboard(period, signal) {
  * trong OwnerDashboard.Stats; cách tính nằm ở OwnerDashboardService.loadStats,
  * hint chỉ tóm tắt lại để người xem biết con số đến từ đâu.
  */
+// icon: ảnh tĩnh trong frontend/public/icons/stats/ (đường dẫn bắt đầu bằng "/" = thư mục public).
 export const TRAINING_STATS = [
   { key: "speed",   label: "Speed",   icon: "/icons/stats/speed.png",   hint: "Average peak speed" },
   { key: "stamina", label: "Stamina", icon: "/icons/stats/stamina.png", hint: "Heart-rate recovery" },
@@ -36,6 +39,8 @@ export const COST_PERIODS = {
 
 export const DEFAULT_COST_PERIOD = "LAST_90_DAYS";
 
+// PRIZE_MONEY không phải hạng mục của EXPENSE_LOG: backend thêm dòng tiền thưởng (RACE_REGISTRATION) vào
+// cùng bảng để chủ ngựa thấy cả khoản chi lẫn khoản thu.
 const COST_LABELS = {
   FEEDING: "Feeding and stabling",
   MEDICAL: "Veterinary",
@@ -46,6 +51,8 @@ const COST_LABELS = {
 
 /** #9: each cost line of the owner's own horses (voided lines excluded). */
 export function listOwnerExpenses({ horseId, from, to, limit = 100 } = {}, signal) {
+  // GET /api/owner/expenses (OwnerExpenseController): chỉ ngựa của chủ đang đăng nhập. Mỗi dòng có trạng thái
+  // BILLED / DISPUTED; chủ khiếu nại một dòng bằng PUT /api/owner/expenses/{id}/dispute (V30).
   const p = new URLSearchParams();
   if (horseId) p.set("horseId", horseId);
   if (from) p.set("from", from);
@@ -77,6 +84,7 @@ export function toEvaluation(e) {
  * Định dạng
  * ------------------------------------------------------------------ */
 
+// Tiền VND đầy đủ (không rút gọn): 1500000 -> "₫1,500,000". Tạo formatter một lần để dùng lại.
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "VND",
@@ -106,6 +114,7 @@ export function formatKm(km) {
 
 /** Số sao 0-5 từ trung bình các chỉ số đã có; null nếu chưa có chỉ số nào. */
 export function toStars(stats) {
+  // Ví dụ: trung bình 73 điểm -> 73 / 20 = 3.65 -> làm tròn thành 4 sao.
   const values = TRAINING_STATS.map((s) => stats?.[s.key]).filter((v) => v != null);
   if (values.length === 0) return null;
   const avg = values.reduce((a, b) => a + b, 0) / values.length;

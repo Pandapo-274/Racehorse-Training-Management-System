@@ -34,6 +34,7 @@ public class OwnerDashboardController {
     public OwnerDashboard.Response get(
             @RequestParam(defaultValue = OwnerDashboardService.DEFAULT_PERIOD) String period,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        // ownerId lấy từ token (user.userId()), không nhận từ client: chủ ngựa không xem được dashboard của người khác.
         return service.load(user.userId(), period);
     }
 }

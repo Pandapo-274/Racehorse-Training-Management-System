@@ -15,6 +15,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+/*
+ * @RestControllerAdvice: một class "bắt lỗi chung" cho MỌI controller. Khi controller
+ * (hoặc service/repository nó gọi, hoặc AuthInterceptor) ném exception, Spring tìm
+ * @ExceptionHandler có kiểu khớp nhất ở đây để dựng response. Nhờ vậy service chỉ cần
+ * "throw", không phải tự viết try/catch và tự dựng JSON lỗi.
+ * Mọi handler đều trả cùng một khuôn ApiError.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -24,6 +31,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new LinkedHashMap<>();
+        // putIfAbsent: một field có nhiều lỗi thì chỉ giữ lỗi đầu tiên cho gọn.
         ex.getBindingResult().getFieldErrors()
                 .forEach(fe -> errors.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
         return ResponseEntity.badRequest().body(ApiError.of(400, "Validation failed", errors));
@@ -33,6 +41,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException ex) {
         String msg = ex.getMessage() != null ? ex.getMessage() : "";
+        // Trường hợp đặc biệt: plannedDistance là int, nhập số quá lớn làm Jackson không đọc
+        // được -> báo lỗi dễ hiểu thay cho "Malformed JSON".
         if (msg.contains("out of range of int") || msg.contains("plannedDistance")) {
             return ResponseEntity.badRequest().body(ApiError.of(400,
                     "Planned distance cannot exceed 5,000 meters",
@@ -47,6 +57,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(s).body(ApiError.of(s.value(), ex.getMessage(), ex.getFieldErrors()));
     }
 
+    // Vd. INSERT trùng khoá UNIQUE (UX_PLAN_active...) hoặc vi phạm CHECK constraint. Đây
+    // cũng là "lưới" cho trường hợp hai người thao tác cùng lúc mà service chưa kịp chặn.
     /** Vi phạm ràng buộc DB (trùng khoá, CHECK) mà service chưa chặn trước: 409, không phải 500. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleIntegrity(DataIntegrityViolationException ex, HttpServletRequest req) {
@@ -72,6 +84,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest req) {
+        // ErrorResponse: các exception chuẩn của Spring MVC đã mang sẵn mã HTTP đúng.
         if (ex instanceof ErrorResponse er) {
             int status = er.getStatusCode().value();
             String detail = er.getBody().getDetail();

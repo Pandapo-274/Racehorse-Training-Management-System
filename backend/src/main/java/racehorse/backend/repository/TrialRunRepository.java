@@ -13,6 +13,7 @@ import racehorse.backend.dto.SessionResponse;
 @Repository
 public class TrialRunRepository {
 
+    // Trạng thái tối thiểu của một buổi tập để quyết định có cho đánh dấu chạy thử không, kèm chủ ngựa để báo.
     public record State(int sessionId, String status, boolean trialRun, String videoUrl,
                         int horseId, String horseName, int ownerId) {
     }

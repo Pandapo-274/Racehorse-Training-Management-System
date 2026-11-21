@@ -25,6 +25,8 @@ import racehorse.backend.service.IncidentGuard;
  * mà IncidentGuard vẫn chặn xếp lịch / Start, và báo cáo cũ nằm mãi trong hàng
  * chờ khám. Giờ bác sĩ phải tích những báo cáo lần khám hồi phục này trả lời.
  */
+// Body của POST /api/recovery-confirmations (chỉ VETERINARIAN) -> HealthClearanceService.
+// Đây là đường DUY NHẤT đưa ngựa từ INJURED/MONITOR/QUARANTINE về lại ELIGIBLE.
 public record RecoveryConfirmationRequest(
 
         @NotNull(message = "Horse is required")

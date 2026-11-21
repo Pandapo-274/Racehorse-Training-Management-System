@@ -26,9 +26,13 @@ import racehorse.backend.exception.ApiException;
 @Component
 public class GoogleTokenVerifier {
 
+    // {t} là biến URI, RestClient tự mã hoá (URL-encode) giá trị token khi thay vào.
     private static final String TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token={t}";
 
+    // RestClient: HTTP client đồng bộ của Spring 6+ (thay cho RestTemplate cũ).
     private final RestClient http;
+    // OAuth Client ID của app trên Google Cloud; frontend dùng CÙNG giá trị
+    // (REACT_APP_GOOGLE_CLIENT_ID) để hiện nút "Sign in with Google".
     private final String clientId;
 
     public GoogleTokenVerifier(@Value("${app.google.client-id:}") String clientId) {
@@ -40,6 +44,12 @@ public class GoogleTokenVerifier {
         this.http = RestClient.builder().requestFactory(factory).build();
     }
 
+    /*
+     * Luồng đăng nhập Google: frontend (@react-oauth/google) nhận "credential" là một
+     * ID token (JWT do Google ký) -> POST /api/auth/google -> GoogleAuthService gọi
+     * verify() ở đây -> nhận GoogleIdentity(sub, email, name) -> tìm/liên kết tài khoản
+     * -> phát JWT của hệ thống mình. Token Google KHÔNG được dùng để gọi API của mình.
+     */
     public GoogleIdentity verify(String idToken) {
         if (clientId == null || clientId.isBlank()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Google login is not configured on the server");
@@ -56,6 +66,8 @@ public class GoogleTokenVerifier {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "Could not reach Google to verify the token");
         }
 
+        // aud (audience) phải đúng client ID của mình: nếu không, một app khác nhận được
+        // token Google của nạn nhân có thể mang sang đăng nhập vào hệ thống này.
         if (claims == null || !clientId.equals(str(claims.get("aud")))) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Google token was not issued for this application");
         }
@@ -66,6 +78,8 @@ public class GoogleTokenVerifier {
         if (!"true".equalsIgnoreCase(str(claims.get("email_verified")))) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Google email is not verified");
         }
+        // sub = mã định danh vĩnh viễn của tài khoản Google (email có thể đổi, sub thì không),
+        // được lưu vào APP_USER.google_sub (V13) để lần sau nhận ra đúng người.
         String sub = str(claims.get("sub"));
         String email = str(claims.get("email"));
         if (sub == null || sub.isBlank() || email == null || email.isBlank()) {

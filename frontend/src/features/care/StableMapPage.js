@@ -15,6 +15,7 @@ import {
 } from "./careApi";
 import "./care.css";
 
+// Danh sách món ăn từng bữa của một ngựa (khẩu phần đã duyệt).
 function RationList({ items }) {
   if (!items?.length) return <p className="hz-muted hz-note">No approved ration yet.</p>;
   return (
@@ -33,6 +34,7 @@ function RationList({ items }) {
   );
 }
 
+// Việc chăm sóc hôm nay của Groom này cho một ngựa, mỗi việc một ô tick (khoá khi đang gửi request).
 function TaskList({ tasks, busyId, onToggle }) {
   if (!tasks?.length) return <p className="hz-muted hz-note">No tasks for you today.</p>;
   return (
@@ -57,6 +59,11 @@ function TaskList({ tasks, busyId, onToggle }) {
   );
 }
 
+/*
+ * Trang /groom/stable. Tải song song: danh sách ngựa, khẩu phần, việc chăm sóc HÔM NAY (backend chỉ trả việc của
+ * Groom đang đăng nhập). Ngựa được gom theo dãy chuồng (stallBlock: "A-06" -> dãy "A") để vẽ như sơ đồ chuồng.
+ * mineOnly: chỉ hiện ngựa có việc của mình hôm nay.
+ */
 export default function StableMapPage() {
   const navigate = useNavigate();
   const [horses, setHorses] = useState(null);
@@ -108,6 +115,7 @@ export default function StableMapPage() {
 
   const done = tasks.filter((t) => t.completed).length;
 
+  // Tick / bỏ tick: PUT complete hoặc undo, rồi thay đúng việc đó trong state bằng bản backend trả về.
   const toggle = useCallback(async (task) => {
     setBusyId(task.taskId);
     setActionError("");

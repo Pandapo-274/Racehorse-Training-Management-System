@@ -50,6 +50,7 @@ public class HealthClearanceController {
      * Những chấn thương còn chặn việc clear. Màn hình gọi trước khi mở form,
      * để hiện sẵn danh sách cần tích thay vì để bác sĩ bấm rồi nhận lỗi 400.
      */
+    // Không có @RequireRole: ai đăng nhập cũng xem được (chủ ngựa chỉ ngựa của mình - service kiểm).
     @GetMapping("/blockers")
     public List<InjuryRepository.OpenInjury> blockers(
             @RequestParam int horseId,

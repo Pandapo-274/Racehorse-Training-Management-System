@@ -32,6 +32,7 @@ import {
 } from "./vetApi";
 import "./vet-care.css";
 
+// Số dòng hiện mỗi lần; nút "Show more" tăng thêm PAGE_SIZE (phân trang ở trình duyệt).
 const PAGE_SIZE = 30;
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -58,6 +59,11 @@ function StatCard({ value, label, type, active, onClick }) {
   );
 }
 
+/*
+ * State: board ({ counts, items } từ backend), bộ lọc (query, statusFilter - mặc định "attention" = mọi ô chưa OK,
+ * typeFilter), shown (số dòng đang hiện), running / runResult / runError (nút gửi nhắc ngay), recording (ô đang mở
+ * hộp thoại ghi), notice (dòng xác nhận).
+ */
 export default function VetPreventiveCarePage() {
   const navigate = useNavigate();
 
@@ -113,6 +119,7 @@ export default function VetPreventiveCarePage() {
   const unscheduled = counts.UNSCHEDULED || 0;
   const needAction = (counts.OVERDUE || 0) + (counts.NEVER || 0) + (counts.DUE_SOON || 0);
 
+  // POST /api/preventive-care/reminders/run; kết quả (đã gửi / bỏ qua bao nhiêu) hiện ở RunBanner.
   const runNow = async () => {
     setRunning(true);
     setRunResult(null);
@@ -128,6 +135,7 @@ export default function VetPreventiveCarePage() {
     }
   };
 
+  // Ghi xong một lần chăm sóc: đóng hộp thoại, hiện xác nhận và tải lại bảng (ô đó chuyển sang OK / DUE_SOON).
   const handleRecorded = (message) => {
     setRecording(null);
     setRunResult(null);
@@ -319,6 +327,7 @@ export default function VetPreventiveCarePage() {
 
 /* ---------- kết quả của nút "Send reminders now" ---------- */
 
+// Banner kết quả của lần chạy nhắc lịch (hoặc lỗi).
 function RunBanner({ result, error }) {
   if (error) return <VetError error={error} />;
   if (!result) return null;
@@ -366,6 +375,7 @@ function RunBanner({ result, error }) {
 
 /* ---------- hộp thoại ghi một lần chăm sóc ---------- */
 
+// Hộp thoại ghi một lần tiêm / tẩy giun / đóng móng cho một ô (ngựa × loại chăm sóc).
 function RecordDialog({ item, onClose, onDone }) {
   const navigate = useNavigate();
   const [doneOn, setDoneOn] = useState(todayInputValue());
@@ -376,6 +386,7 @@ function RecordDialog({ item, onClose, onDone }) {
 
   const label = careTypeLabel(item.careType);
 
+  // Ngày kế tiếp của một ngày "yyyy-mm-dd" (giờ địa phương): ngày làm phải sau lần ghi gần nhất.
   const getNextDayYmd = (ymdStr) => {
     if (!ymdStr) return undefined;
     const base = String(ymdStr).slice(0, 10);
@@ -389,6 +400,8 @@ function RecordDialog({ item, onClose, onDone }) {
 
   const minDoneDate = item.lastExamDate ? getNextDayYmd(item.lastExamDate) : undefined;
 
+  // Kiểm trước (ngày làm không ở tương lai và sau lần trước; ngày hẹn kế tiếp sau hôm nay) rồi POST /api/medical-records
+  // với recordType = loại chăm sóc (VACCINATION / DEWORMING / FARRIER) và nextDueDate.
   const submit = async () => {
     setError(null);
 

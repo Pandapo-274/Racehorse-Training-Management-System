@@ -5,6 +5,8 @@
 // "Transferred Thunder Bay to Tran Duc Minh." / "Could not transfer Thunder Bay to Tran Duc Minh: ..."
 import "./resultLine.css";
 
+// Dùng: const [result, setResult] = useState(null); ... setResult(ok("Saved")) / setResult(fail(err.message));
+// rồi <ResultLine result={result} /> ngay dưới nút bấm.
 export default function ResultLine({ result }) {
   if (!result || !result.text) return null;
   return (

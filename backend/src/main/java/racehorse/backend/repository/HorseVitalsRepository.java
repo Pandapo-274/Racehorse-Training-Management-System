@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 
 import racehorse.backend.dto.HorseVitalsResponse;
 
+// UC8: các câu SQL nhỏ dựng ảnh chụp "sinh hiệu" của một con ngựa (khoá đang hiệu lực, buổi tập gần
+// nhất kèm ngưỡng nhịp tim, cảnh báo chưa xử lý, chấn thương chưa lành).
 @Repository
 public class HorseVitalsRepository {
 

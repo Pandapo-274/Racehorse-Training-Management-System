@@ -24,6 +24,8 @@ public class WithdrawalRepository {
     }
 
     /* LEFT JOIN cho người duyệt: yêu cầu đang chờ thì chưa có ai duyệt. */
+    // Hai subquery đếm số buổi SCHEDULED và giáo án chưa COMPLETED ngay lúc đọc: Manager biết
+    // trước bấm duyệt sẽ huỷ bao nhiêu thứ.
     private static final String SELECT_ROW = """
             SELECT w.withdrawal_id, w.horse_id, h.horse_name, h.registration_code, h.stall_no,
                    h.activity_status,
@@ -76,6 +78,7 @@ public class WithdrawalRepository {
         if (horseId != null) sql.append(" AND w.horse_id = :horseId");
         sql.append(" ORDER BY CASE WHEN w.status = 'PENDING' THEN 0 ELSE 1 END, w.created_at DESC");
 
+        // Gán tham số có điều kiện: chỉ param(...) những tham số thực sự xuất hiện trong câu SQL.
         JdbcClient.StatementSpec spec = jdbc.sql(sql.toString());
         if (ownerId != null) spec = spec.param("ownerId", ownerId);
         if (horseId != null) spec = spec.param("horseId", horseId);

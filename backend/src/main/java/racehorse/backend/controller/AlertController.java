@@ -22,6 +22,13 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.AlertService;
 
+/*
+ * UC11 - theo dõi buổi tập trực tiếp (Live Session Monitor) và cảnh báo vượt ngưỡng.
+ *   POST /api/sessions/{id}/vitals    Groom/HLV gửi nhịp tim và/hoặc vận tốc khi buổi đang RUNNING
+ *   GET  /api/alerts                  danh sách cảnh báo (frontend hỏi lại mỗi vài giây bằng afterId)
+ *   PUT  /api/alerts/{id}/resolve     HLV xử lý: CONTINUE / REDUCE_INTENSITY / STOP_SESSION
+ * Gọi bác sĩ từ cảnh báo: POST /api/alerts/{id}/vet-call (VetCallController).
+ */
 @RestController
 @RequestMapping("/api")
 public class AlertController {

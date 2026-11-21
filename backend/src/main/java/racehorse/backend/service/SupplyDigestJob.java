@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
  * @EnableScheduling is already on PreventiveReminderJob, which is enough for
  * the whole application context.
  */
+// Ghi chú: @EnableScheduling hiện có cả ở BackendApplication (chú thích trên viết trước khi có).
 @Component
 public class SupplyDigestJob {
 
@@ -46,6 +47,7 @@ public class SupplyDigestJob {
             return;
         }
         try {
+            // LocalDate.now(zone): ngày hôm nay theo múi giờ cấu hình, không phụ thuộc múi giờ máy chủ.
             int n = service.sendDailyDigest(LocalDate.now(zone));
             log.info("Store check: {} item(s) in today's digest", n);
         } catch (RuntimeException e) {

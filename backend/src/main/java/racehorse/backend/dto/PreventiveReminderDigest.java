@@ -15,6 +15,8 @@ import racehorse.backend.service.PreventiveCareService;
  *
  * Lớp thuần Java, không phụ thuộc Spring và database, để kiểm riêng được.
  */
+// Nằm trong package dto nhưng thực chất là lớp tiện ích tĩnh (static) soạn câu chữ cho
+// thông báo. PreventiveReminderService gọi build(...) rồi gửi kết quả qua NotificationService.
 public final class PreventiveReminderDigest {
 
     /** NVARCHAR(500) trong bảng NOTIFICATION. */
@@ -38,6 +40,8 @@ public final class PreventiveReminderDigest {
      *              làm việc đó), nên N ô đầu chính là N ô gấp nhất
      * @param window cửa sổ ngày của DUE_SOON, để nói đúng "trong 14 ngày"
      */
+    // Ví dụ kết quả: "2 overdue, 3 due within 14 days, 40 never recorded. Most urgent:
+    // Air Groove (vaccination, 5 days overdue); ...; and 42 more."
     public static Summary build(List<PreventiveCareItem> items, int window) {
         long overdue = count(items, "OVERDUE");
         long dueSoon = count(items, "DUE_SOON");
@@ -62,6 +66,8 @@ public final class PreventiveReminderDigest {
         return new Summary(TITLE, truncate(sb.toString()));
     }
 
+    // switch dạng biểu thức (Java 14+): mỗi nhánh "->" trả một giá trị, "yield" dùng khi
+    // nhánh có nhiều câu lệnh.
     public static String describe(PreventiveCareItem i) {
         String what = LABELS.getOrDefault(i.careType(), i.careType().toLowerCase());
         String when = switch (i.careStatus()) {

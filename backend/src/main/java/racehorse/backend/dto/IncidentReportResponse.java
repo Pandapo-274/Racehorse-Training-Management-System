@@ -3,6 +3,8 @@ package racehorse.backend.dto;
 import java.time.Instant;
 
 /** Một báo cáo sự cố, đủ để vẽ một dòng trong hàng chờ khám của bác sĩ. */
+// Trả về bởi GET /api/incident-reports, GET /{id}, POST /api/incident-reports và kèm trong
+// StopSessionResponse. Instant = giờ UTC (JSON có hậu tố "Z").
 public record IncidentReportResponse(
         int reportId,
         int horseId,
@@ -29,6 +31,7 @@ public record IncidentReportResponse(
         Instant handoverAt,
         String handoverNotes
 ) {
+    // Constructor phụ cho các câu SQL chưa đọc cột bàn giao ca (V40): điền null.
     public IncidentReportResponse(
             int reportId, int horseId, String horseName, String stallNo, String horseStatus,
             int ownerId, Integer sessionId, int reporterId, String reporterName,

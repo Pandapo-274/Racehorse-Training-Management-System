@@ -23,6 +23,14 @@ import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
 /** Club Manager ghi và xem chi phí nuôi ngựa (EXPENSE_LOG). */
+/*
+ * Chi phí theo ngựa (EXPENSE_LOG). Nguồn ghi chi phí:
+ *   - Club Manager ghi tay (create);
+ *   - TreatmentService tự ghi chi phí MEDICAL khi kê đơn thuốc;
+ *   - RaceService ghi lệ phí giải (OTHER) khi chủ duyệt đăng ký, huỷ khi được hoàn.
+ * Không có "sửa": ghi sai thì HUỶ (cancel, bắt buộc lý do) rồi ghi lại, như sổ kế toán.
+ * Chủ ngựa khiếu nại (dispute): BILLED -> DISPUTED.
+ */
 @Service
 public class ExpenseService {
 
@@ -79,6 +87,7 @@ public class ExpenseService {
         List<Expense> items = expenses.find(horseId, category, from, to, n, ownerId);
 
         // Đủ bốn hạng mục, theo thứ tự cố định, kể cả hạng mục bằng 0.
+        // totals tính trên MỌI dòng khớp bộ lọc (không chỉ những dòng trả về), và luôn đủ 4 hạng mục.
         Map<String, BigDecimal> found = expenses.totals(horseId, category, from, to, ownerId);
         Map<String, BigDecimal> totals = new LinkedHashMap<>();
         BigDecimal total = BigDecimal.ZERO;

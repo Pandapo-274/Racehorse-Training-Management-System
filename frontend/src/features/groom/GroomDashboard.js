@@ -1,3 +1,14 @@
+/*
+ * src/features/groom/GroomDashboard.js - trang /groom (dashboard của Groom), phần việc của Groom trong Flow 2.
+ * Bố cục: sidebar (GroomSidebar) | header (tìm kiếm, chuông, avatar) | các ô số | danh sách buổi tập HÔM NAY
+ * (SessionsCard) bên trái + bảng điều khiển buổi đang chọn (SessionPanel) bên phải | các buổi sắp tới (UpcomingCard).
+ * Vòng đời một buổi tập ở phía Groom:
+ *   SCHEDULED --Start (đúng ngày, tới giờ)--> RUNNING --gửi số đo (nhịp tim / vận tốc) nhiều lần-->
+ *     --Finish (sau giờ kết thúc dự kiến)--> COMPLETED
+ *     --End early (lý do; phải gửi đủ nhịp tim và vận tốc ít nhất một lần)--> STOPPED_EARLY
+ *     --End early vì INJURY (triệu chứng + mức khẩn cấp)--> STOPPED_EARLY + báo cáo sự cố cho bác sĩ
+ * Mọi luật đều được backend (TrainingSessionService, AlertService) kiểm lại.
+ */
 import { useSignOutModal } from "../auth/SignOutModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NavItems from "../navigation/NavItems";
@@ -27,6 +38,7 @@ function HorseshoeIcon() {
   );
 }
 
+// Sidebar của Groom: logo, các mục menu (NavItems theo vai trò), thẻ hồ sơ và nút đăng xuất.
 function GroomSidebar() {
   const navigate = useNavigate();
 
@@ -67,6 +79,7 @@ function GroomSidebar() {
   );
 }
 
+// Ô số liệu (đã xong / đang chạy / đã lên lịch hôm nay); bấm vào để lọc danh sách theo trạng thái đó.
 function StatCard({ value, label, type, active, onClick }) {
   return (
     <button
@@ -85,6 +98,7 @@ function StatCard({ value, label, type, active, onClick }) {
    BUỔI TẬP HÔM NAY
 ===================================================== */
 
+// Danh sách buổi tập hôm nay sau khi lọc; bấm một dòng để chọn (onSelect) và mở nó ở SessionPanel.
 function SessionsCard({ items, total, filter, selectedId, onSelect }) {
   return (
     <div className="groom-card tasks-card">
@@ -157,6 +171,12 @@ function SessionsCard({ items, total, filter, selectedId, onSelect }) {
    ĐIỀU KHIỂN BUỔI TẬP ĐANG CHỌN
 ===================================================== */
 
+/*
+ * Bảng điều khiển của MỘT buổi tập. Props: session, onChanged(buổi đã cập nhật | null = tải lại), navigate.
+ * State: heartRate / velocity (ô nhập số đo), lastReading (kết quả lần gửi gần nhất: có sinh cảnh báo không),
+ * earlyOpen / earlyReason (form kết thúc sớm), stop (triệu chứng khi chấn thương), confirmConfig (ConfirmModal),
+ * currentTime (đồng hồ cập nhật mỗi 3 giây để bật nút Start / Finish đúng lúc).
+ */
 function SessionPanel({ session, onChanged, navigate }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -178,12 +198,15 @@ function SessionPanel({ session, onChanged, navigate }) {
     onConfirm: () => {},
   });
 
+  // Đồng hồ nội bộ: chỉ chạy khi buổi còn SCHEDULED / RUNNING, cleanup dừng setInterval.
   useEffect(() => {
     if (session?.status !== "SCHEDULED" && session?.status !== "RUNNING") return undefined;
     const interval = setInterval(() => setCurrentTime(Date.now()), 3000);
     return () => clearInterval(interval);
   }, [session?.status]);
 
+  // sessionDate là giờ địa phương không múi giờ (giờ người dùng nhập), new Date() đọc đúng là giờ địa phương.
+  // plannedEndMs = giờ bắt đầu + thời lượng dự kiến (mặc định 60 phút).
   const scheduledTimeMs = useMemo(() => {
     if (!session?.sessionDate) return 0;
     const d = new Date(session.sessionDate);
@@ -201,6 +224,7 @@ function SessionPanel({ session, onChanged, navigate }) {
   // Flow 1: asked to stop because the horse lost its Head Trainer - no readings needed first.
   const canEndEarly = hasReportedBoth || earlyReason === "NO_HEAD_TRAINER";
 
+  // Đổi sang buổi khác thì xoá sạch các ô nhập và kết quả của buổi trước.
   useEffect(() => {
     setError("");
     setHeartRate("");
@@ -228,6 +252,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
   const st = toSessionStatus(session.status);
 
+  // Khung chạy chung cho mọi thao tác: khoá nút, gọi API, hiện lỗi đầu tiên (ưu tiên lỗi từng ô của backend).
   const run = async (action) => {
     setBusy(true);
     setError("");
@@ -243,11 +268,15 @@ function SessionPanel({ session, onChanged, navigate }) {
     }
   };
 
+  // PUT /api/training-sessions/{id}/start: backend chặn nếu sai ngày, ngựa bị khoá / chưa khám sự cố, giáo án
+  // không ACTIVE, hoặc ngựa đang có buổi RUNNING khác.
   const start = async () => {
     const updated = await run(() => startSession(session.sessionId));
     if (updated) onChanged(updated);
   };
 
+  // Gửi một lần đo: kiểm khoảng hợp lệ (nhịp tim 20-300 nguyên, vận tốc 0-99.99) rồi POST vitals. Kết quả cho biết
+  // có sinh cảnh báo hay không (alertRaised, severity) để hiện ngay cho Groom.
   const submitVitals = async (event) => {
     event.preventDefault();
     const hr = heartRate === "" ? null : Number(heartRate);
@@ -273,6 +302,7 @@ function SessionPanel({ session, onChanged, navigate }) {
     }
   };
 
+  // Finish trước giờ kết thúc dự kiến thì mở form kết thúc sớm thay vì kết thúc bình thường.
   const finishNormally = async () => {
     if (!isEndReached) {
       setEarlyOpen(true);
@@ -293,6 +323,9 @@ function SessionPanel({ session, onChanged, navigate }) {
     });
   };
 
+  // Kết thúc sớm. INJURY -> PUT /stop (backend mở báo cáo sự cố cho bác sĩ, ngựa bị IncidentGuard chặn tập tới khi
+  // được khám; câu xác nhận ghi "Vet Call" nhưng thực tế là báo cáo sự cố, không phải VET_CALL của V27).
+  // Lý do khác -> PUT /finish với earlyStop = true và earlyStopReason.
   const submitEarlyFinish = async (event) => {
     event.preventDefault();
     if (!canEndEarly) {
@@ -644,6 +677,7 @@ function SessionPanel({ session, onChanged, navigate }) {
    SẮP TỚI
 ===================================================== */
 
+// Các buổi SCHEDULED của những ngày sau hôm nay.
 function UpcomingCard({ items }) {
   return (
     <div className="groom-card tack-card">
@@ -675,6 +709,11 @@ function UpcomingCard({ items }) {
    TRANG
 ===================================================== */
 
+/*
+ * Component trang. sessions: mọi buổi được giao cho Groom này (GET /api/training-sessions, backend tự lọc).
+ * todays: buổi của hôm nay + buổi đang RUNNING; upcoming: buổi SCHEDULED các ngày sau.
+ * selectedId: buổi đang mở ở SessionPanel - tự chọn buổi RUNNING, không có thì buổi SCHEDULED đầu tiên.
+ */
 export default function GroomDashboard() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState(null);
@@ -724,6 +763,7 @@ export default function GroomDashboard() {
     [sessions, today]
   );
 
+  // Tự chọn buổi khi buổi đang chọn không còn trong danh sách hôm nay (hoặc lúc mới tải).
   useEffect(() => {
     if (selectedId != null && todays.some((s) => s.sessionId === selectedId)) return;
     const next = todays.find((s) => s.status === "RUNNING") || todays.find((s) => s.status === "SCHEDULED");
@@ -757,6 +797,7 @@ export default function GroomDashboard() {
   const toggleFilter = (status) => setStatusFilter(statusFilter === status ? "all" : status);
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
 
+  // onChanged(updated): có bản cập nhật thì thay đúng dòng đó; null (vd. sau khi dừng vì chấn thương) thì tải lại hết.
   const onChanged = (updated) => {
     if (updated) {
       setSessions((rows) => rows.map((s) => (s.sessionId === updated.sessionId ? updated : s)));

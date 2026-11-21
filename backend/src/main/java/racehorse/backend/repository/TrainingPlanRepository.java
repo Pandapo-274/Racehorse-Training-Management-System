@@ -18,6 +18,9 @@ import racehorse.backend.service.TrainingPlanService;
 @Repository
 public class TrainingPlanRepository {
 
+    // JsonMapper của Jackson 3 (package tools.jackson, đi cùng Spring Boot 4): đổi bản sửa giáo án
+    // (PendingUpdatePayload) qua lại chuỗi JSON để lưu vào cột pending_update_json. Jackson 3 ném
+    // exception unchecked nên writeValueAsString không cần try/catch.
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final JdbcClient jdbc;
@@ -26,6 +29,7 @@ public class TrainingPlanRepository {
         this.jdbc = jdbc;
     }
 
+    // Nội dung một bản sửa đang chờ chủ ngựa duyệt (lưu nguyên dạng JSON trong một cột).
     public record PendingUpdatePayload(Integer groomId, String groomName, String planName,
                                        List<TrainingPlanRequest.PhaseRequest> phases) {}
 
@@ -44,6 +48,7 @@ public class TrainingPlanRepository {
             LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
             """;
 
+    // Chỉ trả bản sửa khi trạng thái là PENDING; JSON hỏng thì coi như không có (null).
     private static TrainingPlanResponse.PendingUpdate parsePendingUpdate(
             String status, LocalDateTime at, String json) {
         if (!"PENDING".equals(status) || json == null || json.isBlank()) {
@@ -80,6 +85,8 @@ public class TrainingPlanRepository {
                 .param("id", planId)
                 .query(TrainingPlanRepository::mapPlan)
                 .optional()
+                // Optional.map: nếu tìm thấy giáo án thì gắn thêm danh sách giai đoạn (record bất biến
+                // nên withPhases tạo bản mới).
                 .map(plan -> plan.withPhases(findPhases(planId)));
     }
 
@@ -163,6 +170,7 @@ public class TrainingPlanRepository {
         return insertPlan(horseId, createdBy, null, planName, startDate, endDate);
     }
 
+    // "Đang hoạt động" ở đây = mọi giáo án chưa COMPLETED (kể cả DRAFT). Lỗi DB thì trả 0 (không chặn).
     public int countActivePlansByGroom(int groomId) {
         try {
             Integer count = jdbc.sql("SELECT COUNT(*) FROM TRAINING_PLAN WHERE groom_id = :groomId AND status <> 'COMPLETED'")
@@ -293,6 +301,7 @@ public class TrainingPlanRepository {
                 .update();
     }
 
+    // phase_no = -phase_no - 100: đẩy mọi số thứ tự sang vùng âm, không trùng với số mới 1, 2, 3...
     public void preparePhasesForReorder(int planId) {
         jdbc.sql("UPDATE PLAN_PHASE SET phase_no = -phase_no - 100 WHERE plan_id = :planId")
                 .param("planId", planId)
@@ -323,6 +332,7 @@ public class TrainingPlanRepository {
      * @return số buổi đã huỷ, để service ghi audit khi khác 0.
      */
     public int cancelRemainingSessions(int planId) {
+        // (cú pháp T-SQL "UPDATE alias SET ... FROM ... JOIN ...": cập nhật bảng có JOIN)
         return jdbc.sql("""
                 UPDATE s
                 SET s.status = 'CANCELLED'

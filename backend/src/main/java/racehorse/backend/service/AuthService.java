@@ -23,6 +23,20 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.JwtService;
 import racehorse.backend.security.TokenBlacklist;
 
+/*
+ * SERVICE = nơi chứa luật nghiệp vụ. @Service để Spring tạo bean và tiêm vào controller.
+ *
+ * AuthService lo: đăng ký chủ ngựa (UC1), đăng nhập + khoá sau 5 lần sai (UC2, V39),
+ * đăng xuất (UC3), và GET /me.
+ *
+ * Luồng đăng nhập:
+ *   1. Tìm user theo username hoặc email (UserRepository.findByLogin).
+ *   2. LUÔN chạy BCrypt.matches (kể cả khi không có user, dùng dummyHash) để thời gian trả
+ *      lời như nhau -> kẻ tấn công không đoán được tài khoản có tồn tại qua độ trễ.
+ *   3. Đang bị khoá -> 429. Sai -> ghi audit DENIED, tăng bộ đếm; lần thứ 5 -> khoá 15 phút.
+ *   4. Tài khoản SUSPENDED -> 403.
+ *   5. Đúng -> xoá bộ đếm, ghi audit SUCCESS, phát JWT, trả LoginResponse.
+ */
 @Service
 public class AuthService {
 
@@ -36,6 +50,7 @@ public class AuthService {
     /** V39: this many wrong passwords in a row lock sign-in for LOCK_MINUTES. */
     static final int MAX_FAILED_LOGINS = 5;
     static final int LOCK_MINUTES = 15;
+    // Định dạng giờ mở khoá (vd. "14:35") theo múi giờ của máy chạy backend để đưa vào thông báo lỗi.
     private static final java.time.format.DateTimeFormatter CLOCK =
             java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(java.time.ZoneId.systemDefault());
 
@@ -58,6 +73,7 @@ public class AuthService {
     /** @Transactional: insert user + ghi audit hoặc cùng thành công, hoặc cùng rollback. */
     @Transactional
     public RegisterResponse register(RegisterRequest req, String ip) {
+        // Chuẩn hoá dữ liệu: bỏ khoảng trắng thừa, email về chữ thường (email không phân biệt hoa thường).
         String username = req.username().trim();
         String email = req.email().trim().toLowerCase(Locale.ROOT);
         String fullName = req.fullName().trim();
@@ -78,6 +94,7 @@ public class AuthService {
 
         int userId;
         try {
+            // passwordEncoder.encode: băm BCrypt trước khi lưu; KHÔNG bao giờ lưu mật khẩu gốc.
             userId = users.insert(roleId, username, passwordEncoder.encode(req.password()),
                     fullName, email, phone);
         } catch (DuplicateKeyException e) {
@@ -100,6 +117,7 @@ public class AuthService {
      * Nếu có transaction, lỗi ném ra sẽ rollback luôn dòng audit vừa ghi.
      */
     public LoginResponse login(LoginRequest req, String ip) {
+        // found = Optional<UserRecord>: có thể rỗng nếu không có tài khoản khớp.
         Optional<UserRecord> found = users.findByLogin(req.username().trim());
         Integer foundId = found.map(UserRecord::userId).orElse(null);
 
@@ -135,6 +153,7 @@ public class AuthService {
         }
         users.clearLoginLock(u.userId());
         users.writeAudit(u.userId(), "LOGIN", "APP_USER", u.userId(), "SUCCESS", ip);
+        // Phát JWT mang userId, username, role; hết hạn sau app.jwt.expiration-minutes (480).
         String token = jwt.generate(u.userId(), u.username(), u.role());
         return new LoginResponse(token, "Bearer", jwt.expiresInSeconds(), toInfo(u));
     }

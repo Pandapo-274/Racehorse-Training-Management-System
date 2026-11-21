@@ -55,6 +55,8 @@ function PendingRow({ row, pricing, onDone }) {
   const noPhoto = !pedigreeOnly && !row.photoUrl;
   const trainerFull = row.preferredTrainerId && row.preferredTrainerLoad >= row.preferredTrainerMax;
 
+  // Khung chạy chung cho duyệt / từ chối: khoá nút, gọi API, lỗi từng ô (mã trùng, chuồng đã có ngựa...) gắn
+  // vào đúng ô nhờ fieldErrors, thành công thì onDone() tải lại danh sách.
   const run = async (fn) => {
     setBusy(true);
     setError("");
@@ -217,6 +219,7 @@ export default function HorseReviewPage() {
   const [pricing, setPricing] = useState(null);
   const [error, setError] = useState("");
 
+  // Tải song song danh sách yêu cầu và danh sách HLV; lỗi khi tải HLV không chặn trang (.catch(() => [])).
   const load = useCallback(
     (signal) => {
       setError("");

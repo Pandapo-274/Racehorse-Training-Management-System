@@ -12,6 +12,8 @@ import racehorse.backend.entity.MedicalRecordRow;
  * được mở là thứ huấn luyện viên quan tâm nhất, vì đó là lúc con ngựa quay
  * lại được lịch tập.
  */
+// injuriesClosed / locksReleased / reportsClosed: danh sách id chấn thương được đóng, lệnh
+// khoá được gỡ, báo cáo sự cố được đóng trong lần xác nhận này.
 public record RecoveryConfirmationResponse(
         MedicalRecordRow record,
         List<Integer> injuriesClosed,

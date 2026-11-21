@@ -26,6 +26,7 @@ public class ExpenseRepository {
     }
 
     /* LEFT JOIN người ghi: dữ liệu mẫu cũ có thể để recorded_by trống. */
+    // FROM và COLUMNS là hai mảnh chuỗi SQL ghép lại ở find/findById/count/totals để không lặp code.
     private static final String FROM = """
             FROM EXPENSE_LOG e
             JOIN HORSE h ON h.horse_id = e.horse_id
@@ -145,6 +146,7 @@ public class ExpenseRepository {
      *
      * @return 1 if voided, 0 if the expense does not exist or is already void.
      */
+    // (Javadoc ngay trên mô tả cancel() bên dưới. markDisputed: BILLED -> DISPUTED, chỉ khi chưa bị huỷ.)
     public int markDisputed(int expenseId, String reason) {
         return jdbc.sql("""
                 UPDATE EXPENSE_LOG

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import EyeIcon from "./EyeIcon";
 
+// Ô nhập có nhãn + dòng lỗi. type="password" thì thêm nút con mắt để hiện/ẩn mật khẩu (state "visible").
+// aria-invalid / aria-describedby giúp trình đọc màn hình đọc được lỗi của ô.
 export default function TextField({ label, id, error, type, ...inputProps }) {
   const isPassword = type === "password";
   const [visible, setVisible] = useState(false);

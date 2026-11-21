@@ -16,6 +16,7 @@ import {
 import "./expenses.css";
 
 /** Khớp @Digits(integer = 10, fraction = 2) của ExpenseRequest.amount. */
+// Giới hạn khớp cột DECIMAL(12,2) của EXPENSE_LOG.amount (10 chữ số phần nguyên, 2 chữ số thập phân).
 const AMOUNT_MAX = 9999999999.99;
 
 const emptyForm = () => ({
@@ -46,6 +47,12 @@ function Field({ id, label, error, children }) {
   );
 }
 
+/*
+ * Trang /manager/expenses (Costs). Hai nửa:
+ *   - Form ghi một khoản chi (POST /api/expenses): ngựa, hạng mục, số tiền, ngày, ghi chú.
+ *   - Bảng khoản chi theo bộ lọc khoảng thời gian / ngựa / hạng mục (GET /api/expenses), kèm tổng theo hạng mục.
+ * Không có sửa; ghi sai thì "Void" (huỷ mềm kèm lý do) rồi ghi lại.
+ */
 export default function ExpensesPage() {
   const navigate = useNavigate();
 
@@ -92,6 +99,7 @@ export default function ExpensesPage() {
     return () => ctrl.abort();
   }, [fail]);
 
+  // Tải lại bảng mỗi khi đổi bộ lọc, hoặc reloadKey tăng (sau khi ghi / huỷ một khoản).
   useEffect(() => {
     const ctrl = new AbortController();
     const { from, to } = periodRange(period);
@@ -138,6 +146,7 @@ export default function ExpensesPage() {
     const what = `${formatMoney(row.amount)} (${toCostLabel(row.category)}) for ${row.horseName} on ${formatDate(row.expenseDate)}`;
     // A void needs a reason: the row is kept, and the reason is all that will
     // explain later why this cost no longer counts. Cancel or blank = no void.
+    // (Trang này vẫn dùng window.prompt, chưa chuyển sang AppDialog như các trang khác.)
     const reason = window.prompt(`Void ${what}?\n\nWhy is this cost being voided?`);
     if (reason === null || !reason.trim()) return;
     setDeletingId(row.expenseId);

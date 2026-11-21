@@ -21,6 +21,7 @@ import java.math.BigDecimal;
  * phải pixel: mô hình hiển thị ở nhiều kích thước khác nhau trên các màn hình
  * khác nhau, nên lưu pixel là dấu sẽ lệch chỗ khi đổi khung.
  */
+// Body của POST /api/injuries (chỉ VETERINARIAN). Lưu thành một dòng INJURY gắn với recordId.
 public record InjuryMarkerRequest(
 
         @NotNull(message = "Medical record is required")

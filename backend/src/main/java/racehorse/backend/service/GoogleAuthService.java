@@ -54,6 +54,12 @@ public class GoogleAuthService {
         this.authService = authService;
     }
 
+    /*
+     * Thứ tự tìm tài khoản:
+     *   1. Theo google_sub (người này đã từng đăng nhập Google) -> LOGIN.
+     *   2. Theo email (đã có tài khoản đăng ký thường)            -> LINKED (gắn Google vào).
+     *   3. Không có gì                                             -> REGISTERED (tạo HORSE_OWNER).
+     */
     public GoogleLoginResponse login(GoogleLoginRequest req, String ip) {
         GoogleIdentity g = verifier.verify(req.idToken().trim());
         String email = g.email().trim().toLowerCase(Locale.ROOT);
@@ -61,6 +67,7 @@ public class GoogleAuthService {
         UserRecord user = null;
         boolean needLink = false;
 
+        // flatMap(users::findById): đổi Optional<Integer> (user_id) thành Optional<UserRecord>.
         Optional<UserRecord> bySub = googleRepo.findUserIdByGoogleSub(g.sub()).flatMap(users::findById);
         if (bySub.isPresent()) {
             user = bySub.get();
@@ -104,6 +111,7 @@ public class GoogleAuthService {
 
         users.writeAudit(user.userId(), "LOGIN_GOOGLE", "APP_USER", user.userId(), "SUCCESS", ip);
         String token = jwt.generate(user.userId(), user.username(), user.role());
+        // Dùng lại AuthService.me để dựng UserInfo giống hệt đăng nhập thường.
         UserInfo info = authService.me(user.userId());
         return new GoogleLoginResponse(token, "Bearer", jwt.expiresInSeconds(), info, outcome);
     }

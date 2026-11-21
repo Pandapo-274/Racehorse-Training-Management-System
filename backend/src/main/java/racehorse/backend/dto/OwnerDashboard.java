@@ -13,6 +13,8 @@ import racehorse.backend.service.OwnerDashboardService;
  * Chỉ gồm ngựa ACADEMY của chủ đang đăng nhập: hồ sơ PEDIGREE không tập,
  * không tốn chi phí nuôi, nên không có gì để hiện trên màn này.
  */
+// Kết quả GET /api/owner/dashboard (OwnerDashboardService). Mọi số liệu chỉ tính trên ngựa
+// của chủ đang đăng nhập (lấy ownerId từ token, không nhận từ client).
 public final class OwnerDashboard {
 
     private OwnerDashboard() {
@@ -64,6 +66,8 @@ public final class OwnerDashboard {
      * OwnerDashboardService.STATS_DAYS ngày gần nhất. Null khi chưa có buổi nào
      * có số liệu tương ứng. Công thức xem OwnerDashboardService.loadStats.
      */
+    // Năm chỉ số được vẽ bằng icon trong frontend/public/icons/stats/ (speed, stamina,
+    // power, guts, wit).
     public record Stats(
             int sessionCount,
             Integer speed,

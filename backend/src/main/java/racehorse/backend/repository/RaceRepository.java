@@ -23,6 +23,7 @@ public class RaceRepository {
         this.jdbc = jdbc;
     }
 
+    // SELECT dùng chung: một dòng đăng ký JOIN giải (RACE), ngựa, chủ, người đăng ký.
     private static final String SELECT = """
             SELECT r.registration_id, r.horse_id, h.horse_name, h.stall_no, h.owner_id,
                    o.full_name AS owner_name, r.race_name, r.race_date, r.registered_by,
@@ -99,6 +100,7 @@ public class RaceRepository {
         return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
 
+    // Overload cũ (trước V28, chưa có duyệt của chủ ngựa) - giữ cho test.
     static String stateOf(String result, LocalDate raceDate) {
         if ("SCRATCHED".equals(result)) return "SCRATCHED";
         if (result != null) return "FINISHED";
@@ -249,6 +251,8 @@ public class RaceRepository {
 
     /** Live entries (LIVE_ENTRY) within gapDays of raceDate, other than this race (#3). */
     public Optional<RaceModels.Entry> nearbyEntry(int horseId, LocalDate raceDate, int gapDays, Integer exceptRaceId) {
+        // ABS(DATEDIFF(DAY, ...)) < gap: có suất khác cách ngày đua này ít hơn gap ngày (cả trước lẫn sau).
+        // LIVE_ENTRY: chỉ tính suất còn hiệu lực (chưa rút, không bị từ chối, đề xuất chưa quá hạn chờ chủ duyệt).
         StringBuilder sql = new StringBuilder(SELECT)
                 .append(" WHERE r.horse_id = :h AND ABS(DATEDIFF(DAY, r.race_date, :d)) < :gap AND ")
                 .append(LIVE_ENTRY);
@@ -334,6 +338,8 @@ public class RaceRepository {
      * updated, not even to itself.)
      */
     public void lockRace(int raceId) {
+        // WITH (UPDLOCK, ROWLOCK): giữ khoá ghi trên đúng dòng RACE tới hết giao dịch; giao dịch khác muốn khoá
+        // cùng dòng phải chờ. Câu SELECT chỉ để lấy khoá, kết quả không dùng.
         jdbc.sql("SELECT race_id FROM RACE WITH (UPDLOCK, ROWLOCK) WHERE race_id = :id")
                 .param("id", raceId).query(Integer.class).optional();
     }

@@ -5,9 +5,12 @@
 
 import { googleLogout } from "@react-oauth/google";
 
+// Hai khoá localStorage: "token" = chuỗi JWT; "user" = JSON thông tin người dùng (userId, username,
+// fullName, email, role, avatarUrl, mustChangePassword) lấy từ LoginResponse.user.
 const TOKEN_KEY = "token";
 const USER_KEY = "user"; // giữ tên key cũ để code đang đọc "user" vẫn chạy
 
+// Trang chủ của từng vai trò sau khi đăng nhập.
 export const HOME_BY_ROLE = {
   CLUB_MANAGER: "/manager",
   HEAD_TRAINER: "/trainer",
@@ -42,6 +45,7 @@ export function getUser() {
   }
 }
 
+// Lưu phiên sau khi đăng nhập thành công (login / loginWithGoogle).
 function saveSession(token, user) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -105,6 +109,7 @@ export function updateStoredUser(partial) {
  * ------------------------------------------------------------------ */
 
 /** Lỗi HTTP có sẵn status và (nếu backend trả) lỗi theo từng field. */
+// Lớp lỗi riêng: các trang bắt err và đọc err.status (mã HTTP), err.message, err.fieldErrors (lỗi từng ô).
 export class ApiError extends Error {
   constructor(status, message, fieldErrors = {}) {
     super(message);
@@ -134,6 +139,10 @@ async function toApiError(res) {
  * Trả JSON đã parse (null nếu 204). Lỗi HTTP -> throw ApiError.
  * `signal` truyền qua options như fetch thường.
  */
+// Ví dụ dùng trong một module *Api.js:
+//   export const listHorses = () => authFetch("/api/horses");
+//   export const updateHorse = (id, body) => authFetch(`/api/horses/${id}`, { method: "PUT", body: JSON.stringify(body) });
+// URL tương đối "/api/..." đi qua proxy của CRA ("proxy": "http://localhost:8080" trong package.json) khi chạy dev.
 export async function authFetch(url, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = getToken();
@@ -154,6 +163,8 @@ export async function authFetch(url, options = {}) {
  *   - 428 (còn mật khẩu tạm, V14)      -> sang /change-password
  * Trả true nếu đã xử lý (màn không cần hiện lỗi nữa), false nếu là lỗi khác.
  */
+// Mẫu dùng trong trang:
+//   listHorses().then(setHorses).catch((err) => { if (!handleAuthError(err, navigate)) setError(err.message); });
 export function handleAuthError(err, navigate) {
   if (!(err instanceof ApiError)) return false;
   if (err.status === 401) {

@@ -21,6 +21,7 @@ const ROLE_LABEL = {
   HORSE_OWNER: "Horse Owner",
 };
 
+// "Trần Minh Hoà" -> "TM": chữ cái đầu của hai từ đầu, dùng khi người dùng chưa có ảnh đại diện.
 function initials(fullName) {
   if (!fullName) return "??";
   return fullName.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();

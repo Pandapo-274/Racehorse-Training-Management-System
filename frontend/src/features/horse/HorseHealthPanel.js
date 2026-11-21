@@ -19,6 +19,8 @@ import "./horse-health.css";
 const SEVERITY = { GRADE_1: "Grade 1", GRADE_2: "Grade 2", GRADE_3: "Grade 3" };
 const INJURY_STATUS = { TREATING: "Under treatment", PARTIAL: "Partly recovered", RECOVERED: "Recovered" };
 
+// Props: horse (hồ sơ ngựa), user (người xem), onViewHistory (chuyển sang tab lịch sử y tế).
+// Ba lời gọi chạy song song bằng Promise.all: chấn thương, hồ sơ khám, lệnh khoá tập của con ngựa.
 export default function HorseHealthPanel({ horse, user, onViewHistory }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -39,6 +41,7 @@ export default function HorseHealthPanel({ horse, user, onViewHistory }) {
       .then(([injuries, records, locks]) => setData({ injuries, records, locks }))
       .catch((err) => {
         if (err.name === "AbortError") return;
+        // Chỉ 401 mới đăng xuất; 403 (vai trò không được xem một phần dữ liệu) thì hiện lỗi trong thẻ, không rời trang.
         if (err instanceof ApiError && err.status === 401 && handleAuthError(err, navigate)) return;
         setError(err.message);
       });

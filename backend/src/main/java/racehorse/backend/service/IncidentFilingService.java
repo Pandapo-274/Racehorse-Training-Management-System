@@ -59,6 +59,7 @@ public class IncidentFilingService {
     @Transactional
     public IncidentReportResponse file(int horseId, String symptoms, String description, String urgency,
                                        MultipartFile photo, AuthenticatedUser user, String ip) {
+        // Kiểm thủ công (không có record + Bean Validation vì dữ liệu đến từ form multipart).
         String s = symptoms == null ? "" : symptoms.trim();
         String u = urgency == null ? "" : urgency.trim().toUpperCase();
         String d = description == null || description.isBlank() ? null : description.trim();

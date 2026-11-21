@@ -8,6 +8,7 @@
 
 import { authFetch } from "../auth/authService";
 
+// Các hàm gọi /api/horse-withdrawals; mọi kiểm quyền thật nằm ở WithdrawalService (backend).
 const API = "/api/horse-withdrawals";
 
 /** Chủ ngựa nhận yêu cầu về ngựa của mình; Club Manager nhận tất cả. */

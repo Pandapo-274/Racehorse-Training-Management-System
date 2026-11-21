@@ -42,6 +42,13 @@ import racehorse.backend.service.NotificationService;
 import racehorse.backend.service.ProfileService;
 import racehorse.backend.service.StaffService;
 
+/*
+ * Cùng kỹ thuật với BusinessRulesTest (Mockito, không cần DB), cho Flow 1: khoá đăng nhập, đổi email,
+ * mật khẩu tạm, tạo tài khoản tại quầy, bàn giao việc khi nhân viên rời vai trò, chuyển chủ / nhận lại
+ * ngựa, luật chọn cha mẹ.
+ * Lưu ý: pom.xml chỉ include BusinessRulesTest nên file này KHÔNG chạy khi gõ .\mvnw test. Chạy riêng:
+ * .\mvnw test -Dtest=Flow1RulesTest (tham số -Dtest ghi đè danh sách include của surefire).
+ */
 /**
  * Flow 1 - horses and user accounts. One test per business rule added or
  * tightened on branch fix/flow1-gaps, so the demo's "exception" step has a
@@ -586,6 +593,7 @@ class Flow1RulesTest {
                 "WITHDRAWN".equals(activity) ? LocalDateTime.now().minusDays(30) : null);
     }
 
+    // Helper giống BusinessRulesTest.expect nhưng mặc định kiểu ApiException.
     private static ApiException expect(int status, org.junit.jupiter.api.function.Executable run) {
         ApiException ex = assertThrows(ApiException.class, run);
         assertEquals(status, ex.getStatus().value(), ex.getMessage());

@@ -73,6 +73,7 @@ public class PreventiveCareController {
     }
 
     /** Lịch của một con ngựa, cả ba loại, kể cả loại đang ổn. */
+    // Không có @RequireRole: chủ ngựa cũng gọi được, service kiểm quyền sở hữu.
     @GetMapping("/horse/{horseId}")
     public List<PreventiveCareItem> forHorse(
             @PathVariable int horseId,

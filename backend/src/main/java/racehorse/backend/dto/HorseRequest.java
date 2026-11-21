@@ -15,6 +15,8 @@ import racehorse.backend.service.HorseService;
 /** Chỉ còn dùng nội bộ: HorseRequestService.approve tạo ngựa qua HorseService.create.
  *  Không còn endpoint POST /api/horses.
  *  status KHÔNG nằm ở đây: trạng thái do bác sĩ thú y quyết định (UC14, UC18). */
+// @Size không có message dùng thông báo mặc định của Hibernate Validator. Đây là dữ liệu
+// nội bộ (dựng từ HORSE_REQUEST đã duyệt) nên hiếm khi chạm tới các luật này.
 public record HorseRequest(
         @NotNull(message = "Owner is required") Integer ownerId,
         Integer sireId,

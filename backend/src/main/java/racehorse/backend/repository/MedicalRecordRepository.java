@@ -13,6 +13,7 @@ import racehorse.backend.dto.MedicalExamRequest;
 import racehorse.backend.dto.RecoveryConfirmationRequest;
 import racehorse.backend.entity.MedicalRecordRow;
 
+// SQL cho MEDICAL_RECORD, đổi HORSE.status và đóng INCIDENT_REPORT khi khám xong.
 @Repository
 public class MedicalRecordRepository {
 

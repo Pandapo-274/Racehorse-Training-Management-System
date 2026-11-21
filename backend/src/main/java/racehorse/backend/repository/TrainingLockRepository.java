@@ -153,6 +153,7 @@ public class TrainingLockRepository {
                 .update();
     }
 
+    // Đổi mức khoá của lệnh đang ACTIVE (FULL <-> HEAVY_WORK_ONLY), dùng ở màn hồi phục.
     public int updateLockLevel(int horseId, String lockLevel) {
         return jdbc.sql("""
                 UPDATE TRAINING_LOCK

@@ -3,6 +3,8 @@ package racehorse.backend.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+// Một buổi tập như màn Schedule (HLV), lịch của Groom và trang Training của chủ ngựa nhìn
+// thấy: kết quả GET /api/training-sessions và các thao tác start/finish/schedule/cancel.
 public record TrainingSessionResponse(
         int sessionId, int phaseId, int phaseNo, String phaseName,
         int horseId, String horseName, int assignedTo, String assignedToName,

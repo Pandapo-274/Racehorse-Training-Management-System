@@ -17,6 +17,8 @@ const API = "/api/trainer/dashboard";
  * Gọi API (có gắn Bearer token). weeks = số tuần hiển thị trên biểu đồ.
  * Lỗi HTTP -> ApiError (có .status); màn hình xử lý 401/403 bằng handleAuthError.
  */
+// Kết quả gồm: danh sách ngựa HLV phụ trách (trạng thái, khoá, giai đoạn hiện tại, đánh giá gần nhất, km tuần),
+// cảnh báo chưa xử lý, xu hướng thể lực theo tuần (TrainerDashboardService).
 export function fetchDashboard(weeks = 8, signal) {
   return authFetch(`${API}?weeks=${weeks}`, { signal });
 }
@@ -73,6 +75,7 @@ export function toAlertMessage(alert) {
 }
 
 /** Severity từ backend là HIGH/MEDIUM/LOW; CSS dùng chữ thường, nhãn viết hoa đầu. */
+// Ví dụ: "HIGH" -> { label: "High", cls: "high" } (cls dùng làm lớp CSS).
 export function toSeverity(severity) {
   const lower = String(severity || "").toLowerCase();
   return { label: lower.charAt(0).toUpperCase() + lower.slice(1), cls: lower };

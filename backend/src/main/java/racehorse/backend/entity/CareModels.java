@@ -18,6 +18,14 @@ import racehorse.backend.repository.RaceRepository;
  * Flow 4 - chăm sóc chuồng trại và dinh dưỡng hằng ngày.
  * Hai bảng có từ V1: FEEDING_SCHEDULE (khẩu phần đã duyệt) và DAILY_TASK (việc trong ngày).
  */
+/*
+ * Các annotation như @NotBlank, @NotNull, @Size, @Pattern, @DecimalMin là Bean Validation
+ * (jakarta.validation, starter spring-boot-starter-validation). Chúng chỉ có tác dụng khi
+ * controller nhận tham số kèm @Valid, vd. `@Valid @RequestBody RationRequest req`.
+ * Dữ liệu sai -> Spring ném MethodArgumentNotValidException -> GlobalExceptionHandler trả
+ * 400 kèm map {tên ô: message}. Vì vậy service không phải kiểm lại những luật đơn giản này.
+ * @Valid đặt trên một List (List<@NotNull RationItem>) làm Spring kiểm cả từng phần tử.
+ */
 public final class CareModels {
 
     private CareModels() {
@@ -30,6 +38,7 @@ public final class CareModels {
      * the Head Trainer picks the item again. feedType and unit are copies of the
      * stock item's name and unit, kept so older screens still read them.
      */
+    // Dùng cho màn Feeding (Groom xem cho ăn gì) và màn Rations (HLV/bác sĩ sửa khẩu phần).
     public record FeedingItem(
             int feedingId, int horseId, String horseName, String stallNo,
             String mealTime, String feedType, BigDecimal quantity, String unit,
@@ -76,6 +85,8 @@ public final class CareModels {
      * state: OPEN, DONE, DONE_LATE (ticked after its day), MISSED (its day has
      * passed and it is still open). Derived on read, like RaceRepository.stateOf.
      */
+    // Một dòng DAILY_TASK đã ghép tên ngựa, số chuồng, tên Groom. state do repository tính
+    // khi đọc (so task_date với hôm nay và is_completed), không lưu trong DB.
     public record Task(
             int taskId, int horseId, String horseName, String stallNo,
             String taskType, int assignedTo, String assignedToName,

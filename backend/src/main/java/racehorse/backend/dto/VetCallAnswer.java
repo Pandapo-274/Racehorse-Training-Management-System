@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /** Bác sĩ trả lời một lần gọi: quyết định, HLV phải làm gì, dùng thuốc gì ngay. */
+// Body của PUT /api/vet-calls/{callId}/answer (chỉ VETERINARIAN). TREAT_ON_SITE bắt buộc có
+// medication (service kiểm). Chỉ trả lời được một lần (UPDATE ... WHERE status = 'PENDING').
 public record VetCallAnswer(
         @NotBlank(message = "Choose a decision")
         @Pattern(regexp = "CONTINUE_LIGHT|TREAT_ON_SITE|EMERGENCY_STOP",

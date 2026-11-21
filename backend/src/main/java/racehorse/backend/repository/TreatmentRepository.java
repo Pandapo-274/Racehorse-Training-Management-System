@@ -112,6 +112,7 @@ public class TreatmentRepository {
      * Chỉ ngựa ACADEMY: hồ sơ PEDIGREE không nằm trong chuồng nên không ai cho
      * thuốc, cùng lý do với bảng sức khoẻ và bảng nhắc lịch.
      */
+    // (Javadoc ngay trên mô tả findActive bên dưới. Hàm này đếm số đơn còn hiệu lực của một con ngựa.)
     public int countActiveByHorse(int horseId) {
         return jdbc.sql("""
                 SELECT COUNT(*)

@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
+// Body của PUT /api/training-sessions/{id}/schedule: đổi giờ, đổi Groom hoặc thời lượng của
+// một buổi còn SCHEDULED. Các luật trùng giờ được kiểm lại như lúc tạo.
 public record TrainingSessionScheduleRequest(
         @NotNull(message = "Groom is required")
         Integer assignedTo,

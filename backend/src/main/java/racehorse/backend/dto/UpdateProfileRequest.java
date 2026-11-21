@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
  * Chỉ cho sửa 3 thứ này. Cố ý KHÔNG có username, role, status:
  * đổi role/khoá tài khoản là việc của Manager (UC Manage Roles), không phải của chính user.
  */
+// Body của PUT /api/profile. userId lấy từ token, nên mỗi người chỉ sửa được hồ sơ của mình.
 public record UpdateProfileRequest(
         @NotBlank(message = "Full name is required")
         @Size(max = 100, message = "Full name must be at most 100 characters")

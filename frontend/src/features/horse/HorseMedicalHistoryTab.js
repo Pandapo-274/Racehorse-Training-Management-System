@@ -43,6 +43,11 @@ const SEVERITY_LABEL = {
   GRADE_4: "Grade 4 (Critical)",
 };
 
+/*
+ * Tab "Medical History" trên trang chi tiết ngựa: gộp sáu nguồn dữ liệu y tế thành MỘT dòng thời gian.
+ * Mỗi bản ghi được đổi về cùng một dạng sự kiện { id, type, date, title, tone, actorName, status, details, ... }
+ * rồi sắp xếp mới nhất trước. Bộ lọc thời gian / loại / từ khoá chạy hoàn toàn ở trình duyệt.
+ */
 export default function HorseMedicalHistoryTab({ horse, user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +68,8 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
     setLoading(true);
     setError("");
 
+    // Promise.allSettled (khác Promise.all): một nguồn lỗi (vd. 403 vì vai trò không được xem) không làm hỏng các
+    // nguồn còn lại; mỗi kết quả có status "fulfilled" / "rejected" và được kiểm riêng bên dưới.
     Promise.allSettled([
       listMedicalRecords(horse.horseId, ctrl.signal),
       listInjuries(horse.horseId, ctrl.signal),
@@ -261,6 +268,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
   }, [horse.horseId]);
 
   // Date range calculation
+  // Đổi lựa chọn khoảng thời gian thành mốc minDate / maxDate (null = không giới hạn phía đó).
   const { minDate, maxDate } = useMemo(() => {
     const now = new Date();
     let min = null;
@@ -302,6 +310,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
   }, [events, minDate, maxDate, typeFilter, searchQuery]);
 
   // Quick summary counts
+  // Số đếm theo loại trên danh sách ĐÃ lọc, cho các ô tóm tắt phía trên dòng thời gian.
   const stats = useMemo(() => {
     const total = filteredEvents.length;
     let exams = 0;

@@ -25,6 +25,7 @@ public class PermissionController {
         this.service = service;
     }
 
+    // GET /api/permissions -> PermissionService.load(): quét @RequireRole của mọi controller lúc chạy và trả ma trận.
     @GetMapping
     @RequireRole({"CLUB_MANAGER"})
     public PermissionMatrix.Response matrix() {

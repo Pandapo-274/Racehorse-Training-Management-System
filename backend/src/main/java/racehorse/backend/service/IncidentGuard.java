@@ -22,6 +22,8 @@ public class IncidentGuard {
         this.incidents = incidents;
     }
 
+    // Ném 409 nếu ngựa còn báo cáo sự cố PENDING / RECEIVED. Hiện chỉ TrainingSessionService.checkHorseCanTrain
+    // gọi (xếp lịch, đổi lịch, Start); RaceService tự kiểm báo cáo mở bằng truy vấn riêng.
     public void assertNoOpenReport(int horseId) {
         incidents.findOpenReport(horseId).ifPresent(open -> {
             throw new ApiException(HttpStatus.CONFLICT,

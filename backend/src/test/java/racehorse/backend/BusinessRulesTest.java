@@ -92,6 +92,26 @@ import racehorse.backend.service.TrainingPlanService;
 import racehorse.backend.service.TrainingSessionService;
 import racehorse.backend.service.TreatmentService;
 
+/*
+ * CÁCH ĐỌC FILE TEST NÀY (unit test thuần, không cần database):
+ *
+ *   1. mock(XxxRepository.class)        - tạo repository "giả" bằng Mockito: mọi method trả giá trị rỗng
+ *                                         (null, 0, Optional.empty(), List rỗng) trừ khi được dạy trước.
+ *   2. when(repo.findById(1)).thenReturn(Optional.of(...))
+ *                                       - dạy repository giả trả dữ liệu mẫu cho một lời gọi cụ thể.
+ *   3. new XxxService(repo, ...)         - dựng service THẬT với các repository giả (constructor injection
+ *                                         giúp việc này dễ: không cần Spring).
+ *   4. expect(ApiException.class, 409, () -> service.xxx(...))
+ *                                       - helper ở dưới: gọi service, khẳng định nó ném ApiException với đúng
+ *                                         mã HTTP (assertThrows của JUnit 5).
+ *   5. verify(repo, never()).updateStatus(...)
+ *                                       - khẳng định service KHÔNG gọi câu UPDATE (luật đã chặn trước khi ghi).
+ *
+ * Mỗi @Test là một luật nghiệp vụ, tên method nói luật đó (vd. completedPlanCannotBeReactivated).
+ * Chạy: .\mvnw test (pom.xml cấu hình surefire chỉ chạy file này, kèm -javaagent Mockito cho JDK mới).
+ * Các nhóm test (dòng "// ----" bên dưới): giáo án, buổi tập, đánh giá, V37 (R1-R4), cảnh báo, y tế,
+ * phả hệ, giải đua, phân công chăm sóc, thuốc trong kho, khẩu phần, kiểm đếm kho.
+ */
 /**
  * Luật nghiệp vụ của 3 flow bắt buộc, kiểm bằng repository giả (Mockito):
  * chạy trong vài giây, không cần database. Mỗi test là một luật hội đồng có
@@ -108,6 +128,8 @@ class BusinessRulesTest {
 
     // ---------------------------------------------------------------- dữ liệu mẫu
 
+    // Các hàm dựng dữ liệu mẫu (fixture): người dùng theo vai trò, ngựa, buổi tập, giáo án... để mỗi test
+    // chỉ cần ghi phần khác biệt.
     private static AuthenticatedUser user(int id, String role) {
         return new AuthenticatedUser(id, "u" + id, role, "t" + id, Instant.now().plusSeconds(3600), Instant.now());
     }
@@ -155,6 +177,8 @@ class BusinessRulesTest {
                 mock(NotificationService.class));
     }
 
+    // Helper: chạy run, bắt buộc phải ném exception kiểu type; nếu là ApiException thì so luôn mã HTTP.
+    // Trả exception về để test kiểm thêm message hoặc fieldErrors.
     private static <T extends Throwable> T expect(Class<T> type, int status, org.junit.jupiter.api.function.Executable run) {
         T ex = assertThrows(type, run);
         if (ex instanceof ApiException api) {
@@ -1751,6 +1775,25 @@ class BusinessRulesTest {
 
         expect(ApiException.class, 409, () -> service.end(1, VET, "ip"));
         verify(treatments, never()).endToday(anyInt());
+    }
+
+    @Test
+    void endingTheLastTreatmentDoesNotMakeTheHorseEligible() {
+        // Đặc tả 2.2.1 / 4.4: chỉ xác nhận hồi phục mới đưa ngựa về ELIGIBLE; kết thúc đơn không đổi sức khoẻ.
+        TreatmentRepository treatments = mock(TreatmentRepository.class);
+        MedicalRecordRepository records = mock(MedicalRecordRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(treatments.findById(1)).thenReturn(Optional.of(new TreatmentRow(1, 1, 100, "Horse 100", "Bute", null,
+                null, null, TODAY.minusDays(3), TODAY.plusDays(4), false)));
+        when(treatments.endToday(1)).thenReturn(1);
+        when(treatments.countActiveByHorse(100)).thenReturn(0);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "INJURED", TODAY.minusYears(5), "COLT")));
+        TreatmentService service = new TreatmentService(treatments, records, horses, mock(UserRepository.class));
+
+        service.end(1, VET, "ip");
+
+        verify(treatments).endToday(1);
+        verify(records, never()).updateHorseStatus(anyInt(), any());
     }
 
     // ---------------------------------------------------------------- Flow 1: phả hệ

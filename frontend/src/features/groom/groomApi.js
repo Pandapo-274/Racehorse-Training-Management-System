@@ -19,6 +19,8 @@ export function startSession(sessionId) {
  * { heartRate, heartRateCeiling, alertRaised, severity, alertId }.
  */
 export function sendVitals(sessionId, { heartRate, velocity }) {
+  // POST /api/sessions/{id}/vitals (AlertController -> AlertService): so heartRate với trần nhịp tim của giai
+  // đoạn giáo án, velocity với app.alert.velocity-max (18 m/s); vượt thì tạo THRESHOLD_ALERT và báo Head Trainer.
   return authFetch(`/api/sessions/${sessionId}/vitals`, {
     method: "POST",
     body: JSON.stringify({ heartRate, velocity }),
@@ -30,6 +32,8 @@ export function sendVitals(sessionId, { heartRate, velocity }) {
  * Nếu body = { earlyStop: true, earlyStopReason } thì yêu cầu đã báo cáo cả HR & Speed >= 1 lần.
  */
 export function finishSession(sessionId, body = null) {
+  // Không có body -> kết thúc bình thường (COMPLETED). Có earlyStop/earlyStopReason -> STOPPED_EARLY.
+  // Lưu ý: backend cũng coi là kết thúc sớm nếu bấm Finish trước giờ kết thúc dự kiến, dù không gửi cờ.
   const options = { method: "PUT" };
   if (body) {
     options.body = JSON.stringify(body);
@@ -51,6 +55,7 @@ export function stopSession(sessionId, { symptoms, description, urgency }) {
 }
 
 /** Danh sách lý do kết thúc sớm buổi tập cho Groom chọn. */
+// value phải nằm trong EARLY_STOP_REASONS của TrainingSessionService (backend từ chối mã lạ).
 export const EARLY_STOP_REASON_OPTIONS = [
   { value: "TARGET_REACHED", label: "Target fitness reached" },
   { value: "HORSE_FATIGUED", label: "Horse fatigued" },
@@ -70,6 +75,7 @@ export const COMMON_SYMPTOMS = [
   "Swelling on a leg",
 ];
 
+// Mức khẩn cấp lưu vào báo cáo sự cố (INCIDENT_REPORT) mà backend mở khi Groom bấm Stop.
 export const URGENCY_OPTIONS = [
   { value: "HIGH", label: "Urgent – vet should come now" },
   { value: "MEDIUM", label: "Soon – today" },
@@ -109,6 +115,7 @@ export function toSeverityLabel(s) {
  * ------------------------------------------------------------------ */
 
 /** "2026-10-22" theo giờ máy, để so với phần ngày của sessionDate. */
+// Groom chỉ được Start buổi tập trong đúng ngày của buổi (backend kiểm lại); so chuỗi yyyy-mm-dd là đủ.
 export function todayIso() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
@@ -125,6 +132,7 @@ export function sessionTime(iso) {
 }
 
 export function formatSessionDay(iso) {
+  // Thêm "T00:00:00" (không có "Z") để Date hiểu là nửa đêm giờ ĐỊA PHƯƠNG, tránh hiện lùi một ngày.
   const d = new Date(`${sessionDay(iso)}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? "—"

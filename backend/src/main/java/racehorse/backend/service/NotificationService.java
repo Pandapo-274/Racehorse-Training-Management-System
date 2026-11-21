@@ -55,6 +55,7 @@ public class NotificationService {
      * Chỉ gửi thông báo cho Head Trainer đang trực tiếp quản lý ngựa này (trừ khi chính họ là actor).
      * Nếu ngựa chưa được gán Head Trainer thì không gửi tràn lan sang các trainer khác.
      */
+    // Dùng khi thông báo liên quan tới một con ngựa cụ thể: HORSE.trainer_id (V37) là HLV phụ trách.
     public int notifyHorseTrainer(int horseId, AuthenticatedUser actor, Notice notice) {
         Integer trainerId = notifications.findHorseTrainerId(horseId).orElse(null);
         if (trainerId == null || (actor != null && trainerId == actor.userId())) {
@@ -68,6 +69,8 @@ public class NotificationService {
      * Chủ ngựa và Head Trainer quản lý ngựa đó (nếu xác định được từ horseId hoặc target HORSE),
      * trừ người vừa làm việc đó.
      */
+    // Hai phiên bản notifyHorseWatchers (overload): bản có horseId gửi cho HLV phụ trách ngựa;
+    // bản không có horseId thì gửi HLV phụ trách nếu target là HORSE, ngược lại gửi mọi HLV.
     public void notifyHorseWatchers(int horseId, int ownerId, AuthenticatedUser actor, Notice notice) {
         if (actor == null || ownerId != actor.userId()) {
             notifications.insertForUser(ownerId, notice);
@@ -112,6 +115,8 @@ public class NotificationService {
         return notifications.markAllRead(me.userId());
     }
 
+    // Các hàm has... bên dưới giúp job/service tránh gửi trùng một thông báo trong cùng ngày
+    // hoặc trong N giờ gần đây (vd. nhắc thuốc, nhắc rủi ro giải đua).
     public boolean hasNotificationSentToday(int userId, String type, String entity, int targetId, String title) {
         return notifications.hasNotificationSent(userId, type, entity, targetId, title);
     }

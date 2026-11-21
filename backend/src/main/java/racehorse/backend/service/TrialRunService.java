@@ -17,6 +17,12 @@ import racehorse.backend.repository.TrialRunRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Đánh dấu buổi tập là "lượt chạy thử" (is_trial_run) và gắn link video (video_url) - V16.
+ * Luật: buổi đã huỷ không thể là lượt chạy thử; chỉ lượt chạy thử mới có video (CK_SESSION_video_trial
+ * trong DB cũng chặn); chỉ gắn video khi buổi đã bắt đầu; link phải là http(s) có host.
+ * Có video mới thì báo chủ ngựa.
+ */
 @Service
 public class TrialRunService {
 
@@ -76,6 +82,7 @@ public class TrialRunService {
         if (raw == null || raw.isBlank()) return null;
         String v = raw.trim();
         try {
+            // java.net.URI tách link thành scheme (http/https), host... ; link sai cú pháp ném URISyntaxException.
             URI u = new URI(v);
             String scheme = u.getScheme();
             boolean http = scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"));

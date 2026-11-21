@@ -28,6 +28,8 @@ function RaceForm({ races = [], onCreated, onCancel }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const num = (v) => (v === "" ? null : Number(v));
 
+  // Kiểm form tạo giải ở trình duyệt (tên chưa dùng cho giải chưa huỷ, ngày đua sau hôm nay, cự ly 100-10.000 m,
+  // trường đua, hạn đăng ký không sau ngày đua...) rồi POST /api/races/events. Backend kiểm lại toàn bộ.
   const submit = async (e) => {
     if (e) e.preventDefault();
     setError("");
@@ -128,6 +130,7 @@ function RaceForm({ races = [], onCreated, onCancel }) {
   );
 }
 
+// Nhãn của một giải trong ô chọn: tên, ngày, cự ly, trường đua.
 function raceLabel(r) {
   return [
     r.raceName,
@@ -137,6 +140,10 @@ function raceLabel(r) {
   ].filter(Boolean).join(" · ");
 }
 
+/*
+ * Form "Enter a horse" (chỉ Head Trainer). Chọn giải trước: effect tải GET /api/races/candidates?raceId= - mọi ngựa
+ * HLV phụ trách kèm problem/problems (lý do bị chặn). open = giải còn mở, chưa tới ngày, chưa quá hạn đăng ký.
+ */
 function EntryForm({ races, onRegistered }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ horseId: "", raceId: "", note: "" });
@@ -161,11 +168,13 @@ function EntryForm({ races, onRegistered }) {
   }, [form.raceId, navigate]);
 
   // The backend decides what blocks (problems); missing trial run / vaccination are problems too.
+  // (Từ bản sửa Flow 5: thiếu lượt chạy thử / hồ sơ tiêm phòng là lý do chặn, nên chỉ cần lọc theo problem.)
   const eligible = candidates.filter((c) => !c.problem);
   const blocked = candidates.filter((c) => c.problem);
   const chosen = candidates.find((c) => String(c.horseId) === form.horseId);
   const full = race && race.maxEntries && race.entries >= race.maxEntries;
 
+  // POST /api/races: tạo suất PENDING_OWNER chờ chủ ngựa duyệt; lỗi từng ô của backend gắn vào đúng ô (fieldErrors).
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -271,6 +280,8 @@ function EntryForm({ races, onRegistered }) {
 }
 
 /** Action buttons in row: open result editor or scratch editor. */
+// raceDone: đã qua ngày đua và suất đã được chủ duyệt -> được nhập / sửa kết quả. canScratch: chỉ HLV phụ trách
+// con ngựa đó (isTrainersHorse) được rút, khi suất còn UPCOMING / PENDING_APPROVAL.
 function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelEdit }) {
   const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED") && entry.approvalStatus === "APPROVED";
   // A proposal still waiting for the owner can be withdrawn too (backend allows it),
@@ -311,6 +322,8 @@ function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelE
 }
 
 /** Expandable editor row: displays result inputs or scratch reason across full table width. */
+// Dòng mở rộng dưới một suất: mode "result" (kết quả, hạng, thời gian, tiền thưởng; Manager sửa sau 7 ngày phải có
+// lý do) hoặc "scratch" (rút ngựa kèm lý do; rút trước hạn đăng ký thì lệ phí được hoàn).
 function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
   const navigate = useNavigate();
   const [result, setResult] = useState(entry.result && entry.result !== "SCRATCHED" ? entry.result : "WON");
@@ -333,6 +346,7 @@ function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
     }
   };
 
+  // Chọn hạng tự suy ra kết quả: hạng 1 = WON, 2-3 = PLACED, từ 4 = UNPLACED (không có tiền thưởng) - giống backend.
   const pickPosition = (v) => {
     setPosition(v);
     const n = Number(v);
@@ -402,6 +416,7 @@ function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
 }
 
 /** The race calendar (V22). */
+// Tab lịch giải: danh sách giải (RACE), form tạo giải, và nút huỷ giải cho Club Manager (mọi suất bị rút, hoàn phí).
 function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
@@ -480,6 +495,11 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
   );
 }
 
+/*
+ * Trang /trainer/races và /manager/races. Hai tab: "entries" (các suất đua của năm đang chọn, lọc theo trạng thái,
+ * kèm thống kê năm - summary) và lịch giải. Tải song song: suất đua, thống kê, danh sách giải.
+ * activeEdit: suất đang mở EditRowForm. onSaved thay đúng suất đó và tải lại thống kê.
+ */
 export default function RacesPage() {
   const navigate = useNavigate();
   const user = getUser();
@@ -501,6 +521,7 @@ export default function RacesPage() {
   const [info, setInfo] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Danh sách năm có dữ liệu (luôn kèm năm nay), sắp mới nhất trước.
   useEffect(() => {
     const ctrl = new AbortController();
     listYears(ctrl.signal)
@@ -536,6 +557,7 @@ export default function RacesPage() {
     refreshSummary();
   };
 
+  // Đếm số suất theo trạng thái để dán lên các nút lọc.
   const counts = useMemo(() => {
     const c = { ALL: 0, UPCOMING: 0, PENDING_APPROVAL: 0, AWAITING_RESULT: 0, FINISHED: 0, SCRATCHED: 0, REJECTED: 0, EXPIRED: 0 };
     for (const e of entries || []) {

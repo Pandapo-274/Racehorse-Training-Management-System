@@ -51,6 +51,12 @@ public class HorseRequestService {
         this.contracts = contracts;
     }
 
+    /* ------------------------------------------------------------------ *
+     * Chủ ngựa gửi yêu cầu
+     * ------------------------------------------------------------------ */
+
+    // Không có @Transactional: INSERT, audit và thông báo mỗi câu tự commit riêng. Nếu một bước sau
+    // lỗi thì yêu cầu vẫn đã được lưu (không gây sai dữ liệu nghiêm trọng vì chỉ là lời đề nghị).
     public HorseRequestRow submit(SubmitRequest raw, AuthenticatedUser me, String ip) {
         String name = raw.horseName().trim();
         if (requests.hasOpenRequest(me.userId(), name)) {
@@ -149,6 +155,8 @@ public class HorseRequestService {
     @Transactional
     public HorseRequestRow approve(int requestId, ReviewRequest review,
                                    AuthenticatedUser me, String ip) {
+        // Cả approve chạy trong MỘT giao dịch: tạo HORSE, gán HLV, đánh dấu APPROVED, audit, thông
+        // báo. Nếu markReviewed trả 0 (ai đó vừa xử lý) thì ném lỗi -> rollback luôn con ngựa vừa tạo.
         HorseRequestRow req = getOrThrow(requestId);
         requirePending(req);
         boolean pedigreeOnly = HorsePolicy.PEDIGREE.equals(req.recordType());
@@ -206,6 +214,10 @@ public class HorseRequestService {
                     "A registration code is required to approve",
                     Map.of("registrationCode", "Enter the code the club assigns"));
         }
+
+        // Dựng HorseRequest (DTO nội bộ) từ dữ liệu chủ khai + mã Manager cấp. Hồ sơ pedigree không ở
+        // CLB nên không có cân nặng, không chuồng. Tên đầy đủ racehorse.backend.dto.HorseRequest để khỏi
+        // nhầm với chữ "request" của yêu cầu đăng ký.
         racehorse.backend.dto.HorseRequest newHorse = new racehorse.backend.dto.HorseRequest(
                 req.ownerId(),
                 req.sireId(), req.damId(),   // V41: parents from the papers, checked again by create()

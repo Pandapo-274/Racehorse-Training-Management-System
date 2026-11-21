@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
  * - targetVetId: id bác sĩ tiếp nhận mới. Nếu null: trả ca về hàng đợi chung (PENDING).
  * - handoverNotes: ghi chú bàn giao bắt buộc (tình trạng ngựa, thuốc đã dùng, lưu ý theo dõi).
  */
+// Body của PUT /api/incident-reports/{id}/handover (bác sĩ hoặc Club Manager).
 public record HandoverIncidentRequest(
         Integer targetVetId,
 

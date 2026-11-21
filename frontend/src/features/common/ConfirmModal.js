@@ -2,6 +2,14 @@ import { useEffect } from "react";
 import ReactDOM from "react-dom";
 import "./confirmModal.css";
 
+/*
+ * Hộp thoại xác nhận dùng chung ("Bạn chắc chắn chứ?"). Điều khiển hoàn toàn bằng props:
+ *   isOpen      - có hiện không
+ *   onConfirm   - bấm nút xác nhận; onCancel - bấm Huỷ, bấm ra ngoài nền mờ, hoặc nhấn phím Escape
+ *   confirmTone - "danger" thì nút xác nhận màu đỏ (xoá, huỷ...)
+ * ReactDOM.createPortal vẽ hộp thoại thẳng vào <body> (ngoài cây DOM của trang) để không bị
+ * overflow/z-index của phần tử cha cắt mất.
+ */
 export default function ConfirmModal({
   isOpen,
   title = "Confirm action",
@@ -13,6 +21,7 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }) {
+  // Lắng nghe phím Escape khi hộp thoại mở; hàm return trong useEffect gỡ listener khi đóng (cleanup).
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {

@@ -27,6 +27,16 @@ import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.TokenBlacklist;
 
+/*
+ * Luồng "quên mật khẩu":
+ *   1. forgotPassword: sinh 32 byte ngẫu nhiên (SecureRandom) -> chuỗi base64url = token.
+ *      Lưu SHA-256(token) vào PASSWORD_RESET_TOKEN, hạn 30 phút; vô hiệu các token cũ.
+ *   2. Gửi link http://localhost:3000/reset-password?token=<token> qua email (hoặc in ra log
+ *      khi app.mail.enabled=false) - chỉ SAU KHI giao dịch commit.
+ *   3. resetPassword: băm token người dùng gửi lên, "tiêu thụ" nó bằng một câu UPDATE có
+ *      điều kiện (chưa dùng, chưa hết hạn), đặt mật khẩu mới, mở khoá đăng nhập, đá mọi phiên.
+ * SecureRandom (không phải Random) vì token phải không đoán được.
+ */
 @Service
 public class PasswordService {
 
@@ -98,10 +108,14 @@ public class PasswordService {
         passwords.insertToken(u.userId(), sha256Hex(token), RESET_TOKEN_MINUTES);
         users.writeAudit(u.userId(), "FORGOT_PASSWORD", "APP_USER", u.userId(), "SUCCESS", ip);
 
+        // frontendBaseUrl = app.frontend-base-url (mặc định http://localhost:3000). Trang
+        // ResetPasswordPage.js của frontend đọc tham số ?token= từ URL.
         String link = frontendBaseUrl + "/reset-password?token=" + token;
         String to = u.email();
         String name = u.fullName();
         Runnable send = () -> mailSender.sendResetLink(to, name, link, RESET_TOKEN_MINUTES);
+        // TransactionSynchronization.afterCommit: hoãn việc gửi mail tới khi giao dịch đã
+        // commit thành công. Nếu giao dịch rollback thì không có mail nào chứa link chết.
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -116,6 +130,7 @@ public class PasswordService {
 
     @Transactional
     public void resetPassword(ResetPasswordRequest req, String ip) {
+        // consumeValidToken trả user_id nếu token hợp lệ và đánh dấu đã dùng NGAY trong cùng câu SQL.
         Integer userId = passwords.consumeValidToken(sha256Hex(req.token().trim()))
                 .orElseThrow(() -> fieldError("token", "Reset link is invalid or has expired"));
 

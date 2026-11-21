@@ -28,6 +28,11 @@ import racehorse.backend.service.MedicalRecordService;
  * thứ huấn luyện viên cần trước khi xếp lịch và chủ ngựa có quyền biết về ngựa
  * của mình - nhưng chẩn đoán thì chỉ người khám mới được viết.
  */
+/*
+ *   POST /api/medical-records          bác sĩ ghi một lần khám (EXAM / VACCINATION / DEWORMING / FARRIER)
+ *   GET  /api/medical-records?horseId= bệnh sử của một con ngựa
+ *   GET  /api/medical-records/{id}     một lần khám
+ */
 @RestController
 @RequestMapping("/api/medical-records")
 public class MedicalRecordController {

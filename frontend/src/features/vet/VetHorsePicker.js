@@ -9,8 +9,10 @@ import VetShell, { VetCard, VetState } from "./VetShell";
 import { isPedigreeOnly, isWithdrawn } from "../horse/horseApi";
 import { listHorses, toBoardStatus, statusLabel } from "./vetApi";
 
+// Thứ tự hiện: ngựa chấn thương trước, rồi cách ly, theo dõi, cuối cùng là ngựa khoẻ.
 const ORDER = { injured: 0, quarantine: 1, monitor: 2, fit: 3 };
 
+// Chữ và đường dẫn cho hai chế độ của trang (mode = "examination" | "recovery").
 const COPY = {
   examination: {
     title: "Examination",
@@ -28,6 +30,8 @@ const COPY = {
   },
 };
 
+// Props: mode. VetExaminationPage / VetRecoveryPage hiện component này khi URL chưa có :horseId.
+// Bấm một ngựa -> mở <base>/<horseId>.
 export default function VetHorsePicker({ mode }) {
   const copy = COPY[mode];
   const navigate = useNavigate();
@@ -49,6 +53,7 @@ export default function VetHorsePicker({ mode }) {
     return () => ctrl.abort();
   }, [navigate, reload]);
 
+  // Bỏ ngựa đã rút và hồ sơ PEDIGREE; chế độ recovery chỉ hiện ngựa chưa ELIGIBLE; tìm theo tên, chuồng, mã.
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (horses || [])

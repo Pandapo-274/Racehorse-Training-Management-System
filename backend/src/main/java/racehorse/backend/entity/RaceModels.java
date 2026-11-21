@@ -15,6 +15,8 @@ import java.util.List;
  * Flow 5 - đăng ký giải đua và kết quả. Một dòng RACE_REGISTRATION (V1) giữ cả
  * đăng ký lẫn kết quả; tập giá trị result chốt ở V17.
  */
+// Ghi chú: tập giá trị result thực ra được chốt ở V18__race_result_rules.sql (comment
+// gốc ghi V17). Bảng RACE (giải đua riêng) có từ V22, duyệt của chủ ngựa từ V28.
 public final class RaceModels {
 
     private RaceModels() {
@@ -31,6 +33,8 @@ public final class RaceModels {
      *  SCRATCHED       - rút khỏi giải trước ngày đua
      * trainerId: Head Trainer phụ trách ngựa (HORSE.trainer_id, V37), null nếu chưa giao.
      */
+    // Một dòng đăng ký giải đã ghép tên ngựa, chủ, người đăng ký, thông tin giải.
+    // approvalStatus: PENDING_OWNER (chờ chủ ngựa duyệt) | APPROVED | REJECTED.
     public record Entry(
             int registrationId, int horseId, String horseName, String stallNo,
             int ownerId, String ownerName, String raceName, LocalDate raceDate,
@@ -126,6 +130,8 @@ public final class RaceModels {
      * problems: every reason that blocks (problem is the first of them).
      * warnings: do not block - e.g. no trial run recently, vaccination never recorded.
      */
+    // Dùng cho màn "Enter a horse": liệt kê ngựa và lý do không đăng ký được (đang bị
+    // thương, bị khoá tập, có sự cố mở, chưa đủ ngày nghỉ sau giải trước...).
     public record Candidate(int horseId, String horseName, String stallNo, String ownerName,
                             Integer age, String healthStatus, String problem,
                             List<String> problems, List<String> warnings) {

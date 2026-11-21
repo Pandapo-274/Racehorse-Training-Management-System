@@ -180,6 +180,13 @@ public class HorseRequestRepository {
                 .update();
     }
 
+    /**
+     * Chủ ngựa huỷ yêu cầu của chính mình. Cùng điều kiện như markReviewed:
+     * owner_id và status = 'PENDING' nằm ngay trong câu UPDATE, nên nếu
+     * Club Manager vừa duyệt xong thì lệnh huỷ nhận 0 dòng chứ không đè lên.
+     *
+     * @return 1 nếu huỷ được, 0 nếu yêu cầu không còn chờ.
+     */
     public int markCancelled(int requestId, int ownerId) {
         return jdbc.sql("""
                 UPDATE HORSE_REQUEST
@@ -193,6 +200,17 @@ public class HorseRequestRepository {
                 .update();
     }
 
+    /**
+     * Đánh dấu đã xử lý, nhưng CHỈ khi yêu cầu vẫn đang chờ.
+     *
+     * Điều kiện status = 'PENDING' nằm ngay trong câu UPDATE chứ không phải
+     * kiểm trước rồi mới ghi: hai người duyệt mở cùng một hàng chờ và bấm gần
+     * như cùng lúc là chuyện thường. Gộp vào một câu thì người thứ hai nhận
+     * 0 dòng bị ảnh hưởng và service báo lại đúng là "ai đó vừa xử lý rồi",
+     * thay vì tạo ra con ngựa thứ hai.
+     *
+     * @return số dòng bị ảnh hưởng: 1 nếu thắng, 0 nếu người khác đã xử lý.
+     */
     public int markReviewed(int requestId, String status, int reviewerId,
                             Integer horseId, String note) {
         return jdbc.sql("""

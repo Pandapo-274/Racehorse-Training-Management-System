@@ -5,6 +5,8 @@ import LoginForm from "./LoginForm";
 import Button from "../../components/ui/Button";
 import "./auth.css";
 
+// Trang /login: bố cục hai cột - BrandPanel (trái) và thẻ đăng nhập chứa LoginForm (phải), kèm link
+// sang Đăng ký và Quên mật khẩu. Logic đăng nhập nằm trong LoginForm.
 export default function LoginPage() {
   const navigate = useNavigate();
 

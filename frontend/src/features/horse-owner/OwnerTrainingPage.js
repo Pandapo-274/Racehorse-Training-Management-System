@@ -67,6 +67,7 @@ function ApprovalBox({ plan, onReviewed }) {
   );
 }
 
+// Ô gửi nhận xét cho Head Trainer về giáo án (PUT /api/training-plans/{id}/owner-feedback).
 function OwnerFeedbackBox({ plan, onFeedbackSent }) {
   const navigate = useNavigate();
   const [feedback, setFeedback] = useState("");
@@ -131,6 +132,7 @@ function OwnerFeedbackBox({ plan, onFeedbackSent }) {
   );
 }
 
+// Thẻ giáo án đang hiện của ngựa: tên, trạng thái, các giai đoạn (giai đoạn hôm nay được tô nổi bật).
 function PlanCard({ plan, detail, today, onReviewed }) {
   if (!plan) {
     return (
@@ -188,6 +190,7 @@ function PlanCard({ plan, detail, today, onReviewed }) {
   );
 }
 
+// HLV sửa giáo án đã duyệt -> bản sửa chờ chủ duyệt (V47). Hộp này hiện thay đổi và hai nút duyệt / từ chối.
 function PendingUpdateReviewBox({ planId, pendingUpdate, onReviewed }) {
   const navigate = useNavigate();
   const [note, setNote] = useState("");
@@ -273,6 +276,7 @@ function PendingUpdateReviewBox({ planId, pendingUpdate, onReviewed }) {
   );
 }
 
+// Các buổi SCHEDULED sắp tới của ngựa đang chọn.
 function UpcomingCard({ sessions }) {
   return (
     <Card title="Coming up" hint={sessions.length ? `${sessions.length} scheduled` : "Nothing scheduled"}>
@@ -292,6 +296,7 @@ function UpcomingCard({ sessions }) {
   );
 }
 
+// Một dòng nhật ký buổi tập: số đo thực tế, đánh giá, nhận xét HLV, link video chạy thử (nếu có).
 function LogEntry({ s }) {
   const st = toSessionStatus(s.status);
   const evaluated = s.evaluation != null;
@@ -363,6 +368,11 @@ function LogEntry({ s }) {
   );
 }
 
+/*
+ * Trang /horse-owner/training. Query string do thông báo chuông tạo ra (notificationTarget):
+ *   ?planId=   mở đúng ngựa của giáo án đó;  ?sessionId= mở ngựa của buổi đó và cuộn tới nhật ký;  ?horseId=
+ * Tải song song: ngựa của chủ, giáo án, buổi tập (backend lọc theo chủ). plan = giáo án nên hiện (pickPlan).
+ */
 export default function OwnerTrainingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -434,6 +444,7 @@ export default function OwnerTrainingPage() {
 
   const plan = useMemo(() => pickPlan(plans, horseId), [plans, horseId]);
 
+  // Tải chi tiết giáo án (kèm giai đoạn và bản sửa đang chờ) mỗi khi đổi giáo án đang hiện.
   useEffect(() => {
     setPlanDetail(null);
     if (!plan) return undefined;
@@ -448,6 +459,8 @@ export default function OwnerTrainingPage() {
     return () => ctrl.abort();
   }, [plan, navigate]);
 
+  // mine: buổi tập của ngựa đang chọn; upcoming: buổi sắp tới; log: buổi đã chạy (lọc trialOnly = chỉ chạy thử);
+  // waiting / waitingUpdates: giáo án / bản sửa đang chờ chủ duyệt (để hiện ApprovalBox / PendingUpdateReviewBox).
   const mine = useMemo(() => sessions.filter((s) => s.horseId === horseId), [sessions, horseId]);
   const upcoming = useMemo(
     () => mine.filter((s) => s.status === "SCHEDULED" && String(s.sessionDate).slice(0, 10) >= today)

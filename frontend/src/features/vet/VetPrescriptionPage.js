@@ -26,6 +26,8 @@ import {
 } from "./vetApi";
 import "./vet-care.css";
 
+// Các hàm định dạng nhỏ: số nhiều tiếng Anh, ghi chú chi phí thuốc "(Qty: x @ giá)" -> "(x tablets)", tiền VND,
+// tên / liều / khoảng ngày của một mục điều trị.
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function formatExpenseNote(note) {
   if (!note) return "";
@@ -50,6 +52,8 @@ const period = (t) =>
   `${formatDate(t.startDate)} → ${t.endDate ? formatDate(t.endDate) : "until review"}`;
 
 // 17 loại thuốc phổ biến cho các bệnh lý của ngựa
+// (Danh mục viết cứng ở frontend; khi mở form kê đơn, mỗi mục được ghép với thuốc thật trong kho theo tên gần đúng
+// để lấy supplyId, đơn vị, đơn giá, tồn kho, hạn dùng - xem effect ở PrescribeDialog.)
 const COMMON_MEDICINES = [
   { supplyName: "Phenylbutazone (Bute)", unit: "tube", unitPrice: 180000, category: "Anti-inflammatory & Pain relief" },
   { supplyName: "Flunixin Meglumine (Banamine)", unit: "vial", unitPrice: 250000, category: "Colic & Fever" },
@@ -70,6 +74,13 @@ const COMMON_MEDICINES = [
   { supplyName: "Ivermectin (Dewormer)", unit: "tube", unitPrice: 160000, category: "Intestinal parasites" },
 ];
 
+/*
+ * Trang /veterinarian/prescriptions. Ba tab (đồng bộ với ?tab= trên URL, replace: true để không làm dày lịch sử):
+ *   prescriptions - các mục điều trị đang hiệu lực toàn đàn (GET /api/treatments/active), gom thành "đơn";
+ *   directory     - danh sách ngựa để mở lịch sử đơn thuốc từng con (/veterinarian/prescriptions/history/:horseId);
+ *   expenses      - chi phí MEDICAL (GET /api/expenses?category=MEDICAL, bác sĩ được đọc).
+ * Nút "Prescribe" mở PrescribeDialog; EndDialog kết thúc một mục điều trị.
+ */
 export default function VetPrescriptionPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,6 +103,7 @@ export default function VetPrescriptionPage() {
     }
   }, [searchParams]);
 
+  // Đổi tab và ghi lại vào URL (tab mặc định thì bỏ tham số).
   const handleTabChange = (nextTab) => {
     setTab(nextTab);
     setSearchParams(
@@ -154,6 +166,7 @@ export default function VetPrescriptionPage() {
   }, [navigate, reload]);
 
   // Load medical expenses when tab is expenses
+  // Chi phí y tế chỉ tải khi đang ở tab expenses.
   useEffect(() => {
     if (tab !== "expenses") return;
     const ctrl = new AbortController();
@@ -166,6 +179,7 @@ export default function VetPrescriptionPage() {
     return () => ctrl.abort();
   }, [tab, navigate, reload]);
 
+  // Gom các mục điều trị thành đơn theo (ngựa, lần khám, ngày bắt đầu); lọc theo tên ngựa / tên thuốc / liều.
   const prescriptionGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
     const map = new Map();
@@ -236,6 +250,7 @@ export default function VetPrescriptionPage() {
     [expenses]
   );
 
+  // Sau khi kê đơn / kết thúc: đóng hộp thoại, hiện xác nhận, tăng reload để tải lại danh sách.
   const handleSaved = (message) => {
     setPrescribing(false);
     setEnding(null);
@@ -539,6 +554,7 @@ export default function VetPrescriptionPage() {
 
 /* ---------- chi tiết đơn thuốc ---------- */
 
+// Hộp thoại xem chi tiết một đơn (các thuốc trong đơn, liều, khoảng ngày).
 function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
   if (!prescription) return null;
   return (
@@ -612,6 +628,7 @@ function PrescriptionDetailModal({ prescription, onClose, onViewHistory }) {
 
 /* ---------- lịch sử đơn thuốc của một con ngựa ---------- */
 
+// Thẻ lịch sử điều trị của một ngựa (GET /api/treatments?horseId=).
 function HistoryCard({ horse, onClose }) {
   const navigate = useNavigate();
   const [items, setItems] = useState(null);
@@ -697,6 +714,7 @@ function HistoryCard({ horse, onClose }) {
 
 /* ---------- hộp thoại kết thúc một mục điều trị ---------- */
 
+// Kết thúc một mục điều trị hôm nay (PUT /api/treatments/{id}/end); backend từ chối đơn chưa tới ngày bắt đầu.
 function EndDialog({ treatment, onClose, onDone }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
@@ -749,6 +767,11 @@ function EndDialog({ treatment, onClose, onDone }) {
 
 /* ---------- hộp thoại kê đơn mới ---------- */
 
+/*
+ * Hộp thoại kê đơn. Luồng: chọn ngựa -> chọn lần khám (chỉ lần khám EXAM chưa được kê đơn, chưa hồi phục) -> thêm
+ * từng thuốc (từ danh mục hoặc gõ tên) với liều, đơn vị, tần suất, hướng dẫn -> ngày bắt đầu / kết thúc -> tuỳ chọn
+ * khoá tập FULL -> Save.
+ */
 function PrescribeDialog({ onClose, onDone }) {
   const navigate = useNavigate();
 
@@ -803,6 +826,8 @@ function PrescribeDialog({ onClose, onDone }) {
   }, [navigate]);
 
   // Load medicines catalog từ backend và merge với 17 loại chuẩn
+  // Ghép COMMON_MEDICINES với thuốc MEDICINE trong kho: khớp tên gần đúng; tìm thấy thì lấy số liệu của kho,
+  // không thấy thì tồn kho = 0.
   useEffect(() => {
     const ctrl = new AbortController();
     listMedicineSupplies(ctrl.signal)
@@ -851,6 +876,7 @@ function PrescribeDialog({ onClose, onDone }) {
   }, []);
 
   // Load medical records, treatments & injuries khi chọn ngựa
+  // Chọn ngựa thì tải hồ sơ khám, các mục điều trị và chấn thương của nó để biết lần khám nào còn cần kê đơn.
   useEffect(() => {
     setRecords(null);
     setTreatments([]);
@@ -897,6 +923,8 @@ function PrescribeDialog({ onClose, onDone }) {
     return recovered;
   }, [injuries]);
 
+  // Một lần khám "còn cần điều trị": loại EXAM, trạng thái không phải ELIGIBLE, không phải chấm thể lực / cho tập nhẹ,
+  // chấn thương chưa lành hết, và chưa có mục điều trị nào gắn với nó. (Lọc bằng chữ trong diagnosis.)
   const isExamUntreated = useCallback((r) => {
     // 1. Chỉ nhận bản ghi EXAM (loại bỏ FARRIER, VACCINE, DEWORM, CLEARANCE)
     if (r.recordType && r.recordType !== "EXAM") return false;
@@ -915,6 +943,7 @@ function PrescribeDialog({ onClose, onDone }) {
     return true;
   }, [recoveredRecordIds, treatedRecordIds]);
 
+  // Chỉ giữ một lần khám "relapse" (tái phát) mới nhất để danh sách không bị lặp.
   const eligibleRecords = useMemo(() => {
     if (!records) return [];
     const sourceList = records.filter(isExamUntreated);
@@ -1030,6 +1059,9 @@ function PrescribeDialog({ onClose, onDone }) {
   };
 
   // Submit toàn bộ đơn thuốc đã chọn
+  // Kiểm form, rồi gọi createTreatment cho TỪNG thuốc (vòng lặp, không gộp một giao dịch: lỗi ở thuốc thứ n thì các
+  // thuốc trước đã lưu). Mỗi mục backend trừ kho và ghi chi phí MEDICAL. Chọn khoá FULL thì gọi thêm issueLock
+  // (lỗi vì ngựa đã có khoá ACTIVE thì bỏ qua).
   const submit = async () => {
     setError(null);
 

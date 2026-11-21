@@ -5,6 +5,9 @@
 import { authFetch } from "../auth/authService";
 
 /** Head Trainer gọi bác sĩ cho một cảnh báo: { reason, observations, urgency, stopSession }. */
+// POST /api/alerts/{alertId}/vet-call (VetCallService): gọi = xử lý cảnh báo với VET_CALLED (UPDATE có điều kiện),
+// nên mỗi cảnh báo chỉ gọi được một lần (cảnh báo đã xử lý -> 409). stopSession = true thì buổi tập dừng ngay
+// và Groom được báo. Mọi bác sĩ nhận thông báo VET_CALL_REQUESTED.
 export function createVetCall(alertId, body) {
   return authFetch(`/api/alerts/${alertId}/vet-call`, {
     method: "POST",
@@ -22,6 +25,8 @@ export function getVetCall(callId, signal) {
 }
 
 /** Bác sĩ trả lời: { decision, instructions, medication }. */
+// PUT /api/vet-calls/{id}/answer: câu UPDATE có điều kiện status = 'PENDING' nên chỉ một bác sĩ trả lời được;
+// người thứ hai nhận 409. Head Trainer đã gọi và Groom của buổi tập nhận thông báo kết quả.
 export function answerVetCall(callId, body) {
   return authFetch(`/api/vet-calls/${callId}/answer`, {
     method: "PUT",
@@ -29,6 +34,8 @@ export function answerVetCall(callId, body) {
   });
 }
 
+// Ba quyết định của bác sĩ. TREAT_ON_SITE bắt buộc ghi thuốc (medication); EMERGENCY_STOP mở / dùng lại báo
+// cáo sự cố do chính bác sĩ đó nhận, nên IncidentGuard chặn tập cho tới khi khám xong.
 export const VET_DECISIONS = [
   {
     value: "CONTINUE_LIGHT",
@@ -58,6 +65,7 @@ export const URGENCIES = [
 ];
 
 export function urgencyLabel(value) {
+  // label.split(":")[0]: "High: come now" -> "High" (chỉ lấy phần trước dấu hai chấm cho chip ngắn).
   return URGENCIES.find((u) => u.value === value)?.label.split(":")[0] || value || "";
 }
 
@@ -72,6 +80,7 @@ export const SIGN_SUGGESTIONS = [
 ];
 
 export function metricText(call) {
+  // Cuộc gọi tạo từ cảnh báo có số đo (metricType, actualValue, thresholdValue); không có thì là báo trực tiếp.
   if (!call.metricType) return "Reported directly during the training session";
   const unit = call.metricType === "VELOCITY" ? "m/s" : "bpm";
   const name = call.metricType === "VELOCITY" ? "Speed" : "Heart rate";

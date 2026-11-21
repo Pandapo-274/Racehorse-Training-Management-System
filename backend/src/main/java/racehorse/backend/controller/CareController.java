@@ -68,6 +68,7 @@ public class CareController {
     @GetMapping("/daily-tasks")
     @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER", "GROOM"})
     public List<CareModels.Task> tasks(
+            // @DateTimeFormat(iso = DATE): đọc tham số query dạng "2026-11-17" thành LocalDate; bỏ trống = hôm nay.
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer horseId,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
@@ -110,6 +111,7 @@ public class CareController {
         return service.undo(id, user, http.getRemoteAddr());
     }
 
+    // Ngoài bảng trên còn: PUT /daily-tasks/{id}/assignee (giao lại cho Groom khác) và GET /daily-tasks/missed.
     /** #15: hand an open task to another groom. */
     @PutMapping("/daily-tasks/{id}/assignee")
     @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})

@@ -1,3 +1,10 @@
+/*
+ * src/features/horse-owner/HorseOwnerDashboard.js - trang /horse-owner (tổng quan của chủ ngựa).
+ * Một lời gọi GET /api/owner/dashboard?period= trả về mọi thứ (OwnerDashboardService): thẻ từng ngựa (ảnh, thông tin,
+ * khoá tập, điều trị, km 7 ngày, giải sắp tới, biểu đồ thể lực, nhận xét HLV, 5 chỉ số), dải số tổng và bảng chi phí /
+ * tiền thưởng. Trang chỉ chọn ngựa (tab) và kỳ chi phí; mọi con số do backend tính.
+ * Chủ chưa có ngựa nào -> NoHorsesYet hướng dẫn gửi yêu cầu đăng ký.
+ */
 import { useSignOutModal } from "../auth/SignOutModal";
 import { useEffect, useState } from "react";
 import "./horse-owner.css";
@@ -15,6 +22,8 @@ import {
   formatShortDate, getOwnerDashboard, isPrizeRow, listOwnerExpenses, toCostLabel, toEvaluation, toStars,
 } from "./horseOwnerApi";
 
+// Ghi chú chi phí thuốc từ backend có dạng "(Qty: 2 @ 150000)"; hàm này đổi thành "(2 tablets)", "(2 vials)"...
+// bằng cách đoán đơn vị theo tên thuốc trong ghi chú (danh sách tên viết cứng).
 function formatExpenseNote(note) {
   if (!note) return "";
   return note.replace(/\(Qty:\s*(\d+(?:\.\d+)?)\s*@\s*\d+\)/gi, (match, q) => {
@@ -93,6 +102,7 @@ function Sidebar({ user }) {
    HEADER
 ===================================================== */
 
+// Header: lời chào + số ngựa, ô tìm kiếm (Enter -> chuyển sang /horse-owner/horses), chuông thông báo, avatar.
 function Header({ horseCount }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -141,6 +151,7 @@ function Header({ horseCount }) {
    STAT STRIP
 ===================================================== */
 
+// Dải bốn số tổng: số ngựa ở chuồng, thể lực trung bình, km trong tuần, giải sắp tới gần nhất.
 function StatStrip({ summary }) {
   const next = summary.nextRace;
   const items = [
@@ -172,6 +183,7 @@ function StatStrip({ summary }) {
 ===================================================== */
 
 /** Chỉ hiện khi chủ có từ hai con trở lên. */
+// Tab chọn ngựa (chỉ hiện khi chủ có từ 2 ngựa trở lên).
 function HorseTabs({ horses, selectedId, onSelect }) {
   if (horses.length < 2) return null;
   return (
@@ -192,6 +204,8 @@ function HorseTabs({ horses, selectedId, onSelect }) {
   );
 }
 
+// Thẻ tổng quan của ngựa đang chọn: ảnh, tuổi, cân nặng, sức khoẻ, khoá tập, 5 chỉ số huấn luyện (TRAINING_STATS)
+// kèm số sao (toStars).
 function HorseOverview({ horse }) {
   // Ảnh không tải được (file đã bị xoá trên máy chủ) thì quay về chữ viết tắt.
   const [photoBroken, setPhotoBroken] = useState(false);
@@ -309,6 +323,7 @@ function HorseOverview({ horse }) {
    FITNESS TREND
 ===================================================== */
 
+// Biểu đồ thể lực 8 tuần: mỗi tuần một cột <div> (chiều cao theo fitnessIndex), cột cuối là tuần hiện tại.
 function FitnessTrend({ horse }) {
   const points = horse.fitnessTrend || [];
 
@@ -358,6 +373,7 @@ function FitnessTrend({ horse }) {
    TRAINER REMARKS
 ===================================================== */
 
+// Nhận xét của Head Trainer: hiện nổi bật nhận xét mới nhất (remarks[0]) từ các buổi tập đã được đánh giá.
 function TrainerRemarks({ horse }) {
   const latest = horse.remarks?.[0];
 
@@ -401,6 +417,8 @@ function TrainerRemarks({ horse }) {
    COSTS & PRIZE MONEY
 ===================================================== */
 
+// Bảng chi phí: hàng = hạng mục (FEEDING, MEDICAL, TRAINING, OTHER, PRIZE_MONEY), cột = ngựa, kèm tổng.
+// Đổi kỳ (COST_PERIODS) thì trang tải lại dashboard với period mới.
 function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
   const range = costs.from
     ? `${formatDate(costs.from)} – ${formatDate(costs.to)}`
@@ -488,6 +506,7 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
 }
 
 /** #9: the lines behind the totals, loaded only when opened. */
+// Chi tiết từng dòng chi phí: chỉ tải (GET /api/owner/expenses) khi người dùng bấm mở.
 function CostLines({ from, to }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -587,6 +606,8 @@ function NoHorsesYet({ pendingCount }) {
   );
 }
 
+// selectedId: ngựa đang xem; pending: số yêu cầu đăng ký còn chờ duyệt (hiện huy hiệu trên menu).
+// reloadKey tăng để tải lại (nút "Try again").
 export default function HorseOwnerDashboard() {
   const user = getUser();
   const navigate = useNavigate();

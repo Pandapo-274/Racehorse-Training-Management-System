@@ -13,6 +13,7 @@ import "./care.css";
 // Every line is taken from a FEED item in the store (V21); its unit is the stock unit.
 const EMPTY_ITEM = { mealTime: "MORNING", supplyId: null, feedType: "", quantity: "", unit: "", note: "" };
 
+// Tóm tắt khẩu phần một bữa thành một dòng chữ, vd. "Oats 3.5 kg, Hay 2 kg".
 function mealText(items, meal) {
   const rows = (items || []).filter((i) => i.mealTime === meal);
   if (!rows.length) return <span className="hz-muted">—</span>;
@@ -25,6 +26,11 @@ function mealText(items, meal) {
   ));
 }
 
+/*
+ * Form sửa khẩu phần của MỘT con ngựa: mỗi dòng = bữa (MORNING/NOON/EVENING) + món FEED trong kho + số lượng.
+ * rows khởi tạo một lần từ khẩu phần hiện có (useState với hàm khởi tạo); chưa có thì một dòng trống.
+ * Lưu -> saveRation thay toàn bộ khẩu phần; onSaved cập nhật bảng mà không tải lại trang.
+ */
 function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
   const navigate = useNavigate();
   const [rows, setRows] = useState(() =>
@@ -46,6 +52,7 @@ function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
   const set = (idx, key, value) =>
     setRows((old) => old.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
 
+  // Chọn món trong kho: điền luôn tên món (feedType) và đơn vị theo kho, người dùng không gõ tay.
   const pickFeed = (idx, value) => {
     const s = feeds.find((x) => String(x.supplyId) === value);
     setRows((old) => old.map((r, i) => (i === idx
@@ -57,6 +64,7 @@ function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
     e.preventDefault();
     setError("");
     setErrors({});
+    // Kiểm từng dòng trước khi gửi; khoá lỗi dạng "items[0].supplyId" trùng tên khoá lỗi backend trả về.
     const local = {};
     rows.forEach((r, i) => {
       if (!r.supplyId) local[`items[${i}].supplyId`] = "Choose a feed from the stock list";
@@ -78,6 +86,8 @@ function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
       setError(err.message);
+      // (Lưu ý: ApiError đặt lỗi từng ô ở err.fieldErrors, không phải err.errors, nên dòng dưới luôn nhận {} và lỗi
+      // từng dòng từ backend chỉ hiện qua message chung.)
       setErrors(err.errors || {});
     } finally {
       setSaving(false);
@@ -139,6 +149,10 @@ function RationEditor({ horse, items, feeds, onSaved, onCancel }) {
   );
 }
 
+/*
+ * Bảng khẩu phần của mọi ngựa đang ở chuồng (một hàng mỗi ngựa, cột theo bữa). editable: Head Trainer (tab
+ * Rations ở StableCarePage) và bác sĩ được sửa; Groom chỉ xem. editing = ngựa đang mở RationEditor.
+ */
 export default function FeedingBoard({ editable = false }) {
   const navigate = useNavigate();
   const [horses, setHorses] = useState(null);
@@ -150,6 +164,7 @@ export default function FeedingBoard({ editable = false }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [feeds, setFeeds] = useState([]);
 
+  // Chỉ người được sửa mới cần danh sách món FEED trong kho để chọn.
   useEffect(() => {
     if (!editable) return undefined;
     const ctrl = new AbortController();
@@ -186,6 +201,7 @@ export default function FeedingBoard({ editable = false }) {
       .sort((a, b) => a.stallNo.localeCompare(b.stallNo, "en", { numeric: true }));
   }, [horses, query]);
 
+  // Thay khẩu phần cũ của ngựa đó bằng khẩu phần vừa lưu ngay trong state (không gọi lại API).
   const onSaved = (horseId, items) => {
     setFeeding((old) => [...old.filter((f) => f.horseId !== horseId), ...items]);
     setSaved(`Ration for ${editing.horseName} approved.`);

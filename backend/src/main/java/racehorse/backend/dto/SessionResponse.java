@@ -3,6 +3,8 @@ package racehorse.backend.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+// Một buổi tập như màn đánh giá (UC12) và trang Training của chủ ngựa nhìn thấy: kết quả
+// GET /api/sessions, GET /api/sessions/{id}, PUT /api/sessions/{id}/evaluation.
 public record SessionResponse(
         int sessionId,
         int phaseId,

@@ -24,6 +24,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import "./appDialog.css";
 
+// Phần hiển thị của hộp thoại. config = tham số truyền vào confirm()/prompt() + kind; onClose(kết quả) đóng
+// hộp thoại và trả kết quả cho Promise đang chờ (true / giá trị nhập / null nếu huỷ).
 function DialogView({ config, onClose }) {
   const [value, setValue] = useState(config.defaultValue ?? "");
   const [error, setError] = useState("");
@@ -38,6 +40,7 @@ function DialogView({ config, onClose }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [busy, onClose]);
 
+  // Hộp thoại nhập: tự đặt con trỏ vào ô nhập và bôi đen giá trị mặc định để gõ đè ngay.
   useEffect(() => {
     if (isPrompt && inputRef.current) {
       inputRef.current.focus();
@@ -45,6 +48,8 @@ function DialogView({ config, onClose }) {
     }
   }, [isPrompt]);
 
+  // Gửi: confirm -> trả true. prompt -> validate, rồi (nếu có) chạy onSubmit; onSubmit lỗi thì giữ hộp thoại
+  // mở và hiện lỗi bên trong để người dùng sửa giá trị.
   const submit = async (e) => {
     e?.preventDefault();
     if (!isPrompt) { onClose(true); return; }
@@ -121,6 +126,9 @@ function DialogView({ config, onClose }) {
   );
 }
 
+// Hook trả { confirm, prompt, element }. Mẹo chính: open() tạo một Promise và cất hàm resolve vào state;
+// khi người dùng bấm nút, close(result) gọi resolve(result) -> dòng "await dialog.confirm(...)" ở trang
+// nhận kết quả. Nhờ vậy code gọi đọc tuần tự như window.confirm nhưng giao diện là của ứng dụng.
 export function useAppDialog() {
   const [state, setState] = useState(null); // { config, resolve }
 
@@ -138,6 +146,7 @@ export function useAppDialog() {
     });
   }, []);
 
+  // key = title: mở hộp thoại khác tiêu đề thì React dựng lại DialogView mới (state value/error được reset).
   const element = state ? <DialogView key={state.config.title} config={state.config} onClose={close} /> : null;
   return { confirm, prompt, element };
 }

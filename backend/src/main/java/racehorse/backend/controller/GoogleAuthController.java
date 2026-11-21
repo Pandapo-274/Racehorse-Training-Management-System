@@ -12,6 +12,8 @@ import racehorse.backend.dto.GoogleLoginRequest;
 import racehorse.backend.dto.GoogleLoginResponse;
 import racehorse.backend.service.GoogleAuthService;
 
+// Một endpoint duy nhất: POST /api/auth/google (công khai, nằm trong WebConfig.PUBLIC_PATHS).
+// Frontend gửi credential lấy từ nút "Sign in with Google" (@react-oauth/google).
 @RestController
 @RequestMapping("/api/auth")
 public class GoogleAuthController {

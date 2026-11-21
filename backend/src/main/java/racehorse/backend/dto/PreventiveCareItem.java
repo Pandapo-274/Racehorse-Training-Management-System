@@ -16,6 +16,14 @@ import racehorse.backend.repository.PreventiveCareRepository;
  * chuồng bao lâu mà chưa ai làm - đó là thước đo mức cấp thiết thay cho ngày
  * hẹn mà nó không có.
  */
+/*
+ * careStatus:
+ *   NEVER       - chưa từng làm loại chăm sóc này
+ *   UNSCHEDULED - đã làm nhưng không có ngày hẹn lần sau (next_due_date NULL)
+ *   OVERDUE     - đã quá ngày hẹn
+ *   DUE_SOON    - sắp đến hạn (trong cửa sổ N ngày, mặc định 14)
+ *   OK          - còn xa
+ */
 public record PreventiveCareItem(
         int horseId,
         int ownerId,

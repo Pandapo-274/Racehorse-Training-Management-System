@@ -23,6 +23,18 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
 import racehorse.backend.service.IncidentService;
 
+/*
+ * Báo cáo sự cố (Flow 3):
+ *   PUT /api/training-sessions/{id}/stop       Groom/HLV dừng buổi vì ngựa bất thường -> mở báo cáo
+ *   GET /api/incident-reports?status=&horseId= hàng chờ khám (mặc định OPEN = PENDING + RECEIVED)
+ *   GET /api/incident-reports/veterinarians    bác sĩ ACTIVE để chọn khi bàn giao ca
+ *   GET /api/incident-reports/{id}             chi tiết
+ *   PUT /api/incident-reports/{id}/dismiss     HLV huỷ báo động giả (khi bác sĩ chưa nhận)
+ *   PUT /api/incident-reports/{id}/receive     bác sĩ nhận ca (PENDING -> RECEIVED)
+ *   PUT /api/incident-reports/{id}/handover    bàn giao ca cho bác sĩ khác hoặc trả về hàng chờ (V40)
+ * Báo cáo tại chuồng (có ảnh) ở IncidentFilingController. Đóng ca (EXAMINED) khi bác sĩ ghi lần khám có
+ * reportId (MedicalRecordService) hoặc xác nhận hồi phục (HealthClearanceService).
+ */
 @RestController
 @RequestMapping("/api")
 public class IncidentController {

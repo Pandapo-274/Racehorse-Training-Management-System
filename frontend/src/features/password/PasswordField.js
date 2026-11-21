@@ -11,6 +11,9 @@ import { passwordRules } from "./passwordApi";
 export default function PasswordField({
   id, label, value, onChange, error, hint, autoComplete, showRules = false,
 }) {
+  // visible: true thì input type="text" (hiện mật khẩu). useId() sinh id duy nhất cho dòng gợi ý/lỗi để gắn
+  // aria-describedby (trình đọc màn hình đọc kèm). showRules = true thì hiện checklist passwordRules đổi theo
+  // từng phím gõ.
   const [visible, setVisible] = useState(false);
   const describedBy = useId();
 

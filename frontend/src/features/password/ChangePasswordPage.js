@@ -20,6 +20,13 @@ import "./password.css";
 
 const EMPTY = { currentPassword: "", newPassword: "", confirmPassword: "" };
 
+/*
+ * Trang /change-password (mọi vai trò). Hai cách tới đây:
+ *   - người dùng tự bấm "Change password" ở trang hồ sơ;
+ *   - đăng nhập bằng mật khẩu tạm do Manager đặt (user.mustChangePassword = true): RoleRoute và backend
+ *     (428 Precondition Required) ép người dùng vào đây trước khi dùng chức năng khác.
+ * Luồng: validate ở trình duyệt -> PUT /api/auth/change-password -> thành công thì logout() + về /login.
+ */
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY);
@@ -33,6 +40,7 @@ export default function ChangePasswordPage() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
+  // Trả object { tênÔ: câu lỗi }; rỗng = hợp lệ.
   const validate = () => {
     const e = {};
     if (!form.currentPassword) e.currentPassword = "Current password is required";

@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /** UC8: ảnh chụp tình trạng hiện tại của ngựa, ghép từ nhiều bảng. */
+// Kết quả GET /api/horses/{id}/vitals, dựng trong HorseVitalsRepository bằng nhiều câu SQL
+// nhỏ. Record lồng nhau (ActiveLock, LatestSession...) thành object lồng nhau trong JSON.
 public record HorseVitalsResponse(
         int horseId, String horseName, String status, String stallNo,
         ActiveLock activeLock,          // null nếu không bị khóa

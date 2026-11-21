@@ -11,6 +11,8 @@ import java.util.List;
  * Đề bài: báo cáo tổng quan về hiệu suất huấn luyện, chi phí vận hành chuồng
  * trại và tiền thưởng giải đua của chủ ngựa. Trước đây trang này chỉ có số liệu viết cứng.
  */
+// Các record con: Summary (4 ô số), WorkloadPoint (biểu đồ km theo tuần), HealthCount
+// (biểu đồ sức khoẻ), OpenItem (việc đang chờ). Response gom tất cả cho một lần gọi API.
 public final class ManagerDashboard {
 
     private ManagerDashboard() {

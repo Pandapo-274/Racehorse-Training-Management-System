@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
  * Lý do là bắt buộc: Club Manager cần biết vì sao trước khi huỷ lịch tập và
  * kết thúc giáo án của con ngựa.
  */
+// Body của POST /api/horse-withdrawals (chỉ HORSE_OWNER, chỉ ngựa của mình).
 public record WithdrawalSubmitRequest(
         @NotNull(message = "Choose a horse")
         Integer horseId,

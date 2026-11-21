@@ -43,6 +43,8 @@ public class OwnerExpenseController {
         return service.listForOwner(horseId, category, from, to, limit, user);
     }
 
+    // PUT /api/owner/expenses/{id}/dispute (V30): chủ ngựa khiếu nại một khoản chi phí, bắt buộc lý do.
+    // Annotation viết đầy đủ tên package vì file không import chúng.
     @org.springframework.web.bind.annotation.PutMapping("/{id}/dispute")
     @RequireRole({"HORSE_OWNER"})
     public ExpenseModels.Expense dispute(

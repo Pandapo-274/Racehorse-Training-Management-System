@@ -25,6 +25,7 @@ import {
 import "../password/password.css";
 import "./staff.css";
 
+// Ảnh đại diện nhỏ của một tài khoản: ảnh thật nếu có avatarUrl, không thì chữ viết tắt (initialsOf).
 function Avatar({ row }) {
   if (row.avatarUrl) {
     return <img className="st-avatar" src={row.avatarUrl} alt="" />;
@@ -41,6 +42,11 @@ const EMPTY_FORM = {
   trainerId: "", maxHorses: 10,
 };
 
+/*
+ * Một dòng tài khoản. Component chỉ hiển thị: mọi hành động (khoá/mở, đổi vai trò, gán HLV cho Groom, đổi hạn
+ * mức ngựa của HLV, sửa liên hệ, đặt mật khẩu tạm, xem đội) được truyền xuống dạng callback onXxx từ StaffPage.
+ * canToggle: không khoá được Club Manager và chính mình. canChangeRole: chỉ ba vai trò nhân viên, trừ chính mình.
+ */
 function MemberRow({
   row, activeTrainers, canToggle, canChangeRole,
   onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam, busy,
@@ -158,6 +164,7 @@ function MemberRow({
   );
 }
 
+// Một nhóm vai trò (tiêu đề + danh sách MemberRow), chỉ hiện những người khớp ô tìm kiếm.
 function RoleGroup({
   group, activeTrainers, query, myId, busyId,
   onToggleStatus, onChangeRole, onAssignTrainer, onUpdateMaxHorses, onEdit, onResetPassword, onShowTeam,
@@ -203,6 +210,9 @@ function RoleGroup({
 }
 
 /** Edit contact details, or set a temporary password, for one account. */
+// mode = "edit": PUT /api/staff/{id} (họ tên, email, SĐT). mode = "password": PUT /api/staff/{id}/password -
+// mật khẩu tạm: người đó bị đăng xuất mọi nơi, khoá đăng nhập (do sai nhiều lần) được gỡ, và lần đăng nhập
+// sau bắt buộc đổi mật khẩu.
 function AccountPanel({ mode, row, onDone, onCancel }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ fullName: row.fullName, email: row.email, phone: row.phone || "", password: "" });
@@ -275,6 +285,16 @@ function AccountPanel({ mode, row, onDone, onCancel }) {
   );
 }
 
+/*
+ * Trang /manager/staff. Dữ liệu: GET /api/staff (các nhóm theo vai trò). State chính:
+ *   groups      - dữ liệu đã tải; query - ô tìm kiếm (lọc ở trình duyệt)
+ *   formOpen / form / fieldErrors - form tạo tài khoản mới
+ *   busyId      - id dòng đang gửi request (khoá nút của dòng đó)
+ *   notice      - dòng thông báo kết quả trên đầu trang
+ *   panel       - AccountPanel đang mở cho dòng nào (sửa liên hệ / đặt mật khẩu tạm)
+ *   team        - TrainerTeamDialog đang mở cho Head Trainer nào
+ * Sau mỗi thay đổi thành công, load() tải lại toàn bộ danh sách để số liệu (số ngựa, số Groom...) luôn đúng.
+ */
 export default function StaffPage() {
   const navigate = useNavigate();
   const dialog = useAppDialog();
@@ -305,8 +325,10 @@ export default function StaffPage() {
       });
   }, [navigate]);
 
+  // useEffect(load, [load]): truyền thẳng hàm load làm effect; load không nhận signal nên không huỷ được request.
   useEffect(load, [load]);
 
+  // Gộp mọi nhóm thành một mảng phẳng; activeTrainers dùng cho ô chọn HLV của Groom.
   const everyone = useMemo(
     () => (groups || []).flatMap((g) => g.members),
     [groups],
@@ -329,6 +351,8 @@ export default function StaffPage() {
     setFormError("");
   };
 
+  // Tạo tài khoản (POST /api/staff). trainerId chỉ gửi khi tạo Groom (gán ngay vào đội một HLV, tối đa 3 Groom);
+  // maxHorses chỉ gửi khi tạo Head Trainer.
   const submitForm = (e) => {
     e.preventDefault();
     setSaving(true);
@@ -368,6 +392,8 @@ export default function StaffPage() {
    * requireSuccessor (role change): "Nobody" is not offered; with nobody able to
    * take the work over, the dialog only explains what to do first.
    */
+  // Luồng bàn giao: hỏi GET /api/staff/{id}/open-work xem người này còn việc gì dang dở và ai cùng vai trò có thể
+  // nhận. Có ứng viên -> hộp thoại chọn người nhận (prompt có options); đổi vai trò mà không ai nhận được -> chặn.
   const confirmLeaving = async (row, { title, message, confirmLabel, danger, requireSuccessor }, send) => {
     let work = null;
     if (STAFF_ROLE_CODES.has(row.roleName)) {
@@ -419,6 +445,8 @@ export default function StaffPage() {
     return send(null);
   };
 
+  // Khoá / mở tài khoản (PUT /api/staff/{id}/status). Khoá thì đi qua confirmLeaving để bàn giao việc; backend
+  // đăng xuất người đó (TokenBlacklist.revokeAllSessions) và chuyển việc cho người được chọn (handoverTo).
   const toggleStatus = async (row) => {
     const next = row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
     setNotice("");
@@ -454,6 +482,7 @@ export default function StaffPage() {
     }
   };
 
+  // Đổi vai trò giữa ba vai trò nhân viên (PUT /api/staff/{id}/role): bắt buộc chọn người nhận việc dang dở.
   const changeRole = async (row, roleName) => {
     if (roleName === row.roleName) return;
     const label = STAFF_ROLE_OPTIONS.find((o) => o.value === roleName)?.label || roleName;
@@ -481,6 +510,7 @@ export default function StaffPage() {
     }
   };
 
+  // Gán / gỡ Groom khỏi đội một Head Trainer ngay khi đổi ô chọn (PUT /api/staff/{groomId}/trainer).
   const handleAssignTrainer = (row, trainerIdStr) => {
     const nextTrainerId = trainerIdStr ? Number(trainerIdStr) : null;
     if ((row.trainerId ?? null) === nextTrainerId) return;
@@ -500,6 +530,7 @@ export default function StaffPage() {
       .finally(() => setBusyId(null));
   };
 
+  // Đổi hạn mức số ngựa của HLV: request chạy bên trong hộp thoại (onSubmit), backend từ chối thì lỗi hiện tại chỗ.
   const handleUpdateMaxHorses = async (row) => {
     const managed = row.managedHorseCount || 0;
     let updated = null;

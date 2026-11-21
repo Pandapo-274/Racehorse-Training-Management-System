@@ -17,6 +17,8 @@ import jakarta.validation.constraints.Size;
  * KHÔNG có issuedBy: lấy từ token. Một lệnh cấm ngựa tập phải ghi đúng tên
  * người ra lệnh, không để client tự khai.
  */
+// Body của POST /api/training-locks (Vet, Head Trainer, Club Manager). Mỗi ngựa chỉ có một
+// lệnh khoá ACTIVE (UX_LOCK_active). Gỡ khoá: POST /api/training-locks/{id}/release.
 public record TrainingLockRequest(
 
         @NotNull(message = "Horse is required")

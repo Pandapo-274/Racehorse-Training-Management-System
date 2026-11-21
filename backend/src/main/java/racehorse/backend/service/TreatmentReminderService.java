@@ -25,6 +25,8 @@ import racehorse.backend.repository.TreatmentRepository;
  *    - If assigned/taken by a vet: reminds that specific vet.
  *    - If unassigned: broadcasts reminder to all active veterinarians.
  */
+// Cron "0 0 */6 * * *" = giây 0, phút 0, mỗi 6 giờ (00:00, 06:00, 12:00, 18:00 giờ Việt Nam).
+// Dùng các hàm has... của NotificationService để không gửi trùng (6 giờ / mỗi ngày).
 @Service
 public class TreatmentReminderService {
 

@@ -1,9 +1,17 @@
+/*
+ * Hộp thoại "Đăng xuất?" dùng ở mọi dashboard, kèm custom hook useSignOutModal để dùng gọn:
+ *   const { requestSignOut, modalElement } = useSignOutModal(navigate);
+ *   <button onClick={requestSignOut}>Sign out</button> ... {modalElement}
+ * Xác nhận -> logout() trong authService: gửi POST /api/auth/logout (backend đưa token vào TokenBlacklist)
+ * rồi xoá token/user khỏi localStorage, sau đó chuyển về /login.
+ */
 import { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import { logout } from "./authService";
 import "./signOutModal.css";
 
 export default function SignOutModal({ isOpen, onConfirm, onCancel }) {
+  // Nghe phím Escape để đóng khi hộp thoại đang mở; cleanup gỡ listener khi đóng hoặc unmount.
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
@@ -17,6 +25,7 @@ export default function SignOutModal({ isOpen, onConfirm, onCancel }) {
 
   if (!isOpen) return null;
 
+  // createPortal (bên dưới) vẽ hộp thoại thẳng vào <body> để nằm trên mọi lớp của trang.
   const modalContent = (
     <div
       className="signout-modal-backdrop"
@@ -62,6 +71,7 @@ export default function SignOutModal({ isOpen, onConfirm, onCancel }) {
 export function useSignOutModal(navigate) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // useCallback giữ nguyên tham chiếu hàm giữa các lần render (tránh effect phụ thuộc onCancel chạy lại thừa).
   const requestSignOut = useCallback(() => {
     setIsOpen(true);
   }, []);

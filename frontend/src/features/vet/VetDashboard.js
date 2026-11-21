@@ -25,6 +25,7 @@ import { listVetCalls } from "../vetcall/vetCallApi";
 // ngựa bất thường. Khám kèm reportId thì báo cáo đóng (EXAMINED) và rời hàng chờ.
 // V40: Bàn giao ca trực (handover/takeover) & Quản lý chuyển viện ngoài (External Referral).
 
+// Nhãn của bốn lớp màu sơ đồ chuồng (fit / monitor / injured / quarantine - xem toBoardStatus trong vetApi.js).
 const STATUS_META = {
   fit: { label: "Healthy" },
   monitor: { label: "Monitor" },
@@ -40,6 +41,7 @@ const STATUS_FILTERS = [
   { value: "quarantine", label: "Quarantine" },
 ];
 
+// Ô số liệu (đếm ngựa theo trạng thái); bấm để lọc sơ đồ chuồng.
 function StatCard({ value, label, type, active, onClick }) {
   return (
     <button
@@ -54,6 +56,7 @@ function StatCard({ value, label, type, active, onClick }) {
   );
 }
 
+// Sơ đồ chuồng: mỗi ô là một ngựa (chuồng + tên) tô màu theo sức khoẻ; bấm để mở trang khám ngựa đó.
 function StableMap({ horses, counts, statusFilter, onStatusChange, matches, onOpen }) {
   return (
     <div className="vet-card stable-card">
@@ -96,6 +99,7 @@ function StableMap({ horses, counts, statusFilter, onStatusChange, matches, onOp
   );
 }
 
+// Biểu đồ vòng tỉ lệ sức khoẻ đàn (conic-gradient), tính trong useMemo từ counts.
 function HealthCard({ counts, total }) {
   const fitPct = total ? Math.round((counts.fit / total) * 100) : 0;
 
@@ -151,6 +155,8 @@ function HealthCard({ counts, total }) {
   );
 }
 
+// Hàng chờ khám: báo cáo sự cố PENDING (chờ nhận) / RECEIVED (đã có bác sĩ nhận). Nút: Receive (nhận ca),
+// Examine (mở form khám kèm ?reportId=), Handover (bàn giao ca cho bác sĩ khác hoặc trả về hàng chờ).
 function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyId, currentUser }) {
   const first = items[0];
 
@@ -271,6 +277,7 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
   );
 }
 
+// Ngựa đang nằm viện bên ngoài (chuyển viện V40) với nút Discharge (cho xuất viện).
 function HospitalizedList({ items, total, onDischarge }) {
   if (total === 0) return null;
 
@@ -338,6 +345,8 @@ function HospitalizedList({ items, total, onDischarge }) {
   );
 }
 
+// Hộp thoại bàn giao ca: ca của mình thì mặc định trả về hàng chờ (""), ca của người khác thì mặc định nhận về mình.
+// handoverNotes bắt buộc. Gửi { targetVetId, handoverNotes } -> PUT /api/incident-reports/{id}/handover.
 function HandoverModal({ report, vets, currentUser, onClose, onSubmit, submitting }) {
   const isMine = report.receivedBy === currentUser?.userId;
   const [targetVetId, setTargetVetId] = useState(
@@ -421,6 +430,7 @@ function HandoverModal({ report, vets, currentUser, onClose, onSubmit, submittin
   );
 }
 
+// Hộp thoại xuất viện: ghi chú bắt buộc và trạng thái sức khoẻ sau xuất viện (mặc định INJURED).
 function DischargeModal({ referral, onClose, onSubmit, submitting }) {
   const [notes, setNotes] = useState("");
   const [postStatus, setPostStatus] = useState("INJURED");
@@ -497,6 +507,12 @@ function DischargeModal({ referral, onClose, onSubmit, submitting }) {
   );
 }
 
+/*
+ * Trang /veterinarian (Herd health board). Tải riêng từng nguồn (mỗi nguồn một useEffect): ngựa, báo cáo sự cố mở,
+ * ca chuyển viện đang mở, danh sách bác sĩ (để bàn giao), các cuộc gọi bác sĩ đang chờ (banner V27).
+ * reload tăng để tải lại sau thao tác. location.state có thể mang thông báo từ trang khác (vd. sau khi khám xong).
+ * Lưu ý: route /veterinarian không bọc RoleRoute (xem App.js); bảo vệ thật nằm ở backend.
+ */
 export default function VetDashboard() {
   const navigate = useNavigate();
   const { state } = useLocation();
@@ -583,6 +599,7 @@ export default function VetDashboard() {
     return () => ctrl.abort();
   }, [navigate, reload]);
 
+  // Chuẩn hoá danh sách ngựa cho sơ đồ: bỏ ngựa đã rút và hồ sơ PEDIGREE, sắp theo số chuồng (so số tự nhiên: A-2 < A-10).
   const horses = useMemo(
     () =>
       (apiHorses || [])
@@ -632,6 +649,7 @@ export default function VetDashboard() {
   const examineWaiting = (report) =>
     navigate(`/veterinarian/examination/${report.horseId}?reportId=${report.reportId}`);
 
+  // Nhận ca (PENDING -> RECEIVED) rồi thay đúng báo cáo đó trong danh sách bằng bản backend trả về.
   const receiveReport = (report) => {
     setBusyId(report.reportId);
     setActionError("");
@@ -645,6 +663,7 @@ export default function VetDashboard() {
       .finally(() => setBusyId(null));
   };
 
+  // Hai handler dưới dùng window.alert để báo lỗi (chưa chuyển sang khung lỗi trên trang).
   const handleHandoverSubmit = (body) => {
     if (!handoverModalReport) return;
     setModalSubmitting(true);
@@ -675,6 +694,7 @@ export default function VetDashboard() {
       .finally(() => setModalSubmitting(false));
   };
 
+  // Báo cáo PENDING mới nhất, dùng cho banner cảnh báo ở đầu trang.
   const newest = reports
     .filter((r) => r.status === "PENDING")
     .sort((a, b) => String(b.reportedAt).localeCompare(String(a.reportedAt)))[0];

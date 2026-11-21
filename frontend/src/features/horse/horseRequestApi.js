@@ -8,10 +8,10 @@ export function listRequests(signal) {
   return authFetch(API, { signal });
 }
 
-// Chuỗi rỗng đổi thành null để backend lưu NULL (không lưu chuỗi trống).
 // Số nguyên dương hoặc null (ô để trống).
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 
+// Chuỗi rỗng đổi thành null để backend lưu NULL (không lưu chuỗi trống).
 export function submitRequest(form) {
   const club = (form.recordType || "ACADEMY") === "ACADEMY";
   return authFetch(API, {

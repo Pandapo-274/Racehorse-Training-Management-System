@@ -1,17 +1,27 @@
 // src/features/manager/staffApi.js
+/*
+ * Module API cho trang quản lý nhân sự của Club Manager (StaffPage.js, TrainerTeamDialog.js).
+ * Mọi endpoint /api/staff/... thuộc StaffController (@RequireRole CLUB_MANAGER) và StaffService.
+ * Phần cuối file là các hàm hiển thị nhỏ (nhãn, tông màu, tìm kiếm, câu cảnh báo trong hộp xác nhận).
+ */
 import { authFetch } from "../auth/authService";
 import { toRoleLabel } from "../profile/profileApi";
 
+// GET /api/staff: mảng StaffGroup { roleName, roleLabel, members: [StaffRow] } - mỗi nhóm một vai trò,
+// thứ tự nhóm do backend quyết định (nhóm rỗng vẫn trả về để màn hình hiện "chưa có ai").
 export function listStaff() {
   return authFetch("/api/staff");
 }
 
+// Ba vai trò nhân viên. Không có CLUB_MANAGER: giao diện không tạo hay chuyển ai sang Manager.
 export const STAFF_ROLE_OPTIONS = [
   { value: "HEAD_TRAINER", label: "Head Trainer" },
   { value: "VETERINARIAN", label: "Veterinarian" },
   { value: "GROOM", label: "Groom" },
 ];
 
+// POST /api/staff: body { username, password, fullName, email, phone, roleName, trainerId?, maxHorses? }.
+// Backend kiểm định dạng (username 3-50 ký tự, mật khẩu 8-72 có chữ và số...) và trả lỗi từng ô (400).
 export function createStaff(body) {
   return authFetch("/api/staff", { method: "POST", body: JSON.stringify(body) });
 }
@@ -97,6 +107,8 @@ export function updateTrainerMaxHorses(trainerId, maxHorses) {
   });
 }
 
+// Câu bổ sung vào thông báo thành công khi một Groom bị khoá hoặc đổi vai trò mà còn buổi tập dang dở
+// (count lấy từ phản hồi của backend). count = 0 -> chuỗi rỗng.
 export function reassignNotice(fullName, count) {
   if (!count) return "";
   return ` ${fullName} still had ${count} unfinished training ${count === 1 ? "session" : "sessions"}; `
@@ -122,11 +134,14 @@ export function leavingConsequences(row) {
   return "";
 }
 
+// Tiêu đề nhóm: ưu tiên nhãn của profileApi.toRoleLabel; vai trò lạ (không có nhãn) thì dùng roleLabel
+// backend gửi kèm.
 export function groupTitle(group) {
   const label = toRoleLabel(group.roleName);
   return label === group.roleName ? group.roleLabel || group.roleName : label;
 }
 
+// Ô tìm kiếm: khớp không phân biệt hoa thường trên họ tên, username, email, số điện thoại.
 export function matchesQuery(row, query) {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -134,6 +149,8 @@ export function matchesQuery(row, query) {
     .some((v) => (v || "").toLowerCase().includes(q));
 }
 
+// Chữ viết tắt cho avatar: hai từ CUỐI của họ tên ("Trần Minh Hoà" -> "MH"), hợp với tên người Việt
+// (tên gọi đứng cuối).
 export function initialsOf(fullName) {
   const parts = (fullName || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -142,6 +159,7 @@ export function initialsOf(fullName) {
   return (first + last).toUpperCase();
 }
 
+// tone dùng làm hậu tố lớp CSS (good = xanh lá, warning = vàng).
 export function statusTone(status) {
   return status === "ACTIVE" ? "good" : "warning";
 }

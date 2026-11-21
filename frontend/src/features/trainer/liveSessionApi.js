@@ -1,8 +1,16 @@
+/*
+ * Module API cho trang Live session (LiveSessionMonitorPage.js) của Head Trainer:
+ *  - cảnh báo ngưỡng (THRESHOLD_ALERT) sinh ra khi nhịp tim / vận tốc vượt ngưỡng trong buổi tập RUNNING,
+ *  - danh sách buổi đang chạy, kết thúc buổi, báo cáo sự cố chờ bác sĩ nhận.
+ * Trang hỏi lại backend mỗi vài giây (polling) thay vì dùng WebSocket.
+ */
 import { authFetch } from "../auth/authService";
 
 const ALERTS_API = "/api/alerts";
 const SESSIONS_API = "/api/training-sessions";
 
+// Polling tăng dần: afterId = alertId lớn nhất trang đã có -> backend chỉ trả cảnh báo MỚI hơn, nên mỗi lần
+// hỏi chỉ tải phần chênh lệch. openOnly = true: chỉ cảnh báo chưa xử lý.
 export function fetchAlerts({ afterId, openOnly = true, limit = 50, signal } = {}) {
   const params = new URLSearchParams();
   if (afterId !== undefined && afterId !== null) params.set("afterId", String(afterId));
@@ -36,6 +44,8 @@ export function dismissIncident(reportId, reason) {
   });
 }
 
+// PUT /api/alerts/{id}/resolve với actionTaken = CONTINUE | REDUCE_INTENSITY | STOP_SESSION.
+// VET_CALLED bị backend từ chối (400): gọi bác sĩ phải đi qua form vet-call (vetCallApi.js, V27).
 export function resolveAlert(alertId, actionTaken) {
   return authFetch(`${ALERTS_API}/${alertId}/resolve`, {
     method: "PUT",

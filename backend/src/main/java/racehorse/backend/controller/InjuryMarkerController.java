@@ -29,6 +29,13 @@ import racehorse.backend.service.InjuryMarkerService;
  * giải phẫu là thứ huấn luyện viên xem trước khi xếp bài tập nặng, và chủ
  * ngựa có quyền biết ngựa mình bị gì - nhưng chỉ người khám mới được ghim.
  */
+/*
+ *   POST   /api/injuries              bác sĩ ghim dấu chấn thương lên hình ngựa (gắn với một lần khám)
+ *   GET    /api/injuries?horseId=     mọi dấu của một con ngựa (kể cả dấu đã lành)
+ *   PUT    /api/injuries/{id}/status  bác sĩ đổi trạng thái dấu: TREATING / PARTIAL / RECOVERED
+ *   DELETE /api/injuries/{id}         bác sĩ xoá dấu ghim nhầm
+ * Ghi chú: PutMapping viết đầy đủ tên package nên công cụ quét endpoint bằng regex "@PutMapping" dễ bỏ sót.
+ */
 @RestController
 @RequestMapping("/api/injuries")
 public class InjuryMarkerController {
@@ -57,11 +64,13 @@ public class InjuryMarkerController {
         return service.listForHorse(horseId, user);
     }
 
+    // (Javadoc ngay trên mô tả việc XOÁ dấu; endpoint này thực ra là ĐỔI TRẠNG THÁI dấu.)
     /** Xoá một dấu ghim sai chỗ. Chỉ được khi dấu còn TREATING và không bị lệnh khoá trỏ vào. */
     @org.springframework.web.bind.annotation.PutMapping("/{id}/status")
     @RequireRole({"VETERINARIAN"})
     public ResponseEntity<Void> updateStatus(
             @PathVariable int id,
+            // Body là JSON tự do {"status": "..."}, đọc thành Map thay vì một record riêng.
             @RequestBody java.util.Map<String, String> body,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser vet,
             HttpServletRequest http) {

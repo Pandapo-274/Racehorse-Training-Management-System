@@ -93,6 +93,9 @@ public class HorseAdminService {
      */
     @Transactional
     public HorseResponse readmit(int horseId, String rawStall, AuthenticatedUser actor, String ip) {
+        // Thứ tự kiểm: đang rút? -> không phải PEDIGREE -> chủ còn ACTIVE -> có chuồng trống -> tuổi
+        // còn dưới CLUB_MAX_AGE. Câu UPDATE còn kèm "WHERE activity_status = 'WITHDRAWN'" để hai người
+        // bấm cùng lúc thì chỉ một người thành công (readmit trả 0 cho người còn lại).
         HorseResponse horse = get(horseId);
         if (!horse.isWithdrawn()) {
             throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is still at the club");

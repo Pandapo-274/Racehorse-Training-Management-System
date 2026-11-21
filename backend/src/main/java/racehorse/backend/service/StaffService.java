@@ -75,6 +75,8 @@ public class StaffService {
      * Kết quả khoá / mở khoá / đổi vai trò. sessionsToReassign > 0 nghĩa là
      * người này còn buổi tập chưa xong cần Head Trainer giao lại.
      */
+    // StaffUpdate trả về cho màn Staff: tài khoản sau khi đổi + câu thông báo (notice) tóm tắt
+    // việc dang dở đã được xử lý thế nào, để Manager đọc ngay trong hộp thoại.
     public record StaffUpdate(StaffRow member, int sessionsToReassign, String notice) {
         StaffUpdate(StaffRow member, int sessionsToReassign) {
             this(member, sessionsToReassign, null);
@@ -84,6 +86,11 @@ public class StaffService {
     /** @Transactional: insert user + ghi audit hoặc cùng thành công, hoặc cùng rollback. */
     @Transactional
     public StaffRow create(StaffController.CreateRequest req, AuthenticatedUser actor, String ip) {
+        /*
+         * Luồng tạo tài khoản: kiểm vai trò được phép tạo -> kiểm trùng username/email -> (Groom)
+         * kiểm HLV còn chỗ / (HLV) kiểm hạn mức ngựa -> INSERT -> gán HLV hoặc hạn mức -> bật cờ
+         * must_change_password -> ghi audit. Toàn bộ trong một giao dịch.
+         */
         if (actor != null && !"CLUB_MANAGER".equals(actor.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only Club Manager can create staff accounts");
         }
@@ -161,6 +168,7 @@ public class StaffService {
      * (kể cả của chính mình) để không ai tự khoá mình ra khỏi hệ thống.
      * Khoá xong thì đá hết phiên đang đăng nhập: không đá thì token cũ vẫn dùng được.
      */
+    // Overload không có handoverTo: giữ cho code/test cũ gọi được.
     @Transactional
     public StaffUpdate setStatus(int userId, String status, AuthenticatedUser actor, String ip) {
         return setStatus(userId, status, null, actor, ip);
@@ -190,6 +198,8 @@ public class StaffService {
             validateTrainerForGroom(target.trainerId(), target.userId());
         }
 
+        // successor = người nhận bàn giao việc (chỉ khi khoá). checkSuccessor ném lỗi nếu người
+        // được chọn không hợp lệ (khác vai trò, bị khoá, khác đội...).
         StaffRow successor = "SUSPENDED".equals(status) ? checkSuccessor(target, handoverTo) : null;
         staff.updateStatus(userId, status);
         int toReassign = 0;
@@ -337,6 +347,8 @@ public class StaffService {
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Role does not exist"));
         // A role change is planned, so the work must go to someone: no "Nobody" here
         // (a suspension can still leave it to the Head Trainer / the queue).
+        // Đổi vai trò là việc có kế hoạch nên BẮT BUỘC chọn người nhận việc dang dở (nếu có việc);
+        // khoá tài khoản thì có thể để trống (việc nằm lại chờ HLV giao lại).
         OpenWork work = openWork(userId);
         if (!work.items().isEmpty()) {
             if (work.noCandidate() != null) {
@@ -360,6 +372,7 @@ public class StaffService {
             staff.updateMaxHorses(userId, DEFAULT_MAX_HORSES_PER_TRAINER);
         }
 
+        // Đá mọi phiên: JWT cũ mang role cũ, phải đăng nhập lại để nhận token với role mới.
         blacklist.revokeAllSessions(userId);
         int toReassign = 0; // the notice already says what is left and who was told
         users.writeAudit(actor == null ? null : actor.userId(), "STAFF_ROLE_CHANGE:" + target.roleName() + "->" + roleName,
@@ -501,6 +514,8 @@ public class StaffService {
     }
 
     public OpenWork openWork(int userId) {
+        // switch theo vai trò: mỗi vai trò có loại "việc dang dở" khác nhau (Groom: buổi tập và việc
+        // chăm sóc; HLV: ngựa, Groom, buổi chờ review, giáo án; Vet: ca sự cố đã nhận).
         StaffRow p = staff.findRow(userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
         List<String> items = new ArrayList<>();
@@ -609,6 +624,7 @@ public class StaffService {
 
     /** A staff member leaves (role change or suspension): deal with what they left unfinished. */
     private String staffLeaves(StaffRow target, StaffRow successor, AuthenticatedUser actor, String reason) {
+        // switch biểu thức trả thẳng câu thông báo cho từng vai trò; vai trò khác trả null.
         return switch (target.roleName()) {
             case "GROOM" -> groomLeaves(target, successor, actor, reason);
             case "HEAD_TRAINER" -> headTrainerLeaves(target, successor, actor, reason);

@@ -17,6 +17,13 @@ public final class ImageFiles {
     }
 
     /** @return "jpg", "png", "webp", hoặc null nếu không phải ba loại đó. */
+    /*
+     * "Magic bytes" (chữ ký đầu file):
+     *   JPEG: FF D8 FF
+     *   PNG : 89 50 4E 47 0D 0A 1A 0A
+     *   WEBP: "RIFF" <4 byte kích thước> "WEBP"
+     * (b[i] & 0xFF) đổi byte có dấu của Java (-128..127) sang 0..255 để so với hằng hex.
+     */
     public static String detectExtension(byte[] b) {
         if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) {
             return "jpg";

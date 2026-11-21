@@ -6,11 +6,14 @@
 
 import { authFetch } from "../auth/authService";
 
+// weeks: số tuần của biểu đồ km tập (backend kẹp trong khoảng 4..26). Kết quả là record ManagerDashboard
+// (xem dto/ManagerDashboard.java và service/ManagerDashboardService.java ở backend).
 export function getManagerDashboard({ weeks = 8, signal } = {}) {
   return authFetch(`/api/manager/dashboard?weeks=${weeks}`, { signal });
 }
 
 /** "₫184M": số gọn cho thẻ thống kê. Cùng đơn vị VND với báo cáo của chủ ngựa và trang Races. */
+// Intl.NumberFormat với notation "compact": 184000000 -> "₫184M". Tạo một lần ở cấp module để dùng lại.
 const compactMoney = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "VND",
@@ -44,6 +47,8 @@ export function openItemTone(kind) {
 
 /** Tuần ISO (thứ Hai là đầu tuần), cho dòng "2026 season · Week 44". */
 export function isoWeek(d = new Date()) {
+  // Thuật toán tuần ISO: dời tới thứ Năm của tuần hiện tại (tuần thuộc năm chứa thứ Năm đó), rồi đếm số tuần
+  // từ 1/1 của năm ấy. getUTCDay() trả 0 cho Chủ nhật nên "|| 7" đổi thành 7.
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const day = t.getUTCDay() || 7;
   t.setUTCDate(t.getUTCDate() + 4 - day);

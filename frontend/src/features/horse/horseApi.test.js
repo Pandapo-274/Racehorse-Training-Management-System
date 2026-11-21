@@ -5,6 +5,12 @@
 // lệch nhau là lỗi thật: giao diện cho bấm một việc mà backend sẽ chặn.
 //
 // Không test App.js: CRA dùng Jest 27, không nạp được react-router-dom v7.
+/*
+ * Test chạy bằng Jest (npm test). Cú pháp:
+ *   describe("nhóm", () => { test("luật", () => { expect(giá trị).toBe(mong đợi); }); });
+ *   test.each([...])(...) chạy cùng một test với nhiều bộ dữ liệu.
+ * Đây là file test duy nhất của frontend.
+ */
 import {
   AGE_RULES, ageProblem, canRequestWithdrawal, formatWeight,
   isWithdrawn, toActivity, toAge, toStage,

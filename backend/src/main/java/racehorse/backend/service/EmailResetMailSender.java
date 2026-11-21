@@ -35,6 +35,8 @@ public class EmailResetMailSender implements ResetMailSender {
         this.from = (configuredFrom == null || configuredFrom.isBlank()) ? smtpUsername : configuredFrom;
     }
 
+    // Mail gồm hai phần: bản chữ thuần (plainText) và bản HTML (htmlText); trình đọc mail tự
+    // chọn bản phù hợp. Cấu hình SMTP Gmail nằm trong application.properties (spring.mail.*).
     @Async
     @Override
     public void sendResetLink(String toEmail, String fullName, String resetLink, int validMinutes) {

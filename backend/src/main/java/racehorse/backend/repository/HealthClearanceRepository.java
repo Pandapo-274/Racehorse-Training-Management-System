@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
  * TrainingLockRepository ở UC16). Còn lại đúng một câu, và nó xứng đáng đứng
  * riêng: đây là điểm xếp hàng của toàn bộ UC18.
  */
+// Chỉ có một câu UPDATE, được gọi ở bước cuối của HealthClearanceService.confirm.
 @Repository
 public class HealthClearanceRepository {
 

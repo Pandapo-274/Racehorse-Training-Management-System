@@ -41,6 +41,7 @@ import racehorse.backend.security.AuthenticatedUser;
 @Service
 public class WithdrawalService {
 
+    // Định dạng ngày giờ trong thông báo cho Groom, vd. "17 Nov 2026 07:30".
     private static final DateTimeFormatter WHEN =
             DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH);
 
@@ -140,6 +141,8 @@ public class WithdrawalService {
     @Transactional
     public WithdrawalRow approve(int withdrawalId, WithdrawalReviewRequest review,
                                  AuthenticatedUser me, String ip) {
+        // Toàn bộ approve trong một giao dịch: nếu bước nào ném lỗi thì mọi thay đổi trước đó (huỷ
+        // buổi tập, kết thúc giáo án, xoá việc chăm sóc, rút khỏi giải) đều được hoàn tác.
         WithdrawalRow row = getOrThrow(withdrawalId);
         requirePending(row);
         HorseResponse horse = horseOf(row);
@@ -255,6 +258,8 @@ public class WithdrawalService {
      */
     private void notifyGrooms(String horseName, List<TrainingSessionRepository.ScheduledSlot> slots,
                               List<WithdrawalRepository.PendingTask> tasks) {
+        // Gom theo Groom: mỗi Groom nhận MỘT thông báo dù có nhiều buổi/việc bị huỷ.
+        // computeIfAbsent: tạo danh sách rỗng nếu chưa có key; merge(..., 1, Integer::sum): đếm +1.
         Map<Integer, List<TrainingSessionRepository.ScheduledSlot>> sessionsByGroom = new LinkedHashMap<>();
         for (TrainingSessionRepository.ScheduledSlot s : slots) {
             sessionsByGroom.computeIfAbsent(s.assignedTo(), k -> new ArrayList<>()).add(s);

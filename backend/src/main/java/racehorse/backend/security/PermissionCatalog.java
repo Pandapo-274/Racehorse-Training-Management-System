@@ -27,6 +27,14 @@ public final class PermissionCatalog {
     private PermissionCatalog() {
     }
 
+    /*
+     * Một dòng trên trang Permissions:
+     *   area     - nhóm hiển thị (Accounts, Horses, Training...)
+     *   label    - tên chức năng bằng lời
+     *   endpoint - "METHOD /path" khớp với mapping của controller; PermissionService dùng
+     *              nó để tìm method và đọc @RequireRole -> biết vai trò nào được phép
+     *   ownOnly  - vai trò chỉ được làm trên dữ liệu của mình (hiện dấu riêng trên ma trận)
+     */
     public record Entry(String area, String label, String endpoint, Set<String> ownOnly) {
     }
 
