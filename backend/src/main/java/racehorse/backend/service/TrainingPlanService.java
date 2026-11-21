@@ -27,9 +27,31 @@ import racehorse.backend.repository.TrainingPlanRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
+/*
+ * Nghiệp vụ giáo án (UC9, Flow 2). Vòng đời (từ V34):
+ *
+ *   DRAFT --gửi duyệt--> PENDING_APPROVAL --chủ duyệt--> APPROVED --kích hoạt--> ACTIVE
+ *     ^                        |                                                  |  ^
+ *     +------chủ từ chối-------+                                     tạm dừng ->  v  | <- tiếp tục
+ *                                                                               PAUSED
+ *   ACTIVE / PAUSED --kết thúc (hoặc tự động khi quá end_date)--> COMPLETED
+ *
+ * Luật chính:
+ *   - Chỉ HLV phụ trách ngựa (HORSE.trainer_id) mới tạo/sửa/đổi trạng thái giáo án của ngựa đó.
+ *   - Mỗi ngựa chỉ một giáo án "mở" (chưa COMPLETED) khi tạo mới, và một giáo án ACTIVE (UX_PLAN_active).
+ *   - Groom được giao phải thuộc đội HLV, mỗi Groom tối đa 2 giáo án chưa COMPLETED (V42).
+ *   - Giai đoạn phải nằm trong khoảng ngày của giáo án và không chồng lên nhau.
+ *   - Kích hoạt bị chặn nếu ngựa là PEDIGREE, đã rút, giáo án đã quá hạn, bị khoá FULL, hoặc
+ *     sức khoẻ không thuộc TRAINABLE_STATUSES (trừ khi chỉ bị khoá HEAVY_WORK_ONLY).
+ *   - Sửa giáo án đã APPROVED/ACTIVE/PAUSED phải chờ chủ duyệt (bản sửa lưu dạng JSON, quá 2 ngày
+ *     tự từ chối - V47). Giáo án DRAFT/PENDING_APPROVAL thì sửa thẳng.
+ *   - Kết thúc giáo án thì huỷ mọi buổi tập SCHEDULED còn lại của nó.
+ */
 @Service
 public class TrainingPlanService {
 
+    // Bảng chuyển trạng thái HLV được phép: trạng thái hiện tại -> tập trạng thái kế tiếp hợp lệ.
+    // PENDING_APPROVAL -> (rỗng): chỉ chủ ngựa đổi được (ownerReview), HLV không tự duyệt.
     private static final Map<String, Set<String>> TRANSITIONS = Map.of(
             "DRAFT", Set.of("PENDING_APPROVAL"),
             "PENDING_APPROVAL", Set.of(),
@@ -38,7 +60,9 @@ public class TrainingPlanService {
             "PAUSED", Set.of("ACTIVE", "COMPLETED"),
             "COMPLETED", Set.of());
 
+    // Xoá được khi giáo án chưa từng chạy (chưa có buổi tập nào phát sinh).
     private static final Set<String> DELETABLE = Set.of("DRAFT", "PENDING_APPROVAL", "APPROVED");
+    // Sửa giáo án ở các trạng thái này phải qua bước chủ ngựa duyệt bản sửa.
     private static final Set<String> UPDATE_REQUIRES_APPROVAL = Set.of("APPROVED", "ACTIVE", "PAUSED");
 
     private final TrainingPlanRepository planRepository;
@@ -60,12 +84,15 @@ public class TrainingPlanService {
         this.staffRepository = staffRepository;
     }
 
+    // Constructor phụ (không có StaffRepository) cho unit test cũ: các phép kiểm Groom bị bỏ qua.
     public TrainingPlanService(TrainingPlanRepository planRepository, HorseRepository horseRepository,
                                HorseVitalsRepository vitalsRepository, UserRepository userRepository,
                                NotificationService notifications) {
         this(planRepository, horseRepository, vitalsRepository, userRepository, notifications, null);
     }
 
+    // Một Groom trong ô chọn: activePlanCount = số giáo án chưa COMPLETED; eligible = còn nhận được
+    // (dưới 2 giáo án).
     public record TrainerGroomOption(int userId, String fullName, int activePlanCount, boolean eligible) {}
 
     public List<TrainerGroomOption> listGroomsForPlan(AuthenticatedUser trainer) {
@@ -107,6 +134,7 @@ public class TrainingPlanService {
         validate(r, user);
         int planId = planRepository.insertPlan(r.horseId(), user.userId(), r.groomId(), r.planName().trim(),
                 r.startDate(), r.endDate());
+        // phaseNo đánh số 1, 2, 3... theo thứ tự trong danh sách gửi lên (client không tự đặt).
         int phaseNo = 1;
         for (TrainingPlanRequest.PhaseRequest p : r.phases()) {
             planRepository.insertPhase(planId, phaseNo++, p);
@@ -122,6 +150,7 @@ public class TrainingPlanService {
      */
     @Transactional
     public TrainingPlanResponse update(int planId, TrainingPlanRequest.Update r, AuthenticatedUser user, String ip) {
+        // get() vừa đọc vừa kiểm quyền xem (chủ ngựa / HLV phụ trách).
         TrainingPlanResponse existing = get(planId, user);
         if ("COMPLETED".equals(existing.status())) {
             throw new ApiException(HttpStatus.CONFLICT, "Cannot update a completed training plan");
@@ -199,6 +228,8 @@ public class TrainingPlanService {
         String targetPlanName = (r.planName() != null && !r.planName().isBlank()) ? r.planName().trim() : existing.planName();
 
         // Nếu plan đã được duyệt / đang chạy / tạm dừng: lưu bản cập nhật chờ chủ ngựa duyệt, giữ nguyên plan cũ.
+        // Giáo án đã được chủ duyệt thì HLV không tự ý sửa: lưu bản sửa vào pending_update_json
+        // và giữ nguyên giáo án cũ tới khi chủ đồng ý.
         if (UPDATE_REQUIRES_APPROVAL.contains(existing.status())) {
             String groomName = existing.groomName();
             if (r.groomId() != null && staffRepository != null) {
@@ -233,6 +264,8 @@ public class TrainingPlanService {
 
     private void applyPlanChanges(int planId, List<TrainingPlanResponse.Phase> currentPhases,
                                   Integer groomId, String planName, List<TrainingPlanRequest.PhaseRequest> phases) {
+        // Áp bản sửa: đổi Groom/tên -> xoá giai đoạn bị bỏ (nếu chưa có buổi tập) -> đánh số lại
+        // -> cập nhật giai đoạn cũ / chèn giai đoạn mới.
         planRepository.updatePlanGroomAndName(planId, groomId, planName);
 
         Set<Integer> keptPhaseIds = new HashSet<>();
@@ -253,6 +286,8 @@ public class TrainingPlanService {
             }
         }
 
+        // Đổi phase_no sang số âm tạm thời trước khi đánh số lại, để không vướng ràng buộc
+        // UQ_PHASE_no (plan_id, phase_no) khi hai giai đoạn đổi chỗ cho nhau.
         planRepository.preparePhasesForReorder(planId);
 
         int phaseNo = 1;
@@ -293,6 +328,7 @@ public class TrainingPlanService {
     @Transactional
     public TrainingPlanResponse changeStatus(int planId, String newStatus, AuthenticatedUser user, String ip) {
         TrainingPlanResponse plan = getOrThrow(planId);
+        // HLV chỉ đổi trạng thái giáo án của ngựa mình phụ trách.
         horseRepository.findById(plan.horseId()).ifPresent(horse -> checkTrainerManagesHorse(horse, user, null));
 
         if (!TRANSITIONS.getOrDefault(plan.status(), Set.of()).contains(newStatus)) {
@@ -306,6 +342,8 @@ public class TrainingPlanService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This plan ended on " + plan.endDate() + ". Create a new plan instead");
         }
+        // updateStatus có điều kiện "AND status = <trạng thái vừa đọc>" (chống hai người đổi cùng
+        // lúc). DuplicateKeyException = vi phạm UX_PLAN_active: ngựa đã có giáo án ACTIVE khác.
         try {
             if (planRepository.updateStatus(planId, plan.status(), newStatus) == 0) {
                 throw new ApiException(HttpStatus.CONFLICT,
@@ -355,6 +393,7 @@ public class TrainingPlanService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data",
                     Map.of("note", "Tell the head trainer why you are rejecting this plan"));
         }
+        // Duyệt -> APPROVED (HLV kích hoạt sau); từ chối -> về DRAFT kèm lý do (owner_note).
         String next = approve ? "APPROVED" : "DRAFT";
         if (planRepository.recordOwnerReview(planId, next, trimmed) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
@@ -378,6 +417,7 @@ public class TrainingPlanService {
     @Transactional
     public TrainingPlanResponse reviewPendingUpdate(int planId, boolean approve, String note,
                                                     AuthenticatedUser owner, String ip) {
+        // Dọn các bản sửa quá hạn trước, để chủ không duyệt nhầm một bản sửa đã hết hạn.
         expireOverduePendingUpdates();
         TrainingPlanResponse plan = get(planId, owner);
         TrainingPlanResponse.PendingUpdate pending = plan.pendingUpdate();
@@ -429,6 +469,8 @@ public class TrainingPlanService {
      */
     @Transactional
     public int expireOverduePendingUpdates() {
+        // Được gọi khi đọc giáo án (get/list/review) và mỗi phút bởi MissedTaskJob. Mốc so sánh là
+        // giờ UTC vì pending_update_at lưu bằng SYSUTCDATETIME().
         LocalDateTime cutoff = LocalDateTime.now(ZoneOffset.UTC).minusDays(2);
         List<TrainingPlanRepository.OverduePendingPlan> overdue = planRepository.findOverduePendingUpdates(cutoff);
         int expired = 0;
@@ -453,6 +495,7 @@ public class TrainingPlanService {
     }
 
     public TrainingPlanResponse get(int planId, AuthenticatedUser user) {
+        // Mỗi lần đọc giáo án đều dọn bản sửa quá hạn trước (không cần chờ job ban đêm).
         expireOverduePendingUpdates();
         TrainingPlanResponse plan = getOrThrow(planId);
         if ("HORSE_OWNER".equals(user.role())) {
@@ -499,6 +542,7 @@ public class TrainingPlanService {
 
     @Transactional
     public int completeExpiredPlans() {
+        // Gọi mỗi đêm bởi MissedTaskJob: giáo án ACTIVE/PAUSED đã qua end_date tự chuyển COMPLETED.
         return completeExpired(planRepository.findSummaries(null, "ACTIVE", null))
                 + completeExpired(planRepository.findSummaries(null, "PAUSED", null));
     }
@@ -526,6 +570,7 @@ public class TrainingPlanService {
     }
 
     private void checkTrainerManagesHorse(HorseResponse horse, AuthenticatedUser user, Map<String, String> errors) {
+        // errors != null: thêm lỗi vào map (dùng khi validate cả form); errors == null: ném 403 ngay.
         if (user == null || !"HEAD_TRAINER".equals(user.role())) return;
         if (horse.trainerId() != null && !horse.trainerId().equals(user.userId())) {
             String msg = "This horse is assigned to Head Trainer "
@@ -540,6 +585,8 @@ public class TrainingPlanService {
     }
 
     private void checkCanActivate(TrainingPlanResponse plan) {
+        // Kiểm tra trước khi kích hoạt. completeExpired(...) ở cuối: giáo án ACTIVE cũ đã quá hạn của
+        // cùng ngựa được kết thúc trước, để không chặn nhầm giáo án mới.
         HorseResponse horse = horseRepository.findById(plan.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
         String typeProblem = HorsePolicy.trainingProblem(horse.recordType());
@@ -549,6 +596,9 @@ public class TrainingPlanService {
         String withdrawn = HorsePolicy.withdrawnProblem(horse);
         if (withdrawn != null) {
             throw new ApiException(HttpStatus.CONFLICT, withdrawn);
+        }
+        if (horseRepository.hasExpiredContract(horse.horseId())) {
+            throw new ApiException(HttpStatus.CONFLICT, HorsePolicy.stayEndedProblem(horse));
         }
         if (plan.endDate().isBefore(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -570,6 +620,8 @@ public class TrainingPlanService {
     }
 
     private void validate(TrainingPlanRequest r, AuthenticatedUser user) {
+        // Kiểm toàn bộ form tạo giáo án, gom mọi lỗi theo ô (key "phases[i].startDate"... để frontend
+        // tô đỏ đúng ô của đúng giai đoạn).
         Map<String, String> errors = new LinkedHashMap<>();
 
         HorseResponse horse = horseRepository.findById(r.horseId()).orElse(null);
@@ -583,6 +635,9 @@ public class TrainingPlanService {
             String withdrawn = HorsePolicy.withdrawnProblem(horse);
             if (withdrawn != null) {
                 errors.put("horseId", withdrawn);
+            } else if (horseRepository.hasExpiredContract(horse.horseId())) {
+                // V49: the stay ran out and was not renewed.
+                errors.put("horseId", HorsePolicy.stayEndedProblem(horse));
             }
             checkTrainerManagesHorse(horse, user, errors);
             if (r.horseId() != null && r.horseId() > 0 && planRepository.existsOpenPlan(r.horseId(), 0)) {

@@ -3,6 +3,7 @@ package racehorse.backend.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,15 @@ import racehorse.backend.service.HorseAdminService;
 import racehorse.backend.service.HorsePhotoService;
 import racehorse.backend.service.HorseService;
 
+/*
+ * Hồ sơ ngựa (UC7 xem/sửa, UC8 sinh hiệu, phả hệ, ảnh), tiền tố /api/horses.
+ * Ba service phía sau:
+ *   HorseService       - xem, sửa thông tin, phả hệ, sinh hiệu, mã đăng ký/chuồng/HLV phụ trách
+ *   HorsePhotoService  - tải / gỡ ảnh ngựa
+ *   HorseAdminService  - chuyển chủ, nhận lại ngựa đã rút
+ * Các GET không gắn @RequireRole (ai đăng nhập cũng gọi được), nhưng HorseService.checkCanView
+ * chặn chủ ngựa xem ngựa không phải của mình, và list() trả danh sách khác nhau theo vai trò.
+ */
 @RestController
 @RequestMapping("/api/horses")
 public class HorseController {
@@ -71,6 +81,7 @@ public class HorseController {
         return adminService.readmit(id, request.stallNo(), user, http.getRemoteAddr());
     }
 
+    // Body của PUT /{id}/owner. Annotation viết đầy đủ tên package vì file không import chúng.
     public record TransferRequest(
             @jakarta.validation.constraints.NotNull(message = "New owner is required") Integer ownerId,
             @jakarta.validation.constraints.NotBlank(message = "Reason is required")
@@ -91,8 +102,32 @@ public class HorseController {
     /** V37: Danh sách Head Trainer đang ACTIVE cùng số ngựa đang quản lý & hạn mức tối đa. */
     @GetMapping("/trainers")
     @RequireRole({"CLUB_MANAGER", "HEAD_TRAINER"})
-    public List<HorseRepository.TrainerSummary> listTrainers() {
-        return horseService.listActiveTrainers();
+    public List<HorseRepository.TrainerSummary> listTrainers(
+            @RequestParam(required = false, defaultValue = "false") boolean available) {
+        // Review feedback: a full Head Trainer is not a choice, so ?available=true leaves them out.
+        return available ? horseService.listAvailableTrainers() : horseService.listActiveTrainers();
+    }
+
+    /** V48: height, BCS and aptitudes. Like the other GETs, any signed-in user; owners see only their own. */
+    @GetMapping("/{id}/intake")
+    public Map<String, Object> intake(@PathVariable int id,
+                                      @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return horseService.getIntake(id, user);
+    }
+
+    /** Next free registration code in the club format (TM-NNNN); the manager may change it. */
+    @GetMapping("/registration-code/next")
+    @RequireRole({"CLUB_MANAGER"})
+    public Map<String, String> nextRegistrationCode() {
+        return Map.of("code", horseService.suggestRegistrationCode());
+    }
+
+    /** Checked while the manager types: format, then whether another horse already holds it. */
+    @GetMapping("/registration-code/check")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseService.CodeCheck checkRegistrationCode(@RequestParam String code,
+                                                        @RequestParam(required = false) Integer horseId) {
+        return horseService.checkRegistrationCode(code, horseId);
     }
 
     /** Chỉ chủ ngựa, và chỉ ngựa của chính mình (service kiểm quyền sở hữu). */
@@ -158,6 +193,8 @@ public class HorseController {
 
     @GetMapping
     public List<HorseResponse> list(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        // GET /api/horses - danh sách tuỳ vai trò: chủ ngựa thấy ngựa của mình, Groom thấy ngựa còn ở
+        // CLB, HLV thấy ngựa được giao, Manager/Vet thấy tất cả.
         return horseService.list(user);
     }
 
@@ -169,6 +206,7 @@ public class HorseController {
 
     @GetMapping("/{id}/pedigree")
     public PedigreeNode pedigree(@PathVariable int id,
+                                 // ?generations=N (mặc định 3, service kẹp trong 1..5).
                                  @RequestParam(defaultValue = "3") int generations,
                                  @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return horseService.getPedigree(id, generations, user);

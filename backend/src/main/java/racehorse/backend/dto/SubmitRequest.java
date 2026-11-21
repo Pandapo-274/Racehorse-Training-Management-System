@@ -1,22 +1,28 @@
 package racehorse.backend.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
  * Những gì chủ ngựa khai khi xin đăng ký.
  *
- * Chỉ horseName bắt buộc. Người đang muốn gửi ngựa tới học viện thường chưa
- * cầm đủ giấy tờ trong tay, mà bắt khai đủ thì chặn đúng việc mà biểu mẫu này
- * sinh ra để mở - phần còn thiếu học viện sẽ hỏi lại lúc duyệt.
+ * Hồ sơ PEDIGREE (chỉ làm cha mẹ / tổ tiên) vẫn chỉ cần tên. Ngựa vào CLB
+ * (ACADEMY) giờ phải khai thêm những thứ học viện cần để DUYỆT có cơ sở
+ * (góp ý review): cân nặng, chiều cao, thời gian huấn luyện, thời hạn gửi.
+ * Ảnh đi bằng một request riêng (multipart), xem HorseRequestController.
+ * HorseRequestService.submit kiểm những ô bắt buộc theo loại hồ sơ, vì
+ * annotation ở đây không biết loại hồ sơ.
  *
  * KHÔNG có registrationCode và stallNo: mã đăng ký do học viện cấp, số chuồng
- * do học viện xếp. Nhận hai thứ đó từ chủ ngựa là để người ngoài tự đặt số
- * hiệu trong sổ của học viện.
+ * do học viện xếp, lúc nhận ngựa.
  */
+// Body của POST /api/horse-requests (chỉ HORSE_OWNER). ownerId lấy từ token.
 public record SubmitRequest(
         @NotBlank(message = "Horse name is required")
         @Size(max = 100, message = "Horse name must be at most 100 characters")
@@ -38,15 +44,39 @@ public record SubmitRequest(
         @Size(max = 500, message = "Note must be at most 500 characters")
         String note,
 
-        /** ACADEMY (mặc định) hoặc PEDIGREE: chỉ làm hồ sơ cha mẹ / tổ tiên. */
         @Pattern(regexp = "ACADEMY|PEDIGREE", message = "Record type must be ACADEMY or PEDIGREE")
         String recordType,
 
-        /**
-         * Sire and dam from the horse's papers (V41), optional: a club pedigree
-         * record or one of the owner's own horses. The club checks them against
-         * the papers when it approves.
-         */
         Integer sireId,
-        Integer damId
-) {}
+        Integer damId,
+
+        // ---- V48: what the club needs to see before approving a club horse ----
+        @DecimalMin(value = "30", message = "Weight must be at least 30 kg")
+        @DecimalMax(value = "1000", message = "Weight must be at most 1000 kg")
+        BigDecimal weight,
+
+        @DecimalMin(value = "60", message = "Height must be at least 60 cm")
+        @DecimalMax(value = "200", message = "Height must be at most 200 cm")
+        BigDecimal heightCm,
+
+        @Pattern(regexp = "TURF|DIRT", message = "Surface must be TURF or DIRT")
+        String surface,
+
+        @Pattern(regexp = "SPRINT|MEDIUM|LONG", message = "Distance must be SPRINT, MEDIUM or LONG")
+        String distancePref,
+
+        @Pattern(regexp = "FRONT|MIDDLE|BACK", message = "Running style must be FRONT, MIDDLE or BACK")
+        String runningStyle,
+
+        LocalDate preferredStart,
+        Integer trainingWeeks,
+        Integer contractMonths,
+        Integer preferredTrainerId
+) {
+    /** The nine fields a pedigree-only record uses (and that older callers pass). */
+    public SubmitRequest(String horseName, String breed, String horseGender, LocalDate dateOfBirth,
+                         String color, String note, String recordType, Integer sireId, Integer damId) {
+        this(horseName, breed, horseGender, dateOfBirth, color, note, recordType, sireId, damId,
+                null, null, null, null, null, null, null, null, null);
+    }
+}

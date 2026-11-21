@@ -99,6 +99,13 @@
 			<version>0.12.6</version>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- V49: payOS payment gateway (https://payos.vn), official Java SDK.
+		     2.0.2 tightens webhook signature checks (GHSA-mc2r-v3x7-j5rv). -->
+		<dependency>
+			<groupId>vn.payos</groupId>
+			<artifactId>payos-java</artifactId>
+			<version>2.0.2</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>
@@ -119,6 +126,8 @@
 				<configuration>
 					<includes>
 						<include>**/BusinessRulesTest.java</include>
+						<include>**/Flow1RulesTest.java</include>
+						<include>**/Flow1ContractRulesTest.java</include>
 					</includes>
 					<argLine>-javaagent:"${settings.localRepository}/org/mockito/mockito-core/5.23.0/mockito-core-5.23.0.jar" -XX:+EnableDynamicAgentLoading</argLine>
 				</configuration>

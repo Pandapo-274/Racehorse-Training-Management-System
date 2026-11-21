@@ -20,6 +20,7 @@ export const ROLE_NAV = {
   HORSE_OWNER: [
     { key: "overview", label: "Overview", path: "/horse-owner", exact: true },
     { key: "horses", label: "My horses", path: "/horse-owner/horses" },
+    { key: "contracts", label: "Contracts", path: "/horse-owner/contracts" },
     { key: "training", label: "Training", path: "/horse-owner/training" },
     { key: "results", label: "Results & races", path: "/horse-owner/races" },
     { key: "costs", label: "Costs & prizes", path: "/horse-owner", hash: "costs-prizes" },
@@ -29,6 +30,7 @@ export const ROLE_NAV = {
     { key: "overview", label: "Overview", path: "/manager", exact: true },
     { key: "horses", label: "Horses", path: "/manager/horses" },
     { key: "registrations", label: "Registrations", path: "/manager/horse-requests" },
+    { key: "contracts", label: "Contracts", path: "/manager/contracts" },
     { key: "withdrawals", label: "Withdrawals", path: "/manager/withdrawals" },
     { key: "staff", label: "Staff", path: "/manager/staff" },
     { key: "supplies", label: "Supplies & feed", path: "/manager/supplies" },
@@ -71,6 +73,7 @@ export const ROLE_NAV = {
 };
 
 /** Mục có đang là trang hiện tại không. */
+// Ví dụ: mục { path: "/trainer/horses" } active với "/trainer/horses" và "/trainer/horses/12".
 export function isNavActive(item, pathname) {
   if (!item.path || item.hash) return false;
   if (item.exact) return pathname === item.path;

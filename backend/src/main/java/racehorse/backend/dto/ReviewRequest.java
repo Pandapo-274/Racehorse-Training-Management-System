@@ -7,12 +7,17 @@ import racehorse.backend.service.HorseRequestService;
 /**
  * Phần học viện điền khi xử lý một yêu cầu.
  *
- * Lúc DUYỆT, registrationCode là bắt buộc - nó là thứ duy nhất học viện phải
- * cấp mà chủ ngựa không có. Không kiểm bằng @NotBlank ở đây vì cùng một record
- * này cũng dùng cho lệnh TỪ CHỐI, nơi mã đăng ký không có nghĩa gì;
- * HorseRequestService kiểm nó ở đúng nhánh duyệt.
+ * Ngựa vào CLB (ACADEMY): DUYỆT không còn tạo ngựa, mà gửi hợp đồng cho chủ
+ * ngựa (V49). Mã đăng ký, chuồng và HLV được chốt lúc NHẬN ngựa, sau khi chủ đã
+ * ký và trả tiền (ReceiveRequest). Lúc duyệt Manager chỉ phải xác nhận hai điều
+ * (góp ý review "duyệt dựa vào đâu"): ảnh khớp mô tả, và đã đối chiếu giấy tờ
+ * cha mẹ. Cả hai ghi vào audit cùng dòng HORSE_REQUEST_APPROVE.
  *
- * V37: trainerId cho phép Club Manager điều phối ngựa ngay cho một Head Trainer.
+ * Hồ sơ PEDIGREE không ở CLB nên không có hợp đồng: duyệt vẫn cấp mã và tạo
+ * hồ sơ ngay như trước, nên registrationCode vẫn còn ở đây.
+ *
+ * Không kiểm @NotBlank vì cùng record này dùng cho lệnh TỪ CHỐI;
+ * {@link HorseRequestService} kiểm đúng nhánh.
  */
 public record ReviewRequest(
         @Size(max = 30, message = "Registration code must be at most 30 characters")
@@ -24,9 +29,16 @@ public record ReviewRequest(
         @Size(max = 255, message = "Note must be at most 255 characters")
         String note,
 
-        Integer trainerId
+        Integer trainerId,
+
+        Boolean photoChecked,
+        Boolean papersChecked
 ) {
     public ReviewRequest(String registrationCode, String stallNo, String note) {
-        this(registrationCode, stallNo, note, null);
+        this(registrationCode, stallNo, note, null, null, null);
+    }
+
+    public ReviewRequest(String registrationCode, String stallNo, String note, Integer trainerId) {
+        this(registrationCode, stallNo, note, trainerId, null, null);
     }
 }

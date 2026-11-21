@@ -14,6 +14,7 @@ import NavItems from "../navigation/NavItems";
 import { canReviewRequests } from "./horseApi";
 import { listRequests } from "./horseRequestApi";
 import { listWithdrawals } from "./withdrawalApi";
+import { listContracts } from "./contractApi";
 import "./horse.css";
 
 const ROLE_LABEL = {
@@ -39,6 +40,12 @@ function HorseshoeIcon() {
   );
 }
 
+/*
+ * Khung trang dùng chung (sidebar + header + nội dung) cho các trang ngựa, hồ sơ, đổi mật khẩu, kho, giải đua...
+ * Props: title / subtitle (tiêu đề), actions (nút góc phải header), children (nội dung trang).
+ * Sidebar lấy danh sách mục từ NavItems theo vai trò người dùng (roleNav.js). Với Club Manager, khung còn đếm
+ * số yêu cầu đăng ký ngựa và yêu cầu rút ngựa đang PENDING để dán huy hiệu lên menu.
+ */
 export default function HorseShell({ title, subtitle, actions, children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,6 +60,9 @@ export default function HorseShell({ title, subtitle, actions, children }) {
   // Số yêu cầu đang chờ, dán lên menu để Manager biết có việc cần duyệt.
   const [pending, setPending] = useState(0);
   const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
+  // V49: hợp đồng chờ Manager: đã trả tiền (nhận ngựa) hoặc hết hạn chưa gia hạn (theo dõi).
+  const [contractsToHandle, setContractsToHandle] = useState(0);
+  // Chạy lại mỗi khi đổi trang (location.pathname) để huy hiệu cập nhật sau khi Manager vừa duyệt xong.
   useEffect(() => {
     if (!mayReview) return undefined;
     const ctrl = new AbortController();
@@ -62,6 +72,10 @@ export default function HorseShell({ title, subtitle, actions, children }) {
       .catch(() => {}); // huy hiệu chỉ là phụ, lỗi thì thôi không hiện
     listWithdrawals({ signal: ctrl.signal })
       .then((rows) => setPendingWithdrawals(countPending(rows)))
+      .catch(() => {});
+    listContracts(ctrl.signal)
+      .then((rows) => setContractsToHandle((rows || []).filter((c) =>
+        (c.status === "PAID" && !c.renewsContractId) || c.status === "EXPIRED").length))
       .catch(() => {});
     return () => ctrl.abort();
   }, [mayReview, location.pathname]);
@@ -87,7 +101,7 @@ export default function HorseShell({ title, subtitle, actions, children }) {
             role={user?.role}
             prefix="hz"
             icon={<HorseshoeIcon />}
-            badges={{ registrations: pending, withdrawals: pendingWithdrawals }}
+            badges={{ registrations: pending, withdrawals: pendingWithdrawals, contracts: contractsToHandle }}
           />
         </nav>
 
@@ -141,6 +155,7 @@ export function StatusChip({ tone = "neutral", label, title }) {
   );
 }
 
+// Thẻ nội dung: tiêu đề có hình thoi, dòng gợi ý (hint), vùng nút (actions) và phần thân (children).
 export function Card({ title, hint, actions, children, className = "" }) {
   return (
     <div className={`hz-card ${className}`}>

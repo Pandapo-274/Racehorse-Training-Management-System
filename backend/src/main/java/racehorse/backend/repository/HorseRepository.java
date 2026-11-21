@@ -16,6 +16,8 @@ import racehorse.backend.dto.HorseUpdateRequest;
 import racehorse.backend.service.HorseService;
 import racehorse.backend.service.MedicalRecordService;
 
+// Mọi câu SQL trên bảng HORSE. SELECT_HORSE JOIN APP_USER hai lần: một lần lấy tên chủ (u),
+// một lần (LEFT JOIN, vì có thể NULL) lấy tên HLV phụ trách (tr).
 @Repository
 public class HorseRepository {
 
@@ -25,6 +27,7 @@ public class HorseRepository {
         this.jdbc = jdbc;
     }
 
+    // Một HLV kèm số ngựa đang quản lý và hạn mức, cho ô chọn HLV ở trang Club records.
     public record TrainerSummary(
             int userId,
             String username,
@@ -163,8 +166,14 @@ public class HorseRepository {
 
     /** Chuyển chủ (Club Manager). */
     public int updateOwner(int horseId, int ownerId) {
-        return jdbc.sql("UPDATE HORSE SET owner_id = :o, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+        int changed = jdbc.sql("UPDATE HORSE SET owner_id = :o, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
                 .param("o", ownerId).param("id", horseId).update();
+        // V49: the running stay goes with the horse; the new owner is the one who renews it.
+        jdbc.sql("""
+                UPDATE HORSE_CONTRACT SET owner_id = :o, updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id AND status IN ('ACTIVE', 'EXPIRED')
+                """).param("o", ownerId).param("id", horseId).update();
+        return changed;
     }
 
     /** Nhận lại ngựa đã rút: về ACTIVE, xếp chuồng. Điều kiện WITHDRAWN trong câu UPDATE. */
@@ -360,7 +369,7 @@ public class HorseRepository {
      * Đánh dấu ngựa đã rút và trả chuồng, CHỈ khi nó vẫn đang ACTIVE.
      */
     public int markWithdrawn(int horseId) {
-        return jdbc.sql("""
+        int changed = jdbc.sql("""
                 UPDATE HORSE
                 SET activity_status = 'WITHDRAWN',
                     withdrawn_at = SYSUTCDATETIME(),
@@ -371,6 +380,16 @@ public class HorseRepository {
                 """)
                 .param("id", horseId)
                 .update();
+        if (changed > 0) {
+            // V49: the horse left, so its stay is over, whether or not the term had run out.
+            jdbc.sql("""
+                    UPDATE HORSE_CONTRACT
+                    SET status = 'ENDED', closed_note = N'Horse withdrawn from the club',
+                        updated_at = SYSUTCDATETIME()
+                    WHERE horse_id = :id AND status IN ('ACTIVE', 'EXPIRED')
+                    """).param("id", horseId).update();
+        }
+        return changed;
     }
 
     public boolean isHorseOwner(int userId) {
@@ -384,6 +403,11 @@ public class HorseRepository {
     public record PedigreeRow(int horseId, String horseName, String registrationCode,
                               String horseGender, Integer sireId, Integer damId) {}
 
+    /*
+     * CTE đệ quy (WITH tree AS (... UNION ALL ...)) của SQL Server: bắt đầu từ cha mẹ của horseId,
+     * mỗi vòng đi lên một đời. Nếu candidateId xuất hiện trong cây tổ tiên của horseId thì gán
+     * candidateId làm cha/mẹ sẽ tạo vòng lặp. depth < 50 là chốt an toàn chống lặp vô hạn.
+     */
     public boolean isAncestorOf(int candidateId, int horseId) {
         Integer hit = jdbc.sql("""
                 WITH tree AS (
@@ -407,6 +431,8 @@ public class HorseRepository {
         return hit != null;
     }
 
+    // Cùng kỹ thuật CTE đệ quy, dừng ở maxDepth đời; DISTINCT vì một tổ tiên có thể xuất hiện ở
+    // nhiều nhánh (vd. Sunday Silence vừa là ông nội vừa là ông ngoại).
     public List<PedigreeRow> findAncestors(int horseId, int maxDepth) {
         return jdbc.sql("""
                 WITH tree AS (
@@ -429,5 +455,75 @@ public class HorseRepository {
                         rs.getString("registration_code"), rs.getString("horse_gender"),
                         rs.getObject("sire_id", Integer.class), rs.getObject("dam_id", Integer.class)))
                 .list();
+    }
+
+    /* ------------------------------------------------------------------
+     * V48/V49: registration code suggestion, intake measures, contract gate
+     * ------------------------------------------------------------------ */
+
+    /** Largest number used after "PREFIX-" in a PREFIX-NNNN code, 0 when none. */
+    public int maxCodeNumber(String prefix) {
+        // MAX over no rows is one NULL row, so read it as a list and look at the value.
+        List<Integer> max = jdbc.sql("""
+                SELECT MAX(TRY_CAST(SUBSTRING(registration_code, LEN(:prefix) + 2, 10) AS INT))
+                FROM HORSE
+                WHERE registration_code LIKE :prefix + '-[0-9][0-9][0-9][0-9]%'
+                """)
+                .param("prefix", prefix)
+                .query(Integer.class)
+                .list();
+        return max.isEmpty() || max.get(0) == null ? 0 : max.get(0);
+    }
+
+    /** Who already holds this code (for "Already used by ..."), empty when it is free. */
+    public Optional<String> findNameByRegistrationCode(String code) {
+        return jdbc.sql("SELECT horse_name FROM HORSE WHERE registration_code = :code")
+                .param("code", code)
+                .query(String.class)
+                .optional();
+    }
+
+    /** What the club measured when the horse arrived, plus the owner's aptitude guess. */
+    public int updateIntake(int horseId, java.math.BigDecimal heightCm, Integer bcs,
+                            String surface, String distancePref, String runningStyle) {
+        return jdbc.sql("""
+                UPDATE HORSE SET height_cm = :height, bcs = :bcs, surface = :surface,
+                       distance_pref = :distance, running_style = :style, updated_at = SYSUTCDATETIME()
+                WHERE horse_id = :id
+                """)
+                .param("height", heightCm)
+                .param("bcs", bcs)
+                .param("surface", surface)
+                .param("distance", distancePref)
+                .param("style", runningStyle)
+                .param("id", horseId)
+                .update();
+    }
+
+    public record Intake(java.math.BigDecimal heightCm, Integer bcs,
+                         String surface, String distancePref, String runningStyle) {}
+
+    public Optional<Intake> findIntake(int horseId) {
+        return jdbc.sql("""
+                SELECT height_cm, bcs, surface, distance_pref, running_style FROM HORSE WHERE horse_id = :id
+                """)
+                .param("id", horseId)
+                .query((rs, n) -> new Intake(rs.getBigDecimal("height_cm"),
+                        rs.getObject("bcs", Integer.class), rs.getString("surface"),
+                        rs.getString("distance_pref"), rs.getString("running_style")))
+                .optional();
+    }
+
+    /**
+     * V49: the stay ran out and was not renewed. Horses registered before
+     * contracts existed have no row at all and are never blocked.
+     */
+    public boolean hasExpiredContract(int horseId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM HORSE_CONTRACT WHERE horse_id = :id AND status = 'EXPIRED'
+                """)
+                .param("id", horseId)
+                .query(Integer.class)
+                .single() > 0;
     }
 }

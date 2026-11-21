@@ -17,12 +17,24 @@ import {
   GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
   listParentCandidates, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
-import { listRequests, submitRequest, cancelRequest, toRequestStatus } from "./horseRequestApi";
+import {
+  listRequests, submitRequest, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
+  getPricing, estimatePrice, formatVnd, termProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
+  CONTRACT_MONTH_OPTIONS, STAY_RULES,
+} from "./horseRequestApi";
+import HorsePhoto from "./HorsePhoto";
 
+// Giá trị ban đầu của form. recordType mặc định ACADEMY (ngựa vào CLB huấn luyện); PEDIGREE = chỉ khai báo
+// để làm cha mẹ trong phả hệ.
 const EMPTY = {
   horseName: "", breed: "", horseGender: "", dateOfBirth: "", color: "", note: "",
   recordType: "ACADEMY", sireId: "", damId: "",
+  // V48 (review feedback): what the club needs to approve a club horse.
+  breedChoice: "", weight: "", heightCm: "", surface: "", distancePref: "", runningStyle: "",
+  preferredStart: "", trainingWeeks: "4", contractMonths: "1", preferredTrainerId: "",
 };
+
+const PHOTO_TYPES = "image/jpeg,image/png,image/webp";
 
 function todayIso() {
   const d = new Date();
@@ -30,7 +42,8 @@ function todayIso() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function validate(form) {
+// Kiểm ở trình duyệt, cùng luật với backend (độ dài, ngày sinh không ở tương lai, tuổi theo loại hồ sơ).
+function validate(form, photo) {
   const e = {};
   if (!form.horseName.trim()) e.horseName = "Tell us the horse's name";
   else if (form.horseName.trim().length > 100) e.horseName = "100 characters at most";
@@ -48,6 +61,18 @@ function validate(form) {
     const problem = ageProblem(form.recordType, form.dateOfBirth);
     if (problem) e.dateOfBirth = problem;
   }
+  if (form.recordType === "ACADEMY") {
+    if (form.breedChoice === "OTHER" && !form.breed.trim()) e.breed = "Type the breed";
+    const w = Number(form.weight);
+    if (!form.weight) e.weight = "Weight is required for a club horse";
+    else if (w < 30 || w > 1000) e.weight = "Between 30 and 1000 kg";
+    const h = Number(form.heightCm);
+    if (!form.heightCm) e.heightCm = "Height is required for a club horse";
+    else if (h < 60 || h > 200) e.heightCm = "Between 60 and 200 cm";
+    if (form.preferredStart && form.preferredStart < todayIso()) e.preferredStart = "The start date cannot be in the past";
+    if (!photo) e.photo = "Add a photo: the club cannot approve a horse it has not seen";
+    Object.assign(e, termProblems(form.trainingWeeks, form.contractMonths));
+  }
   return e;
 }
 
@@ -62,11 +87,21 @@ function Field({ id, label, error, hint, children }) {
   );
 }
 
+/*
+ * Trang /horse-owner/request của chủ ngựa: phần trên là form gửi yêu cầu đăng ký (POST /api/horse-requests),
+ * phần dưới là danh sách yêu cầu đã gửi với trạng thái PENDING / APPROVED / REJECTED / CANCELLED.
+ * Yêu cầu còn PENDING thì chủ tự huỷ được (PUT /api/horse-requests/{id}/cancel), không cần Manager.
+ */
 export default function HorseRequestPage() {
   const navigate = useNavigate();
   const dialog = useAppDialog();
 
   const [form, setForm] = useState(EMPTY);
+  const [photo, setPhoto] = useState(null); // File chọn cho yêu cầu đang soạn
+  const [photoPreview, setPhotoPreview] = useState("");
+  const [trainers, setTrainers] = useState([]);
+  const [pricing, setPricing] = useState(null);
+  const [photoBusyId, setPhotoBusyId] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [sending, setSending] = useState(false);
@@ -79,8 +114,21 @@ export default function HorseRequestPage() {
   useEffect(() => {
     const ctrl = new AbortController();
     listParentCandidates(ctrl.signal).then((h) => setHerd(h || [])).catch(() => {});
+    listTrainerOptions(ctrl.signal).then((t) => setTrainers(t || [])).catch(() => {});
+    getPricing(ctrl.signal).then(setPricing).catch(() => {});
     return () => ctrl.abort();
   }, []);
+
+  // Xem trước ảnh vừa chọn; thu hồi URL tạm khi đổi ảnh để khỏi rò bộ nhớ.
+  useEffect(() => {
+    if (!photo) { setPhotoPreview(""); return undefined; }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  const estimate = estimatePrice(pricing, form.contractMonths);
+  // useMemo: chỉ lọc lại danh sách cha / mẹ khi herd đổi, không lọc lại ở mỗi lần render.
   const sires = useMemo(() => herd.filter((h) => SIRE_GENDERS.has(h.horseGender)), [herd]);
   const dams = useMemo(() => herd.filter((h) => DAM_GENDERS.has(h.horseGender)), [herd]);
 
@@ -110,10 +158,47 @@ export default function HorseRequestPage() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
+  // Chọn giống có sẵn thì điền luôn mặt đường, cự ly, kiểu chạy (owner vẫn sửa được).
+  const chooseBreed = (e) => {
+    const choice = e.target.value;
+    const preset = BREED_PRESETS[choice];
+    setForm((prev) => ({
+      ...prev,
+      breedChoice: choice,
+      // "Other": keep what was typed before, but not a preset name left over from the list.
+      breed: choice === "OTHER" ? (BREED_PRESETS[prev.breed] ? "" : prev.breed) : choice,
+      ...(preset || {}),
+    }));
+    if (errors.breed) setErrors((prev) => ({ ...prev, breed: undefined }));
+  };
+
+  const choosePhoto = (e) => {
+    const file = e.target.files?.[0] || null;
+    setPhoto(file);
+    if (errors.photo) setErrors((prev) => ({ ...prev, photo: undefined }));
+  };
+
+  // Thêm / thay ảnh cho một yêu cầu đã gửi mà còn chờ duyệt.
+  const replacePhoto = async (r, file) => {
+    if (!file) return;
+    setPhotoBusyId(r.requestId);
+    setListError("");
+    try {
+      await uploadRequestPhoto(r.requestId, file);
+      load();
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setListError(err.fieldErrors?.file || err.message);
+    } finally {
+      setPhotoBusyId(null);
+    }
+  };
+
+  // Gửi yêu cầu: validate -> submitRequest -> xoá form và tải lại danh sách. Manager nhận thông báo HORSE_REQUEST.
   const submit = async (e) => {
     e.preventDefault();
 
-    const found = validate(form);
+    const found = validate(form, form.recordType === "ACADEMY" ? photo : true);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
@@ -121,8 +206,17 @@ export default function HorseRequestPage() {
     setSubmitError("");
 
     try {
-      await submitRequest(form);
+      const saved = await submitRequest(form);
+      if (form.recordType === "ACADEMY" && photo) {
+        try {
+          await uploadRequestPhoto(saved.requestId, photo);
+        } catch (err) {
+          // The request is saved; only the photo failed. Say so and let the owner retry from the list.
+          setListError(`Request sent, but the photo was not saved: ${err.fieldErrors?.file || err.message}. Add it again below.`);
+        }
+      }
       setForm(EMPTY);
+      setPhoto(null);
       load(); // nạp lại để yêu cầu vừa gửi hiện ngay trong danh sách bên dưới
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
@@ -173,6 +267,16 @@ export default function HorseRequestPage() {
       recordType: r.recordType || EMPTY.recordType,
       sireId: r.sireId ? String(r.sireId) : "",
       damId: r.damId ? String(r.damId) : "",
+      breedChoice: !r.breed ? "" : BREED_PRESETS[r.breed] ? r.breed : "OTHER",
+      weight: r.weight ?? "",
+      heightCm: r.heightCm ?? "",
+      surface: r.surface || "",
+      distancePref: r.distancePref || "",
+      runningStyle: r.runningStyle || "",
+      preferredStart: "",
+      trainingWeeks: r.trainingWeeks ? String(r.trainingWeeks) : EMPTY.trainingWeeks,
+      contractMonths: r.contractMonths ? String(r.contractMonths) : EMPTY.contractMonths,
+      preferredTrainerId: r.preferredTrainerId ? String(r.preferredTrainerId) : "",
     });
     setErrors({});
     setSubmitError("");
@@ -193,7 +297,7 @@ export default function HorseRequestPage() {
       <form onSubmit={submit} noValidate>
         <Card
           title="About the horse"
-          hint="Name is required, plus date of birth for club horses"
+          hint="Club horses need a date of birth, weight, height, a photo and the length of the stay"
         >
           <div className="hz-form-grid">
             <Field id="horseName" label="Name" error={errors.horseName}>
@@ -239,9 +343,19 @@ export default function HorseRequestPage() {
                      aria-invalid={!!errors.dateOfBirth} />
             </Field>
 
-            <Field id="breed" label="Breed" error={errors.breed}>
-              <input id="breed" name="breed" value={form.breed} onChange={change}
-                     maxLength={50} />
+            <Field id="breedChoice" label="Breed" error={errors.breed}
+                   hint={form.breedChoice && form.breedChoice !== "OTHER"
+                     ? "Surface, distance and running style below were filled in for this breed. Change them if your horse differs."
+                     : undefined}>
+              <select id="breedChoice" name="breedChoice" value={form.breedChoice} onChange={chooseBreed}>
+                <option value="">Not sure</option>
+                {Object.keys(BREED_PRESETS).map((b) => <option key={b} value={b}>{b}</option>)}
+                <option value="OTHER">Other (type it)</option>
+              </select>
+              {form.breedChoice === "OTHER" && (
+                <input id="breed" name="breed" value={form.breed} onChange={change} maxLength={50}
+                       placeholder="Breed name" aria-label="Breed name" style={{ marginTop: 8 }} />
+              )}
             </Field>
 
             <Field id="color" label="Colour" error={errors.color}>
@@ -266,6 +380,95 @@ export default function HorseRequestPage() {
             </Field>
           </div>
 
+          {form.recordType === "ACADEMY" && (
+            <>
+              <h3 className="hz-subhead">Measures and photo</h3>
+              <div className="hz-form-grid">
+                <Field id="weight" label="Weight (kg)" error={errors.weight}>
+                  <input id="weight" name="weight" type="number" min="30" max="1000" step="0.5"
+                         value={form.weight} onChange={change} aria-invalid={!!errors.weight} />
+                </Field>
+                <Field id="heightCm" label="Height at the withers (cm)" error={errors.heightCm}>
+                  <input id="heightCm" name="heightCm" type="number" min="60" max="200" step="0.5"
+                         value={form.heightCm} onChange={change} aria-invalid={!!errors.heightCm} />
+                </Field>
+              </div>
+              <div className="hz-field">
+                <label htmlFor="photo">Photo of the horse (required)</label>
+                <div className="hz-photo-editor">
+                  {photoPreview
+                    ? <img className="hz-photo hz-photo--sm" src={photoPreview} alt="Selected horse" />
+                    : <div className="hz-photo hz-photo--sm hz-photo--empty" aria-hidden="true">?</div>}
+                  <input id="photo" type="file" accept={PHOTO_TYPES} onChange={choosePhoto} />
+                </div>
+                {errors.photo ? <p className="hz-field__error">{errors.photo}</p>
+                  : <p className="hz-field__hint">JPEG, PNG or WebP, up to 2 MB. The club checks it against the description.</p>}
+              </div>
+
+              <h3 className="hz-subhead">Aptitude</h3>
+              <div className="hz-form-grid">
+                <Field id="surface" label="Surface">
+                  <select id="surface" name="surface" value={form.surface} onChange={change}>
+                    <option value="">Not sure</option>
+                    {Object.entries(SURFACES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field id="distancePref" label="Distance">
+                  <select id="distancePref" name="distancePref" value={form.distancePref} onChange={change}>
+                    <option value="">Not sure</option>
+                    {Object.entries(DISTANCES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field id="runningStyle" label="Running style">
+                  <select id="runningStyle" name="runningStyle" value={form.runningStyle} onChange={change}>
+                    <option value="">Not sure</option>
+                    {Object.entries(RUNNING_STYLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+              </div>
+
+              <h3 className="hz-subhead">Stay and training</h3>
+              <div className="hz-form-grid">
+                <Field id="preferredStart" label="Bring the horse in from" error={errors.preferredStart}
+                       hint="The stay itself starts the day the club receives the horse.">
+                  <input id="preferredStart" name="preferredStart" type="date" min={todayIso()}
+                         value={form.preferredStart} onChange={change} />
+                </Field>
+                <Field id="contractMonths" label="Stay at the club" error={errors.contractMonths}>
+                  <select id="contractMonths" name="contractMonths" value={form.contractMonths} onChange={change}>
+                    {CONTRACT_MONTH_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m} month{m === 1 ? "" : "s"}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field id="trainingWeeks" label="Training wanted (weeks)" error={errors.trainingWeeks}
+                       hint={`At least ${STAY_RULES.minTrainingWeeks} weeks, within the stay.`}>
+                  <input id="trainingWeeks" name="trainingWeeks" type="number"
+                         min={STAY_RULES.minTrainingWeeks}
+                         max={Number(form.contractMonths || 1) * STAY_RULES.weeksPerMonth}
+                         value={form.trainingWeeks} onChange={change} aria-invalid={!!errors.trainingWeeks} />
+                </Field>
+                <Field id="preferredTrainerId" label="Preferred Head Trainer" error={errors.preferredTrainerId}
+                       hint="Only trainers who can take another horse are listed. The club confirms it on arrival.">
+                  <select id="preferredTrainerId" name="preferredTrainerId" value={form.preferredTrainerId}
+                          onChange={change}>
+                    <option value="">No preference</option>
+                    {trainers.map((t) => <option key={t.userId} value={t.userId}>{t.fullName}</option>)}
+                  </select>
+                </Field>
+              </div>
+              {estimate && (
+                <p className="hz-estimate">
+                  Contract value: <strong>{formatVnd(estimate.total)}</strong>
+                  <span className="hz-muted">
+                    {" "}({formatVnd(estimate.monthlyFee)} × {estimate.months}
+                    {estimate.discountPct > 0 ? `, ${estimate.discountPct}% off` : ""})
+                  </span>
+                </p>
+              )}
+            </>
+          )}
+
           <Field
             id="note"
             label="Anything the club should know"
@@ -281,10 +484,11 @@ export default function HorseRequestPage() {
           <div className="hz-note-box">
             <strong>What happens next</strong>
             <p>
-              The club manager reviews your request and, if approved, assigns the registration
-              code and a stall, and checks the parents against the papers. After approval you can
-              edit the basic details of your own horse (name, colour...) and add a parent that is
-              still unknown. A parent already on record can only be corrected by the club.
+              The club manager reviews the photo, measures and papers. If approved, you receive a
+              contract for the stay: sign it online and pay through payOS (bank QR). The club then
+              receives the horse, assigns its registration code, stall and Head Trainer, and the
+              stay starts that day. Pedigree records skip the contract: the club issues the code
+              straight away.
             </p>
           </div>
 
@@ -313,9 +517,10 @@ export default function HorseRequestPage() {
           {listError && <p className="hz-form-error" role="alert">{listError}</p>}
           <ul className="hz-list">
             {rows.map((r) => {
-              const st = toRequestStatus(r.status);
+              const st = toRequestStatus(r.status, r.contractStatus);
               return (
                 <li key={r.requestId}>
+                  {r.recordType !== "PEDIGREE" && <HorsePhoto horse={r} className="hz-photo--sm" />}
                   <div>
                     <strong>{r.horseName}</strong>
                     <p>{toStage({ recordType: r.recordType, dateOfBirth: r.dateOfBirth }).label}</p>
@@ -329,7 +534,13 @@ export default function HorseRequestPage() {
                     {(r.sireName || r.damName) && (
                       <p>Sire {r.sireName || "unknown"} · Dam {r.damName || "unknown"}</p>
                     )}
+                    {r.recordType !== "PEDIGREE" && r.contractMonths && (
+                      <p>Stay {r.contractMonths} month{r.contractMonths === 1 ? "" : "s"} · training {r.trainingWeeks} weeks</p>
+                    )}
                     <p>Sent {formatDateTime(r.createdAt)}</p>
+                    {r.status === "PENDING" && r.recordType !== "PEDIGREE" && !r.photoUrl && (
+                      <p className="hz-field__error">No photo yet: the club cannot approve it until you add one.</p>
+                    )}
 
                     {/* Lý do từ chối phải hiện ra. Không có nó thì lần gửi lại
                         sẽ hỏng y như lần đầu. */}
@@ -340,6 +551,14 @@ export default function HorseRequestPage() {
 
                   <div className="hz-row-action">
                     <StatusChip tone={st.tone} label={st.label} />
+                    {r.status === "PENDING" && r.recordType !== "PEDIGREE" && (
+                      <label className="hz-btn hz-btn--ghost" style={{ marginLeft: 8 }}>
+                        {photoBusyId === r.requestId ? "Uploading…" : r.photoUrl ? "Replace photo" : "Add photo"}
+                        <input type="file" accept={PHOTO_TYPES} hidden
+                               disabled={photoBusyId === r.requestId}
+                               onChange={(e) => replacePhoto(r, e.target.files?.[0])} />
+                      </label>
+                    )}
                     {r.status === "PENDING" && (
                       <button
                         type="button"
@@ -349,6 +568,16 @@ export default function HorseRequestPage() {
                         onClick={() => cancel(r)}
                       >
                         {cancellingId === r.requestId ? "Cancelling…" : "Cancel request"}
+                      </button>
+                    )}
+                    {r.contractId && (
+                      <button
+                        type="button"
+                        className="hz-btn"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => navigate(`/horse-owner/contracts/${r.contractId}`)}
+                      >
+                        {r.contractStatus === "SENT" ? "Read and sign" : r.contractStatus === "SIGNED" ? "Pay" : "Open contract"}
                       </button>
                     )}
                     {(r.status === "REJECTED" || r.status === "CANCELLED") && (

@@ -3,6 +3,10 @@ package racehorse.backend.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +24,8 @@ import racehorse.backend.entity.HorseRequestRow;
 import racehorse.backend.security.AuthInterceptor;
 import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.RequireRole;
+import racehorse.backend.service.ContractService;
+import racehorse.backend.service.HorsePhotoService;
 import racehorse.backend.service.HorseRequestService;
 import racehorse.backend.service.HorseService;
 
@@ -34,14 +40,53 @@ import racehorse.backend.service.HorseService;
  * ownerId luôn lấy từ token, không nhận từ client, nên không ai gửi yêu cầu
  * thay người khác được.
  */
+/*
+ * Ghi chú cập nhật: chú thích trên nhắc HorseController.create, nhưng endpoint POST /api/horses
+ * đã bị bỏ; HorseService.create giờ chỉ được gọi nội bộ từ HorseRequestService.approve.
+ *
+ * Vòng đời một yêu cầu (bảng HORSE_REQUEST):
+ *   PENDING --(Manager duyệt: cấp mã đăng ký + chuồng [+ HLV])--> APPROVED (tạo dòng HORSE)
+ *   PENDING --(Manager từ chối, bắt buộc lý do)----------------> REJECTED
+ *   PENDING --(chủ ngựa tự huỷ)--------------------------------> CANCELLED
+ */
 @RestController
 @RequestMapping("/api/horse-requests")
 public class HorseRequestController {
 
     private final HorseRequestService service;
+    private final HorsePhotoService photos;
+    private final ContractService contracts;
 
-    public HorseRequestController(HorseRequestService service) {
+    public HorseRequestController(HorseRequestService service, HorsePhotoService photos,
+                                  ContractService contracts) {
         this.service = service;
+        this.photos = photos;
+        this.contracts = contracts;
+    }
+
+    /** V48: ảnh của yêu cầu (bắt buộc với ngựa vào CLB trước khi Manager duyệt). Phần tên "file". */
+    @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireRole({"HORSE_OWNER"})
+    public HorseRequestRow uploadPhoto(
+            @PathVariable int id,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return photos.uploadRequestPhoto(id, file, user, http.getRemoteAddr());
+    }
+
+    /** Head Trainer chủ ngựa có thể xin: chỉ người còn nhận thêm ngựa, chỉ tên. */
+    @GetMapping("/trainer-options")
+    @RequireRole({"HORSE_OWNER"})
+    public List<Map<String, Object>> trainerOptions() {
+        return service.trainerOptions();
+    }
+
+    /** Phí tháng và chiết khấu theo gói, để form tính trước giá trị hợp đồng. */
+    @GetMapping("/pricing")
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER"})
+    public ContractService.Pricing pricing() {
+        return contracts.pricing();
     }
 
     @PostMapping
