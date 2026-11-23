@@ -11,6 +11,7 @@ import java.time.LocalDate;
 
 /**
  * Những gì chủ ngựa khai khi xin đăng ký.
+ * V50: thêm khoảng huấn luyện mong muốn (từ ngày, đến ngày), thay cho chỉ số tuần.
  *
  * Hồ sơ PEDIGREE (chỉ làm cha mẹ / tổ tiên) vẫn chỉ cần tên. Ngựa vào CLB
  * (ACADEMY) giờ phải khai thêm những thứ học viện cần để DUYỆT có cơ sở
@@ -69,14 +70,18 @@ public record SubmitRequest(
         String runningStyle,
 
         LocalDate preferredStart,
-        Integer trainingWeeks,
+        Integer trainingWeeks,          // computed by the server from the two dates below (V50)
         Integer contractMonths,
-        Integer preferredTrainerId
+        Integer preferredTrainerId,
+
+        // ---- V50: the training window the owner asks for ----
+        LocalDate trainingStart,
+        LocalDate trainingEnd
 ) {
     /** The nine fields a pedigree-only record uses (and that older callers pass). */
     public SubmitRequest(String horseName, String breed, String horseGender, LocalDate dateOfBirth,
                          String color, String note, String recordType, Integer sireId, Integer damId) {
         this(horseName, breed, horseGender, dateOfBirth, color, note, recordType, sireId, damId,
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null);
     }
 }

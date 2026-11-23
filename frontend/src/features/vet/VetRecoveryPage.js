@@ -40,6 +40,16 @@ import {
   createMedicalRecord,
 } from "./vetApi";
 
+// AAEP (American Association of Equine Practitioners) Official Lameness Scale
+const AAEP_LAMENESS_GRADES = [
+  { grade: 0, code: "GRADE_0", name: "Grade 0: Completely Sound", desc: "Lameness not perceptible under any circumstances. Clean symmetrical stride.", eligible: true },
+  { grade: 1, code: "GRADE_1", name: "Grade 1: Trace / Inconsistent", desc: "Difficult to observe; not consistently apparent regardless of circumstances.", eligible: false },
+  { grade: 2, code: "GRADE_2", name: "Grade 2: Mild / Weight-bearing", desc: "Difficult to observe in straight line; consistently apparent in circles or hard surfaces.", eligible: false },
+  { grade: 3, code: "GRADE_3", name: "Grade 3: Moderate / Trot", desc: "Consistently observable at a trot under all circumstances.", eligible: false },
+  { grade: 4, code: "GRADE_4", name: "Grade 4: Severe Lameness", desc: "Obvious lameness with marked head bob, hitching, or shortened stride at all gaits.", eligible: false },
+  { grade: 5, code: "GRADE_5", name: "Grade 5: Non-weight bearing / Paralysis", desc: "Minimal weight-bearing in motion/rest; inability to move or extreme distress.", eligible: false },
+];
+
 // Năm bước hiển thị trên thanh tiến trình (chỉ số 0..4 khớp giá trị stageOf trả về).
 const STAGES = ["Examine", "Treatment", "Light work", "Rating", "Healthy"];
 
@@ -959,19 +969,27 @@ function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
           </div>
 
           <label className="vx-field vx-field--full">
-            <span>Gait & Locomotion Evaluation</span>
+            <span>AAEP Lameness & Gait Locomotion Evaluation</span>
             <select
               className="vx-input"
               value={gaitAssessment}
               onChange={(e) => setGaitAssessment(e.target.value)}
             >
-              <option value="Grade 0: Completely sound, clean symmetrical trot, no lameness">
-                Grade 0: Completely sound, clean symmetrical trot, no lameness
-              </option>
-              <option value="Grade 1: Trace irregularity, resolves after warm-up, non-functional">
-                Grade 1: Trace irregularity, resolves after warm-up, non-functional
-              </option>
+              {AAEP_LAMENESS_GRADES.map((g) => (
+                <option key={g.grade} value={`${g.name} - ${g.desc}`}>
+                  {g.name} ({g.desc})
+                </option>
+              ))}
             </select>
+            {gaitAssessment.includes("Grade 0") ? (
+              <span style={{ fontSize: "12px", color: "#059669", fontWeight: 600, marginTop: "4px" }}>
+                ✓ AAEP Grade 0 (Sound): Symmetrical stride confirmed. Horse satisfies gait locomotion criteria for final clearance.
+              </span>
+            ) : (
+              <span style={{ fontSize: "12px", color: "#d97706", fontWeight: 600, marginTop: "4px" }}>
+                ⚠️ Notice: Perceptible gait irregularity detected. Final lock release will strictly require Grade 0 (Sound).
+              </span>
+            )}
           </label>
 
           <label className="vx-field vx-field--full">
@@ -1231,7 +1249,8 @@ function ConfirmDialog({ horse, openInjuries, openReports, hasActiveTreatment, h
   const navigate = useNavigate();
   const [picked, setPicked] = useState(() => new Set());
   const [answered, setAnswered] = useState(() => new Set());
-  const [diagnosis, setDiagnosis] = useState("");
+  const [aaepGrade, setAaepGrade] = useState(0);
+  const [diagnosis, setDiagnosis] = useState("AAEP Grade 0: Full recovery confirmed, completely sound with symmetrical stride at all gaits");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -1259,6 +1278,12 @@ function ConfirmDialog({ horse, openInjuries, openReports, hasActiveTreatment, h
     const unanswered = openReports.filter((r) => !answered.has(r.reportId));
     if (hasActiveTreatment) {
       setError({ message: "Cannot confirm recovery: Horse is still under active medical treatment/prescription." });
+      return;
+    }
+    if (aaepGrade > 0) {
+      setError({
+        message: `Cannot release training lock: Horse evaluated at AAEP Grade ${aaepGrade}. Equine sports regulations strictly require Grade 0 (Completely Sound) to grant health clearance.`,
+      });
       return;
     }
     if (!diagnosis.trim()) {
@@ -1354,6 +1379,60 @@ function ConfirmDialog({ horse, openInjuries, openReports, hasActiveTreatment, h
           </fieldset>
         )}
 
+        <label className="vx-field vx-field--full" style={{ marginTop: "12px" }}>
+          <span>Final Locomotion Clearance (AAEP Lameness Scale)</span>
+          <select
+            className="vx-input"
+            value={aaepGrade}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              setAaepGrade(val);
+              if (val === 0) {
+                setDiagnosis("AAEP Grade 0 confirmed: Full recovery, completely sound with symmetrical stride at walk and trot.");
+              }
+            }}
+          >
+            {AAEP_LAMENESS_GRADES.map((g) => (
+              <option key={g.grade} value={g.grade}>
+                {g.name} — {g.desc}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {aaepGrade === 0 ? (
+          <div
+            className="vx-banner vx-banner--green"
+            style={{
+              margin: "10px 0",
+              padding: "10px 14px",
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              borderRadius: "8px",
+              color: "#065f46",
+            }}
+          >
+            <strong>✓ AAEP Grade 0 (Sound):</strong> Đạt chuẩn vận động không khập khiễng. Đủ điều kiện cấp chứng chỉ hồi phục và giải phóng Training Lock.
+          </div>
+        ) : (
+          <div
+            className="vx-banner vx-banner--warn"
+            style={{
+              margin: "10px 0",
+              padding: "10px 14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              color: "#991b1b",
+            }}
+          >
+            <strong>⚠️ Không thể mở khóa:</strong> Ngựa được đánh giá <strong>AAEP Grade {aaepGrade}</strong> (còn khập khiễng). Quy chuẩn thú y đua ngựa yêu cầu đạt <strong>Grade 0 (Sound)</strong> mới được giải phóng Training Lock.
+            <div style={{ marginTop: "6px", fontSize: "12px" }}>
+              Vui lòng chỉ định thêm các buổi tập nhẹ phục hồi hoặc yêu cầu tái khám trước khi cấp giấy chứng nhận sức khỏe.
+            </div>
+          </div>
+        )}
+
         <label className="vx-field vx-field--full">
           <span>Conclusion (Required)</span>
           <input
@@ -1377,8 +1456,20 @@ function ConfirmDialog({ horse, openInjuries, openReports, hasActiveTreatment, h
         </label>
 
         <div className="vx-actions">
-          <button type="button" className="vx-btn vx-btn--green" disabled={busy} onClick={submit}>
-            {busy ? "Saving…" : "Confirm recovery"}
+          <button
+            type="button"
+            className="vx-btn vx-btn--green"
+            disabled={busy || aaepGrade > 0}
+            onClick={submit}
+            style={aaepGrade > 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+          >
+            {busy
+              ? "Saving…"
+              : aaepGrade > 0
+              ? "Locked (AAEP Grade 0 Required)"
+              : hasLock
+              ? "Release training lock"
+              : "Confirm recovery"}
           </button>
           <button type="button" className="vx-btn vx-btn--ghost" disabled={busy} onClick={onClose}>
             Cancel

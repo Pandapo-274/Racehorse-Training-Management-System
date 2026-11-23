@@ -77,6 +77,7 @@ public class HorseRequestService {
         horseService.checkDeclaredParents(raw.sireId(), raw.damId(), raw.dateOfBirth(), me.userId());
 
         // A pedigree record never stays at the club: its stay fields are dropped, not stored.
+        // training_weeks is derived from the window, never taken from the client.
         SubmitRequest clean = new SubmitRequest(
                 name, blankToNull(raw.breed()), blankToNull(raw.horseGender()),
                 raw.dateOfBirth(), blankToNull(raw.color()), blankToNull(raw.note()), type,
@@ -84,8 +85,10 @@ public class HorseRequestService {
                 club ? raw.weight() : null, club ? raw.heightCm() : null,
                 club ? blankToNull(raw.surface()) : null, club ? blankToNull(raw.distancePref()) : null,
                 club ? blankToNull(raw.runningStyle()) : null,
-                club ? raw.preferredStart() : null, club ? raw.trainingWeeks() : null,
-                club ? raw.contractMonths() : null, club ? raw.preferredTrainerId() : null);
+                club ? raw.preferredStart() : null,
+                club ? HorsePolicy.trainingWeeks(raw.trainingStart(), raw.trainingEnd()) : null,
+                club ? raw.contractMonths() : null, club ? raw.preferredTrainerId() : null,
+                club ? raw.trainingStart() : null, club ? raw.trainingEnd() : null);
         int id = requests.insert(me.userId(), clean);
         users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
         HorseRequestRow saved = getOrThrow(id);
@@ -102,10 +105,9 @@ public class HorseRequestService {
         Map<String, String> errors = new LinkedHashMap<>();
         if (raw.weight() == null) errors.put("weight", "Weight is required for a club horse");
         if (raw.heightCm() == null) errors.put("heightCm", "Height is required for a club horse");
-        errors.putAll(HorsePolicy.termProblems(raw.trainingWeeks(), raw.contractMonths()));
-        if (raw.preferredStart() != null && raw.preferredStart().isBefore(LocalDate.now())) {
-            errors.put("preferredStart", "The start date cannot be in the past");
-        }
+        // V50: arrival day, training window (>= 3 weeks, inside the stay) and length of stay.
+        errors.putAll(HorsePolicy.stayProblems(raw.preferredStart(), raw.trainingStart(), raw.trainingEnd(),
+                raw.contractMonths(), LocalDate.now()));
         if (raw.preferredTrainerId() != null
                 && horseService.listAvailableTrainers().stream()
                         .noneMatch(t -> t.userId() == raw.preferredTrainerId())) {

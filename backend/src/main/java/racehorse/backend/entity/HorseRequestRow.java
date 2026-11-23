@@ -37,5 +37,7 @@ public record HorseRequestRow(
         int ownerActiveHorses,
         String growth,
         // V49: newest contract of this request, null before approval
-        Integer contractId, String contractStatus
+        Integer contractId, String contractStatus,
+        // V50: training window asked for
+        LocalDate trainingStart, LocalDate trainingEnd
 ) {}

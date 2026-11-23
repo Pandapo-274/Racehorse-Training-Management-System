@@ -11,7 +11,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   listHorses, canEditHorse, getHorseBasePath, toStatus, toGender,
-  toAge, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly, healthApplies,
+  toAge, formatAge, formatAgeShort, formatWeight, STATUS_OPTIONS, toStage, STAGE_FILTERS, isPedigreeOnly, healthApplies,
   isWithdrawn, toActivity, ACTIVITY_OPTIONS,
 } from "./horseApi";
 import { listTrainingPlans } from "../trainer/trainingPlanApi";
@@ -275,7 +275,9 @@ export default function HorseListPage() {
                         <td className="hz-name">{h.horseName}</td>
                         <td className="hz-mono">{h.registrationCode}</td>
                         <td>{toGender(h.horseGender)}</td>
-                        <td>{age == null ? "—" : `${age}y`}</td>
+                        <td title={age == null ? undefined : formatAge(h.dateOfBirth)}>
+                          {age == null ? "—" : formatAgeShort(h.dateOfBirth)}
+                        </td>
                         <td>{pedigree ? "—" : formatWeight(h.weight)}</td>
                         <td className="hz-mono">{pedigree ? "—" : h.stallNo || "—"}</td>
                         <td>{h.ownerName || `#${h.ownerId}`}</td>

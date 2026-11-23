@@ -10,6 +10,7 @@
  * Ngoài ra: gỡ lệnh khoá đang có (releaseLock) và chuyển viện ngoài (ReferralModal, V40).
  */
 import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import { toAge } from "../horse/horseApi";
@@ -37,146 +38,475 @@ import {
 const WEIGHT_MIN = 30;
 const WEIGHT_MAX = 1500;
 
-/* ---------- mô hình ngựa 2D (toạ độ theo % của khung vuông) ---------- */
-
-const SHAPES = {
-  body: { x: 12, y: 26, w: 52, h: 26, r: 5 },
-  head: { x: 60, y: 12, w: 28, h: 15, r: 4 },
-  legs: [
-    { x: 16, y: 48, w: 7, h: 40 },
-    { x: 27, y: 48, w: 7, h: 40 },
-    { x: 50, y: 48, w: 7, h: 40 },
-    { x: 59, y: 48, w: 7, h: 40 },
-  ],
-};
-
-/** Vùng cơ thể gần đúng từ vị trí chạm. */
-// Đoán tên vùng cơ thể từ toạ độ bấm (0-100 theo chiều ngang / dọc): đầu, thân, chân trước / sau (trên / giữa / dưới).
-function guessBodyPart(x, y) {
-  if (x >= 58 && y < 30) return "Head";
-
-  if (y >= 50) {
-    const level = y < 62 ? "upper" : y < 76 ? "middle" : "lower";
-
-    if (x < 40) return `Hind limb, ${level}`;
-    if (x >= 46) return `Forelimb, ${level}`;
-  }
-
-  return "Trunk";
-}
-
-// Ghép vị trí hiển thị: "Left forelimb, upper"; đầu và thân không cần bên trái / phải.
-function composeLocation(part, side) {
-  return /^(Head|Trunk)/.test(part)
-    ? part
-    : `${side} ${part[0].toLowerCase()}${part.slice(1)}`;
-}
-
-function swapSide(text, side) {
-  return /^(left|right)\b/i.test(text)
-    ? text.replace(/^(left|right)/i, side)
-    : text;
-}
+/* ---------- MÔ HÌNH NGỰA 3D CHUẨN ĐỒ HOẠ BASE MESH POLYGON (THREE.JS WEBGL) ---------- */
 
 const clamp = (n) => Math.min(100, Math.max(0, n));
 const round2 = (n) => Math.round(n * 100) / 100;
 
-// Đổi một hình chữ nhật trong SHAPES thành thuộc tính của thẻ <rect> trong SVG.
-function rect({ x, y, w, h, r }) {
-  return {
-    x,
-    y,
-    width: w,
-    height: h,
-    rx: r,
-    className: "vx-model-shape",
+/**
+ * Xây dựng mô hình 3D Base Mesh Horse (polygon/wireframe) tương tự ảnh tham chiếu 3704 triangles.
+ */
+function buildHorse3DMesh() {
+  const horseGroup = new THREE.Group();
+  horseGroup.name = "HorseGroup";
+
+  // Vật liệu Base Mesh màu xám studio, flatShading tạo hiệu ứng khối đa giác (polygon mesh)
+  const clayMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb5bec7,
+    roughness: 0.5,
+    metalness: 0.08,
+    flatShading: true,
+  });
+
+  // Lưới wireframe trắng tinh tế phủ lên bề mặt đa giác
+  const wireframeMaterial = new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.4,
+  });
+
+  const addSegment = (geom, pos, rot, scale, partName, side) => {
+    const mesh = new THREE.Mesh(geom, clayMaterial);
+    if (pos) mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = { bodyPart: partName, side: side || "Left" };
+
+    // Thêm wireframe edges
+    const edges = new THREE.EdgesGeometry(geom, 24);
+    const line = new THREE.LineSegments(edges, wireframeMaterial);
+    mesh.add(line);
+
+    horseGroup.add(mesh);
+    return mesh;
   };
+
+  // 1. Thân mình & Lồng ngực (Torso / Barrel)
+  const barrelGeo = new THREE.CylinderGeometry(15, 17, 44, 14, 6);
+  addSegment(barrelGeo, [2, 9, 0], [0, 0, Math.PI / 2], [1.08, 1, 0.95], "Trunk / Barrel", "Both");
+
+  // Vai & Xương sống (Withers & Spine)
+  const withersGeo = new THREE.BoxGeometry(17, 13, 14);
+  addSegment(withersGeo, [15, 19, 0], [0, 0, -0.2], [1, 1, 0.8], "Withers / Spine", "Both");
+
+  // Hông, Xương chậu & Mông dốc hài hòa (Croup, Pelvis & Harmonious Rump)
+  // Khung chậu kéo dài từ thắt lưng về phía sau, dốc tự nhiên ~20 độ
+  const pelvisGeo = new THREE.CylinderGeometry(12, 14.5, 22, 12, 4);
+  addSegment(pelvisGeo, [-18, 13.5, 0], [0, 0, Math.PI / 2 + 0.28], [1, 0.95, 0.9], "Croup / Pelvis", "Both");
+
+  // Vòm mông sau & Đỉnh mông tròn đều (Rump & Buttocks curve)
+  const buttockGeo = new THREE.SphereGeometry(10.5, 12, 10);
+  addSegment(buttockGeo, [-26, 11, 0], [0, 0, 0], [0.92, 1.08, 0.86], "Rump / Buttocks", "Both");
+
+  // Ngực & Lồng sườn trước (Chest & Girth)
+  const chestGeo = new THREE.SphereGeometry(16.5, 12, 10);
+  addSegment(chestGeo, [22, 10, 0], [0, 0, 0], [1.05, 1.1, 0.9], "Chest & Girth", "Both");
+
+  // 2. Cổ (Neck & Crest)
+  const neckGeo = new THREE.CylinderGeometry(9, 13.5, 36, 12, 5);
+  addSegment(neckGeo, [35, 30, 0], [0, 0, -0.65], [1.1, 1, 0.85], "Neck & Crest", "Both");
+
+  // 3. Đầu & Mõm (Head & Muzzle)
+  const headGeo = new THREE.ConeGeometry(9.5, 28, 10);
+  addSegment(headGeo, [53, 46, 0], [0, 0, 1.15], [1, 1, 0.8], "Head / Muzzle", "Both");
+
+  // Tai (Ears)
+  const earGeo = new THREE.ConeGeometry(2.5, 8, 6);
+  addSegment(earGeo, [45, 58, 4.5], [0.2, 0, -0.3], [1, 1, 1], "Left Ear", "Left");
+  addSegment(earGeo, [45, 58, -4.5], [-0.2, 0, -0.3], [1, 1, 1], "Right Ear", "Right");
+
+  // 4. Đuôi (Tail) gắn tại khớp đuôi (Dock)
+  const tailGeo = new THREE.CylinderGeometry(2.8, 1.0, 32, 8);
+  addSegment(tailGeo, [-31, -2, 0], [0, 0, 0.18], [1, 1, 0.8], "Tail / Dock", "Both");
+
+  // 5. Hai chân trước (Forelimbs: Trái +Z, Phải -Z)
+  [-1, 1].forEach((sign) => {
+    const side = sign > 0 ? "Left" : "Right";
+    const z = sign * 12.5;
+
+    // Vai (Shoulder)
+    const shGeo = new THREE.SphereGeometry(8.5, 8, 8);
+    addSegment(shGeo, [19, 8, z], [0, 0, 0], [1, 1.3, 0.8], `${side} forelimb, shoulder`, side);
+
+    // Cẳng chân trên (Forearm)
+    const upperGeo = new THREE.CylinderGeometry(4.8, 3.8, 22, 8);
+    addSegment(upperGeo, [19, -8, z], [0, 0, 0.05], [1, 1, 1], `${side} forelimb, upper (radius)`, side);
+
+    // Khớp khuỷu / Khớp gối trước (Carpus / Knee)
+    const kneeGeo = new THREE.SphereGeometry(4.2, 8, 8);
+    addSegment(kneeGeo, [18, -20, z], [0, 0, 0], [1, 1, 0.9], `${side} forelimb, knee (carpus)`, side);
+
+    // Xương ống & Gân gấp ngón nông (Cannon & SDFT Tendon)
+    const cannonGeo = new THREE.CylinderGeometry(3.2, 2.8, 20, 8);
+    addSegment(cannonGeo, [18, -31, z], [0, 0, 0], [0.9, 1, 0.9], `${side} forelimb, tendon (SDFT / cannon)`, side);
+
+    // Khớp cổ chân (Fetlock joint)
+    const fetlockGeo = new THREE.SphereGeometry(3.8, 8, 8);
+    addSegment(fetlockGeo, [18, -42, z], [0, 0, 0], [1, 1, 1], `${side} forelimb, fetlock joint`, side);
+
+    // Móng & Khớp bàn (Pastern & Hoof)
+    const hoofGeo = new THREE.CylinderGeometry(3.5, 5, 8, 8);
+    addSegment(hoofGeo, [18, -48, z], [0, 0, 0], [1, 1, 1], `${side} forelimb, hoof & pastern`, side);
+  });
+
+  // 6. Hai chân sau (Hindlimbs: Trái +Z, Phải -Z) - Kết nối mượt mà với khung chậu & đùi
+  [-1, 1].forEach((sign) => {
+    const side = sign > 0 ? "Left" : "Right";
+    const z = sign * 12.5;
+
+    // Cơ đùi mông 2 bên (Gluteal Quarter & Hip flank)
+    const haunchGeo = new THREE.SphereGeometry(8.5, 8, 8);
+    addSegment(haunchGeo, [-20, 11, sign * 8.0], [0, 0, 0.25], [1.2, 1.1, 0.75], `${side} haunch / gluteal`, side);
+
+    // Đùi & Khớp đùi (Thigh & Stifle)
+    const thighGeo = new THREE.CylinderGeometry(7.2, 5.0, 21, 8, 2);
+    addSegment(thighGeo, [-17, 2, z], [0, 0, -0.32], [1.15, 1, 0.9], `${side} hindlimb, stifle / thigh`, side);
+
+    // Khớp bánh chè / Đầu gối sau (Stifle joint)
+    const stifleGeo = new THREE.SphereGeometry(4.4, 8, 8);
+    addSegment(stifleGeo, [-13, -7, z], [0, 0, 0], [1, 1, 1], `${side} hindlimb, stifle joint`, side);
+
+    // Cẳng chân sau (Gaskin / Second thigh)
+    const gaskinGeo = new THREE.CylinderGeometry(4.6, 3.6, 17, 8);
+    addSegment(gaskinGeo, [-17, -14, z], [0, 0, 0.36], [1, 1, 0.9], `${side} hindlimb, gaskin`, side);
+
+    // Khớp khoeo (Hock / Tarsus)
+    const hockGeo = new THREE.SphereGeometry(4.4, 8, 8);
+    addSegment(hockGeo, [-21, -22, z], [0, 0, 0], [1.1, 1, 0.9], `${side} hindlimb, hock (tarsus)`, side);
+
+    // Xương ống sau (Cannon & Hind Tendon)
+    const cannonGeo = new THREE.CylinderGeometry(3.3, 2.7, 20, 8);
+    addSegment(cannonGeo, [-21, -32, z], [0, 0, 0.05], [0.9, 1, 0.9], `${side} hindlimb, tendon / cannon`, side);
+
+    // Khớp cổ chân sau (Hind Fetlock)
+    const fetlockGeo = new THREE.SphereGeometry(3.6, 8, 8);
+    addSegment(fetlockGeo, [-20, -42, z], [0, 0, 0], [1, 1, 1], `${side} hindlimb, fetlock joint`, side);
+
+    // Móng sau (Hind Hoof)
+    const hoofGeo = new THREE.CylinderGeometry(3.5, 4.8, 7, 8);
+    addSegment(hoofGeo, [-19, -48, z], [0, 0, 0], [1, 1, 1], `${side} hindlimb, hoof & pastern`, side);
+  });
+
+  return horseGroup;
 }
 
-// Mô hình ngựa 2D bằng SVG: bấm (hoặc dùng phím) để đặt điểm chấn thương; hiện cả các điểm chấn thương cũ.
-function HorseModel({ marker, existingMarkers = [], onMark }) {
-  // Toạ độ bấm đổi sang phần trăm của khung (không phụ thuộc kích thước hiển thị), làm tròn 2 chữ số.
-  const handleClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+/**
+ * Component Mô hình 3D Three.js hoàn chỉnh với tracking chấm đỏ theo toạ độ 3D.
+ */
+function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmarkSelect }) {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const cameraRef = useRef(null);
+  const horseGroupRef = useRef(null);
+  const pinGroupRef = useRef(null);
 
-    onMark(
-      round2(clamp(((e.clientX - rect.left) / rect.width) * 100)),
-      round2(clamp(((e.clientY - rect.top) / rect.height) * 100))
+  const [cameraLabel, setCameraLabel] = useState("3/4 Perspective");
+  const isDraggingRef = useRef(false);
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const downPosRef = useRef({ x: 0, y: 0 });
+
+  // Khởi tạo Scene Three.js
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+
+    const width = container.clientWidth || 360;
+    const height = container.clientHeight || 360;
+
+    // Scene
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(42, width / height, 1, 1000);
+    camera.position.set(0, 12, 185);
+    cameraRef.current = camera;
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.innerHTML = "";
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Ánh sáng Studio
+    const ambientLight = new THREE.AmbientLight(0xf1f5f9, 0.85);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.3);
+    keyLight.position.set(80, 120, 90);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xcfd8dc, 0.65);
+    fillLight.position.set(-80, 50, -70);
+    scene.add(fillLight);
+
+    // Bóng sàn (Ground shadow disk)
+    const shadowGeo = new THREE.PlaneGeometry(160, 110);
+    const shadowCanvas = document.createElement("canvas");
+    shadowCanvas.width = 128;
+    shadowCanvas.height = 128;
+    const sCtx = shadowCanvas.getContext("2d");
+    const sGrad = sCtx.createRadialGradient(64, 64, 10, 64, 64, 64);
+    sGrad.addColorStop(0, "rgba(100, 116, 139, 0.35)");
+    sGrad.addColorStop(0.6, "rgba(148, 163, 184, 0.12)");
+    sGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+    sCtx.fillStyle = sGrad;
+    sCtx.fillRect(0, 0, 128, 128);
+    const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
+    const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false });
+    const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+    shadowMesh.rotation.x = -Math.PI / 2;
+    shadowMesh.position.set(0, -52.5, 0);
+    scene.add(shadowMesh);
+
+    // Thêm mô hình ngựa 3D
+    const horseGroup = buildHorse3DMesh();
+    horseGroup.rotation.y = 0.65; // Mặc định góc 3/4 đẹp
+    horseGroup.rotation.x = 0.12;
+    scene.add(horseGroup);
+    horseGroupRef.current = horseGroup;
+
+    // Nhóm chấm đỏ Pin (GẮN TRỰC TIẾP VÀO HORSEGROUP ĐỂ TRACKING 100% KHI XOAY)
+    const pinGroup = new THREE.Group();
+    pinGroup.name = "ActivePinGroup";
+    pinGroup.visible = false;
+
+    // Viên ngọc đỏ phát sáng 3D
+    const pinSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 16, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0xff1e38,
+        emissive: 0xff002b,
+        emissiveIntensity: 0.9,
+        roughness: 0.2,
+      })
     );
+    pinGroup.add(pinSphere);
+
+    // Vòng hào quang pulsing
+    const ringGeo = new THREE.RingGeometry(4.2, 5.8, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff4d5e,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const pinRing = new THREE.Mesh(ringGeo, ringMat);
+    pinRing.rotation.x = Math.PI / 2;
+    pinGroup.add(pinRing);
+
+    horseGroup.add(pinGroup);
+    pinGroupRef.current = pinGroup;
+
+    // Animation Loop
+    let reqId;
+    let clock = 0;
+    const animate = () => {
+      reqId = requestAnimationFrame(animate);
+      clock += 0.05;
+      if (pinRing) {
+        const s = 1 + Math.sin(clock * 3) * 0.18;
+        pinRing.scale.set(s, s, s);
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Resize Handler
+    const handleResize = () => {
+      if (!container) return;
+      const w = container.clientWidth || 360;
+      const h = container.clientHeight || 360;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      window.removeEventListener("resize", handleResize);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  // Cập nhật vị trí chấm đỏ tracking khi marker3D hoặc marker thay đổi
+  useEffect(() => {
+    if (!pinGroupRef.current || !horseGroupRef.current) return;
+    const pin = pinGroupRef.current;
+
+    if (marker3D && typeof marker3D.x === "number") {
+      pin.visible = true;
+      pin.position.set(marker3D.x, marker3D.y, marker3D.z);
+    } else if (marker && typeof marker.x === "number") {
+      // Ước tính vị trí 3D từ toạ độ 2D phần trăm nếu chưa có toạ độ 3D trực tiếp
+      const x3d = (marker.x - 50) * 1.5;
+      const y3d = (50 - marker.y) * 1.3;
+      const z3d = 14;
+      pin.visible = true;
+      pin.position.set(x3d, y3d, z3d);
+    } else {
+      pin.visible = false;
+    }
+  }, [marker, marker3D]);
+
+  // Xử lý kéo xoay chuột 3D Orbit
+  const handlePointerDown = (e) => {
+    isDraggingRef.current = true;
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    downPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleKey = (e) => {
-    const step = 2;
+  const handlePointerMove = (e) => {
+    if (!isDraggingRef.current || !horseGroupRef.current) return;
+    const dx = e.clientX - lastMousePosRef.current.x;
+    const dy = e.clientY - lastMousePosRef.current.y;
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
-    if ((e.key === "Enter" || e.key === " ") && !marker) {
-      e.preventDefault();
-      onMark(38, 40);
+    horseGroupRef.current.rotation.y += dx * 0.012;
+    horseGroupRef.current.rotation.x = Math.max(
+      -0.45,
+      Math.min(0.45, horseGroupRef.current.rotation.x + dy * 0.012)
+    );
+    setCameraLabel("Free Orbit");
+  };
+
+  const handlePointerUp = (e) => {
+    isDraggingRef.current = false;
+    const container = mountRef.current;
+    if (!container || !cameraRef.current || !horseGroupRef.current) return;
+
+    // Kiểm tra nếu là một cú CLICK thật sự (không phải drag xoay)
+    const moveDist = Math.hypot(
+      e.clientX - downPosRef.current.x,
+      e.clientY - downPosRef.current.y
+    );
+    if (moveDist > 6) {
+      // Người dùng đang kéo xoay mô hình -> KHÔNG ĐƯỢC THAY ĐỔI VẾT THƯƠNG HOẶC TEXT
       return;
     }
 
-    if (!marker) return;
+    // Bắt điểm 3D Raycasting
+    const rect = container.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
 
-    const moves = {
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-      ArrowUp: [0, -step],
-      ArrowDown: [0, step],
-    };
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, cameraRef.current);
 
-    if (moves[e.key]) {
-      e.preventDefault();
+    const intersects = raycaster.intersectObjects(horseGroupRef.current.children, true);
+    // Lọc bỏ đối tượng pin
+    const validHits = intersects.filter(
+      (h) => h.object.name !== "ActivePinGroup" && h.object.parent?.name !== "ActivePinGroup"
+    );
 
-      onMark(
-        round2(clamp(marker.x + moves[e.key][0])),
-        round2(clamp(marker.y + moves[e.key][1])),
-        true
-      );
+    if (validHits.length > 0) {
+      const hit = validHits[0];
+      // Chuyển toạ độ điểm va chạm từ World Space sang Local Space của HorseGroup
+      const localPt = horseGroupRef.current.worldToLocal(hit.point.clone());
+
+      // Lấy tên giải phẫu và vị trí bên trái/phải
+      const bodyPart = hit.object.userData?.bodyPart || "Trunk / Barrel";
+      const detectedSide = hit.object.userData?.side || (localPt.z > 0 ? "Left" : "Right");
+
+      // Toạ độ phần trăm 2D lưu database
+      const pctX = round2(clamp(((e.clientX - rect.left) / rect.width) * 100));
+      const pctY = round2(clamp(((e.clientY - rect.top) / rect.height) * 100));
+
+      // Cập nhật toạ độ điểm 3D và gọi callback LƯU VẾT THƯƠNG
+      onMark(pctX, pctY, { x: localPt.x, y: localPt.y, z: localPt.z });
+      if (onLandmarkSelect) {
+        onLandmarkSelect(bodyPart, detectedSide);
+      }
     }
   };
 
+  // Nút xoay camera cố định chuẩn y khoa
+  const setCameraPreset = (name, targetYaw, targetPitch) => {
+    if (!horseGroupRef.current) return;
+    horseGroupRef.current.rotation.y = targetYaw;
+    horseGroupRef.current.rotation.x = targetPitch;
+    setCameraLabel(name);
+  };
+
   return (
-    <div
-      className="vx-model"
-      role="button"
-      tabIndex={0}
-      aria-label="Horse model. Click to mark the injury site, or press Enter and use the arrow keys"
-      onClick={handleClick}
-      onKeyDown={handleKey}
-    >
-      <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-        <rect {...rect(SHAPES.body)} />
-        <rect {...rect(SHAPES.head)} />
+    <div style={{ position: "relative" }}>
+      {/* Thanh điều khiển góc nhìn 3D (3D Orbit Toolbar) */}
+      <div className="vx-3d-toolbar">
+        <div className="vx-3d-badge">
+          <span className="vx-3d-badge-dot" />
+          <span>3D Mesh · {cameraLabel}</span>
+        </div>
+        <div className="vx-3d-cam-group">
+          <button
+            type="button"
+            className={`vx-3d-btn ${cameraLabel.includes("Perspective") ? "vx-3d-btn--active" : ""}`}
+            onClick={() => setCameraPreset("3/4 Perspective", 0.65, 0.12)}
+            title="Góc nhìn 3D 3/4 phối cảnh"
+          >
+            3D 3/4
+          </button>
+          <button
+            type="button"
+            className={`vx-3d-btn ${cameraLabel.includes("Left") ? "vx-3d-btn--active" : ""}`}
+            onClick={() => setCameraPreset("Left Lateral", 0, 0)}
+            title="Mặt bên trái (Left Lateral)"
+          >
+            Trái (0°)
+          </button>
+          <button
+            type="button"
+            className={`vx-3d-btn ${cameraLabel.includes("Right") ? "vx-3d-btn--active" : ""}`}
+            onClick={() => setCameraPreset("Right Lateral", Math.PI, 0)}
+            title="Mặt bên phải (Right Lateral)"
+          >
+            Phải (180°)
+          </button>
+          <button
+            type="button"
+            className={`vx-3d-btn ${cameraLabel.includes("Front") ? "vx-3d-btn--active" : ""}`}
+            onClick={() => setCameraPreset("Front View", Math.PI / 2, 0)}
+            title="Mặt trước (Ngực & Chân trước)"
+          >
+            Trước (90°)
+          </button>
+          <button
+            type="button"
+            className={`vx-3d-btn ${cameraLabel.includes("Hind") ? "vx-3d-btn--active" : ""}`}
+            onClick={() => setCameraPreset("Hind View", -Math.PI / 2, 0)}
+            title="Mặt sau (Hông & Chân sau)"
+          >
+            Sau (270°)
+          </button>
+        </div>
+      </div>
 
-        {SHAPES.legs.map((leg) => (
-          <rect key={leg.x} {...rect({ ...leg, r: 3 })} />
-        ))}
-      </svg>
+      {/* Container WebGL canvas mô hình 3D */}
+      <div
+        ref={mountRef}
+        className="vx-model-3d"
+        style={{ width: "100%", aspectRatio: "1 / 1" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      />
 
-      {existingMarkers.map((item) => (
-        <span
-          key={item.injuryId}
-          className="vx-marker"
-          title={`${item.bodyLocation || "Injury"} · ${item.severity || ""}`}
-          style={{
-            left: `${Number(item.coordinateX)}%`,
-            top: `${Number(item.coordinateY)}%`,
-          }}
-        >
-          <i />
-        </span>
-      ))}
-
-      {marker && (
-        <span
-          className="vx-marker"
-          style={{
-            left: `${marker.x}%`,
-            top: `${marker.y}%`,
-          }}
-        >
-          <i />
-        </span>
-      )}
+      <div className="vx-3d-hint">
+        <span>🖱️ Giữ chuột kéo để xoay 360° · Bấm trực tiếp vào khối 3D để cắm vết thương</span>
+      </div>
     </div>
   );
 }
@@ -371,11 +701,16 @@ function ExaminationForm({ horseId, reportId }) {
   const [restDays, setRestDays] = useState("");
   const [otherStatus, setOtherStatus] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Tiên lượng y khoa & Lối thoát hồ sơ khi chấn thương vĩnh viễn / chấm dứt sự nghiệp
+  const [prognosis, setPrognosis] = useState("FAVORABLE");
+  const [terminalAction, setTerminalAction] = useState("NONE");
+  const insuranceClaimRef = "EQ-INS-2026-VET";
   // Cân nặng đo lúc khám (kg). Để trống = lần khám này không cân.
   const [weight, setWeight] = useState("");
 
   const [marker, setMarker] = useState(null);
-  const [side, setSide] = useState("Left");
+  const [marker3D, setMarker3D] = useState(null);
   const [bodyLocation, setBodyLocation] = useState("");
   const [severity, setSeverity] = useState("GRADE_2");
 
@@ -460,21 +795,13 @@ function ExaminationForm({ horseId, reportId }) {
     return () => ctrl.abort();
   }, [horseId, navigate, reload]);
 
-  // Di chuyển marker không ghi đè tên vùng đã được bác sĩ chỉnh sửa.
-  // Bấm trên mô hình: đặt điểm và tự điền vị trí đoán được (giữ bên trái / phải đang chọn).
-  const handleTap = (x, y, moveOnly = false) => {
+  // Bấm trên mô hình 3D: lưu toạ độ 2D (lưu db) và 3D point (tracking theo khối xoay).
+  // Tuyệt đối không thay đổi bodyLocation khi đang kéo xoay mô hình.
+  const handleTap = (x, y, pt3D) => {
     setMarker({ x, y });
-
-    if (!moveOnly) {
-      setBodyLocation(
-        composeLocation(guessBodyPart(x, y), side)
-      );
+    if (pt3D) {
+      setMarker3D(pt3D);
     }
-  };
-
-  const handleSide = (next) => {
-    setSide(next);
-    setBodyLocation((text) => swapSide(text, next));
   };
 
   // Kiểm form trước khi gửi, trả mảng câu lỗi (rỗng = hợp lệ): chẩn đoán, ngày khám, cân nặng, điểm chấn thương...
@@ -771,8 +1098,14 @@ function ExaminationForm({ horseId, reportId }) {
         >
           <HorseModel
             marker={injuryConfirmed ? marker : null}
+            marker3D={injuryConfirmed ? marker3D : null}
             existingMarkers={existingMarkers}
             onMark={injuryConfirmed ? handleTap : () => {}}
+            onLandmarkSelect={(name) => {
+              if (injuryConfirmed) {
+                setBodyLocation(name);
+              }
+            }}
           />
 
           <div className="vx-marked">
@@ -789,23 +1122,6 @@ function ExaminationForm({ horseId, reportId }) {
                 />
 
                 <div className="vx-marked-row">
-                  <div
-                    className="vx-segment"
-                    role="group"
-                    aria-label="Side of the horse"
-                  >
-                    {["Left", "Right"].map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        aria-pressed={side === s}
-                        onClick={() => handleSide(s)}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-
                   <select
                     className="vx-input vx-input--compact"
                     value={severity}
@@ -865,6 +1181,31 @@ function ExaminationForm({ horseId, reportId }) {
                   onChange={(e) => setDiagnosis(e.target.value)}
                   placeholder="e.g. Grade 2 tendon sheath inflammation, left hind hock"
                 />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Gợi ý chẩn đoán:</span>
+                  {[
+                    { label: "Viêm gân SDFT", text: "Tổn thương rách vi thể gân gấp ngón nông (SDFT)", sev: "GRADE_3", lock: "FULL" },
+                    { label: "Loét dạ dày EGUS", text: "Hội chứng loét dạ dày ngựa đua (EGUS Grade 2)", sev: "GRADE_2", lock: "LIGHT" },
+                    { label: "Viêm bao hoạt dịch cổ chân", text: "Viêm bao hoạt dịch khớp cổ chân (Fetlock Joint Synovitis)", sev: "GRADE_2", lock: "LIGHT" },
+                    { label: "Viêm phế quản co thắt", text: "Viêm đường hô hấp dưới / Viêm phế quản co thắt (Asthma)", sev: "GRADE_2", lock: "FULL" },
+                    { label: "Sốc nhiệt / Kiệt sức", text: "Hội chứng kiệt sức & mất nước sau thi đấu (Heat Exhaustion)", sev: "GRADE_4", lock: "FULL" },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      className="vx-link"
+                      style={{ fontSize: "11px", padding: "2px 8px", background: "#f1f5f9", borderRadius: "12px", border: "1px solid #cbd5e1" }}
+                      onClick={() => {
+                        setDiagnosis(p.text);
+                        setConfirmed("yes");
+                        setSeverity(p.sev);
+                        setLockLevel(p.lock);
+                      }}
+                    >
+                      + {p.label}
+                    </button>
+                  ))}
+                </div>
               </Field>
 
               <Field label="Injury confirmed">
@@ -877,6 +1218,85 @@ function ExaminationForm({ horseId, reportId }) {
                   <option value="no">No</option>
                 </select>
               </Field>
+
+              <Field label="Clinical Prognosis (Tiên lượng y khoa)">
+                <select
+                  className="vx-input"
+                  value={prognosis}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPrognosis(val);
+                    if (val === "CAREER_ENDING") {
+                      setConfirmed("yes");
+                      setSeverity("GRADE_5");
+                      setLockLevel("FULL");
+                      setTerminalAction("BREEDING_CONVERT");
+                      setDiagnosis("[CAREER-ENDING] Permanent musculoskeletal impairment. Horse cannot return to high-speed racing.");
+                    }
+                  }}
+                  style={{ fontWeight: prognosis === "CAREER_ENDING" ? 700 : 400, color: prognosis === "CAREER_ENDING" ? "#b91c1c" : "inherit" }}
+                >
+                  <option value="FAVORABLE">Favorable / Good (Tiên lượng khả quan - hồi phục tốt)</option>
+                  <option value="EXCELLENT">Excellent (Rất tốt - hồi phục nhanh không di chứng)</option>
+                  <option value="GUARDED">Guarded / Uncertain (Dè dặt - có nguy cơ tái phát mãn tính)</option>
+                  <option value="CAREER_ENDING">Career-Ending / Paralysis (Chấn thương vĩnh viễn / Liệt / Chấm dứt sự nghiệp)</option>
+                </select>
+              </Field>
+
+              {prognosis === "CAREER_ENDING" && (
+                <div style={{ gridColumn: "1 / -1", padding: "14px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", marginTop: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#991b1b", fontWeight: 700, fontSize: "14px" }}>
+                    <span>⚠️ Terminal Resolution & Owner Protection Protocol</span>
+                  </div>
+                  <p style={{ margin: "6px 0 10px", fontSize: "12.5px", color: "#7f1d1d" }}>
+                    Ngựa bị chấn thương nghiêm trọng / liệt vĩnh viễn không thể tiếp tục sự nghiệp thi đấu. Hệ thống kích hoạt các phương án bảo vệ quyền lợi tài chính cho Chủ ngựa:
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#374151" }}>
+                      Phương án xử lý hồ sơ (Resolution Pathway):
+                    </label>
+                    <select
+                      className="vx-input"
+                      value={terminalAction}
+                      onChange={(e) => {
+                        const act = e.target.value;
+                        setTerminalAction(act);
+                        if (act === "BREEDING_CONVERT") {
+                          setDiagnosis("[CAREER-ENDING] Chấn thương vĩnh viễn kết thúc sự nghiệp đua. Đề xuất chuyển công năng sang Ngựa giống (PEDIGREE Stud/Broodmare) bảo tồn giá trị gen.");
+                        } else if (act === "MEDICAL_RETIRE") {
+                          setDiagnosis("[CAREER-ENDING] Tổn thương cơ xương khớp mãn tính. Đề xuất nghỉ hưu y tế (RETIRED), thanh lý hợp đồng lưu trú và hoàn trả chi phí lưu trú chưa sử dụng.");
+                        } else if (act === "RECOMMEND_EUTHANASIA") {
+                          setDiagnosis("[CATASTROPHIC] Đau đớn cùng cực / bại liệt không thể cứu chữa. Hội đồng Thú y đề xuất An tử nhân đạo (Euthanasia) theo chuẩn AAEP. Cấp chứng nhận nộp Bảo hiểm Equine Mortality Claim.");
+                        }
+                      }}
+                      style={{ fontWeight: 600 }}
+                    >
+                      <option value="BREEDING_CONVERT">1. Chuyển sang Ngựa giống (Convert to PEDIGREE) — Khai thác giá trị phối giống, giải phóng chuồng đua</option>
+                      <option value="MEDICAL_RETIRE">2. Cho nghỉ hưu an dưỡng (Medical Retirement) — Rút ngựa về trang trại, hoàn tiền hợp đồng chưa dùng</option>
+                      <option value="RECOMMEND_EUTHANASIA">3. Đề xuất An tử nhân đạo (Humane Euthanasia) — Cấp chứng nhận y khoa nộp Bảo hiểm đền bù 100% (Cần chủ ngựa ký)</option>
+                    </select>
+
+                    {terminalAction === "BREEDING_CONVERT" && (
+                      <div style={{ fontSize: "12px", color: "#166534", background: "#f0fdf4", padding: "8px 12px", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                        ✓ <strong>Bảo toàn quyền lợi:</strong> Ngựa được chuyển từ hồ sơ học viện (ACADEMY) sang làm ngựa giống (PEDIGREE). Chủ ngựa bảo tồn được giá trị kinh tế qua hợp đồng phối giống (Stud fees) cho thế hệ sau.
+                      </div>
+                    )}
+
+                    {terminalAction === "MEDICAL_RETIRE" && (
+                      <div style={{ fontSize: "12px", color: "#1e40af", background: "#eff6ff", padding: "8px 12px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
+                        ✓ <strong>Hoàn phí lưu trú:</strong> Hợp đồng lưu trú (HORSE_CONTRACT) sẽ được thanh lý trước hạn. CLB tự động tính toán số ngày lưu trú chưa sử dụng để hoàn tiền (Prorated refund) cho Chủ ngựa.
+                      </div>
+                    )}
+
+                    {terminalAction === "RECOMMEND_EUTHANASIA" && (
+                      <div style={{ fontSize: "12px", color: "#991b1b", background: "#fff1f2", padding: "8px 12px", borderRadius: "6px", border: "1px solid #fecdd3" }}>
+                        ⚠️ <strong>Đền bù Bảo hiểm Tử vong (Equine Mortality Claim):</strong> Hồ sơ bệnh án điện tử và kết quả chẩn đoán hình ảnh sẽ được đóng băng (Freeze/Audit Log) làm căn cứ pháp lý để Chủ ngựa yêu cầu Công ty Bảo hiểm bồi thường 100% giá trị con ngựa (Mã bảo hiểm dự kiến: {insuranceClaimRef}). Bắt buộc có chữ ký đồng thuận của Chủ ngựa (Owner Consent) trước khi thực hiện.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {injuryConfirmed ? (
                 <Field label="Expected rest (days)">
@@ -925,6 +1345,38 @@ function ExaminationForm({ horseId, reportId }) {
                   placeholder="Treatment, medication, rehab instructions…"
                 />
               </Field>
+            </div>
+          </VetCard>
+
+          <VetCard title="Equine Normal Vital Signs Reference" tone="teal" hint="AAEP Clinical Benchmark Standards">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "4px" }}>
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>🌡️ Thân nhiệt (Temp)</div>
+                <div style={{ fontSize: "16px", fontWeight: 800, color: "#15803d", marginTop: "2px" }}>37.2°C – 38.3°C</div>
+                <div style={{ fontSize: "11.5px", color: "#166534", marginTop: "2px" }}>Sốt (Fever): ≥ 38.5°C</div>
+              </div>
+
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase" }}>💓 Nhịp tim lúc nghỉ (HR)</div>
+                <div style={{ fontSize: "16px", fontWeight: 800, color: "#1d4ed8", marginTop: "2px" }}>28 – 44 bpm</div>
+                <div style={{ fontSize: "11.5px", color: "#1e40af", marginTop: "2px" }}>Ngựa non &lt;2t: 60–80 bpm · Đau/Stress: &gt;60</div>
+              </div>
+
+              <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", borderRadius: "8px", padding: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#86198f", textTransform: "uppercase" }}>🫁 Nhịp thở lúc nghỉ (RR)</div>
+                <div style={{ fontSize: "16px", fontWeight: 800, color: "#a21caf", marginTop: "2px" }}>8 – 16 bpm</div>
+                <div style={{ fontSize: "11.5px", color: "#86198f", marginTop: "2px" }}>Thở dốc / Sốc: &gt;25 lần/phút</div>
+              </div>
+
+              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "10px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#92400e", textTransform: "uppercase" }}>⚖️ Cân nặng chuẩn</div>
+                <div style={{ fontSize: "16px", fontWeight: 800, color: "#b45309", marginTop: "2px" }}>450 – 550 kg</div>
+                <div style={{ fontSize: "11.5px", color: "#92400e", marginTop: "2px" }}>Thoroughbred đua tiêu chuẩn</div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: "10px", fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+              💡 <strong>Căn cứ lâm sàng:</strong> Khi Thân nhiệt &gt; 38.5°C hoặc Nhịp tim &gt; 60 bpm, khuyến nghị bác sĩ thú y chỉ định khóa tập luyện <strong>FULL LOCK</strong> và chuyển sang chế độ theo dõi (MONITOR) hoặc cách ly (QUARANTINE).
             </div>
           </VetCard>
 

@@ -188,7 +188,11 @@ function ContractDetail({ id }) {
       <Card title="Summary" actions={<StatusChip tone={st.tone} label={st.label} />}>
         <div className="hz-basis">
           <div className="hz-basis__item"><span>Stay</span><strong>{c.months} month{c.months === 1 ? "" : "s"}</strong></div>
-          <div className="hz-basis__item"><span>Training</span><strong>{c.trainingWeeks ? `${c.trainingWeeks} weeks` : "—"}</strong></div>
+          <div className="hz-basis__item"><span>Training asked</span><strong>
+            {c.trainingStart && c.trainingEnd
+              ? `${formatDate(c.trainingStart)} - ${formatDate(c.trainingEnd)}${c.trainingWeeks ? ` (${c.trainingWeeks} weeks)` : ""}`
+              : c.trainingWeeks ? `${c.trainingWeeks} weeks` : "—"}
+          </strong></div>
           <div className="hz-basis__item"><span>Total</span><strong>{formatVnd(c.totalAmount)}</strong></div>
           <div className="hz-basis__item"><span>Sign and pay by</span><strong>{formatDate(c.respondBy)}</strong></div>
           {c.endDate && <div className="hz-basis__item"><span>Stay</span><strong>{stayLine(c, formatDate)}</strong></div>}

@@ -74,6 +74,75 @@ const COMMON_MEDICINES = [
   { supplyName: "Ivermectin (Dewormer)", unit: "tube", unitPrice: 160000, category: "Intestinal parasites" },
 ];
 
+/** 5 Phác đồ điều trị mẫu chuẩn y khoa cho bệnh phổ biến của ngựa đua */
+export const CLINICAL_PROTOCOLS = [
+  {
+    id: "SDFT",
+    name: "1. Viêm gân gấp ngón nông (Superficial Digital Flexor Tendonitis - SDFT)",
+    shortName: "Viêm gân SDFT",
+    medicineName: "Phenylbutazone (Bute)",
+    dosage: 2,
+    frequency: "Once daily",
+    days: 7,
+    lockLevel: "FULL",
+    instruction: "Uống kèm cám sáng. Chườm lạnh / đắp gel lạnh chân đau 2 lần/ngày. Chỉ dắt đi bộ tại chỗ (stall rest).",
+    note: "[Phác đồ SDFT] Viêm gân cấp tính. Khóa tập hoàn toàn 7-14 ngày. Tránh vận động bứt tốc.",
+    category: "Gân cơ & Khớp",
+  },
+  {
+    id: "EGUS",
+    name: "2. Hội chứng loét dạ dày ngựa đua (Equine Gastric Ulcer Syndrome - EGUS)",
+    shortName: "Loét dạ dày EGUS",
+    medicineName: "Omeprazole (GastroGard)",
+    dosage: 1,
+    frequency: "Once daily",
+    days: 14,
+    lockLevel: "HEAVY_WORK_ONLY",
+    instruction: "Bơm miệng lúc đói 30 phút trước bữa sáng. Chia nhỏ khẩu phần cỏ khô trong ngày.",
+    note: "[Phác đồ EGUS] Viêm loét dạ dày do stress tập nặng. Cho phép đi bộ và chạy trot nhẹ, cấm nước rút.",
+    category: "Tiêu hóa",
+  },
+  {
+    id: "FETLOCK",
+    name: "3. Viêm bao khớp cổ chân / Tràn dịch khớp (Fetlock Synovitis / Arthritis)",
+    shortName: "Viêm khớp Fetlock",
+    medicineName: "Flunixin Meglumine (Banamine)",
+    dosage: 1,
+    frequency: "Once daily",
+    days: 5,
+    lockLevel: "FULL",
+    instruction: "Tiêm tĩnh mạch hoặc uống theo liều. Băng ép gạc lạnh sau vận động nhẹ.",
+    note: "[Phác đồ Fetlock] Tràn dịch sưng nóng khớp cổ chân. Nghỉ ngơi tuyệt đối trong 5 ngày đầu.",
+    category: "Gân cơ & Khớp",
+  },
+  {
+    id: "BRONCHITIS",
+    name: "4. Nhiễm trùng & Co thắt đường hô hấp (Equine Bronchitis & Respiratory Spasm)",
+    shortName: "Viêm phế quản",
+    medicineName: "Clenbuterol (Ventipulmin)",
+    dosage: 1,
+    frequency: "Twice daily",
+    days: 7,
+    lockLevel: "FULL",
+    instruction: "Trộn thức ăn mỗi 12 giờ. Giữ chuồng thông thoáng, tưới ẩm rơm tránh bụi mịn.",
+    note: "[Phác đồ Viêm phế quản] Giãn phế quản, giảm ho sốt. Cách ly tại chuồng y tế, cấm chạy gắng sức.",
+    category: "Hô hấp",
+  },
+  {
+    id: "HEAT_EXHAUSTION",
+    name: "5. Sốc nhiệt & Mất cân bằng điện giải (Exertional Heat Exhaustion & Dehydration)",
+    shortName: "Sốc nhiệt & Kiệt sức",
+    medicineName: "Electrolyte solution (Electrolytes)",
+    dosage: 2,
+    frequency: "Twice daily",
+    days: 3,
+    lockLevel: "FULL",
+    instruction: "Pha nước uống sạch hoặc drench qua miệng. Tắm nước mát hạ nhiệt tức thì.",
+    note: "[Phác đồ Sốc nhiệt] Thân nhiệt cao, mất nước sau bài tập nặng. Nghỉ stall mát có quạt thông gió.",
+    category: "Cấp cứu vận động",
+  },
+];
+
 /*
  * Trang /veterinarian/prescriptions. Ba tab (đồng bộ với ?tab= trên URL, replace: true để không làm dày lịch sử):
  *   prescriptions - các mục điều trị đang hiệu lực toàn đàn (GET /api/treatments/active), gom thành "đơn";
@@ -804,6 +873,40 @@ function PrescribeDialog({ onClose, onDone }) {
   const [endDate, setEndDate] = useState("");
   const [trainingLock, setTrainingLock] = useState("FULL");
 
+  // Phác đồ điều trị mẫu (Clinical Treatment Protocol Template)
+  const [selectedProtocolId, setSelectedProtocolId] = useState("");
+
+  const handleProtocolChange = (protocolId) => {
+    setSelectedProtocolId(protocolId);
+    if (!protocolId) return;
+    const proto = CLINICAL_PROTOCOLS.find((p) => p.id === protocolId);
+    if (!proto) return;
+
+    // Tìm thuốc trong catalog
+    const matched = medCatalog.find((m) =>
+      m.supplyName.toLowerCase().includes(proto.medicineName.toLowerCase().split(" ")[0])
+    ) || { supplyName: proto.medicineName, unit: "dose", currentQty: 10 };
+
+    setChosenMedKey(matched.supplyName);
+    setCustomMed("");
+    setDoseQty(String(proto.dosage));
+    setDoseUnit(matched.unit || "dose");
+    setFrequency(proto.frequency);
+    setInstruction(proto.instruction);
+    setTrainingLock(proto.lockLevel);
+    setPrescriptionNote(proto.note);
+
+    // Tính end date: startDate + days
+    try {
+      const base = startDate ? new Date(startDate) : new Date();
+      base.setDate(base.getDate() + proto.days);
+      const yyyy = base.getFullYear();
+      const mm = String(base.getMonth() + 1).padStart(2, "0");
+      const dd = String(base.getDate()).padStart(2, "0");
+      setEndDate(`${yyyy}-${mm}-${dd}`);
+    } catch (_) {}
+  };
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [fieldNotice, setFieldNotice] = useState("");
@@ -1258,6 +1361,34 @@ function PrescribeDialog({ onClose, onDone }) {
             </p>
           </div>
         )}
+
+        {/* Phác đồ điều trị mẫu chuẩn (Clinical Treatment Protocols) */}
+        <div style={{ marginTop: "14px", padding: "12px 14px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>
+              📋 Phác đồ điều trị mẫu (Clinical Protocol Template)
+            </span>
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Tự động điền thuốc, liều lượng, số ngày & mức khóa</span>
+          </div>
+          <select
+            className="vx-input vc-select"
+            value={selectedProtocolId}
+            onChange={(e) => handleProtocolChange(e.target.value)}
+            style={{ fontWeight: selectedProtocolId ? 600 : 400, borderColor: selectedProtocolId ? "#3b82f6" : "#cbd5e1" }}
+          >
+            <option value="">-- Chọn 1 trong 5 phác đồ mẫu chuẩn (hoặc tự kê đơn thủ công) --</option>
+            {CLINICAL_PROTOCOLS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} [{p.category} · {p.days} ngày · Khóa: {p.lockLevel === "FULL" ? "Full Lock" : "Heavy work only"}]
+              </option>
+            ))}
+          </select>
+          {selectedProtocolId && (
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>✓ Đã áp dụng: <strong>{CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.shortName}</strong>. Thuốc, thời gian điều trị ({CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.days} ngày), hướng dẫn và lệnh khóa ({CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.lockLevel}) đã được điền sẵn. Bạn có thể tinh chỉnh thêm nếu cần.</span>
+            </div>
+          )}
+        </div>
 
         {/* 2. CHỌN THUỐC, LIỀU LƯỢNG, FREQUENCY, INSTRUCTION */}
         <div className="vc-form-grid" style={{ marginTop: "14px" }}>

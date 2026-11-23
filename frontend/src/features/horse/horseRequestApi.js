@@ -33,7 +33,9 @@ export function submitRequest(form) {
       distancePref: club ? form.distancePref || null : null,
       runningStyle: club ? form.runningStyle || null : null,
       preferredStart: club ? form.preferredStart || null : null,
-      trainingWeeks: club ? num(form.trainingWeeks) : null,
+      // V50: the training window; the server works out the number of weeks from it.
+      trainingStart: club ? form.trainingStart || null : null,
+      trainingEnd: club ? form.trainingEnd || null : null,
       contractMonths: club ? num(form.contractMonths) : null,
       preferredTrainerId: club && form.preferredTrainerId ? Number(form.preferredTrainerId) : null,
     }),
@@ -89,7 +91,7 @@ export function formatVnd(amount) {
 
 /* ---- Breeds, aptitudes, stay rules (same numbers as HorsePolicy.java) ---- */
 
-export const STAY_RULES = { minTrainingWeeks: 3, minMonths: 1, maxMonths: 24, weeksPerMonth: 4 };
+export const STAY_RULES = { minTrainingWeeks: 3, minMonths: 1, maxMonths: 24 };
 export const CONTRACT_MONTH_OPTIONS = [1, 3, 6, 12];
 
 // Default aptitudes per breed: a starting point the owner can change, not a rule.
@@ -111,19 +113,66 @@ export function toGrowth(g) {
   return GROWTH[g] || { label: "No growth reference", tone: "neutral" };
 }
 
-/** Kiểm thời hạn ở trình duyệt, cùng luật với HorsePolicy.termProblems. */
-export function termProblems(trainingWeeks, contractMonths) {
+/* ---- Date helpers on "YYYY-MM-DD" strings (UTC, so the time zone cannot shift a day) ---- */
+function parseIso(iso) {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  return { y, m, d };
+}
+function toIso(y, m, d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${y}-${p(m)}-${p(d)}`;
+}
+export function isoAddDays(iso, days) {
+  const { y, m, d } = parseIso(iso);
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  return toIso(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+/** Same as Java LocalDate.plusMonths: 31 Jan + 1 month = 28/29 Feb (clamped to the month's last day). */
+export function isoAddMonths(iso, months) {
+  const { y, m, d } = parseIso(iso);
+  const total = (m - 1) + Number(months);
+  const ty = y + Math.floor(total / 12);
+  const tm = (total % 12 + 12) % 12 + 1;
+  const last = new Date(Date.UTC(ty, tm, 0)).getUTCDate();
+  return toIso(ty, tm, Math.min(d, last));
+}
+export function isoDaysBetween(a, b) {
+  const pa = parseIso(a), pb = parseIso(b);
+  return Math.round((Date.UTC(pb.y, pb.m - 1, pb.d) - Date.UTC(pa.y, pa.m - 1, pa.d)) / 86400000);
+}
+export function todayIsoLocal() {
+  const d = new Date();
+  return toIso(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/**
+ * Kiểm ngày ở trình duyệt, cùng luật với HorsePolicy.stayProblems (V50):
+ * ngày mang ngựa tới >= hôm nay; huấn luyện bắt đầu >= ngày tới; dài ít nhất 3 tuần;
+ * kết thúc không sau ngày hết thời hạn gửi (ngày tới + số tháng).
+ */
+export function stayProblems({ preferredStart, trainingStart, trainingEnd, contractMonths }, today = todayIsoLocal()) {
   const e = {};
-  const w = trainingWeeks === "" ? null : Number(trainingWeeks);
-  const m = contractMonths === "" ? null : Number(contractMonths);
+  const m = contractMonths === "" || contractMonths == null ? null : Number(contractMonths);
   if (!m) e.contractMonths = "Choose how many months the horse stays";
   else if (m < STAY_RULES.minMonths || m > STAY_RULES.maxMonths) e.contractMonths = "Between 1 and 24 months";
-  if (w === null || Number.isNaN(w)) e.trainingWeeks = "Say how many weeks of training you want";
-  else if (w < STAY_RULES.minTrainingWeeks) e.trainingWeeks = `Training is at least ${STAY_RULES.minTrainingWeeks} weeks`;
-  else if (m && w > m * STAY_RULES.weeksPerMonth) {
-    e.trainingWeeks = `Training cannot run longer than the stay (${m * STAY_RULES.weeksPerMonth} weeks for ${m} month${m === 1 ? "" : "s"})`;
+  if (!preferredStart) e.preferredStart = "Choose the day you bring the horse in";
+  else if (preferredStart < today) e.preferredStart = "The arrival date cannot be in the past";
+  if (!trainingStart) e.trainingStart = "Choose the first day of training";
+  else if (preferredStart && trainingStart < preferredStart) e.trainingStart = "Training cannot start before the horse arrives";
+  const minEnd = trainingStart ? isoAddDays(trainingStart, STAY_RULES.minTrainingWeeks * 7) : null;
+  const stayEnd = preferredStart && m ? isoAddMonths(preferredStart, m) : null;
+  if (!trainingEnd) e.trainingEnd = "Choose the last day of training";
+  else if (minEnd && trainingEnd < minEnd) e.trainingEnd = `Training is at least ${STAY_RULES.minTrainingWeeks} weeks: until ${minEnd} or later`;
+  else if (stayEnd && m >= STAY_RULES.minMonths && trainingEnd > stayEnd) {
+    e.trainingEnd = `Training must end by ${stayEnd}, the end of a ${m}-month stay`;
   }
   return e;
+}
+
+/** Số tuần trọn của khoảng huấn luyện (21 ngày = 3 tuần), giống HorsePolicy.trainingWeeks. */
+export function trainingWeeksOf(trainingStart, trainingEnd) {
+  if (!trainingStart || !trainingEnd) return null;
+  return Math.floor(isoDaysBetween(trainingStart, trainingEnd) / 7);
 }
 
 /**

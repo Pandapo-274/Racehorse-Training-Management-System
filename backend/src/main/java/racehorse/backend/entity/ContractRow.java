@@ -35,5 +35,7 @@ public record ContractRow(
         String registrationCode, String stallNo,
         String termsSnapshot, String termsSha256,
         String closedNote,
-        Long daysLeft
+        Long daysLeft,
+        // V50: training window the owner asked for
+        LocalDate trainingStart, LocalDate trainingEnd
 ) {}

@@ -19,8 +19,8 @@ import {
 } from "./horseApi";
 import {
   listRequests, submitRequest, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
-  getPricing, estimatePrice, formatVnd, termProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
-  CONTRACT_MONTH_OPTIONS, STAY_RULES,
+  getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
+  CONTRACT_MONTH_OPTIONS, STAY_RULES, isoAddDays, isoAddMonths, trainingWeeksOf,
 } from "./horseRequestApi";
 import HorsePhoto from "./HorsePhoto";
 
@@ -31,7 +31,9 @@ const EMPTY = {
   recordType: "ACADEMY", sireId: "", damId: "",
   // V48 (review feedback): what the club needs to approve a club horse.
   breedChoice: "", weight: "", heightCm: "", surface: "", distancePref: "", runningStyle: "",
-  preferredStart: "", trainingWeeks: "4", contractMonths: "1", preferredTrainerId: "",
+  preferredStart: "", contractMonths: "1", preferredTrainerId: "",
+  // V50: the training window asked for (from / until), at least 3 weeks, inside the stay.
+  trainingStart: "", trainingEnd: "",
 };
 
 const PHOTO_TYPES = "image/jpeg,image/png,image/webp";
@@ -69,9 +71,8 @@ function validate(form, photo) {
     const h = Number(form.heightCm);
     if (!form.heightCm) e.heightCm = "Height is required for a club horse";
     else if (h < 60 || h > 200) e.heightCm = "Between 60 and 200 cm";
-    if (form.preferredStart && form.preferredStart < todayIso()) e.preferredStart = "The start date cannot be in the past";
     if (!photo) e.photo = "Add a photo: the club cannot approve a horse it has not seen";
-    Object.assign(e, termProblems(form.trainingWeeks, form.contractMonths));
+    Object.assign(e, stayProblems(form, todayIso()));
   }
   return e;
 }
@@ -128,6 +129,12 @@ export default function HorseRequestPage() {
   }, [photo]);
 
   const estimate = estimatePrice(pricing, form.contractMonths);
+  // V50: the stay ends arrival + months; training lasts at least 3 weeks and ends inside it.
+  const stayEnd = form.preferredStart && form.contractMonths
+    ? isoAddMonths(form.preferredStart, form.contractMonths) : null;
+  const minTrainingEnd = form.trainingStart
+    ? isoAddDays(form.trainingStart, STAY_RULES.minTrainingWeeks * 7) : null;
+  const weeks = trainingWeeksOf(form.trainingStart, form.trainingEnd);
   // useMemo: chỉ lọc lại danh sách cha / mẹ khi herd đổi, không lọc lại ở mỗi lần render.
   const sires = useMemo(() => herd.filter((h) => SIRE_GENDERS.has(h.horseGender)), [herd]);
   const dams = useMemo(() => herd.filter((h) => DAM_GENDERS.has(h.horseGender)), [herd]);
@@ -156,6 +163,32 @@ export default function HorseRequestPage() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+
+  // Chọn ngày mang ngựa tới: nếu chưa chọn ngày bắt đầu huấn luyện thì gợi ý luôn ngày đó.
+  const changeArrival = (e) => {
+    const { value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      preferredStart: value,
+      trainingStart: !prev.trainingStart || prev.trainingStart < value ? value : prev.trainingStart,
+    }));
+    setErrors((prev) => ({ ...prev, preferredStart: undefined, trainingStart: undefined }));
+  };
+
+  // Chọn ngày bắt đầu: nếu chưa có ngày kết thúc (hoặc quá ngắn) thì gợi ý đủ 4 tuần.
+  const changeTrainingStart = (e) => {
+    const { value } = e.target;
+    setForm((prev) => {
+      const min = value ? isoAddDays(value, STAY_RULES.minTrainingWeeks * 7) : "";
+      const suggested = value ? isoAddDays(value, 28) : "";
+      return {
+        ...prev,
+        trainingStart: value,
+        trainingEnd: !prev.trainingEnd || prev.trainingEnd < min ? suggested : prev.trainingEnd,
+      };
+    });
+    setErrors((prev) => ({ ...prev, trainingStart: undefined, trainingEnd: undefined }));
   };
 
   // Chọn giống có sẵn thì điền luôn mặt đường, cự ly, kiểu chạy (owner vẫn sửa được).
@@ -273,8 +306,10 @@ export default function HorseRequestPage() {
       surface: r.surface || "",
       distancePref: r.distancePref || "",
       runningStyle: r.runningStyle || "",
+      // Dates of an old request are likely past: the owner picks them again.
       preferredStart: "",
-      trainingWeeks: r.trainingWeeks ? String(r.trainingWeeks) : EMPTY.trainingWeeks,
+      trainingStart: "",
+      trainingEnd: "",
       contractMonths: r.contractMonths ? String(r.contractMonths) : EMPTY.contractMonths,
       preferredTrainerId: r.preferredTrainerId ? String(r.preferredTrainerId) : "",
     });
@@ -429,24 +464,34 @@ export default function HorseRequestPage() {
 
               <h3 className="hz-subhead">Stay and training</h3>
               <div className="hz-form-grid">
-                <Field id="preferredStart" label="Bring the horse in from" error={errors.preferredStart}
-                       hint="The stay itself starts the day the club receives the horse.">
+                <Field id="preferredStart" label="Arrival day" error={errors.preferredStart}
+                       hint="The day you bring the horse in. The stay is counted from the day the club receives it.">
                   <input id="preferredStart" name="preferredStart" type="date" min={todayIso()}
-                         value={form.preferredStart} onChange={change} />
+                         value={form.preferredStart} onChange={changeArrival}
+                         aria-invalid={!!errors.preferredStart} />
                 </Field>
-                <Field id="contractMonths" label="Stay at the club" error={errors.contractMonths}>
+                <Field id="contractMonths" label="Stay at the club" error={errors.contractMonths}
+                       hint={stayEnd ? `Until ${formatDate(stayEnd)} if the horse arrives on that day.` : undefined}>
                   <select id="contractMonths" name="contractMonths" value={form.contractMonths} onChange={change}>
                     {CONTRACT_MONTH_OPTIONS.map((m) => (
                       <option key={m} value={m}>{m} month{m === 1 ? "" : "s"}</option>
                     ))}
                   </select>
                 </Field>
-                <Field id="trainingWeeks" label="Training wanted (weeks)" error={errors.trainingWeeks}
-                       hint={`At least ${STAY_RULES.minTrainingWeeks} weeks, within the stay.`}>
-                  <input id="trainingWeeks" name="trainingWeeks" type="number"
-                         min={STAY_RULES.minTrainingWeeks}
-                         max={Number(form.contractMonths || 1) * STAY_RULES.weeksPerMonth}
-                         value={form.trainingWeeks} onChange={change} aria-invalid={!!errors.trainingWeeks} />
+                <Field id="trainingStart" label="Training from" error={errors.trainingStart}>
+                  <input id="trainingStart" name="trainingStart" type="date"
+                         min={form.preferredStart || todayIso()} max={stayEnd || undefined}
+                         value={form.trainingStart} onChange={changeTrainingStart}
+                         aria-invalid={!!errors.trainingStart} />
+                </Field>
+                <Field id="trainingEnd" label="Training until" error={errors.trainingEnd}
+                       hint={weeks != null && !errors.trainingEnd
+                         ? `${weeks} week${weeks === 1 ? "" : "s"} of training`
+                         : `At least ${STAY_RULES.minTrainingWeeks} weeks, inside the stay.`}>
+                  <input id="trainingEnd" name="trainingEnd" type="date"
+                         min={minTrainingEnd || undefined} max={stayEnd || undefined}
+                         value={form.trainingEnd} onChange={change}
+                         aria-invalid={!!errors.trainingEnd} />
                 </Field>
                 <Field id="preferredTrainerId" label="Preferred Head Trainer" error={errors.preferredTrainerId}
                        hint="Only trainers who can take another horse are listed. The club confirms it on arrival.">
@@ -535,7 +580,12 @@ export default function HorseRequestPage() {
                       <p>Sire {r.sireName || "unknown"} · Dam {r.damName || "unknown"}</p>
                     )}
                     {r.recordType !== "PEDIGREE" && r.contractMonths && (
-                      <p>Stay {r.contractMonths} month{r.contractMonths === 1 ? "" : "s"} · training {r.trainingWeeks} weeks</p>
+                      <p>
+                        Stay {r.contractMonths} month{r.contractMonths === 1 ? "" : "s"}
+                        {r.trainingStart && r.trainingEnd
+                          ? ` · training ${formatDate(r.trainingStart)} - ${formatDate(r.trainingEnd)} (${r.trainingWeeks} weeks)`
+                          : r.trainingWeeks ? ` · training ${r.trainingWeeks} weeks` : ""}
+                      </p>
                     )}
                     <p>Sent {formatDateTime(r.createdAt)}</p>
                     {r.status === "PENDING" && r.recordType !== "PEDIGREE" && !r.photoUrl && (

@@ -1,21 +1,45 @@
-// Luật thời hạn, giá hợp đồng và nhóm BCS ở trình duyệt phải khớp backend
-// (HorsePolicy.termProblems, ContractTerms.priceFor, HorsePolicy.bcsGroup).
-import { termProblems, estimatePrice, toRequestStatus } from "./horseRequestApi";
-import { toBcsGroup } from "./horseApi";
+// Luật thời hạn, khoảng huấn luyện, giá hợp đồng, nhóm BCS và tuổi theo tháng ở trình duyệt phải khớp backend
+// (HorsePolicy.stayProblems, ContractTerms.priceFor, HorsePolicy.bcsGroup, HorsePolicy.ageInMonths).
+import { stayProblems, estimatePrice, toRequestStatus, isoAddMonths, trainingWeeksOf } from "./horseRequestApi";
+import { toBcsGroup, toAgeInMonths, formatAge } from "./horseApi";
 
-describe("stay rules (same as HorsePolicy.termProblems)", () => {
+describe("training window (same as HorsePolicy.stayProblems)", () => {
+  const today = "2026-11-23";
+  const ok = { preferredStart: "2026-12-01", trainingStart: "2026-12-01", trainingEnd: "2026-12-22", contractMonths: "1" };
+
   test("training is at least 3 weeks", () => {
-    expect(termProblems("2", "1")).toHaveProperty("trainingWeeks");
-    expect(termProblems("3", "1")).toEqual({});
+    expect(stayProblems({ ...ok, trainingEnd: "2026-12-21" }, today)).toHaveProperty("trainingEnd");
+    expect(stayProblems(ok, today)).toEqual({});
+    expect(trainingWeeksOf(ok.trainingStart, ok.trainingEnd)).toBe(3);
   });
 
-  test("training cannot run longer than the stay", () => {
-    expect(termProblems("6", "1").trainingWeeks).toMatch(/longer than the stay/);
-    expect(termProblems("8", "2")).toEqual({});
+  test("training starts after the horse arrives and ends inside the stay", () => {
+    expect(stayProblems({ ...ok, trainingStart: "2026-11-30" }, today)).toHaveProperty("trainingStart");
+    expect(stayProblems({ ...ok, trainingEnd: "2027-01-02" }, today).trainingEnd).toMatch(/must end by 2027-01-01/);
+    expect(stayProblems({ ...ok, trainingEnd: "2027-01-01" }, today)).toEqual({});
   });
 
-  test("the stay is at least one month", () => {
-    expect(termProblems("3", "")).toHaveProperty("contractMonths");
+  test("arrival, dates and stay are required", () => {
+    const e = stayProblems({ preferredStart: "", trainingStart: "", trainingEnd: "", contractMonths: "" }, today);
+    expect(Object.keys(e).sort()).toEqual(["contractMonths", "preferredStart", "trainingEnd", "trainingStart"]);
+    expect(stayProblems({ ...ok, preferredStart: "2026-11-22" }, today)).toHaveProperty("preferredStart");
+  });
+
+  test("a month is added like Java LocalDate.plusMonths", () => {
+    expect(isoAddMonths("2027-01-31", 1)).toBe("2027-02-28");
+    expect(isoAddMonths("2026-12-01", 1)).toBe("2027-01-01");
+  });
+});
+
+describe("age in months (same as HorsePolicy.ageInMonths)", () => {
+  const today = new Date(2026, 10, 23); // 23 Nov 2026
+  test("counts whole months", () => {
+    expect(toAgeInMonths("2021-04-13", today)).toBe(67);
+    expect(toAgeInMonths("2026-05-24", today)).toBe(5); // 24th not reached yet
+  });
+  test("reads as years and months, with the month count", () => {
+    expect(formatAge("2021-04-13", today)).toBe("5 years 7 months (67 months)");
+    expect(formatAge("2026-05-23", today)).toBe("6 months");
   });
 });
 

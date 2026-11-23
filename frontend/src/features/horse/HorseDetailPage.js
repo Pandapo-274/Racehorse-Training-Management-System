@@ -16,10 +16,11 @@ import HorseWithdrawalPanel from "./HorseWithdrawalPanel";
 import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
   canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity, listActiveTrainers,
-  toStatus, toGender, toAge, formatDate, formatDateTime, formatWeight,
+  toStatus, toGender, toAge, formatAge, formatAgeShort, formatDate, formatDateTime, formatWeight, getIntake,
   readmitHorse, transferHorseOwner,
   listParentCandidates, correctHorseParents, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
+import { SURFACES, DISTANCES, RUNNING_STYLES } from "./horseRequestApi";
 import { listStaff } from "../manager/staffApi";
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
@@ -435,6 +436,16 @@ export default function HorseDetailPage() {
     return () => ctrl.abort();
   }, [id, fail]);
 
+  // V48: chiều cao, BCS, năng khiếu (mặt sân, cự ly, kiểu chạy) ghi lúc nhận ngựa.
+  // Lỗi ở đây không chặn trang: thiếu thì các dòng hiện "Not recorded".
+  const [intake, setIntake] = useState(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setIntake(null);
+    getIntake(id, ctrl.signal).then(setIntake).catch(() => {});
+    return () => ctrl.abort();
+  }, [id]);
+
   // Phả hệ chỉ tải khi đang ở tab Pedigree (lazy load), tải lại khi đổi số đời.
   useEffect(() => {
     if (tab !== "pedigree") return undefined;
@@ -488,7 +499,7 @@ export default function HorseDetailPage() {
       title={horse.horseName}
       subtitle={`${horse.registrationCode} · ${toGender(
         horse.horseGender
-      )}${age == null ? "" : ` · ${age} years old`}`}
+      )}${age == null ? "" : ` · ${formatAgeShort(horse.dateOfBirth)} old`}`}
       actions={
         <>
           <StatusChip tone={stg.tone} label={stg.label} title={stg.hint} />
@@ -567,10 +578,18 @@ export default function HorseDetailPage() {
             <Row label="Sex">{toGender(horse.horseGender)}</Row>
             <Row label="Date of birth">
               {formatDate(horse.dateOfBirth)}
-              {age != null && <span className="hz-muted"> · {age} years</span>}
+              {age != null && <span className="hz-muted"> · {formatAge(horse.dateOfBirth)}</span>}
             </Row>
             <Row label="Breed">{horse.breed || "—"}</Row>
             <Row label="Colour">{horse.color || "—"}</Row>
+            {/* Aptitude: one row each, so a missing running style shows as missing, not as nothing. */}
+            {!pedigreeOnly && (
+              <>
+                <Row label="Surface">{SURFACES[intake?.surface] || "Not recorded"}</Row>
+                <Row label="Distance">{DISTANCES[intake?.distancePref] || "Not recorded"}</Row>
+                <Row label="Running style">{RUNNING_STYLES[intake?.runningStyle] || "Not recorded"}</Row>
+              </>
+            )}
           </Card>
 
           <Card title={pedigreeOnly ? "Record" : "Stable"}>
@@ -610,7 +629,7 @@ export default function HorseDetailPage() {
             <Row label="Last updated">{formatDateTime(horse.updatedAt)}</Row>
           </Card>
 
-          {!pedigreeOnly && <HorseStayPanel horse={horse} user={user} />}
+          {!pedigreeOnly && <HorseStayPanel horse={horse} user={user} intake={intake} />}
 
           {user?.role === "CLUB_MANAGER" && <IdentityForm key={`id-${horse.activityStatus}`} horse={horse} onSaved={setHorse} />}
           {user?.role === "CLUB_MANAGER" && <OwnershipForm key={`own-${horse.ownerId}-${horse.activityStatus}`} horse={horse} onSaved={setHorse}

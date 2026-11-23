@@ -132,18 +132,22 @@ public final class HorsePolicy {
     }
 
     /* ------------------------------------------------------------------
-     * How long the horse stays (review feedback: "no deadline for the horse's
-     * time at the club"). The stay is the contract term; training must fit
-     * inside it. A month counts as 4 weeks here, the short side, so the rule
-     * never accepts training longer than the paid stay. Same numbers as the
-     * CK_HREQ_term constraint (V48) and as horseRequestApi.js.
+     * How long the horse stays and when it trains (review feedback: "no deadline
+     * for the horse's time at the club", then "the owner gives no training start
+     * and end date"). The stay is the contract term, counted from the day the horse
+     * comes in; the training window the owner asks for must fit inside it and last
+     * at least 3 weeks. Same rules as CK_HREQ_training_window (V50) and as
+     * stayProblems in horseRequestApi.js.
      * ------------------------------------------------------------------ */
     public static final int MIN_TRAINING_WEEKS = 3;
+    public static final int MIN_TRAINING_DAYS = MIN_TRAINING_WEEKS * 7;
     public static final int MIN_CONTRACT_MONTHS = 1;
     public static final int MAX_CONTRACT_MONTHS = 24;
 
-    /** @return field -> message, empty when the term is fine. */
-    public static java.util.Map<String, String> termProblems(Integer trainingWeeks, Integer contractMonths) {
+    /** @return field -> message, empty when the stay and the training window are fine. */
+    public static java.util.Map<String, String> stayProblems(LocalDate arrival, LocalDate trainingStart,
+                                                            LocalDate trainingEnd, Integer contractMonths,
+                                                            LocalDate today) {
         java.util.Map<String, String> errors = new java.util.LinkedHashMap<>();
         if (contractMonths == null) {
             errors.put("contractMonths", "Choose how many months the horse stays");
@@ -151,16 +155,33 @@ public final class HorsePolicy {
             errors.put("contractMonths", "The stay is between " + MIN_CONTRACT_MONTHS + " and "
                     + MAX_CONTRACT_MONTHS + " months");
         }
-        if (trainingWeeks == null) {
-            errors.put("trainingWeeks", "Say how many weeks of training you want");
-        } else if (trainingWeeks < MIN_TRAINING_WEEKS) {
-            errors.put("trainingWeeks", "Training is at least " + MIN_TRAINING_WEEKS + " weeks");
-        } else if (contractMonths != null && trainingWeeks > contractMonths * 4) {
-            errors.put("trainingWeeks", "Training cannot run longer than the stay ("
-                    + contractMonths * 4 + " weeks for " + contractMonths + " month"
-                    + (contractMonths == 1 ? "" : "s") + ")");
+        if (arrival == null) {
+            errors.put("preferredStart", "Choose the day you bring the horse in");
+        } else if (arrival.isBefore(today)) {
+            errors.put("preferredStart", "The arrival date cannot be in the past");
+        }
+        if (trainingStart == null) {
+            errors.put("trainingStart", "Choose the first day of training");
+        } else if (arrival != null && trainingStart.isBefore(arrival)) {
+            errors.put("trainingStart", "Training cannot start before the horse arrives");
+        }
+        if (trainingEnd == null) {
+            errors.put("trainingEnd", "Choose the last day of training");
+        } else if (trainingStart != null && trainingEnd.isBefore(trainingStart.plusDays(MIN_TRAINING_DAYS))) {
+            errors.put("trainingEnd", "Training is at least " + MIN_TRAINING_WEEKS + " weeks: until "
+                    + trainingStart.plusDays(MIN_TRAINING_DAYS) + " or later");
+        } else if (arrival != null && contractMonths != null && contractMonths >= MIN_CONTRACT_MONTHS
+                && trainingEnd.isAfter(arrival.plusMonths(contractMonths))) {
+            errors.put("trainingEnd", "Training must end by " + arrival.plusMonths(contractMonths)
+                    + ", the end of a " + contractMonths + "-month stay");
         }
         return errors;
+    }
+
+    /** Whole weeks in the training window (21 days = 3 weeks), null when a date is missing. */
+    public static Integer trainingWeeks(LocalDate trainingStart, LocalDate trainingEnd) {
+        if (trainingStart == null || trainingEnd == null) return null;
+        return (int) (java.time.temporal.ChronoUnit.DAYS.between(trainingStart, trainingEnd) / 7);
     }
 
     /* ------------------------------------------------------------------
