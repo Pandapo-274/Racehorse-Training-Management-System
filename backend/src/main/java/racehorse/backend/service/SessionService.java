@@ -262,7 +262,7 @@ public class SessionService {
             String prelimEval = s.evaluation() != null ? s.evaluation() : "FAIR";
 
             String hrText = s.peakHeartRate() != null ? (s.peakHeartRate() + " bpm") : "not recorded";
-            String speedText = s.peakVelocity() != null ? (s.peakVelocity() + " m/s") : "not recorded";
+            String speedText = s.peakVelocity() != null ? (s.peakVelocity() + " km/h") : "not recorded";
             String stopInfo = s.earlyStopReason() != null ? (" Early stop: " + s.earlyStopReason() + ".") : "";
             String groomName = s.assignedToName() != null ? s.assignedToName() : ("#" + s.assignedTo());
             String autoRemarks = "[AUTOMATED PRELIMINARY REPORT - NOT AN OFFICIAL REVIEW FROM HEAD TRAINER] "

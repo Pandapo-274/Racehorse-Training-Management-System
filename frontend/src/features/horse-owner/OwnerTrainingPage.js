@@ -46,7 +46,7 @@ function ApprovalBox({ plan, onReviewed }) {
   return (
     <div className="ot-approval">
       <p className="ot-note">
-        The head trainer is asking for your approval. Training starts only after you approve this plan.
+        The head trainer is asking for your approval. Approving this plan will activate it and automatically generate the training schedule.
       </p>
       <div className="hz-field">
         <label htmlFor={`plan-note-${plan.planId}`}>Note for the head trainer (required if you reject)</label>
@@ -166,7 +166,7 @@ function PlanCard({ plan, detail, today, onReviewed }) {
                     ph.surface && ph.surface.charAt(0) + ph.surface.slice(1).toLowerCase(),
                     ph.workload,
                     ph.sessionsPerWeek ? `${ph.sessionsPerWeek} sessions / week` : null,
-                    ph.targetVelocity ? `target ${ph.targetVelocity} m/s` : null]
+                    ph.targetVelocity ? `target ${ph.targetVelocity} km/h` : null]
                     .filter((x) => x && x !== "—").join(" · ")}
                 </span>
               </li>
@@ -243,7 +243,7 @@ function PendingUpdateReviewBox({ planId, pendingUpdate, onReviewed }) {
                 <li key={idx}>
                   Phase {idx + 1}: {ph.phaseName} ({formatDate(ph.startDate)} – {formatDate(ph.endDate)})
                   {ph.distance ? ` · ${formatMetres(ph.distance)}` : ""}
-                  {ph.targetVelocity ? ` · ${ph.targetVelocity} m/s` : ""}
+                  {ph.targetVelocity ? ` · ${ph.targetVelocity} km/h` : ""}
                   {ph.heartRateCeiling ? ` · max ${ph.heartRateCeiling} bpm` : ""}
                 </li>
               ))}
@@ -327,7 +327,7 @@ function LogEntry({ s }) {
           <div><dt>Distance</dt><dd>{formatMetres(s.actualDistance)} <small>of {formatMetres(s.plannedDistance)}</small></dd></div>
           <div><dt>Duration</dt><dd>{s.durationMinutes != null ? `${s.durationMinutes} min` : (s.plannedDuration ? `${s.plannedDuration} min (planned)` : "—")}</dd></div>
           <div><dt>Heart rate</dt><dd>{s.avgHeartRate != null ? `${s.avgHeartRate} avg / ${s.peakHeartRate} peak` : (s.peakHeartRate != null ? `${s.peakHeartRate} peak` : "—")}</dd></div>
-          <div><dt>Top speed</dt><dd>{s.peakVelocity != null ? `${s.peakVelocity} m/s` : "—"}</dd></div>
+          <div><dt>Top speed</dt><dd>{s.peakVelocity != null ? `${s.peakVelocity} km/h` : "—"}</dd></div>
         </dl>
       )}
 

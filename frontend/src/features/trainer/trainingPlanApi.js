@@ -108,3 +108,14 @@ export function sendOwnerFeedback(id, note) {
     body: JSON.stringify({ note }),
   });
 }
+
+// V50: Lấy danh sách 9 Template mặc định + gợi ý & hệ số điều chỉnh theo hồ sơ ngựa.
+export function getPlanTemplates(horseId, signal) {
+  const q = horseId ? `?horseId=${encodeURIComponent(horseId)}` : "";
+  return authFetch(`${API}/templates${q}`, { signal });
+}
+
+// V50: Kích hoạt Auto-Scheduling Engine sinh buổi tập + ngày nghỉ từ start_date đến end_date.
+export function autoScheduleTrainingPlan(planId) {
+  return authFetch(`${API}/${planId}/auto-schedule`, { method: "POST" });
+}

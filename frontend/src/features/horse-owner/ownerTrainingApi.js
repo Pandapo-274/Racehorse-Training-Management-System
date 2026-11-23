@@ -87,7 +87,10 @@ export function toPlanStatus(s) {
 
 const SESSION_STATUS = {
   SCHEDULED: { label: "Scheduled", tone: "neutral" },
+  UNASSIGNED: { label: "Unassigned", tone: "critical" },
+  REST: { label: "Rest day", tone: "neutral" },
   RUNNING: { label: "In progress", tone: "warning" },
+  RECOVERY: { label: "Recovery", tone: "warning" },
   COMPLETED: { label: "Completed", tone: "good" },
   STOPPED_EARLY: { label: "Stopped early", tone: "serious" },
   CANCELLED: { label: "Cancelled", tone: "neutral" },

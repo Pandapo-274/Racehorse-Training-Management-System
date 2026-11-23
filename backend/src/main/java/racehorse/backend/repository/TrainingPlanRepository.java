@@ -36,16 +36,37 @@ public class TrainingPlanRepository {
     public record OverduePendingPlan(int planId, int horseId, String horseName,
                                      String planName, int createdBy) {}
 
+    public record HorseAptitude(int horseId, String horseName, String breed,
+                                String surface, String distancePref, String runningStyle) {}
+
+    public record RawTemplate(int templateId, String templateCode, String templateName,
+                              String breed, String runningStyle, String defaultIntensity,
+                              int baseMaxHeartRate, java.math.BigDecimal baseMaxSpeed,
+                              int defaultRestDays, int defaultTargetHrr, int baseDistanceM) {}
+
+    public record RawTemplatePhase(int phaseNo, String phaseCode, String phaseName,
+                                   int defaultRatio, int recoveryDurationMinutes,
+                                   java.math.BigDecimal distanceMultiplier,
+                                   java.math.BigDecimal speedMultiplier, int hrOffset) {}
+
     private static final String SELECT_PLAN = """
             SELECT tp.plan_id, tp.horse_id, h.horse_name, tp.groom_id, gr.full_name AS groom_name,
                    tp.plan_name, tp.start_date, tp.end_date,
                    tp.status, tp.created_by, u.full_name AS created_by_name, tp.created_at,
                    tp.owner_note, tp.owner_reviewed_at,
-                   tp.pending_update_status, tp.pending_update_at, tp.pending_update_json
+                   tp.pending_update_status, tp.pending_update_at, tp.pending_update_json,
+                   tp.template_id,
+                   ISNULL(tp.primary_groom_id, tp.groom_id) AS primary_groom_id,
+                   COALESCE(pg.full_name, gr.full_name) AS primary_groom_name,
+                   tp.backup_groom_id, bg.full_name AS backup_groom_name,
+                   tp.preferred_surface, tp.intensity,
+                   tp.max_heart_rate, tp.max_speed, tp.rest_days_per_week, tp.target_hrr
             FROM TRAINING_PLAN tp
             JOIN HORSE h    ON h.horse_id = tp.horse_id
             JOIN APP_USER u ON u.user_id  = tp.created_by
             LEFT JOIN APP_USER gr ON gr.user_id = tp.groom_id
+            LEFT JOIN APP_USER pg ON pg.user_id = tp.primary_groom_id
+            LEFT JOIN APP_USER bg ON bg.user_id = tp.backup_groom_id
             """;
 
     // Chỉ trả bản sửa khi trạng thái là PENDING; JSON hỏng thì coi như không có (null).
@@ -76,7 +97,18 @@ public class TrainingPlanRepository {
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getString("owner_note"), rs.getObject("owner_reviewed_at", LocalDateTime.class),
                 List.of(),
-                parsePendingUpdate(pendingStatus, pendingAt, pendingJson));
+                parsePendingUpdate(pendingStatus, pendingAt, pendingJson),
+                rs.getObject("template_id", Integer.class),
+                rs.getObject("primary_groom_id", Integer.class),
+                rs.getString("primary_groom_name"),
+                rs.getObject("backup_groom_id", Integer.class),
+                rs.getString("backup_groom_name"),
+                rs.getString("preferred_surface"),
+                rs.getString("intensity"),
+                rs.getObject("max_heart_rate", Integer.class),
+                rs.getBigDecimal("max_speed"),
+                rs.getObject("rest_days_per_week", Integer.class),
+                rs.getObject("target_hrr", Integer.class));
     }
 
     /** Trả giáo án kèm đầy đủ giai đoạn. */
@@ -94,7 +126,8 @@ public class TrainingPlanRepository {
         return jdbc.sql("""
                 SELECT phase_id, phase_no, phase_name, distance, workload, surface,
                        sessions_per_week, heart_rate_ceiling, start_date, end_date,
-                       min_gap_minutes, target_velocity
+                       min_gap_minutes, target_velocity,
+                       phase_code, phase_ratio, recovery_duration_minutes
                 FROM PLAN_PHASE WHERE plan_id = :id ORDER BY phase_no
                 """)
                 .param("id", planId)
@@ -107,7 +140,10 @@ public class TrainingPlanRepository {
                         rs.getObject("start_date", LocalDate.class),
                         rs.getObject("end_date", LocalDate.class),
                         rs.getObject("min_gap_minutes", Integer.class),
-                        rs.getBigDecimal("target_velocity")))
+                        rs.getBigDecimal("target_velocity"),
+                        rs.getString("phase_code"),
+                        rs.getObject("phase_ratio", Integer.class),
+                        rs.getObject("recovery_duration_minutes", Integer.class)))
                 .list();
     }
 
@@ -221,9 +257,11 @@ public class TrainingPlanRepository {
         jdbc.sql("""
                 INSERT INTO PLAN_PHASE (plan_id, phase_no, phase_name, distance, workload, surface,
                                         sessions_per_week, heart_rate_ceiling, start_date, end_date,
-                                        min_gap_minutes, target_velocity)
+                                        min_gap_minutes, target_velocity, phase_code, phase_ratio,
+                                        recovery_duration_minutes)
                 VALUES (:planId, :phaseNo, :phaseName, :distance, :workload, :surface,
-                        :spw, :ceiling, :startDate, :endDate, :gap, :targetVelocity)
+                        :spw, :ceiling, :startDate, :endDate, :gap, :targetVelocity,
+                        :phaseCode, :phaseRatio, :recoveryMins)
                 """)
                 .param("planId", planId)
                 .param("phaseNo", phaseNo)
@@ -237,11 +275,44 @@ public class TrainingPlanRepository {
                 .param("endDate", p.endDate())
                 .param("gap", p.minGapMinutes())
                 .param("targetVelocity", p.targetVelocity())
+                .param("phaseCode", p.phaseCode())
+                .param("phaseRatio", p.phaseRatio())
+                .param("recoveryMins", p.recoveryDurationMinutes() != null ? p.recoveryDurationMinutes() : 15)
+                .update();
+    }
+
+    public int updatePlanConfig(int planId, Integer templateId, Integer primaryGroomId,
+                                Integer backupGroomId, String preferredSurface, String intensity,
+                                Integer maxHeartRate, java.math.BigDecimal maxSpeed,
+                                Integer restDaysPerWeek, Integer targetHrr) {
+        return jdbc.sql("""
+                UPDATE TRAINING_PLAN
+                SET template_id = :templateId,
+                    primary_groom_id = :primaryGroomId,
+                    backup_groom_id = :backupGroomId,
+                    preferred_surface = :preferredSurface,
+                    intensity = :intensity,
+                    max_heart_rate = :maxHeartRate,
+                    max_speed = :maxSpeed,
+                    rest_days_per_week = :restDays,
+                    target_hrr = :targetHrr
+                WHERE plan_id = :planId
+                """)
+                .param("templateId", templateId)
+                .param("primaryGroomId", primaryGroomId)
+                .param("backupGroomId", backupGroomId)
+                .param("preferredSurface", preferredSurface)
+                .param("intensity", intensity)
+                .param("maxHeartRate", maxHeartRate)
+                .param("maxSpeed", maxSpeed)
+                .param("restDays", restDaysPerWeek != null ? restDaysPerWeek : 1)
+                .param("targetHrr", targetHrr)
+                .param("planId", planId)
                 .update();
     }
 
     public int updatePlanGroomAndName(int planId, Integer groomId, String planName) {
-        StringBuilder sql = new StringBuilder("UPDATE TRAINING_PLAN SET groom_id = :groomId");
+        StringBuilder sql = new StringBuilder("UPDATE TRAINING_PLAN SET groom_id = :groomId, primary_groom_id = :groomId");
         if (planName != null && !planName.isBlank()) {
             sql.append(", plan_name = :planName");
         }
@@ -268,7 +339,10 @@ public class TrainingPlanRepository {
                     start_date = :startDate,
                     end_date = :endDate,
                     min_gap_minutes = :gap,
-                    target_velocity = :targetVelocity
+                    target_velocity = :targetVelocity,
+                    phase_code = ISNULL(:phaseCode, phase_code),
+                    phase_ratio = ISNULL(:phaseRatio, phase_ratio),
+                    recovery_duration_minutes = ISNULL(:recoveryMins, recovery_duration_minutes)
                 WHERE phase_id = :phaseId AND plan_id = :planId
                 """)
                 .param("phaseId", phaseId)
@@ -284,6 +358,9 @@ public class TrainingPlanRepository {
                 .param("endDate", p.endDate())
                 .param("gap", p.minGapMinutes())
                 .param("targetVelocity", p.targetVelocity())
+                .param("phaseCode", p.phaseCode())
+                .param("phaseRatio", p.phaseRatio())
+                .param("recoveryMins", p.recoveryDurationMinutes())
                 .update();
     }
 
@@ -491,5 +568,68 @@ public class TrainingPlanRepository {
                         rs.getString("horse_name"), rs.getString("plan_name"),
                         rs.getInt("created_by")))
                 .list();
+    }
+
+    public Optional<HorseAptitude> findHorseAptitude(int horseId) {
+        return jdbc.sql("""
+                SELECT horse_id, horse_name, breed, surface, distance_pref, running_style
+                FROM HORSE
+                WHERE horse_id = :id
+                """)
+                .param("id", horseId)
+                .query((rs, n) -> new HorseAptitude(
+                        rs.getInt("horse_id"), rs.getString("horse_name"),
+                        rs.getString("breed"), rs.getString("surface"),
+                        rs.getString("distance_pref"), rs.getString("running_style")))
+                .optional();
+    }
+
+    public List<RawTemplate> findAllTemplates() {
+        return jdbc.sql("""
+                SELECT template_id, template_code, template_name, breed, running_style,
+                       default_intensity, base_max_heart_rate, base_max_speed,
+                       default_rest_days, default_target_hrr, base_distance_m
+                FROM TRAINING_PLAN_TEMPLATE
+                ORDER BY template_id
+                """)
+                .query((rs, n) -> new RawTemplate(
+                        rs.getInt("template_id"), rs.getString("template_code"),
+                        rs.getString("template_name"), rs.getString("breed"),
+                        rs.getString("running_style"), rs.getString("default_intensity"),
+                        rs.getInt("base_max_heart_rate"), rs.getBigDecimal("base_max_speed"),
+                        rs.getInt("default_rest_days"), rs.getInt("default_target_hrr"),
+                        rs.getInt("base_distance_m")))
+                .list();
+    }
+
+    public List<RawTemplatePhase> findTemplatePhases(int templateId) {
+        return jdbc.sql("""
+                SELECT phase_no, phase_code, phase_name, default_ratio,
+                       recovery_duration_minutes, distance_multiplier, speed_multiplier, hr_offset
+                FROM TEMPLATE_PHASE
+                WHERE template_id = :id
+                ORDER BY phase_no
+                """)
+                .param("id", templateId)
+                .query((rs, n) -> new RawTemplatePhase(
+                        rs.getInt("phase_no"), rs.getString("phase_code"),
+                        rs.getString("phase_name"), rs.getInt("default_ratio"),
+                        rs.getInt("recovery_duration_minutes"),
+                        rs.getBigDecimal("distance_multiplier"),
+                        rs.getBigDecimal("speed_multiplier"),
+                        rs.getInt("hr_offset")))
+                .list();
+    }
+
+    public void updatePhaseDates(int phaseId, LocalDate startDate, LocalDate endDate) {
+        jdbc.sql("""
+                UPDATE PLAN_PHASE
+                SET start_date = :startDate, end_date = :endDate
+                WHERE phase_id = :id
+                """)
+                .param("startDate", startDate)
+                .param("endDate", endDate)
+                .param("id", phaseId)
+                .update();
     }
 }
