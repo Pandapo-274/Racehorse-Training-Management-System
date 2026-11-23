@@ -41,6 +41,22 @@ export function finishSession(sessionId, body = null) {
   return authFetch(`/api/training-sessions/${sessionId}/finish`, options);
 }
 
+/** V50: RUNNING -> RECOVERY: bắt đầu đếm ngược thời gian hồi phục của Phase. */
+export function enterRecoverySession(sessionId) {
+  return authFetch(`/api/training-sessions/${sessionId}/enter-recovery`, { method: "PUT" });
+}
+
+/** V50: RECOVERY -> COMPLETED: Groom nhập actualHrr (bpm) và hoàn tất buổi tập. */
+export function completeRecoverySession(sessionId, { actualHrr, remarks }) {
+  return authFetch(`/api/training-sessions/${sessionId}/complete-recovery`, {
+    method: "PUT",
+    body: JSON.stringify({
+      actualHrr: Number(actualHrr),
+      remarks: remarks?.trim() || null,
+    }),
+  });
+}
+
 /**
  * PUT /api/training-sessions/{id}/stop: ngựa có dấu hiệu bất thường / chấn thương giữa buổi.
  * Buổi chuyển STOPPED_EARLY và backend mở báo cáo sự cố cho bác sĩ thú y; tới
@@ -89,7 +105,10 @@ export const URGENCY_OPTIONS = [
 /** slug là lớp CSS của chip trạng thái trong groom.css. */
 const SESSION_STATUS = {
   SCHEDULED:     { label: "Scheduled",     slug: "queued" },
+  UNASSIGNED:    { label: "Unassigned",    slug: "stopped" },
+  REST:          { label: "Rest day",      slug: "cancelled" },
   RUNNING:       { label: "Running",       slug: "in-progress" },
+  RECOVERY:      { label: "Recovery",      slug: "in-progress" },
   COMPLETED:     { label: "Completed",     slug: "done" },
   STOPPED_EARLY: { label: "Stopped early", slug: "stopped" },
   CANCELLED:     { label: "Cancelled",     slug: "cancelled" },

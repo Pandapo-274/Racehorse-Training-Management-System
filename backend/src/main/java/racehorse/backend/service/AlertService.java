@@ -44,15 +44,14 @@ public class AlertService {
     private final NotificationService notifications;
     private final IncidentService incidentService;
     /**
-     * Ngưỡng vận tốc (m/s). Schema không có ngưỡng vận tốc theo giai đoạn nên dùng
-     * một ngưỡng chung, mặc định 18 m/s (khoảng 65 km/h): vượt mức này trong buổi
+     * Ngưỡng vận tốc (km/h). Mặc định 65.0 km/h: vượt mức này trong buổi
      * tập là ngựa đang chạy gần tốc độ đua, nguy cơ chấn thương cao.
      */
     private final BigDecimal velocityMax;
 
     public AlertService(AlertRepository alerts, UserRepository users,
                         NotificationService notifications, IncidentService incidentService,
-                        @Value("${app.alert.velocity-max:18.0}") BigDecimal velocityMax) {
+                        @Value("${app.alert.velocity-max:65.0}") BigDecimal velocityMax) {
         this.alerts = alerts;
         this.users = users;
         this.notifications = notifications;
@@ -106,8 +105,8 @@ public class AlertService {
             // hoặc 120 làm giá trị hiển thị mặc định.
             int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
             VitalsResult speed = raise(me, ctx.horseId(), sessionId, effectiveHr, ceiling, VELOCITY, speedLimit, req.velocity(),
-                    "High speed alert", req.velocity().toPlainString() + " m/s, limit is "
-                            + speedLimit.toPlainString() + " m/s");
+                    "High speed alert", req.velocity().toPlainString() + " km/h, limit is "
+                            + speedLimit.toPlainString() + " km/h");
             if (heart == null || !heart.alertRaised()) {
                 return speed;
             }
@@ -125,7 +124,7 @@ public class AlertService {
         // open = mức độ của cảnh báo chưa xử lý gần nhất cùng loại trong 60 giây qua (nếu có).
         Optional<String> open = alerts.latestOpenSeverity(sessionId, metric, DEDUPE_SECONDS);
         String msg = "VELOCITY".equals(metric)
-                ? (actual.toPlainString() + " m/s is over the " + limit.toPlainString() + " m/s limit")
+                ? (actual.toPlainString() + " km/h is over the " + limit.toPlainString() + " km/h limit")
                 : (actual.intValue() + " bpm is over the " + limit.intValue() + " bpm ceiling");
         if (open.isPresent() && rank(open.get()) >= rank(severity)) {
             return new VitalsResult(hr, ceiling, false, severity, null, metric, msg);
@@ -211,11 +210,11 @@ public class AlertService {
         return VELOCITY.equals(metric) ? "speed" : "heart-rate";
     }
 
-    /** "232 bpm (ceiling 200 bpm)" hoặc "19.5 m/s (limit 18.0 m/s)". */
+    /** "232 bpm (ceiling 200 bpm)" hoặc "70.2 km/h (limit 65.0 km/h)". */
     private static String alertDetail(AlertResponse a) {
         if (a.actualValue() == null || a.thresholdValue() == null) return "value over the limit";
         return VELOCITY.equals(a.metricType())
-                ? a.actualValue().toPlainString() + " m/s (limit " + a.thresholdValue().toPlainString() + " m/s)"
+                ? a.actualValue().toPlainString() + " km/h (limit " + a.thresholdValue().toPlainString() + " km/h)"
                 : a.actualValue().intValue() + " bpm (ceiling " + a.thresholdValue().intValue() + " bpm)";
     }
 

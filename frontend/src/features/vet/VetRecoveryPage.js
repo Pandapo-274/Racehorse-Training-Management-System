@@ -525,7 +525,7 @@ function RecoveryView({ horseId }) {
                           <span><strong>Avg HR:</strong> {s.avgHeartRate ? `${s.avgHeartRate} bpm` : "—"}</span>
                           <span><strong>Peak HR:</strong> {s.peakHeartRate ? `${s.peakHeartRate} bpm` : "—"}</span>
                           <span><strong>Recovery HR:</strong> {s.recoveryHeartRate ? `${s.recoveryHeartRate} bpm` : "—"}</span>
-                          <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} m/s` : "—"}</span>
+                          <span><strong>Peak Speed:</strong> {s.peakVelocity ? `${s.peakVelocity} km/h` : "—"}</span>
                         </div>
                         {cleanSessionRemarks(s.remarks) && (
                           <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#475569", fontStyle: "italic", borderTop: "1px dashed #e2e8f0", paddingTop: "6px" }}>
@@ -931,7 +931,7 @@ function RatingDialog({ horse, openInjuries, latestSession, onClose, onDone }) {
               <span>Avg HR: <strong>{latestSession.avgHeartRate ? `${latestSession.avgHeartRate} bpm` : "—"}</strong></span>
               <span>Peak HR: <strong>{latestSession.peakHeartRate ? `${latestSession.peakHeartRate} bpm` : "—"}</strong></span>
               <span>Recovery HR: <strong>{latestSession.recoveryHeartRate ? `${latestSession.recoveryHeartRate} bpm` : "—"}</strong></span>
-              <span>Speed: <strong>{latestSession.peakVelocity ? `${latestSession.peakVelocity} m/s` : "—"}</strong></span>
+              <span>Speed: <strong>{latestSession.peakVelocity ? `${latestSession.peakVelocity} km/h` : "—"}</strong></span>
             </div>
             {cleanSessionRemarks(latestSession.remarks) && (
               <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#15803d", fontStyle: "italic" }}>
