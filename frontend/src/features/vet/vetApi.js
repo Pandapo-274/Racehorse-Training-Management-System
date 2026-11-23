@@ -310,9 +310,11 @@ export function describeDue(item) {
 }
 
 export const SEVERITIES = [
-  { value: "GRADE_1", label: "Grade 1" },
-  { value: "GRADE_2", label: "Grade 2" },
-  { value: "GRADE_3", label: "Grade 3" },
+  { value: "GRADE_1", label: "Grade 1 - Rất nhẹ / Khó thấy (Difficult to observe)" },
+  { value: "GRADE_2", label: "Grade 2 - Nhẹ (Visible under stress/circles)" },
+  { value: "GRADE_3", label: "Grade 3 - Vừa (Consistently observable at trot)" },
+  { value: "GRADE_4", label: "Grade 4 - Nặng (Marked nodding/hitching)" },
+  { value: "GRADE_5", label: "Grade 5 - Tê liệt / Không tì chân (Non-weight bearing)" },
 ];
 
 /* ------------------------------------------------------------------ *
