@@ -145,7 +145,9 @@ function ContractItem({ c, trainers, openId, onDone, onCancel }) {
             <strong>{c.horseName}{c.renewsContractId ? " · renewal" : ""}</strong>
             <p>{c.ownerName} · contract #{c.contractId}</p>
             <p>{c.months} month{c.months === 1 ? "" : "s"} · {formatVnd(c.totalAmount)}
-              {c.trainingWeeks ? ` · training ${c.trainingWeeks} weeks` : ""}</p>
+              {c.trainingStart && c.trainingEnd
+                ? ` · training ${formatDate(c.trainingStart)} - ${formatDate(c.trainingEnd)}`
+                : c.trainingWeeks ? ` · training ${c.trainingWeeks} weeks` : ""}</p>
             <p>{stayLine(c, formatDate) || `Sign and pay by ${formatDate(c.respondBy)}`}</p>
             {c.paidAt && <p>Paid {formatDateTime(c.paidAt)}{c.paymentRef ? ` · ref ${c.paymentRef}` : ""}</p>}
             {c.registrationCode && <p>{c.registrationCode} · stall {c.stallNo || "—"}</p>}

@@ -2,15 +2,16 @@
 /*
  * Thẻ "Stay at the club" trên trang chi tiết ngựa (V48/V49).
  * Góp ý review: "chưa thể hiện thời hạn ngựa ở CLB" - thẻ này cho thấy hợp đồng đang chạy
- * (tới ngày nào, còn bao nhiêu ngày), và những gì CLB ghi lúc nhận ngựa: chiều cao, BCS,
- * năng khiếu, phát triển theo tuổi. Chủ ngựa gia hạn từ đây.
+ * (tới ngày nào, còn bao nhiêu ngày, khoảng huấn luyện owner xin), và những gì CLB ghi lúc nhận
+ * ngựa: chiều cao, BCS, phát triển theo tuổi. Năng khiếu (mặt sân, cự ly, kiểu chạy) nằm ở thẻ
+ * Identity. Chủ ngựa gia hạn từ đây.
  * Ngựa đăng ký trước khi có hợp đồng thì không có thời hạn: nói rõ như vậy, không đoán.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, StatusChip } from "./HorseShell";
-import { formatDate, getIntake, BCS_GROUPS } from "./horseApi";
-import { toGrowth, SURFACES, DISTANCES, RUNNING_STYLES } from "./horseRequestApi";
+import { formatDate, BCS_GROUPS } from "./horseApi";
+import { toGrowth } from "./horseRequestApi";
 import { contractsForHorse, toContractStatus, stayLine, REMINDER_DAYS } from "./contractApi";
 
 function Line({ label, children }) {
@@ -22,15 +23,14 @@ function Line({ label, children }) {
   );
 }
 
-export default function HorseStayPanel({ horse, user }) {
+// intake (chiều cao, BCS, năng khiếu) do HorseDetailPage tải và truyền xuống, để Identity và thẻ này dùng chung.
+export default function HorseStayPanel({ horse, user, intake }) {
   const navigate = useNavigate();
   const [contracts, setContracts] = useState(null);
-  const [intake, setIntake] = useState(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
     contractsForHorse(horse.horseId, ctrl.signal).then(setContracts).catch(() => setContracts([]));
-    getIntake(horse.horseId, ctrl.signal).then(setIntake).catch(() => setIntake(null));
     return () => ctrl.abort();
   }, [horse.horseId]);
 
@@ -53,7 +53,12 @@ export default function HorseStayPanel({ horse, user }) {
                         label={stayLine(running, formatDate)} />
           </Line>
           <Line label="Started">{formatDate(running.startDate)} · {running.months} month{running.months === 1 ? "" : "s"}</Line>
-          {running.trainingWeeks && <Line label="Training asked">{running.trainingWeeks} weeks</Line>}
+          {running.trainingStart && running.trainingEnd ? (
+            <Line label="Training asked">
+              {formatDate(running.trainingStart)} - {formatDate(running.trainingEnd)}
+              {running.trainingWeeks ? ` (${running.trainingWeeks} weeks)` : ""}
+            </Line>
+          ) : running.trainingWeeks ? <Line label="Training asked">{running.trainingWeeks} weeks</Line> : null}
         </>
       ) : (
         <p className="hz-muted hz-note">
@@ -61,7 +66,7 @@ export default function HorseStayPanel({ horse, user }) {
         </p>
       )}
 
-      {intake && (intake.bcs || intake.heightCm || intake.surface) && (
+      {intake && (intake.bcs || intake.heightCm) && (
         <>
           {intake.heightCm && <Line label="Height">{intake.heightCm} cm</Line>}
           {intake.bcs && (
@@ -70,12 +75,6 @@ export default function HorseStayPanel({ horse, user }) {
             </Line>
           )}
           {growth && <Line label="Growth for age"><StatusChip tone={growth.tone} label={growth.label} /></Line>}
-          {(intake.surface || intake.distancePref || intake.runningStyle) && (
-            <Line label="Aptitude">
-              {[SURFACES[intake.surface], DISTANCES[intake.distancePref], RUNNING_STYLES[intake.runningStyle]]
-                .filter(Boolean).join(" · ")}
-            </Line>
-          )}
         </>
       )}
 

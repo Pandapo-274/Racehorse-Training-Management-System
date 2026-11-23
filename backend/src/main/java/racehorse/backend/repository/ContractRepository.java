@@ -41,7 +41,8 @@ public class ContractRepository {
                    c.order_code, c.checkout_url, c.paid_at, c.paid_amount, c.payment_ref,
                    rb.full_name AS received_by_name,
                    h.registration_code, h.stall_no, h.horse_name AS current_horse_name,
-                   c.terms_snapshot, c.terms_sha256, c.closed_note
+                   c.terms_snapshot, c.terms_sha256, c.closed_note,
+                   c.training_start, c.training_end
             FROM HORSE_CONTRACT c
             JOIN HORSE_REQUEST q ON q.request_id = c.request_id
             JOIN APP_USER o ON o.user_id = c.owner_id
@@ -87,7 +88,8 @@ public class ContractRepository {
                 rs.getString("registration_code"), rs.getString("stall_no"),
                 rs.getString("terms_snapshot"), rs.getString("terms_sha256"),
                 rs.getString("closed_note"),
-                daysLeft);
+                daysLeft,
+                rs.getObject("training_start", LocalDate.class), rs.getObject("training_end", LocalDate.class));
     }
 
     /* ---------------- reads ---------------- */
@@ -142,16 +144,19 @@ public class ContractRepository {
     public record NewContract(int requestId, Integer horseId, int ownerId, Integer renewsContractId,
                               int months, Integer trainingWeeks, long monthlyFee, BigDecimal discountPct,
                               long totalAmount, LocalDate plannedStart, String terms, String termsSha256,
-                              int sentBy, LocalDate respondBy) {}
+                              int sentBy, LocalDate respondBy,
+                              LocalDate trainingStart, LocalDate trainingEnd) {}
 
     public int insert(NewContract c) {
         return jdbc.sql("""
                 INSERT INTO HORSE_CONTRACT (request_id, horse_id, owner_id, renews_contract_id,
                         months, training_weeks, monthly_fee, discount_pct, total_amount, planned_start,
-                        terms_snapshot, terms_sha256, status, sent_by, respond_by)
+                        terms_snapshot, terms_sha256, status, sent_by, respond_by,
+                        training_start, training_end)
                 OUTPUT INSERTED.contract_id
                 VALUES (:request, :horse, :owner, :renews, :months, :weeks, :fee, :discount, :total,
-                        :planned, :terms, :sha, 'SENT', :sentBy, :respondBy)
+                        :planned, :terms, :sha, 'SENT', :sentBy, :respondBy,
+                        :trainingStart, :trainingEnd)
                 """)
                 .param("request", c.requestId())
                 .param("horse", c.horseId())
@@ -167,6 +172,8 @@ public class ContractRepository {
                 .param("sha", c.termsSha256())
                 .param("sentBy", c.sentBy())
                 .param("respondBy", c.respondBy())
+                .param("trainingStart", c.trainingStart())
+                .param("trainingEnd", c.trainingEnd())
                 .query(Integer.class).single();
     }
 

@@ -48,7 +48,8 @@ IF COL_LENGTH('APP_USER', 'locked_until') IS NULL OR COL_LENGTH('APP_USER', 'tok
     THROW 50910, N'Migrations are missing (V45, V46): start the backend on main with V45 and V46 once, then run this script.', 1;
 
 IF COL_LENGTH('HORSE_REQUEST', 'photo_url') IS NULL OR OBJECT_ID('HORSE_CONTRACT', 'U') IS NULL
-    THROW 50911, N'Migrations V48 and V49 are missing: start the backend of branch flow1-contract once, then run this script.', 1;
+   OR COL_LENGTH('HORSE_REQUEST', 'training_start') IS NULL
+    THROW 50911, N'Migrations V48, V49 or V50 are missing: start the backend on main once, then run this script.', 1;
 
 -- Stalls the demo uses (Z-02..Z-04, Z-06 now; Z-07, Z-08, Z-09 typed live).
 -- If another horse already stands in one of them, stop and say which, instead of
@@ -277,17 +278,20 @@ VALUES
 INSERT INTO HORSE_REQUEST (owner_id, horse_name, breed, horse_gender, date_of_birth, color, note,
                            record_type, status, created_at, reviewed_by, reviewed_at, review_note,
                            photo_url, weight, height_cm, surface, distance_pref, running_style,
-                           preferred_start, training_weeks, contract_months)
+                           preferred_start, training_weeks, contract_months,
+                           training_start, training_end)
 VALUES
   -- HISTORY: rejected two weeks ago; Lan sends it again in Step 1.1
   (@lan, N'Morning Star', 'Thoroughbred', 'FILLY', NULL, N'Bay', N'Bought at the spring yearling sale',
    'ACADEMY', 'REJECTED', DATEADD(DAY, -15, @utc), @manager, DATEADD(DAY, -14, @utc),
    N'Date of birth is missing. Add it and send the request again',
-   NULL, 455.0, 157.0, 'TURF', 'MEDIUM', 'MIDDLE', NULL, 4, 1),
+   NULL, 455.0, 157.0, 'TURF', 'MEDIUM', 'MIDDLE', NULL, 4, 1, NULL, NULL),
   -- CURRENT: in the manager's queue, complete, ready to approve -> contract -> payOS
   (@minh, N'Blue Lagoon', 'Thoroughbred', 'COLT', '2023-07-11', N'Grey', NULL,
    'ACADEMY', 'PENDING', DATEADD(HOUR, -6, @utc), NULL, NULL, NULL,
-   '/seed/horses/TM-0298.webp', 468.0, 158.5, 'TURF', 'MEDIUM', 'FRONT', DATEADD(DAY, 3, @today), 4, 1);
+   '/seed/horses/TM-0298.webp', 468.0, 158.5, 'TURF', 'MEDIUM', 'FRONT', DATEADD(DAY, 3, @today), 4, 1,
+   -- training asked: from arrival day, 4 weeks (inside the 1-month stay)
+   DATEADD(DAY, 3, @today), DATEADD(DAY, 31, @today));
 
 COMMIT;
 

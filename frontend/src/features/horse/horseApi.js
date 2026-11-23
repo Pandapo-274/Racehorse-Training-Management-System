@@ -374,6 +374,39 @@ export function toAge(dateOfBirth) {
   return age;
 }
 
+/**
+ * Tuổi tính bằng THÁNG (giống HorsePolicy.ageInMonths, Period.toTotalMonths):
+ * hệ thống đánh giá phát triển của ngựa theo tháng tuổi, nên màn hình cũng hiện theo tháng.
+ */
+export function toAgeInMonths(dateOfBirth, today = new Date()) {
+  if (!dateOfBirth) return null;
+  const [y, m, d] = String(dateOfBirth).slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  let months = (today.getFullYear() - y) * 12 + (today.getMonth() + 1 - m);
+  if (today.getDate() < d) months -= 1;
+  return months < 0 ? null : months;
+}
+
+/** "7 months", "2 years 3 months (27 months)" - years for reading, months for the rules. */
+export function formatAge(dateOfBirth, today = new Date()) {
+  const total = toAgeInMonths(dateOfBirth, today);
+  if (total == null) return "";
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (total < 12) return plural(total, "month");
+  const y = Math.floor(total / 12);
+  const m = total % 12;
+  return `${plural(y, "year")}${m ? ` ${plural(m, "month")}` : ""} (${total} months)`;
+}
+
+/** Short form for tables and subtitles: "2y 3m", "7m". */
+export function formatAgeShort(dateOfBirth, today = new Date()) {
+  const total = toAgeInMonths(dateOfBirth, today);
+  if (total == null) return "";
+  const y = Math.floor(total / 12);
+  const m = total % 12;
+  return y ? `${y}y ${m}m` : `${m}m`;
+}
+
 export function formatWeight(w) {
   const n = Number(w);
   return Number.isFinite(n) && n > 0 ? `${n.toFixed(1)} kg` : "—";

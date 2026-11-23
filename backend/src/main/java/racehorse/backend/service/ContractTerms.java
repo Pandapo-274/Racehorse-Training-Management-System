@@ -93,7 +93,8 @@ public class ContractTerms {
     public record Parties(String ownerName, String horseName, String breed, String horseGender,
                           LocalDate dateOfBirth, String color, String sireName, String damName,
                           Integer trainingWeeks, LocalDate plannedStart, String managerName,
-                          boolean renewal, LocalDate renewalStart) {}
+                          boolean renewal, LocalDate renewalStart,
+                          LocalDate trainingStart, LocalDate trainingEnd) {}
 
     /** The contract text, frozen at sending. Plain text, one clause per paragraph. */
     public String text(Parties p, Price price, LocalDate respondBy) {
@@ -125,7 +126,13 @@ public class ContractTerms {
             if (p.plannedStart() != null) t.append(" (planned: ").append(d.format(p.plannedStart())).append(")");
             t.append(".");
         }
-        if (p.trainingWeeks() != null) {
+        if (p.trainingStart() != null && p.trainingEnd() != null) {
+            t.append(" Training requested: from ").append(d.format(p.trainingStart()))
+             .append(" to ").append(d.format(p.trainingEnd()));
+            if (p.trainingWeeks() != null) t.append(" (").append(p.trainingWeeks()).append(" weeks)");
+            t.append(". If the horse arrives later than planned, the training window moves with it, ")
+             .append("staying inside the term.");
+        } else if (p.trainingWeeks() != null) {
             t.append(" Training requested: ").append(p.trainingWeeks()).append(" weeks within the term.");
         }
         t.append("\n\n");

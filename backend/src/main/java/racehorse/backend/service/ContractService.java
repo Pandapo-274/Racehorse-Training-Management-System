@@ -97,12 +97,13 @@ public class ContractService {
         String text = terms.text(new ContractTerms.Parties(
                         req.ownerName(), req.horseName(), req.breed(), req.horseGender(), req.dateOfBirth(),
                         req.color(), req.sireName(), req.damName(), req.trainingWeeks(), req.preferredStart(),
-                        managerName, false, null),
+                        managerName, false, null, req.trainingStart(), req.trainingEnd()),
                 price, respondBy);
         return contracts.insert(new ContractRepository.NewContract(
                 req.requestId(), null, req.ownerId(), null, price.months(), req.trainingWeeks(),
                 price.monthlyFee(), price.discountPct(), price.total(), req.preferredStart(),
-                text, ContractTerms.sha256(text), manager.userId(), respondBy));
+                text, ContractTerms.sha256(text), manager.userId(), respondBy,
+                req.trainingStart(), req.trainingEnd()));
     }
 
     /* ==================================================================
@@ -426,12 +427,12 @@ public class ContractService {
         String text = terms.text(new ContractTerms.Parties(
                         running.ownerName(), horse.horseName(), horse.breed(), horse.horseGender(),
                         horse.dateOfBirth(), horse.color(), req.sireName(), req.damName(), null, null,
-                        "the Club Manager", true, renewalStart),
+                        "the Club Manager", true, renewalStart, null, null),
                 price, respondBy);
         int id = contracts.insert(new ContractRepository.NewContract(
                 running.requestId(), horseId, owner.userId(), running.contractId(), months, null,
                 price.monthlyFee(), price.discountPct(), price.total(), renewalStart,
-                text, ContractTerms.sha256(text), owner.userId(), respondBy));
+                text, ContractTerms.sha256(text), owner.userId(), respondBy, null, null));
         users.writeAudit(owner.userId(), "CONTRACT_RENEW_REQUEST", "HORSE_CONTRACT", id, "SUCCESS", ip,
                 months + " month(s) after contract #" + running.contractId());
         notifications.notifyRole("CLUB_MANAGER", owner, new Notice("CONTRACT_RENEW_REQUEST",

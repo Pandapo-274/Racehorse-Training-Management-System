@@ -17,7 +17,7 @@ import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import {
-  toGender, formatDate, formatDateTime, toAge, toStage, ageProblem, canReviewRequests,
+  toGender, formatDate, formatDateTime, formatAge, toStage, ageProblem, canReviewRequests,
 } from "./horseApi";
 import {
   listRequests, approveRequest, rejectRequest, toRequestStatus, toGrowth, SURFACES, DISTANCES,
@@ -48,7 +48,7 @@ function PendingRow({ row, pricing, onDone }) {
   // Hồ sơ PEDIGREE chỉ để làm cha mẹ / tổ tiên trong phả hệ: không ở CLB, không hợp đồng.
   const pedigreeOnly = row.recordType === "PEDIGREE";
   const stage = toStage({ recordType: row.recordType, dateOfBirth: row.dateOfBirth });
-  const age = toAge(row.dateOfBirth);
+  const age = formatAge(row.dateOfBirth);
   const ageWarning = ageProblem(row.recordType, row.dateOfBirth);
   const growth = toGrowth(row.growth);
   const estimate = estimatePrice(pricing, row.contractMonths);
@@ -106,7 +106,7 @@ function PendingRow({ row, pricing, onDone }) {
             <strong>{row.horseName}</strong>
             <p>
               {[toGender(row.horseGender) === "—" ? null : toGender(row.horseGender), row.breed, row.color,
-                row.dateOfBirth ? `${formatDate(row.dateOfBirth)}${age == null ? "" : ` (${age}y)`}` : null]
+                row.dateOfBirth ? `${formatDate(row.dateOfBirth)}${age ? ` (${age})` : ""}` : null]
                 .filter(Boolean).join(" · ") || "No other details given"}
             </p>
             <p>From {row.ownerName} · sent {formatDateTime(row.createdAt)}</p>
@@ -126,15 +126,17 @@ function PendingRow({ row, pricing, onDone }) {
               <StatusChip tone={growth.tone} label={growth.label}
                           title="Thoroughbred weight and height against age, 0-18 months. Body condition is scored on arrival." />
             </Basis>
-            <Basis label="Aptitude">
-              {[SURFACES[row.surface], DISTANCES[row.distancePref], RUNNING_STYLES[row.runningStyle]]
-                .filter(Boolean).join(" · ") || "Not given"}
-            </Basis>
-            <Basis label="Stay / training">
+            <Basis label="Surface">{SURFACES[row.surface] || "Not given"}</Basis>
+            <Basis label="Distance">{DISTANCES[row.distancePref] || "Not given"}</Basis>
+            <Basis label="Running style">{RUNNING_STYLES[row.runningStyle] || "Not given"}</Basis>
+            <Basis label="Stay">
               {row.contractMonths ? `${row.contractMonths} month${row.contractMonths === 1 ? "" : "s"}` : "—"}
-              {" / "}
-              {row.trainingWeeks ? `${row.trainingWeeks} weeks` : "—"}
-              {row.preferredStart ? ` · from ${formatDate(row.preferredStart)}` : ""}
+              {row.preferredStart ? ` · arrives ${formatDate(row.preferredStart)}` : ""}
+            </Basis>
+            <Basis label="Training asked">
+              {row.trainingStart && row.trainingEnd
+                ? `${formatDate(row.trainingStart)} - ${formatDate(row.trainingEnd)} (${row.trainingWeeks} weeks)`
+                : row.trainingWeeks ? `${row.trainingWeeks} weeks` : "—"}
             </Basis>
             <Basis label="Contract value">{estimate ? formatVnd(estimate.total) : "—"}</Basis>
             <Basis label="Preferred trainer">

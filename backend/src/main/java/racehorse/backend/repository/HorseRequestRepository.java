@@ -42,7 +42,8 @@ public class HorseRequestRepository {
                    (SELECT COUNT(*) FROM HORSE oh
                     WHERE oh.owner_id = q.owner_id AND oh.activity_status = 'ACTIVE'
                       AND oh.record_type = 'ACADEMY') AS owner_active_horses,
-                   c.contract_id, c.status AS contract_status
+                   c.contract_id, c.status AS contract_status,
+                   q.training_start, q.training_end
             FROM HORSE_REQUEST q
             JOIN APP_USER o ON o.user_id = q.owner_id
             LEFT JOIN APP_USER r ON r.user_id = q.reviewed_by
@@ -85,7 +86,8 @@ public class HorseRequestRepository {
                 preferredTrainerId == null ? null : rs.getInt("pt_max"),
                 rs.getInt("owner_active_horses"),
                 HorsePolicy.growthFor(breed, dob, weight, height, LocalDate.now()),
-                rs.getObject("contract_id", Integer.class), rs.getString("contract_status"));
+                rs.getObject("contract_id", Integer.class), rs.getString("contract_status"),
+                rs.getObject("training_start", LocalDate.class), rs.getObject("training_end", LocalDate.class));
     }
 
     public Optional<HorseRequestRow> findById(int requestId) {
@@ -131,11 +133,11 @@ public class HorseRequestRepository {
                                            date_of_birth, color, note, record_type, sire_id, dam_id,
                                            weight, height_cm, surface, distance_pref, running_style,
                                            preferred_start, training_weeks, contract_months,
-                                           preferred_trainer_id)
+                                           preferred_trainer_id, training_start, training_end)
                 OUTPUT INSERTED.request_id
                 VALUES (:owner, :name, :breed, :gender, :dob, :color, :note, :recordType, :sire, :dam,
                         :weight, :height, :surface, :distance, :style,
-                        :start, :weeks, :months, :trainer)
+                        :start, :weeks, :months, :trainer, :trainingStart, :trainingEnd)
                 """)
                 .param("owner", ownerId)
                 .param("name", r.horseName())
@@ -156,6 +158,8 @@ public class HorseRequestRepository {
                 .param("weeks", r.trainingWeeks())
                 .param("months", r.contractMonths())
                 .param("trainer", r.preferredTrainerId())
+                .param("trainingStart", r.trainingStart())
+                .param("trainingEnd", r.trainingEnd())
                 .query(Integer.class)
                 .single();
     }

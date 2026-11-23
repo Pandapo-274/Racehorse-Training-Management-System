@@ -135,15 +135,30 @@ class Flow1ContractRulesTest {
 
     @Test
     void trainingShorterThanThreeWeeksIsRefused() {
-        assertTrue(HorsePolicy.termProblems(2, 1).containsKey("trainingWeeks"));
-        assertTrue(HorsePolicy.termProblems(3, 1).isEmpty());
+        LocalDate today = LocalDate.of(2026, 11, 23);
+        LocalDate arrive = today.plusDays(3);
+        // 20 days is one day short of 3 weeks; 21 days is enough.
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive, arrive.plusDays(20), 1, today).containsKey("trainingEnd"));
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive, arrive.plusDays(21), 1, today).isEmpty());
+        assertEquals(Integer.valueOf(3), HorsePolicy.trainingWeeks(arrive, arrive.plusDays(21)));
     }
 
     @Test
-    void trainingLongerThanTheStayIsRefused() {
-        assertTrue(HorsePolicy.termProblems(6, 1).containsKey("trainingWeeks")); // 6 weeks in a 1-month stay
-        assertTrue(HorsePolicy.termProblems(3, 0).containsKey("contractMonths"));
-        assertTrue(HorsePolicy.termProblems(8, 2).isEmpty());
+    void trainingWindowMustFitTheStay() {
+        LocalDate today = LocalDate.of(2026, 11, 23);
+        LocalDate arrive = LocalDate.of(2026, 12, 1);
+        // Training before the horse arrives.
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive.minusDays(1), arrive.plusDays(30), 1, today)
+                .containsKey("trainingStart"));
+        // A 1-month stay from 1 Dec ends on 1 Jan: training until 2 Jan does not fit, until 1 Jan does.
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive, LocalDate.of(2027, 1, 2), 1, today)
+                .containsKey("trainingEnd"));
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive, LocalDate.of(2027, 1, 1), 1, today).isEmpty());
+        // Arrival in the past, stay of 0 months.
+        assertTrue(HorsePolicy.stayProblems(today.minusDays(1), today, today.plusDays(30), 1, today)
+                .containsKey("preferredStart"));
+        assertTrue(HorsePolicy.stayProblems(arrive, arrive, arrive.plusDays(21), 0, today)
+                .containsKey("contractMonths"));
     }
 
     @Test
@@ -155,7 +170,8 @@ class Flow1ContractRulesTest {
         ApiException ex = expect(400, () -> service.submit(new SubmitRequest("Sakura", "Thoroughbred", "COLT",
                 LocalDate.now().minusYears(2), "Bay", null, "ACADEMY", null, null), OWNER_7, "ip"));
         assertTrue(ex.getFieldErrors().keySet().containsAll(
-                List.of("weight", "heightCm", "trainingWeeks", "contractMonths")), ex.getFieldErrors().toString());
+                List.of("weight", "heightCm", "preferredStart", "trainingStart", "trainingEnd", "contractMonths")),
+                ex.getFieldErrors().toString());
         verify(requests, never()).insert(anyInt(), any());
     }
 
@@ -283,7 +299,8 @@ class Flow1ContractRulesTest {
                 LocalDate.now().minusYears(2), "Bay", null, "PENDING", LocalDateTime.now(),
                 null, null, null, null, null, null, null, null, null,
                 photoUrl, new BigDecimal("450"), new BigDecimal("155"), "TURF", "MEDIUM", "MIDDLE",
-                null, 4, months, trainerId, null, null, null, 0, null, null, null);
+                null, 4, months, trainerId, null, null, null, 0, null, null, null,
+                LocalDate.now().plusDays(3), LocalDate.now().plusDays(31));
     }
 
     private static ContractRow contract(int id, String status, long total) {
@@ -294,7 +311,7 @@ class Flow1ContractRulesTest {
                 1, 4, total, BigDecimal.ZERO, total,
                 null, null, null, status, "Manager", LocalDateTime.now(), LocalDate.now().plusDays(7),
                 null, null, null, null, null, null, null, null, null, null,
-                terms, ContractTerms.sha256(terms), null, null);
+                terms, ContractTerms.sha256(terms), null, null, null, null);
     }
 
     private static ApiException expect(int status, org.junit.jupiter.api.function.Executable run) {
