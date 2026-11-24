@@ -30,12 +30,14 @@ public class RaceRepository {
                    u.full_name AS registered_by_name, r.result, r.prize_money, r.note,
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
                    r.finish_position, r.finish_time_ms, r.scratch_reason,
-                   r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id
+                   r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id,
+                   r.withdraw_advice, r.withdraw_advice_at, wa.full_name AS withdraw_advice_by_name
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
             JOIN APP_USER o ON o.user_id  = h.owner_id
             JOIN APP_USER u ON u.user_id  = r.registered_by
+            LEFT JOIN APP_USER wa ON wa.user_id = r.withdraw_advice_by
             """;
 
     /**
@@ -81,7 +83,10 @@ public class RaceRepository {
                 rs.getString("race_status"), rs.getObject("finish_position", Integer.class),
                 rs.getObject("finish_time_ms", Integer.class), rs.getString("scratch_reason"),
                 rs.getString("approval_status"), rs.getString("reject_reason"),
-                rs.getObject("trainer_id", Integer.class));
+                rs.getObject("trainer_id", Integer.class),
+                rs.getString("withdraw_advice"),
+                rs.getObject("withdraw_advice_at", java.time.LocalDateTime.class),
+                rs.getString("withdraw_advice_by_name"));
     }
 
     /**
@@ -172,7 +177,8 @@ public class RaceRepository {
                 SET result = NULL, prize_money = NULL, registered_by = :by, note = :note,
                     scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL,
                     approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL,
-                    fee_expense_id = NULL   -- V36: the old fee is settled; a new approval charges again
+                    fee_expense_id = NULL,  -- V36: the old fee is settled; a new approval charges again
+                    withdraw_advice = NULL, withdraw_advice_at = NULL, withdraw_advice_by = NULL  -- V55
                 WHERE registration_id = :id
                   AND (result = 'SCRATCHED' OR (result IS NULL AND approval_status = 'REJECTED'))
                 """).param("id", id).param("by", by).param("note", note).update();
@@ -228,6 +234,18 @@ public class RaceRepository {
     }
 
     /** V23: the reason goes to its own column; the note is left as it was. */
+    /**
+     * V55: the Head Trainer advises the owner to withdraw a confirmed entry. Only an entry
+     * the owner confirmed and that has no result can carry advice; the owner decides.
+     */
+    public int setWithdrawAdvice(int id, String advice, int by) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET withdraw_advice = :advice, withdraw_advice_at = SYSUTCDATETIME(), withdraw_advice_by = :by
+                WHERE registration_id = :id AND result IS NULL AND approval_status = 'APPROVED'
+                """).param("advice", advice).param("by", by).param("id", id).update();
+    }
+
     public int scratch(int id, String reason) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION SET result = 'SCRATCHED', prize_money = NULL, scratch_reason = :reason

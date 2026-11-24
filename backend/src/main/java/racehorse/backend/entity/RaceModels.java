@@ -44,7 +44,9 @@ public final class RaceModels {
             Integer finishPosition, Integer finishTimeMs,
             /* V23 */ String scratchReason,
             /* V27 */ String approvalStatus, String rejectReason,
-            /* V37 */ Integer trainerId) {
+            /* V37 */ Integer trainerId,
+            /* V55: the Head Trainer's latest advice to withdraw (only the owner withdraws) */
+            String withdrawAdvice, java.time.LocalDateTime withdrawAdviceAt, String withdrawAdviceByName) {
     }
 
     /**
@@ -134,7 +136,7 @@ public final class RaceModels {
     // thương, bị khoá tập, có sự cố mở, chưa đủ ngày nghỉ sau giải trước...).
     public record Candidate(int horseId, String horseName, String stallNo, String ownerName,
                             Integer age, String healthStatus, String problem,
-                            List<String> problems, List<String> warnings) {
+                            List<String> problems, List<String> warnings, Integer ageMonths) {
     }
 
     public record HorseSummary(int horseId, String horseName, String ownerName,

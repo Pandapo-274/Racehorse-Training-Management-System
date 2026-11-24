@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -241,14 +242,15 @@ class BusinessRulesTest {
     void ownerApprovesAPendingPlan() {
         TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
         when(plans.findById(1)).thenReturn(Optional.of(plan("PENDING_APPROVAL", TODAY.plusDays(10))));
         when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
-        when(plans.recordOwnerReview(1, "APPROVED", null)).thenReturn(1);
-        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class),
-                mock(NotificationService.class));
+        when(plans.recordOwnerReview(1, "ACTIVE", null)).thenReturn(1);
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class), notifications);
 
         service.ownerReview(1, true, null, OWNER, "ip");
-        verify(plans).recordOwnerReview(1, "APPROVED", null);
+        verify(plans).recordOwnerReview(1, "ACTIVE", null);
+        verify(notifications).notifyUser(eq(2), argThat(n -> "TRAINING_PLAN_APPROVED".equals(n.type())));
     }
 
     @Test
@@ -662,11 +664,11 @@ class BusinessRulesTest {
         verify(repo).markAutoArchived(eq(15), eq(1600), eq(60), eq(172), eq("FAIR"),
                 argThat(r -> r.contains("AUTOMATED PRELIMINARY REPORT")
                         && r.contains("Peak HR = 172 bpm")
-                        && r.contains("Peak Speed = 16.4 m/s")));
+                        && r.contains("Peak Speed = 16.4 km/h")));
         verify(notifications).notifyUser(eq(7),
                 argThat(n -> "SESSION_AUTO_PRELIMINARY_REPORT".equals(n.type())
                         && n.message().contains("Peak HR 172 bpm")
-                        && n.message().contains("Peak Speed 16.4 m/s")));
+                        && n.message().contains("Peak Speed 16.4 km/h")));
     }
 
     @Test
@@ -688,7 +690,7 @@ class BusinessRulesTest {
         verify(repo).markAutoArchived(eq(16), eq(1000), eq(35), eq(150), eq("FAIR"),
                 argThat(r -> r.contains("Early stop: Target fitness reached")
                         && r.contains("Peak HR = 168 bpm")
-                        && r.contains("Peak Speed = 15.8 m/s")));
+                        && r.contains("Peak Speed = 15.8 km/h")));
     }
 
     // ---------------------------------------------------------------- V37: Kiểm tra bổ sung 4 nghiệp vụ huấn luyện (R1-R4)
@@ -1827,7 +1829,8 @@ class BusinessRulesTest {
     /** trainerId: Head Trainer phụ trách ngựa (null = chưa giao). Người đề xuất luôn là user 2. */
     private static RaceModels.Entry entry(int id, String state, String approval, LocalDate raceDate, Integer trainerId) {
         return new RaceModels.Entry(id, 100, "Horse 100", "A-100", 7, "Owner", "Japan Cup", raceDate, 2, "Trainer",
-                null, null, null, state, 50, 2400, "Tokyo", "OPEN", null, null, null, approval, null, trainerId);
+                null, null, null, state, 50, 2400, "Tokyo", "OPEN", null, null, null, approval, null, trainerId,
+                null, null, null);
     }
 
     private static RaceService raceService(RaceRepository races, HorseRepository horses) {
@@ -1878,8 +1881,9 @@ class BusinessRulesTest {
         when(races.scratch(eq(1), any())).thenReturn(1);
         when(races.findFeeExpense(1)).thenReturn(Optional.of(77));
 
-        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", TRAINER, "ip");
-        verify(expenses).cancel(77, 2, "Withdrawn before entries closed");
+        // V55: only the owner (user 7 owns horse 100) withdraws a confirmed entry.
+        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", user(7, "HORSE_OWNER"), "ip");
+        verify(expenses).cancel(77, 7, "Withdrawn before entries closed");
     }
 
     @Test
@@ -1891,7 +1895,7 @@ class BusinessRulesTest {
         when(races.scratch(eq(1), any())).thenReturn(1);
         when(races.findFeeExpense(1)).thenReturn(Optional.of(77));
 
-        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", TRAINER, "ip");
+        raceService(races, mock(HorseRepository.class), expenses).scratch(1, "Sore hoof", user(7, "HORSE_OWNER"), "ip");
         verify(expenses, never()).cancel(anyInt(), anyInt(), any());
     }
 
@@ -2002,7 +2006,7 @@ class BusinessRulesTest {
         RaceRepository races = mock(RaceRepository.class);
         when(races.findById(1)).thenReturn(Optional.of(new RaceModels.Entry(1, 100, "Horse 100", "A-100", 7, "Owner",
                 "Japan Cup", TODAY.minusDays(10), 2, "Trainer", "WON", new BigDecimal("100000000"), null, "FINISHED",
-                50, 2400, "Tokyo", "OPEN", 1, null, null, "APPROVED", null, 2)));
+                50, 2400, "Tokyo", "OPEN", 1, null, null, "APPROVED", null, 2, null, null, null)));
         RaceService service = raceService(races, mock(HorseRepository.class));
 
         // 409, không phải 403: frontend chuyển mọi 403 sang /access-denied.
@@ -2073,6 +2077,211 @@ class BusinessRulesTest {
         assertEquals(1, s.upcoming());
     }
 
+    // ---------------------------------------------------------------- Hội đồng: chủ ngựa đăng ký, HLV tư vấn
+
+    private static void openRaceFor(RaceRepository races, HorseRepository horses) {
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
+        when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(true);
+    }
+
+    @Test
+    void ownerRegistersTheirHorseAndTheEntryIsConfirmedWithItsFee() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        openRaceFor(races, horses);
+        when(races.insert(eq(100), any(), eq(7), any())).thenReturn(9);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
+
+        raceService(races, horses, expenses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
+
+        verify(races).updateApproval(9, "APPROVED", null);
+        verify(expenses).insert(any(), anyInt());
+    }
+
+    @Test
+    void ownerRegisteringARecommendedRaceConfirmsTheRecommendation() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(races.findEntry(100, 50)).thenReturn(Optional.of(new RaceRepository.ExistingEntry(9, null, "PENDING_OWNER")));
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
+
+        raceService(races, horses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
+
+        verify(races).updateApproval(9, "APPROVED", null);
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    @Test
+    void trainerRecommendationDoesNotConfirmAnEntry() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(races.insert(eq(100), any(), eq(2), any())).thenReturn(9);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+
+        raceService(races, horses).register(new RaceModels.RegisterRequest(100, 50, "Good trial"), TRAINER, "ip");
+
+        verify(races, never()).updateApproval(anyInt(), any(), any());
+    }
+
+    @Test
+    void ownerCannotRegisterAnotherOwnersHorse() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        RaceService service = raceService(races, horses);
+
+        expect(ApiException.class, 403, () -> service.ownerRegister(
+                new RaceModels.RegisterRequest(100, 50, null), user(8, "HORSE_OWNER"), "ip"));
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    // ---- V55, committee point 14: the owner withdraws, the Head Trainer advises ----
+
+    @Test
+    void headTrainerCannotWithdrawAConfirmedEntry() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20), 2)));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        // 409, not 403: the trainer's screen stays open and says to send a recommendation instead.
+        ApiException ex = expect(ApiException.class, 409, () -> service.scratch(1, "Sore hoof", TRAINER, "ip"));
+        assertTrue(ex.getMessage().contains("Only the owner"), ex.getMessage());
+        verify(races, never()).scratch(anyInt(), any());
+    }
+
+    @Test
+    void headTrainerCanTakeBackARecommendationTheOwnerHasNotAnswered() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20), 2)));
+        when(races.findRace(50)).thenReturn(Optional.of(raceWithDeadline(TODAY.plusDays(13))));
+        when(races.scratch(eq(1), any())).thenReturn(1);
+
+        raceService(races, mock(HorseRepository.class)).scratch(1, "Trial was slow", TRAINER, "ip");
+        verify(races).scratch(eq(1), any());
+    }
+
+    @Test
+    void headTrainerAdviceToWithdrawReachesTheOwnerAndWithdrawsNothing() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20), 2)));
+        when(races.setWithdrawAdvice(1, "Sore hoof", 2)).thenReturn(1);
+        NotificationService notifications = mock(NotificationService.class);
+        RaceService service = raceService(races, mock(HorseRepository.class), mock(ExpenseRepository.class), notifications);
+
+        service.recommendWithdrawal(1, "Sore hoof", TRAINER, "ip");
+        verify(races).setWithdrawAdvice(1, "Sore hoof", 2);
+        verify(notifications).notifyUser(eq(7), any());
+        verify(races, never()).scratch(anyInt(), any());
+    }
+
+    @Test
+    void ownerCannotWithdrawAnotherOwnersEntry() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 403, () -> service.scratch(1, "Changed my mind", user(8, "HORSE_OWNER"), "ip"));
+        verify(races, never()).scratch(anyInt(), any());
+    }
+
+    @Test
+    void horseWhoseStayEndedCannotBeEntered() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.hasExpiredContract(100)).thenReturn(true);
+        RaceService service = raceService(races, horses);
+
+        expect(ApiException.class, 409, () -> service.ownerRegister(
+                new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip"));
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    // ---------------------------------------------------------------- Hội đồng: Groom thuộc đội HLV
+
+    @Test
+    void headTrainerWithoutATeamSeesNoGrooms() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        when(repo.findActiveGroomsByTrainer(2)).thenReturn(List.of());
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
+                mock(HorseRepository.class), mock(HorseVitalsRepository.class));
+
+        assertTrue(service.listActiveGrooms(TRAINER).isEmpty());
+        verify(repo, never()).findActiveGrooms();
+    }
+
+    @Test
+    void careTaskCannotGoToAGroomOfAnotherTeam() {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(false);
+        CareRepository care = mock(CareRepository.class);
+        CareService service = careService(care, mock(HorseRepository.class), sessions,
+                mock(NotificationService.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.assignBulk(
+                new CareModels.BulkAssignRequest(List.of(100), 5, TODAY, TODAY, List.of("CLEANING"), null),
+                TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("assignedTo"), ex.getFieldErrors().toString());
+        verify(care, never()).insertTask(anyInt(), any(), anyInt(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- Hội đồng: chuẩn theo giống và tuổi
+
+    private static TrainingPlanRequest planAtSpeed(String speed) {
+        return new TrainingPlanRequest(100, "Speed Plan", TODAY.plusDays(1), TODAY.plusDays(30),
+                List.of(new TrainingPlanRequest.PhaseRequest("Base", 1600, "Moderate", "TURF", 3, 180, 90,
+                        new BigDecimal(speed), TODAY.plusDays(1), TODAY.plusDays(30))));
+    }
+
+    @Test
+    void horseUnderEighteenMonthsCannotGetATrainingPlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusMonths(10), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(planAtSpeed("30"), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().get("horseId").contains("18 months"), ex.getFieldErrors().toString());
+        verify(plans, never()).insertPlan(anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void phaseFasterThanTheBreedAndAgeLimitIsRefused() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        // Breed "TB" has no reference, so the lowest club limit (58 km/h) applies.
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(planAtSpeed("60"), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("phases[0].targetVelocity"), ex.getFieldErrors().toString());
+    }
+
+    @Test
+    void breedWithoutATemplateGetsNoRecommendation() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = new TrainingPlanService(
+                plans, horses, mock(HorseVitalsRepository.class), mock(UserRepository.class),
+                mock(NotificationService.class), null, mock(TrainingSessionRepository.class));
+
+        TrainingPlanResponse.TemplateRecommendation rec = service.getTemplates(100, TRAINER);
+        assertNull(rec.recommendedTemplate());
+        assertFalse(rec.standard().breedKnown());
+        assertEquals(new BigDecimal("58.0"), rec.standard().speedLimitKmh());
+    }
+
     // ---------------------------------------------------------------- Flow 4: phân công chăm sóc
 
     private static CareService careService(CareRepository care, HorseRepository horses,
@@ -2088,6 +2297,7 @@ class BusinessRulesTest {
         TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
         NotificationService notifications = mock(NotificationService.class);
         when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(true);
         when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
         when(horses.findById(101)).thenReturn(Optional.of(horse(101, "INJURED", TODAY.minusYears(5), "FILLY")));
         when(care.taskExists(100, "CLEANING", TODAY)).thenReturn(true);
@@ -2105,6 +2315,7 @@ class BusinessRulesTest {
     void bulkAssignIsLimitedToTwoWeeks() {
         TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
         when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(true);
         CareRepository care = mock(CareRepository.class);
         CareService service = careService(care, mock(HorseRepository.class), sessions,
                 mock(NotificationService.class));
@@ -2157,7 +2368,7 @@ class BusinessRulesTest {
         assertEquals("VELOCITY", res.metricType());
         assertEquals("HIGH", res.severity());
         verify(notifications).notifyHorseTrainer(eq(100), eq(GROOM),
-                argThat(n -> "THRESHOLD_ALERT_HIGH".equals(n.type()) && n.message().contains("14.0 m/s")));
+                argThat(n -> "THRESHOLD_ALERT_HIGH".equals(n.type()) && n.message().contains("14.0 km/h")));
         verify(notifications, never()).notifyRole(eq("HEAD_TRAINER"), any(), any());
     }
 
@@ -2530,5 +2741,136 @@ class BusinessRulesTest {
 
         verify(repo).insertMovement(eq(4), eq("ADJUST"), any(), any(), any(), any(), eq("Stock count"), eq(GROOM.userId()));
         verify(notifications, never()).notifyRole(any(), any(), argThat(n -> n.type().equals("SUPPLY_COUNT_UP")));
+    }
+
+    // ---------------------------------------------------------------- V50: Templates, Auto-Scheduling & Recovery
+
+    @Test
+    void getTemplatesRecommendsByBreedAndStyleAndScalesByDistanceType() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        HorseResponse tbHorse = new HorseResponse(101, 7, "Owner", null, null, "Vodka", "TM-101",
+                "Thoroughbred", "MARE", TODAY.minusYears(4), "Bay", null, "C-02", "ELIGIBLE",
+                LocalDateTime.now(), null, "ACADEMY", null, "ACTIVE", null, 2, "Trainer 2");
+        when(horses.findById(101)).thenReturn(Optional.of(tbHorse));
+        when(plans.findHorseAptitude(101)).thenReturn(Optional.of(
+                new TrainingPlanRepository.HorseAptitude(101, "Vodka", "Thoroughbred", "TURF", "SPRINT", "FRONT")));
+
+        TrainingPlanService service = new TrainingPlanService(
+                plans, horses, mock(HorseVitalsRepository.class), mock(UserRepository.class),
+                mock(NotificationService.class), null, mock(TrainingSessionRepository.class));
+
+        TrainingPlanResponse.TemplateRecommendation rec = service.getTemplates(101, TRAINER);
+        assertEquals("TURF", rec.lockedSurface());
+        assertEquals("FRONT", rec.runningStyle());
+        assertEquals("SPRINT", rec.distanceType());
+        assertNotNull(rec.recommendedTemplate());
+        assertEquals("TB_FRONT", rec.recommendedTemplate().templateCode());
+        assertEquals(9, rec.allTemplates().size());
+        assertEquals(3, rec.recommendedTemplate().phases().size());
+        // Sprint scales speed x1.08 (71.3 km/h), capped at the Thoroughbred limit (66.0); HR +5 (210 -> 215)
+        assertEquals(new BigDecimal("66.0"), rec.recommendedTemplate().maxSpeed());
+        assertEquals(215, rec.recommendedTemplate().maxHeartRate());
+    }
+
+    @Test
+    void autoScheduleSplitsPhasesWithMathFloorAndHandlesGroomConflictAndRestSwap() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+
+        HorseResponse horse = new HorseResponse(100, 7, "Owner", null, null, "Horse 100", "TM-100",
+                "Thoroughbred", "COLT", TODAY.minusYears(4), "Bay", null, "A-100", "ELIGIBLE",
+                LocalDateTime.now(), null, "ACADEMY", null, "ACTIVE", null, 2, "Trainer 2");
+        when(horses.findById(100)).thenReturn(Optional.of(horse));
+
+        LocalDate pStart = TODAY.plusDays(1);
+        LocalDate pEnd = pStart.plusDays(9); // 10 days total: floor(3.0)=3, floor(4.5)=4, peak=3
+        List<TrainingPlanResponse.Phase> threePhases = List.of(
+                new TrainingPlanResponse.Phase(11, 1, "Foundation", 1200, "Light", "GRASS", 5, 185,
+                        pStart, pEnd, 90, new BigDecimal("50.0"), "FOUNDATION", 30, 15),
+                new TrainingPlanResponse.Phase(12, 2, "Build", 1600, "Medium", "GRASS", 5, 195,
+                        pStart, pEnd, 90, new BigDecimal("58.0"), "BUILD", 45, 20),
+                new TrainingPlanResponse.Phase(13, 3, "Peak", 1800, "High", "GRASS", 5, 205,
+                        pStart, pEnd, 90, new BigDecimal("64.0"), "PEAK", 25, 30)
+        );
+        TrainingPlanResponse plan = new TrainingPlanResponse(
+                50, 100, "Horse 100", 5, "Groom 5", "G1 Prep", pStart, pEnd,
+                "ACTIVE", 2, "Trainer 2", LocalDateTime.now(), null, null, threePhases, null,
+                1, 5, "Groom 5", 8, "Backup 8", "GRASS", "HIGH", 205, new BigDecimal("64.0"), 1, 115);
+
+        when(plans.findById(50)).thenReturn(Optional.of(plan));
+        when(plans.findPhases(50)).thenReturn(threePhases);
+
+        // Day 0: both primary (5) and backup (8) busy -> should swap to REST using block 0's rest quota!
+        // Day 1: both busy and block 0 rest quota already spent by Day 0 swap -> UNASSIGNED + conflictAlert!
+        // Day 2: primary busy, backup free -> assigned to Backup 8!
+        when(sessions.isGroomBusyOnDate(5, pStart)).thenReturn(true);
+        when(sessions.isGroomBusyOnDate(8, pStart)).thenReturn(true);
+        when(sessions.isGroomBusyOnDate(5, pStart.plusDays(1))).thenReturn(true);
+        when(sessions.isGroomBusyOnDate(8, pStart.plusDays(1))).thenReturn(true);
+        when(sessions.isGroomBusyOnDate(5, pStart.plusDays(2))).thenReturn(true);
+        when(sessions.isGroomBusyOnDate(8, pStart.plusDays(2))).thenReturn(false);
+
+        TrainingPlanService service = new TrainingPlanService(
+                plans, horses, mock(HorseVitalsRepository.class), mock(UserRepository.class),
+                notifications, null, sessions);
+
+        TrainingPlanResponse.AutoScheduleResult res = service.autoSchedule(50, TRAINER, "ip");
+
+        // Math.floor phase date splits: [d0..d2] (3 days), [d3..d6] (4 days), [d7..d9] (3 days)
+        verify(plans).updatePhaseDates(11, pStart, pStart.plusDays(2));
+        verify(plans).updatePhaseDates(12, pStart.plusDays(3), pStart.plusDays(6));
+        verify(plans).updatePhaseDates(13, pStart.plusDays(7), pEnd);
+
+        assertEquals(1, res.conflictCount());
+        verify(sessions).insertAutoSlot(eq(11), eq(100), eq(null), any(), any(), eq(60), any(),
+                eq("UNASSIGNED"), eq("TRAINING"), eq(true), eq(15), any());
+        verify(notifications).notifyHorseTrainer(eq(100), eq(TRAINER),
+                argThat(n -> "TRAINING_SCHEDULE_CONFLICT".equals(n.type())));
+    }
+
+    @Test
+    void sessionEntersRecoveryAndCompletesWithOverloadWarningWhenActualHrrExceedsTarget() {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        UserRepository users = mock(UserRepository.class);
+
+        TrainingSessionResponse running = new TrainingSessionResponse(
+                99, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(30), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RUNNING", 185, 0, false, null,
+                60, LocalDateTime.now().minusMinutes(30), null, null, "NONE", new BigDecimal("60.0"),
+                "TRAINING", false, 20, null, null, null, false, 115);
+
+        TrainingSessionResponse inRecovery = new TrainingSessionResponse(
+                99, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
+                running.sessionDate(), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RECOVERY", 185, 0, false, null,
+                60, running.startedAt(), null, null, "NONE", new BigDecimal("60.0"),
+                "TRAINING", false, 20, LocalDateTime.now(), LocalDateTime.now().plusMinutes(20), null, false, 115);
+
+        when(sessions.findById(99)).thenReturn(Optional.of(running)).thenReturn(Optional.of(inRecovery));
+        when(sessions.findPhaseRecoveryMinutes(11)).thenReturn(Optional.of(20));
+        when(sessions.markRecoveryStarted(eq(99), eq(20), any(), any())).thenReturn(1);
+
+        TrainingSessionService service = new TrainingSessionService(
+                sessions, mock(TrainingPlanRepository.class), mock(HorseRepository.class),
+                mock(HorseVitalsRepository.class), users, notifications, mock(IncidentGuard.class), 800);
+
+        TrainingSessionResponse recState = service.enterRecovery(99, GROOM, "ip");
+        assertEquals("RECOVERY", recState.status());
+        verify(sessions).markRecoveryStarted(eq(99), eq(20), any(), any());
+
+        // Now complete recovery with actualHrr = 130 > targetHrr = 115 -> overload_warning = true
+        when(sessions.findPlanTargetHrr(11)).thenReturn(Optional.of(115));
+        when(sessions.markRecoveryCompleted(99, 130, true, "Heavy breathing")).thenReturn(1);
+
+        service.completeRecovery(99, new racehorse.backend.dto.CompleteRecoveryRequest(130, "Heavy breathing"), GROOM, "ip");
+
+        verify(sessions).markRecoveryCompleted(99, 130, true, "Heavy breathing");
+        verify(notifications).notifyHorseTrainer(eq(100), eq(GROOM),
+                argThat(n -> "SESSION_OVERLOAD_WARNING".equals(n.type()) && n.message().contains("130 bpm")));
     }
 }
