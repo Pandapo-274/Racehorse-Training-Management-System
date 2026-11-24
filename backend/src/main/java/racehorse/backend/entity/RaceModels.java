@@ -134,7 +134,7 @@ public final class RaceModels {
     // thương, bị khoá tập, có sự cố mở, chưa đủ ngày nghỉ sau giải trước...).
     public record Candidate(int horseId, String horseName, String stallNo, String ownerName,
                             Integer age, String healthStatus, String problem,
-                            List<String> problems, List<String> warnings) {
+                            List<String> problems, List<String> warnings, Integer ageMonths) {
     }
 
     public record HorseSummary(int horseId, String horseName, String ownerName,

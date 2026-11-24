@@ -84,11 +84,13 @@ public class HorseRequestService {
                 raw.sireId(), raw.damId(),
                 club ? raw.weight() : null, club ? raw.heightCm() : null,
                 club ? blankToNull(raw.surface()) : null, club ? blankToNull(raw.distancePref()) : null,
-                club ? blankToNull(raw.runningStyle()) : null,
+                club ? HorsePolicy.normalizeRunningStyle(raw.runningStyle()) : null,
                 club ? raw.preferredStart() : null,
                 club ? HorsePolicy.trainingWeeks(raw.trainingStart(), raw.trainingEnd()) : null,
                 club ? raw.contractMonths() : null, club ? raw.preferredTrainerId() : null,
-                club ? raw.trainingStart() : null, club ? raw.trainingEnd() : null);
+                club ? raw.trainingStart() : null, club ? raw.trainingEnd() : null,
+                club ? blankToNull(raw.insurerName()) : null, club ? blankToNull(raw.insurerPhone()) : null,
+                club ? blankToNull(raw.emergencyName()) : null, club ? blankToNull(raw.emergencyPhone()) : null);
         int id = requests.insert(me.userId(), clean);
         users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
         HorseRequestRow saved = getOrThrow(id);
@@ -105,6 +107,11 @@ public class HorseRequestService {
         Map<String, String> errors = new LinkedHashMap<>();
         if (raw.weight() == null) errors.put("weight", "Weight is required for a club horse");
         if (raw.heightCm() == null) errors.put("heightCm", "Height is required for a club horse");
+        // V54: contract clause 8 relies on these four.
+        if (blankToNull(raw.insurerName()) == null) errors.put("insurerName", "Name the horse's insurer");
+        if (blankToNull(raw.insurerPhone()) == null) errors.put("insurerPhone", "Give the insurer's emergency number");
+        if (blankToNull(raw.emergencyName()) == null) errors.put("emergencyName", "Name a second person to call");
+        if (blankToNull(raw.emergencyPhone()) == null) errors.put("emergencyPhone", "Give that person's phone number");
         // V50: arrival day, training window (>= 3 weeks, inside the stay) and length of stay.
         errors.putAll(HorsePolicy.stayProblems(raw.preferredStart(), raw.trainingStart(), raw.trainingEnd(),
                 raw.contractMonths(), LocalDate.now()));

@@ -642,3 +642,68 @@
 }
 @media (max-width: 1180px) { .training-plan-layout { grid-template-columns: minmax(0, 1fr); } .training-plan-right { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
 @media (max-width: 760px) { .training-plan-target { display: none; } .plan-builder-card, .training-settings-card, .saved-plans-card { padding: 17px 15px; } .training-plan-form-grid, .training-phase-fields { grid-template-columns: minmax(0, 1fr); } .training-field--wide { grid-column: auto; } .training-plan-right { display: flex; } .training-phase { padding: 12px; } }
+
+/* ---------- chuẩn theo giống và tháng tuổi ---------- */
+
+.plan-standard-select {
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid #e6dbe3;
+  border-radius: 10px;
+  background: #fff;
+  color: #202a49;
+  font: inherit;
+  font-size: 13px;
+}
+
+.plan-standard-note {
+  margin: 12px 0 0;
+  color: #8e96ad;
+  font-size: 12px;
+}
+
+.plan-standard-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-standard-strip > div {
+  padding: 8px 12px;
+  border: 1px solid #f2dee8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.plan-standard-strip span {
+  display: block;
+  color: #8e96ad;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.plan-standard-strip strong {
+  display: block;
+  margin-top: 2px;
+  color: #202a49;
+  font-size: 13px;
+}
+
+.plan-standard-strip p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64708a;
+  font-size: 12px;
+}
+
+.plan-standard-strip p.plan-standard-strip__stop {
+  color: #b42318;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .plan-standard-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

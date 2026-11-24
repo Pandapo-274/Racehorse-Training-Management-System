@@ -57,6 +57,14 @@ public class ContractController {
         return service.forHorse(horseId, user);
     }
 
+    /** Điều 11: đã giao được bao nhiêu buổi huấn luyện so với cam kết. */
+    @GetMapping("/{id}/commitment")
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER", "HEAD_TRAINER", "VETERINARIAN", "GROOM"})
+    public ContractService.Commitment commitment(@PathVariable int id,
+                                                 @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.commitment(id, user);
+    }
+
     @PostMapping("/{id}/sign")
     @RequireRole({"HORSE_OWNER"})
     public ContractRow sign(@PathVariable int id, @Valid @RequestBody SignContractRequest body,

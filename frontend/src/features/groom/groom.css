@@ -858,3 +858,142 @@ button.task-row.selected { outline: 2px solid #f55fa9; outline-offset: -2px; bor
 .stop-cancel:hover:not(:disabled) {
   background: #fff0f5;
 }
+
+/* ---------- to-do đầu ngày ---------- */
+
+.groom-todo {
+  margin-top: 20px;
+  padding: 22px 28px;
+  border-top: 6px solid #4f8f22;
+}
+
+.groom-todo-progress {
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  background: #edf0f5;
+  border-radius: 8px;
+}
+
+.groom-todo-progress i {
+  display: block;
+  height: 100%;
+  background: #4f8f22;
+  border-radius: 8px;
+  transition: width 0.2s ease;
+}
+
+.groom-todo-error {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.groom-todo-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 16px;
+}
+
+.groom-todo h3 {
+  margin: 0 0 6px;
+  color: var(--g-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.groom-todo ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groom-todo li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 7px 0;
+  border-bottom: 1px solid #eef0f4;
+  font-size: 13.5px;
+}
+
+.groom-todo li:last-child {
+  border-bottom: 0;
+}
+
+.groom-todo li.done strong,
+.groom-todo li.done .groom-todo-session span {
+  color: var(--g-muted);
+  text-decoration: line-through;
+}
+
+.groom-todo label {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.groom-todo input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: #4f8f22;
+}
+
+.groom-todo label small {
+  display: block;
+  margin-top: 2px;
+  color: var(--g-muted);
+  font-size: 12px;
+}
+
+.groom-todo-session {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.groom-todo-session:hover span {
+  text-decoration: underline;
+}
+
+.groom-todo-time {
+  flex: none;
+  color: var(--g-muted);
+  font-size: 12px;
+}
+
+.groom-todo-empty {
+  margin: 6px 0 0;
+  color: var(--g-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 860px) {
+  .groom-todo {
+    padding: 18px;
+  }
+
+  .groom-todo-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+}

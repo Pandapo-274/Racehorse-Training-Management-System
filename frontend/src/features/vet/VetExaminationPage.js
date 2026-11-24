@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
-import { toAge } from "../horse/horseApi";
+import { formatAge } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
 import VetHorsePicker from "./VetHorsePicker";
 import {
@@ -1031,7 +1031,7 @@ function ExaminationForm({ horseId, reportId }) {
     );
   }
 
-  const age = toAge(horse.dateOfBirth);
+  const age = formatAge(horse.dateOfBirth);
   const busy = submitting !== null;
 
   return (
@@ -1041,7 +1041,7 @@ function ExaminationForm({ horseId, reportId }) {
       subtitle={[
         horse.registrationCode,
         horse.breed,
-        age != null ? `${age} yrs` : null,
+        age || null,
       ]
         .filter(Boolean)
         .join(" · ")}

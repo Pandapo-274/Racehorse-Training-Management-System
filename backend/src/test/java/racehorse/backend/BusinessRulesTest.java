@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -2074,6 +2075,172 @@ class BusinessRulesTest {
         assertEquals(1, s.upcoming());
     }
 
+    // ---------------------------------------------------------------- Hội đồng: chủ ngựa đăng ký, HLV tư vấn
+
+    private static void openRaceFor(RaceRepository races, HorseRepository horses) {
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
+        when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(true);
+    }
+
+    @Test
+    void ownerRegistersTheirHorseAndTheEntryIsConfirmedWithItsFee() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        openRaceFor(races, horses);
+        when(races.insert(eq(100), any(), eq(7), any())).thenReturn(9);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
+
+        raceService(races, horses, expenses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
+
+        verify(races).updateApproval(9, "APPROVED", null);
+        verify(expenses).insert(any(), anyInt());
+    }
+
+    @Test
+    void ownerRegisteringARecommendedRaceConfirmsTheRecommendation() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(races.findEntry(100, 50)).thenReturn(Optional.of(new RaceRepository.ExistingEntry(9, null, "PENDING_OWNER")));
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
+
+        raceService(races, horses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
+
+        verify(races).updateApproval(9, "APPROVED", null);
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    @Test
+    void trainerRecommendationDoesNotConfirmAnEntry() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(races.insert(eq(100), any(), eq(2), any())).thenReturn(9);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+
+        raceService(races, horses).register(new RaceModels.RegisterRequest(100, 50, "Good trial"), TRAINER, "ip");
+
+        verify(races, never()).updateApproval(anyInt(), any(), any());
+    }
+
+    @Test
+    void ownerCannotRegisterAnotherOwnersHorse() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        RaceService service = raceService(races, horses);
+
+        expect(ApiException.class, 403, () -> service.ownerRegister(
+                new RaceModels.RegisterRequest(100, 50, null), user(8, "HORSE_OWNER"), "ip"));
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    @Test
+    void ownerCannotWithdrawAnotherOwnersEntry() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 403, () -> service.scratch(1, "Changed my mind", user(8, "HORSE_OWNER"), "ip"));
+        verify(races, never()).scratch(anyInt(), any());
+    }
+
+    @Test
+    void horseWhoseStayEndedCannotBeEntered() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.hasExpiredContract(100)).thenReturn(true);
+        RaceService service = raceService(races, horses);
+
+        expect(ApiException.class, 409, () -> service.ownerRegister(
+                new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip"));
+        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    // ---------------------------------------------------------------- Hội đồng: Groom thuộc đội HLV
+
+    @Test
+    void headTrainerWithoutATeamSeesNoGrooms() {
+        TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
+        when(repo.findActiveGroomsByTrainer(2)).thenReturn(List.of());
+        TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
+                mock(HorseRepository.class), mock(HorseVitalsRepository.class));
+
+        assertTrue(service.listActiveGrooms(TRAINER).isEmpty());
+        verify(repo, never()).findActiveGrooms();
+    }
+
+    @Test
+    void careTaskCannotGoToAGroomOfAnotherTeam() {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(false);
+        CareRepository care = mock(CareRepository.class);
+        CareService service = careService(care, mock(HorseRepository.class), sessions,
+                mock(NotificationService.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.assignBulk(
+                new CareModels.BulkAssignRequest(List.of(100), 5, TODAY, TODAY, List.of("CLEANING"), null),
+                TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("assignedTo"), ex.getFieldErrors().toString());
+        verify(care, never()).insertTask(anyInt(), any(), anyInt(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- Hội đồng: chuẩn theo giống và tuổi
+
+    private static TrainingPlanRequest planAtSpeed(String speed) {
+        return new TrainingPlanRequest(100, "Speed Plan", TODAY.plusDays(1), TODAY.plusDays(30),
+                List.of(new TrainingPlanRequest.PhaseRequest("Base", 1600, "Moderate", "TURF", 3, 180, 90,
+                        new BigDecimal(speed), TODAY.plusDays(1), TODAY.plusDays(30))));
+    }
+
+    @Test
+    void horseUnderEighteenMonthsCannotGetATrainingPlan() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusMonths(10), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(planAtSpeed("30"), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().get("horseId").contains("18 months"), ex.getFieldErrors().toString());
+        verify(plans, never()).insertPlan(anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void phaseFasterThanTheBreedAndAgeLimitIsRefused() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        // Breed "TB" has no reference, so the lowest club limit (58 km/h) applies.
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = planService(plans, horses, mock(HorseVitalsRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(planAtSpeed("60"), TRAINER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("phases[0].targetVelocity"), ex.getFieldErrors().toString());
+    }
+
+    @Test
+    void breedWithoutATemplateGetsNoRecommendation() {
+        TrainingPlanRepository plans = mock(TrainingPlanRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer 2")));
+        TrainingPlanService service = new TrainingPlanService(
+                plans, horses, mock(HorseVitalsRepository.class), mock(UserRepository.class),
+                mock(NotificationService.class), null, mock(TrainingSessionRepository.class));
+
+        TrainingPlanResponse.TemplateRecommendation rec = service.getTemplates(100, TRAINER);
+        assertNull(rec.recommendedTemplate());
+        assertFalse(rec.standard().breedKnown());
+        assertEquals(new BigDecimal("58.0"), rec.standard().speedLimitKmh());
+    }
+
     // ---------------------------------------------------------------- Flow 4: phân công chăm sóc
 
     private static CareService careService(CareRepository care, HorseRepository horses,
@@ -2089,6 +2256,7 @@ class BusinessRulesTest {
         TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
         NotificationService notifications = mock(NotificationService.class);
         when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(true);
         when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
         when(horses.findById(101)).thenReturn(Optional.of(horse(101, "INJURED", TODAY.minusYears(5), "FILLY")));
         when(care.taskExists(100, "CLEANING", TODAY)).thenReturn(true);
@@ -2106,6 +2274,7 @@ class BusinessRulesTest {
     void bulkAssignIsLimitedToTwoWeeks() {
         TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
         when(sessions.isActiveGroom(5)).thenReturn(true);
+        when(sessions.isGroomOfTrainer(5, 2)).thenReturn(true);
         CareRepository care = mock(CareRepository.class);
         CareService service = careService(care, mock(HorseRepository.class), sessions,
                 mock(NotificationService.class));
@@ -2558,8 +2727,8 @@ class BusinessRulesTest {
         assertEquals("TB_FRONT", rec.recommendedTemplate().templateCode());
         assertEquals(9, rec.allTemplates().size());
         assertEquals(3, rec.recommendedTemplate().phases().size());
-        // Sprint scales speed x1.08 (66.0 -> 71.3 km/h) and HR +5 (210 -> 215)
-        assertEquals(new BigDecimal("71.3"), rec.recommendedTemplate().maxSpeed());
+        // Sprint scales speed x1.08 (71.3 km/h), capped at the Thoroughbred limit (66.0); HR +5 (210 -> 215)
+        assertEquals(new BigDecimal("66.0"), rec.recommendedTemplate().maxSpeed());
         assertEquals(215, rec.recommendedTemplate().maxHeartRate());
     }
 

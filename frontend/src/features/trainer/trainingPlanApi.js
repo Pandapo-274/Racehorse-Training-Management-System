@@ -22,39 +22,15 @@ export function listTrainingPlans(opts = {}) {
 }
 
 // GET /api/training-plans/grooms: Groom trong đội của HLV kèm số giáo án đang giữ (tối đa 2, V42) và cờ eligible.
-// Nếu rỗng hoặc lỗi thì thử /api/training-sessions/assignees và tự điền activePlanCount = 0, eligible = true
-// (dữ liệu dự phòng: backend vẫn kiểm lại giới hạn khi lưu giáo án).
+// Góp ý hội đồng: danh sách rỗng nghĩa là HLV chưa có Groom, không lấy danh sách khác thay vào.
 export async function listPlanGrooms(signal) {
-  try {
-    const res = await authFetch(`${API}/grooms`, { signal });
-    if (Array.isArray(res) && res.length > 0) return res;
-    // Fallback: Nếu /grooms trả về mảng rỗng, thử gọi /api/training-sessions/assignees
-    const assignees = await authFetch("/api/training-sessions/assignees", { signal }).catch(() => []);
-    if (Array.isArray(assignees) && assignees.length > 0) {
-      return assignees.map((g) => ({
-        userId: g.userId,
-        fullName: g.fullName,
-        activePlanCount: 0,
-        eligible: true,
-      }));
-    }
-    return Array.isArray(res) ? res : [];
-  } catch (err) {
-    try {
-      const fallback = await authFetch("/api/training-sessions/assignees", { signal });
-      if (Array.isArray(fallback) && fallback.length > 0) {
-        return fallback.map((g) => ({
-          userId: g.userId,
-          fullName: g.fullName,
-          activePlanCount: 0,
-          eligible: true,
-        }));
-      }
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
+  const res = await authFetch(`${API}/grooms`, { signal });
+  return Array.isArray(res) ? res : [];
+}
+
+/** Chuẩn cân nặng, chiều cao, trần tốc độ theo giống và tháng tuổi (HorseStandards). */
+export function getHorseStandards(signal) {
+  return authFetch(`${API}/standards`, { signal });
 }
 
 export function getTrainingPlan(id, signal) {

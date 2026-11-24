@@ -203,7 +203,7 @@ function EntryForm({ races, onRegistered }) {
   };
 
   return (
-    <Card title="Enter a horse" hint="Your horses (or horses not yet assigned to a Head Trainer): club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
+    <Card title="Recommend a race to the owner" hint="The owner decides and registers the horse. Your horses (or horses not yet assigned to a Head Trainer): club horses aged 24–131 months, stay not expired, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
@@ -232,7 +232,7 @@ function EntryForm({ races, onRegistered }) {
               </option>
               {eligible.map((c) => (
                 <option key={c.horseId} value={c.horseId}>
-                  {c.horseName} · {c.stallNo || "no stall"} · {c.age} yrs
+                  {c.horseName} · {c.stallNo || "no stall"} · {c.ageMonths} months
                 </option>
               ))}
             </select>
@@ -262,8 +262,8 @@ function EntryForm({ races, onRegistered }) {
         )}
 
         <div className="hz-field" style={{ marginTop: "12px" }}>
-          <label htmlFor="re-note">Note</label>
-          <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. papers submitted" onChange={set("note")} />
+          <label htmlFor="re-note">Your advice to the owner</label>
+          <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. strong trial, suits this distance" onChange={set("note")} />
         </div>
 
         {error && <p className="hz-form-error" role="alert">{error}</p>}
@@ -271,7 +271,7 @@ function EntryForm({ races, onRegistered }) {
 
         <div className="hz-form-footer" style={{ marginTop: "14px" }}>
           <button type="submit" className="hz-btn" disabled={saving || full || !form.raceId || !form.horseId}>
-            {saving ? "Entering…" : "Enter horse"}
+            {saving ? "Sending…" : "Send recommendation"}
           </button>
         </div>
       </form>

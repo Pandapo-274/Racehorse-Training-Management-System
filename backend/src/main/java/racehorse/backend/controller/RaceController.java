@@ -29,9 +29,10 @@ import racehorse.backend.service.RaceService;
  *  GET  /api/races/years            các năm có dữ liệu
  *  GET  /api/races/candidates       ngựa đăng ký được và lý do nếu không
  *  GET  /api/races/summary?year=    thành tích và tổng tiền thưởng trong năm
- *  POST /api/races                  đăng ký (Head Trainer)
+ *  POST /api/races                  Head Trainer tư vấn: đề xuất một giải cho chủ ngựa
+ *  POST /api/races/owner-entry      chủ ngựa đăng ký ngựa của mình (góp ý hội đồng)
  *  PUT  /api/races/{id}/result      nhập kết quả (Head Trainer, Club Manager)
- *  PUT  /api/races/{id}/scratch     rút khỏi giải trước ngày đua (Head Trainer)
+ *  PUT  /api/races/{id}/scratch     rút khỏi giải trước ngày đua (Head Trainer, chủ ngựa)
  *  GET  /api/races/events?upcoming= races (V22)
  *  POST /api/races/events           create a race (Head Trainer, Club Manager)
  *  PUT  /api/races/events/{id}/cancel  cancel a race, scratching its entries (Club Manager)
@@ -62,7 +63,7 @@ public class RaceController {
     }
 
     @GetMapping("/candidates")
-    @RequireRole({"HEAD_TRAINER"})
+    @RequireRole({"HEAD_TRAINER", "HORSE_OWNER"})
     public List<RaceModels.Candidate> candidates(@RequestParam(required = false) Integer raceId,
                                                  @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
         return service.candidates(raceId, user);
@@ -104,6 +105,15 @@ public class RaceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.register(req, user, http.getRemoteAddr()));
     }
 
+    /** Chủ ngựa là người đăng ký: suất được xác nhận ngay và lệ phí ghi vào chi phí của ngựa. */
+    @PostMapping("/owner-entry")
+    @RequireRole({"HORSE_OWNER"})
+    public ResponseEntity<RaceModels.Entry> ownerEntry(@Valid @RequestBody RaceModels.RegisterRequest req,
+                                                       @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                                       HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.ownerRegister(req, user, http.getRemoteAddr()));
+    }
+
     @PutMapping("/{id}/result")
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
     public RaceModels.Entry result(@PathVariable int id, @Valid @RequestBody RaceModels.ResultRequest req,
@@ -130,7 +140,7 @@ public class RaceController {
     }
 
     @PutMapping("/{id}/scratch")
-    @RequireRole({"HEAD_TRAINER"})
+    @RequireRole({"HEAD_TRAINER", "HORSE_OWNER"})
     public RaceModels.Entry scratch(@PathVariable int id, @Valid @RequestBody RaceModels.ScratchRequest req,
                                     @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                     HttpServletRequest http) {

@@ -25,6 +25,7 @@ import {
   updateTrainingPlan,
   listTrainingPlans,
   listPlanGrooms,
+  getHorseStandards,
   getPlanTemplates,
   getTrainingPlan,
 } from "./trainingPlanApi";
@@ -74,6 +75,70 @@ function formatDistanceType(dist) {
 
 function formatTemplateName(name) {
   return String(name || "").replace(/\bStalker\b/gi, "Mid-pack");
+}
+
+// Bảng chuẩn theo giống và tháng tuổi. Ghi rõ số nào đã công bố, số nào là tham chiếu của CLB.
+function StandardsCard() {
+  const [catalog, setCatalog] = useState(null);
+  const [breed, setBreed] = useState("");
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getHorseStandards(ctrl.signal)
+      .then((c) => { setCatalog(c); setBreed(c?.breeds?.[0]?.breed || ""); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+
+  if (!catalog) return null;
+  const table = catalog.breeds.find((b) => b.breed === breed) || catalog.breeds[0];
+  return (
+    <section className="trainer-card plans-overview-card" style={{ marginTop: 20 }}>
+      <div className="plans-overview-head">
+        <div className="trainer-card-title" style={{ marginBottom: 0 }}>
+          <span className="trainer-diamond" />
+          <div>
+            <h2>Standards by breed and age</h2>
+            <p>
+              What a plan is based on. No plan before {catalog.minTrainingMonths} months. A plan cannot go above the speed limit
+              for the horse's breed and age. Past {catalog.growthUntilMonths} months, use the body condition score.
+            </p>
+          </div>
+        </div>
+        <select className="plan-standard-select" value={table.breed} aria-label="Breed"
+                onChange={(e) => setBreed(e.target.value)}>
+          {catalog.breeds.map((b) => <option key={b.breed} value={b.breed}>{b.breed}</option>)}
+        </select>
+      </div>
+      <div className="trainer-table-wrap">
+        <table className="plans-table">
+          <thead>
+            <tr>
+              <th>Age (months)</th>
+              <th>Expected weight</th>
+              <th>Expected height</th>
+              <th>Speed limit</th>
+              <th>Weight and height from</th>
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((r) => (
+              <tr key={r.months}>
+                <td><strong>{r.months > catalog.growthUntilMonths ? `${r.months}+` : r.months}</strong></td>
+                <td>{r.weightKg != null ? `${r.weightKg} kg` : "—"}</td>
+                <td>{r.heightCm != null ? `${r.heightCm} cm` : "—"}</td>
+                <td>{Number(r.speedLimitKmh) > 0 ? `${r.speedLimitKmh} km/h` : "Not in training"}</td>
+                <td>{r.basis === "PUBLISHED" ? "Published (KER 2006)" : "Club reference"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="plan-standard-note">
+        Speed limits are club rules. Breeds without a reference use {catalog.unknownBreedLimitKmh} km/h.
+      </p>
+    </section>
+  );
 }
 
 function normalizeUiSurface(raw) {
@@ -437,6 +502,9 @@ export default function TrainingPlanPage() {
         if (rec?.allTemplates?.length) setCatalogTemplates(rec.allTemplates);
         if (rec?.recommendedTemplate && String(selectedTemplateId) !== String(rec.recommendedTemplate.templateId)) {
           applyTemplateToForm(rec.recommendedTemplate, startDate, endDate, rec.lockedSurface);
+        } else if (rec && !rec.recommendedTemplate) {
+          // Giống không có mẫu: bỏ mẫu của con ngựa trước, HLV tự chọn.
+          setSelectedTemplateId("");
         } else if (rec?.lockedSurface) {
           const safeSurf = normalizeUiSurface(rec.lockedSurface);
           setPhases((curr) => curr.map((p) => ({ ...p, surface: safeSurf })));
@@ -1205,6 +1273,7 @@ export default function TrainingPlanPage() {
                 </div>
               )}
             </section>
+            <StandardsCard />
             </>
           ) : (
             <form onSubmit={submit}>
@@ -1345,6 +1414,26 @@ export default function TrainingPlanPage() {
                               </div>
                             </div>
                           </div>
+                          {!templateLoading && templateRec?.standard && (
+                            <div className="plan-standard-strip">
+                              <div><span>Age</span><strong>{templateRec.standard.ageMonths ?? "—"} months</strong></div>
+                              <div>
+                                <span>Expected weight</span>
+                                <strong>{templateRec.standard.expectedWeightKg != null ? `${templateRec.standard.expectedWeightKg} kg` : "—"}</strong>
+                              </div>
+                              <div>
+                                <span>Expected height</span>
+                                <strong>{templateRec.standard.expectedHeightCm != null ? `${templateRec.standard.expectedHeightCm} cm` : "—"}</strong>
+                              </div>
+                              <div>
+                                <span>Speed limit</span>
+                                <strong>{Number(templateRec.standard.speedLimitKmh) > 0 ? `${templateRec.standard.speedLimitKmh} km/h` : "Not in training"}</strong>
+                              </div>
+                              {templateRec.standard.note && (
+                                <p className={templateRec.standard.canTrain ? "" : "plan-standard-strip__stop"}>{templateRec.standard.note}</p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 

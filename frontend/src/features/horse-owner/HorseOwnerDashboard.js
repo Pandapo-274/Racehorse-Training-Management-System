@@ -11,7 +11,7 @@ import "./horse-owner.css";
 import { Link, useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import {
-  formatDate, formatWeight, toAge, toEnumLabel, toInitials, toStatus,
+  formatAge, formatDate, formatWeight, toEnumLabel, toInitials, toStatus,
 } from "../horse/horseApi";
 import { listRequests, pendingOnly } from "../horse/horseRequestApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
@@ -217,8 +217,8 @@ function HorseOverview({ horse }) {
     ? { label: "Training locked", tone: "critical", hint: "The vet has locked training" }
     : toStatus(horse.status);
   const stars = toStars(horse.stats);
-  const age = toAge(horse.dateOfBirth);
-  const subtitle = [horse.breed, age == null ? null : `${age} yrs`, horse.registrationCode]
+  const age = formatAge(horse.dateOfBirth);
+  const subtitle = [horse.breed, age || null, horse.registrationCode]
     .filter(Boolean)
     .join(" · ");
 

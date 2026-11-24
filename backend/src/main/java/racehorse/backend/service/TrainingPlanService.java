@@ -237,6 +237,11 @@ public class TrainingPlanService {
             String key = "phases[" + i + "]";
             if (p.targetVelocity() == null) {
                 errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            } else {
+                String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), p.targetVelocity(), LocalDate.now());
+                if (over != null) {
+                    errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed: " + over);
+                }
             }
             if (p.endDate().isBefore(p.startDate())) {
                 errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
@@ -683,6 +688,10 @@ public class TrainingPlanService {
         if (horseRepository.hasExpiredContract(horse.horseId())) {
             throw new ApiException(HttpStatus.CONFLICT, HorsePolicy.stayEndedProblem(horse));
         }
+        String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
+        if (tooYoung != null) {
+            throw new ApiException(HttpStatus.CONFLICT, tooYoung);
+        }
         if (plan.endDate().isBefore(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This plan ended on " + plan.endDate() + ". Create a new plan instead");
@@ -721,6 +730,11 @@ public class TrainingPlanService {
             } else if (horseRepository.hasExpiredContract(horse.horseId())) {
                 // V49: the stay ran out and was not renewed.
                 errors.put("horseId", HorsePolicy.stayEndedProblem(horse));
+            } else {
+                String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
+                if (tooYoung != null) {
+                    errors.put("horseId", tooYoung);
+                }
             }
             checkTrainerManagesHorse(horse, user, errors);
             if (r.horseId() != null && r.horseId() > 0 && planRepository.existsOpenPlan(r.horseId(), 0)) {
@@ -787,12 +801,24 @@ public class TrainingPlanService {
             }
         }
 
+        if (horse != null) {
+            String overMax = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), r.maxSpeed(), LocalDate.now());
+            if (overMax != null) {
+                errors.put("maxSpeed", "Max speed: " + overMax);
+            }
+        }
+
         LocalDate prevEnd = null;
         for (int i = 0; i < r.phases().size(); i++) {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
             if (p.targetVelocity() == null) {
                 errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            } else if (horse != null) {
+                String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), p.targetVelocity(), LocalDate.now());
+                if (over != null) {
+                    errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed: " + over);
+                }
             }
             if (!usesRatio) {
                 if (p.startDate() == null) {
@@ -831,6 +857,7 @@ public class TrainingPlanService {
         String runningStyle = "STALKER";
         String distanceType = "MEDIUM";
         String lockedSurface = "TURF";
+        HorseStandards.Reference standard = null;
 
         if (horseId != null) {
             HorseResponse horse = horseRepository.findById(horseId)
@@ -838,6 +865,7 @@ public class TrainingPlanService {
             checkTrainerManagesHorse(horse, user, null);
             horseName = horse.horseName();
             breed = horse.breed();
+            standard = HorseStandards.reference(horse.breed(), horse.dateOfBirth(), LocalDate.now());
 
             var apt = planRepository.findHorseAptitude(horseId).orElse(null);
             if (apt != null) {
@@ -882,6 +910,11 @@ public class TrainingPlanService {
             if (scaledMaxSpeed.compareTo(new BigDecimal("90.0")) > 0) {
                 scaledMaxSpeed = new BigDecimal("90.0");
             }
+            // Không vượt trần tốc độ của giống và tháng tuổi con ngựa đang chọn.
+            if (standard != null && standard.speedLimitKmh().signum() > 0
+                    && scaledMaxSpeed.compareTo(standard.speedLimitKmh()) > 0) {
+                scaledMaxSpeed = standard.speedLimitKmh();
+            }
             int scaledBaseDist = (int) Math.round(t.baseDistanceM() * distScale);
 
             List<TrainingPlanResponse.TemplatePhaseDto> phaseDtos = new ArrayList<>();
@@ -918,10 +951,12 @@ public class TrainingPlanService {
                 .or(() -> scaledTemplates.stream()
                         .filter(t -> finalBreed != null && t.breed().equalsIgnoreCase(finalBreed))
                         .findFirst())
-                .orElse(scaledTemplates.isEmpty() ? null : scaledTemplates.get(0));
+                // Giống không có mẫu: không gợi ý mẫu của giống khác, HLV tự chọn.
+                .orElse(null);
 
         return new TrainingPlanResponse.TemplateRecommendation(
-                horseId, horseName, breed, runningStyle, distanceType, lockedSurface, recommended, scaledTemplates);
+                horseId, horseName, breed, runningStyle, distanceType, lockedSurface, recommended, scaledTemplates,
+                standard);
     }
 
     @Transactional

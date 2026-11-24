@@ -97,7 +97,8 @@ public class ContractService {
         String text = terms.text(new ContractTerms.Parties(
                         req.ownerName(), req.horseName(), req.breed(), req.horseGender(), req.dateOfBirth(),
                         req.color(), req.sireName(), req.damName(), req.trainingWeeks(), req.preferredStart(),
-                        managerName, false, null, req.trainingStart(), req.trainingEnd()),
+                        managerName, false, null, req.trainingStart(), req.trainingEnd(),
+                        req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone()),
                 price, respondBy);
         return contracts.insert(new ContractRepository.NewContract(
                 req.requestId(), null, req.ownerId(), null, price.months(), req.trainingWeeks(),
@@ -137,6 +138,38 @@ public class ContractService {
     /** What the registration form needs to show an estimate before sending. */
     public Pricing pricing() {
         return new Pricing(terms.monthlyFee(), terms.discountTiers(), terms.offerDays(), gateway.isConfigured());
+    }
+
+    /** applies = false: the contract is not running, or was signed before clause 11 existed. */
+    public record Commitment(int contractId, boolean applies, LocalDate from, LocalDate to,
+                             HorsePolicy.Delivery delivery) {}
+
+    /**
+     * Clause 11: how much of the promised training has been delivered so far. If the horse
+     * arrived late, the training window moves with it (clause 3), staying inside the stay.
+     */
+    public Commitment commitment(int contractId, AuthenticatedUser user) {
+        ContractRow c = get(contractId, user);
+        boolean running = "ACTIVE".equals(c.status()) || "EXPIRED".equals(c.status());
+        boolean hasClause = c.termsSnapshot() != null && c.termsSnapshot().contains(ContractTerms.COMMITMENT_HEADING);
+        if (!running || !hasClause || c.horseId() == null) {
+            return new Commitment(contractId, false, null, null, null);
+        }
+        LocalDate from = c.trainingStart() != null ? c.trainingStart() : c.startDate();
+        LocalDate to = c.trainingEnd() != null ? c.trainingEnd() : c.endDate();
+        if (c.trainingStart() != null && c.plannedStart() != null && c.startDate() != null
+                && c.startDate().isAfter(c.plannedStart())) {
+            long late = java.time.temporal.ChronoUnit.DAYS.between(c.plannedStart(), c.startDate());
+            from = from.plusDays(late);
+            to = to.plusDays(late);
+        }
+        if (c.endDate() != null && to.isAfter(c.endDate())) {
+            to = c.endDate();
+        }
+        LocalDate today = today();
+        ContractRepository.SessionCounts n = contracts.sessionCounts(c.horseId(), from, to, today);
+        return new Commitment(contractId, true, from, to,
+                HorsePolicy.delivery(n.due(), n.delivered(), n.excused(), today.isAfter(to)));
     }
 
     /* ==================================================================
@@ -226,7 +259,7 @@ public class ContractService {
         String back = frontendBaseUrl + "/horse-owner/contracts/" + contractId;
         long expiresAt = c.respondBy().plusDays(1).atStartOfDay(CLUB_ZONE).toEpochSecond();
         PaymentGateway.Link link = gateway.createLink(orderCode, c.totalAmount(),
-                "RTMS HD" + contractId,
+                paymentDescription(contractId),
                 "Stay " + c.months() + " month" + (c.months() == 1 ? "" : "s") + " - " + c.horseName(),
                 c.ownerName(), back, back, expiresAt);
         if (contracts.setPaymentLink(contractId, link.orderCode(), link.paymentLinkId(), link.checkoutUrl()) == 0) {
@@ -427,7 +460,8 @@ public class ContractService {
         String text = terms.text(new ContractTerms.Parties(
                         running.ownerName(), horse.horseName(), horse.breed(), horse.horseGender(),
                         horse.dateOfBirth(), horse.color(), req.sireName(), req.damName(), null, null,
-                        "the Club Manager", true, renewalStart, null, null),
+                        "the Club Manager", true, renewalStart, null, null,
+                        req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone()),
                 price, respondBy);
         int id = contracts.insert(new ContractRepository.NewContract(
                 running.requestId(), horseId, owner.userId(), running.contractId(), months, null,
@@ -530,6 +564,11 @@ public class ContractService {
     }
 
     /* ---------------- helpers ---------------- */
+
+    /** payOS limits the description to 9 characters for a bank account not linked through payOS. */
+    static String paymentDescription(int contractId) {
+        return "HD" + contractId;
+    }
 
     static long newOrderCode(int contractId) {
         // contract id in the high digits keeps codes unique across contracts; the time in the

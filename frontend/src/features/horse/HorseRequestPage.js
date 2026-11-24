@@ -19,7 +19,7 @@ import {
 } from "./horseApi";
 import {
   listRequests, submitRequest, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
-  getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
+  getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES, PHONE_PATTERN,
   CONTRACT_MONTH_OPTIONS, STAY_RULES, isoAddDays, isoAddMonths, trainingWeeksOf,
 } from "./horseRequestApi";
 import HorsePhoto from "./HorsePhoto";
@@ -34,6 +34,8 @@ const EMPTY = {
   preferredStart: "", contractMonths: "1", preferredTrainerId: "",
   // V50: the training window asked for (from / until), at least 3 weeks, inside the stay.
   trainingStart: "", trainingEnd: "",
+  // V54: contract clause 8.
+  insurerName: "", insurerPhone: "", emergencyName: "", emergencyPhone: "",
 };
 
 const PHOTO_TYPES = "image/jpeg,image/png,image/webp";
@@ -73,6 +75,12 @@ function validate(form, photo) {
     else if (h < 60 || h > 200) e.heightCm = "Between 60 and 200 cm";
     if (!photo) e.photo = "Add a photo: the club cannot approve a horse it has not seen";
     Object.assign(e, stayProblems(form, todayIso()));
+    if (!form.insurerName.trim()) e.insurerName = "Name the horse's insurer";
+    if (!form.insurerPhone.trim()) e.insurerPhone = "Give the insurer's emergency number";
+    else if (!PHONE_PATTERN.test(form.insurerPhone.trim())) e.insurerPhone = "Enter a valid phone number";
+    if (!form.emergencyName.trim()) e.emergencyName = "Name a second person to call";
+    if (!form.emergencyPhone.trim()) e.emergencyPhone = "Give that person's phone number";
+    else if (!PHONE_PATTERN.test(form.emergencyPhone.trim())) e.emergencyPhone = "Enter a valid phone number";
   }
   return e;
 }
@@ -312,6 +320,10 @@ export default function HorseRequestPage() {
       trainingEnd: "",
       contractMonths: r.contractMonths ? String(r.contractMonths) : EMPTY.contractMonths,
       preferredTrainerId: r.preferredTrainerId ? String(r.preferredTrainerId) : "",
+      insurerName: r.insurerName || "",
+      insurerPhone: r.insurerPhone || "",
+      emergencyName: r.emergencyName || "",
+      emergencyPhone: r.emergencyPhone || "",
     });
     setErrors({});
     setSubmitError("");
@@ -500,6 +512,26 @@ export default function HorseRequestPage() {
                     <option value="">No preference</option>
                     {trainers.map((t) => <option key={t.userId} value={t.userId}>{t.fullName}</option>)}
                   </select>
+                </Field>
+              </div>
+              <h3 className="hz-subhead">Insurance and emergency contact</h3>
+              <div className="hz-form-grid">
+                <Field id="insurerName" label="Insurer" error={errors.insurerName}>
+                  <input id="insurerName" name="insurerName" value={form.insurerName} onChange={change}
+                         maxLength={100} aria-invalid={!!errors.insurerName} />
+                </Field>
+                <Field id="insurerPhone" label="Insurer's emergency number" error={errors.insurerPhone}>
+                  <input id="insurerPhone" name="insurerPhone" type="tel" value={form.insurerPhone} onChange={change}
+                         maxLength={20} aria-invalid={!!errors.insurerPhone} />
+                </Field>
+                <Field id="emergencyName" label="Second person to call" error={errors.emergencyName}
+                       hint="Someone who can decide for the horse if the club cannot reach you.">
+                  <input id="emergencyName" name="emergencyName" value={form.emergencyName} onChange={change}
+                         maxLength={100} aria-invalid={!!errors.emergencyName} />
+                </Field>
+                <Field id="emergencyPhone" label="Their phone number" error={errors.emergencyPhone}>
+                  <input id="emergencyPhone" name="emergencyPhone" type="tel" value={form.emergencyPhone} onChange={change}
+                         maxLength={20} aria-invalid={!!errors.emergencyPhone} />
                 </Field>
               </div>
               {estimate && (

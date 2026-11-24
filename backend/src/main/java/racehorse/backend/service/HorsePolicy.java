@@ -105,8 +105,9 @@ public final class HorsePolicy {
         }
         int age = ageOf(dateOfBirth);
         if (age > CLUB_MAX_AGE) {
-            return "This horse is " + age + " years old, above the club limit of "
-                    + CLUB_MAX_AGE + ". Register it as a pedigree record instead.";
+            return "This horse is " + ageInMonths(dateOfBirth, LocalDate.now())
+                    + " months old, above the club limit of " + CLUB_MAX_AGE
+                    + " years. Register it as a pedigree record instead.";
         }
         return null;
     }
@@ -193,59 +194,77 @@ public final class HorsePolicy {
      * arrives (HORSE.bcs). So this returns BELOW / WITHIN / ABOVE, never
      * "malnourished" or "obese".
      *
-     * Reference: world-average Thoroughbred body weight and wither height at
-     * 0, 1, 6, 12 and 18 months, Brown-Douglas & Pagan (2006), "Body weight,
-     * wither height and growth rates in Thoroughbreds raised in America,
-     * England, Australia, New Zealand and India", Kentucky Equine Research,
-     * Tables 2 and 3. The paper gives means only, no spread, so "within" is a
-     * +/-10% band around the mean, interpolated between the published months.
-     * Past 18 months (or for another breed) there is no reference and the
-     * answer is null: the UI says "No reference" instead of guessing.
+     * The expected values and their sources live in HorseStandards. "Within"
+     * is a +/-10% band around them. A breed without a reference, or a horse
+     * past 60 months, gets null: the UI says "No reference" instead of guessing.
      * ------------------------------------------------------------------ */
     public static final String GROWTH_BELOW = "BELOW";
     public static final String GROWTH_WITHIN = "WITHIN";
     public static final String GROWTH_ABOVE = "ABOVE";
     private static final double GROWTH_BAND = 0.10;
-    private static final int[] REF_MONTHS = {0, 1, 6, 12, 18};
-    private static final double[] REF_WEIGHT_KG = {66.9, 98.6, 247.1, 350.7, 444.9};
-    // Height at 7 days (106.1) stands in for month 0.
-    private static final double[] REF_HEIGHT_CM = {106.1, 112.0, 135.0, 147.1, 153.8};
 
     public static Integer ageInMonths(LocalDate dateOfBirth, LocalDate today) {
         if (dateOfBirth == null || today == null || dateOfBirth.isAfter(today)) return null;
         return (int) Period.between(dateOfBirth, today).toTotalMonths();
     }
 
-    /** Thoroughbred only, 0..18 months; null when there is nothing to compare with. */
+    /** null when there is nothing to compare with. */
     public static String growthFor(String breed, LocalDate dateOfBirth,
                                    java.math.BigDecimal weight, java.math.BigDecimal heightCm,
                                    LocalDate today) {
-        if (breed == null || !breed.trim().equalsIgnoreCase("Thoroughbred")) return null;
-        Integer months = ageInMonths(dateOfBirth, today);
-        if (months == null || months > REF_MONTHS[REF_MONTHS.length - 1]) return null;
-        String byWeight = weight == null ? null : band(weight.doubleValue(), interpolate(REF_WEIGHT_KG, months));
-        String byHeight = heightCm == null ? null : band(heightCm.doubleValue(), interpolate(REF_HEIGHT_CM, months));
+        HorseStandards.Expected expected = HorseStandards.expected(breed, ageInMonths(dateOfBirth, today));
+        if (expected == null) return null;
+        String byWeight = weight == null ? null : band(weight.doubleValue(), expected.weightKg());
+        String byHeight = heightCm == null ? null : band(heightCm.doubleValue(), expected.heightCm());
         if (byWeight == null) return byHeight;
         if (byHeight == null || byWeight.equals(byHeight)) return byWeight;
         // The two disagree: a long, light foal or a short, heavy one. Report the one off the band.
         return GROWTH_WITHIN.equals(byWeight) ? byHeight : byWeight;
     }
 
-    private static double interpolate(double[] values, int months) {
-        for (int i = 1; i < REF_MONTHS.length; i++) {
-            if (months <= REF_MONTHS[i]) {
-                int m0 = REF_MONTHS[i - 1], m1 = REF_MONTHS[i];
-                double t = (months - m0) / (double) (m1 - m0);
-                return values[i - 1] + t * (values[i] - values[i - 1]);
-            }
-        }
-        return values[values.length - 1];
-    }
-
     private static String band(double actual, double mean) {
         if (actual < mean * (1 - GROWTH_BAND)) return GROWTH_BELOW;
         if (actual > mean * (1 + GROWTH_BAND)) return GROWTH_ABOVE;
         return GROWTH_WITHIN;
+    }
+
+    /** V54: one list of running styles. The two older names map onto the template names. */
+    public static String normalizeRunningStyle(String style) {
+        if (style == null || style.isBlank()) return null;
+        String s = style.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (s) {
+            case "MIDDLE" -> "STALKER";
+            case "BACK" -> "CLOSER";
+            default -> s;
+        };
+    }
+
+    /* ------------------------------------------------------------------
+     * Training commitment (review feedback: "what does the owner get after
+     * training, and what happens if it fails?"). Contract clauses 11 and 12.
+     *
+     * The club commits to DELIVERING the training, not to a race result:
+     * at least COMMITMENT_PCT of the sessions due. Sessions missed while the
+     * horse was under a veterinary lock are excused and not counted.
+     * ------------------------------------------------------------------ */
+    public static final int COMMITMENT_PCT = 80;
+
+    public record Delivery(int due, int delivered, int excused, int missed, Integer deliveredPct,
+                           int targetPct, int sessionsShort, String status) {}
+
+    /** status: NOT_STARTED, ON_TRACK, AT_RISK (window still open), MET, NOT_MET (window over). */
+    public static Delivery delivery(int due, int delivered, int excused, boolean windowOver) {
+        int counted = Math.max(0, due - excused);
+        int missed = Math.max(0, counted - delivered);
+        if (counted == 0) {
+            return new Delivery(due, delivered, excused, 0, null, COMMITMENT_PCT, 0,
+                    windowOver ? "MET" : "NOT_STARTED");
+        }
+        int pct = delivered * 100 / counted;
+        int needed = (counted * COMMITMENT_PCT + 99) / 100;
+        int shortBy = Math.max(0, needed - delivered);
+        String status = shortBy == 0 ? (windowOver ? "MET" : "ON_TRACK") : (windowOver ? "NOT_MET" : "AT_RISK");
+        return new Delivery(due, delivered, excused, missed, pct, COMMITMENT_PCT, shortBy, status);
     }
 
     /** Henneke 1-3 thin, 4-6 ideal, 7-9 fat; null outside 1..9. */

@@ -60,23 +60,15 @@ public class TrainingSessionRepository {
                 .param("id", userId).query(Integer.class).single() > 0;
     }
 
-    /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không, hoặc là Groom phụ trách giáo án của Trainer. */
-    // Groom "thuộc" HLV nếu trainer_id = HLV, HOẶC đang được giao một giáo án do HLV tạo/phụ trách
-    // (trường hợp Groom đã chuyển đội nhưng còn giáo án cũ).
+    /** Groom thuộc đội của Head Trainer này (APP_USER.trainer_id, do Club Manager phân công). */
+    // Góp ý hội đồng: trước đây Groom từng có giáo án với HLV cũng tính là "thuộc", kể cả giáo án đã
+    // xong, nên HLV vẫn chọn được Groom đã chuyển đội.
     public boolean isGroomOfTrainer(int groomId, int trainerId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
                 WHERE u.user_id = :groomId AND r.role_name = 'GROOM'
                   AND u.status = 'ACTIVE'
-                  AND (
-                      u.trainer_id = :trainerId
-                      OR EXISTS (
-                          SELECT 1 FROM TRAINING_PLAN tp
-                          JOIN HORSE h ON h.horse_id = tp.horse_id
-                          WHERE tp.groom_id = u.user_id
-                            AND (tp.created_by = :trainerId OR h.trainer_id = :trainerId)
-                      )
-                  )
+                  AND u.trainer_id = :trainerId
                 """)
                 .param("groomId", groomId)
                 .param("trainerId", trainerId)

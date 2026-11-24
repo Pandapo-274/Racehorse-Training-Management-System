@@ -39,5 +39,7 @@ public record HorseRequestRow(
         // V49: newest contract of this request, null before approval
         Integer contractId, String contractStatus,
         // V50: training window asked for
-        LocalDate trainingStart, LocalDate trainingEnd
+        LocalDate trainingStart, LocalDate trainingEnd,
+        // V54: contract clause 8
+        String insurerName, String insurerPhone, String emergencyName, String emergencyPhone
 ) {}
