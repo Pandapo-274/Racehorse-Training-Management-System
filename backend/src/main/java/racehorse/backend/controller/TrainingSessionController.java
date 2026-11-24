@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import racehorse.backend.dto.CompleteRecoveryRequest;
 import racehorse.backend.dto.FinishSessionRequest;
 import racehorse.backend.dto.TrainingSessionRequest;
 import racehorse.backend.dto.TrainingSessionResponse;
@@ -107,6 +108,31 @@ public class TrainingSessionController {
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
         return service.finish(id, request, user, http.getRemoteAddr());
+    }
+
+    /**
+     * PUT /api/training-sessions/{id}/enter-recovery
+     * Groom hoàn tất phần chạy: RUNNING -> RECOVERY và bật đếm ngược recovery theo Phase.
+     */
+    @PutMapping("/{id}/enter-recovery")
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
+    public TrainingSessionResponse enterRecovery(@PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.enterRecovery(id, user, http.getRemoteAddr());
+    }
+
+    /**
+     * PUT /api/training-sessions/{id}/complete-recovery
+     * Groom gửi nhịp tim hồi phục thực tế (actual_hrr) -> COMPLETED và cảnh báo quá tải nếu actual_hrr > target_hrr.
+     */
+    @PutMapping("/{id}/complete-recovery")
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
+    public TrainingSessionResponse completeRecovery(@PathVariable int id,
+            @Valid @RequestBody CompleteRecoveryRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.completeRecovery(id, request, user, http.getRemoteAddr());
     }
 
     @PutMapping("/{id}/schedule")

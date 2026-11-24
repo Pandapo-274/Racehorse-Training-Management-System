@@ -38,7 +38,7 @@ describe("age in months (same as HorsePolicy.ageInMonths)", () => {
     expect(toAgeInMonths("2026-05-24", today)).toBe(5); // 24th not reached yet
   });
   test("reads as years and months, with the month count", () => {
-    expect(formatAge("2021-04-13", today)).toBe("5 years 7 months (67 months)");
+    expect(formatAge("2021-04-13", today)).toBe("67 months");
     expect(formatAge("2026-05-23", today)).toBe("6 months");
   });
 });

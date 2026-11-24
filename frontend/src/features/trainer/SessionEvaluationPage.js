@@ -580,12 +580,12 @@ export default function SessionEvaluationPage() {
                         />
                       </label>
                       <label>
-                        Peak velocity (m/s)
+                        Peak velocity (km/h)
                         <input
                           name="peakVelocity"
                           type="text"
                           readOnly
-                          value={form.peakVelocity !== "" ? `${form.peakVelocity} m/s` : "—"}
+                          value={form.peakVelocity !== "" ? `${form.peakVelocity} km/h` : "—"}
                           placeholder="—"
                           style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#334155" }}
                         />

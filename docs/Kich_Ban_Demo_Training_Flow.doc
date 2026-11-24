@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset='utf-8'>
+<title>Kịch bản Demo Training Flow - RTMS</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  @page Section1 {
+    size: 595.3pt 841.9pt; /* A4 */
+    margin: 2.0cm 2.0cm 2.0cm 2.0cm;
+    mso-header-margin: 36.0pt;
+    mso-footer-margin: 36.0pt;
+    mso-paper-source: 0;
+  }
+  div.Section1 { page: Section1; }
+  body {
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #1e293b;
+    background: #ffffff;
+  }
+  h1 {
+    color: #d93b87;
+    font-size: 18pt;
+    border-bottom: 2px solid #f472b6;
+    padding-bottom: 6px;
+    margin-top: 18pt;
+    margin-bottom: 8pt;
+    text-transform: uppercase;
+  }
+  h2 {
+    color: #0f172a;
+    font-size: 14pt;
+    border-left: 5px solid #d93b87;
+    padding-left: 10px;
+    margin-top: 16pt;
+    margin-bottom: 6pt;
+  }
+  h3 {
+    color: #be185d;
+    font-size: 12pt;
+    margin-top: 14pt;
+    margin-bottom: 4pt;
+  }
+  h4 {
+    color: #334155;
+    font-size: 11pt;
+    margin-top: 8pt;
+    margin-bottom: 2pt;
+  }
+  p { margin-top: 0; margin-bottom: 6pt; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 8pt;
+    margin-bottom: 12pt;
+    font-size: 10pt;
+  }
+  th {
+    background-color: #fdf2f8;
+    color: #9d174d;
+    border: 1px solid #fbcfe8;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: bold;
+  }
+  td {
+    border: 1px solid #fbcfe8;
+    padding: 8px 10px;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background-color: #fffafc; }
+  .callout-quote {
+    background-color: #f8fafc;
+    border-left: 4px solid #3b82f6;
+    padding: 10px 14px;
+    margin: 8pt 0;
+    font-style: italic;
+    color: #1e3a8a;
+  }
+  .callout-alert {
+    background-color: #fef2f2;
+    border-left: 4px solid #ef4444;
+    padding: 10px 14px;
+    margin: 8pt 0;
+    color: #991b1b;
+  }
+  ol, ul {
+    margin-top: 4pt;
+    margin-bottom: 8pt;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 4pt;
+  }
+</style>
+</head>
+<body>
+<div class='Section1'>
+
+  <div style='text-align: center; margin-bottom: 20pt;'>
+    <p style='font-size: 11pt; font-weight: bold; color: #64748b; margin-bottom: 2pt;'>ĐỒ ÁN TỐT NGHIỆP / SWP391 - RACEHORSE TRAINING MANAGEMENT SYSTEM (RTMS)</p>
+    <h1 style='border: none; margin-top: 4pt; margin-bottom: 4pt; color: #d93b87;'>KỊCH BẢN BÁO CÁO & TRÌNH DIỄN TRAINING FLOW</h1>
+    <p style='font-size: 11pt; color: #475569;'>Tài liệu chuẩn bị bảo vệ trước Hội đồng đánh giá đồ án (Defense Presentation Script)</p>
+  </div>
+
+  <h2>1. THÔNG TIN BỘ DỮ LIỆU DEMO (create_training_demo_data.sql)</h2>
+  <p>Dữ liệu được chuẩn bị sẵn bao phủ 100% các nhánh nghiệp vụ xuyên suốt 3 trục thời gian:</p>
+  <table>
+    <tr>
+      <th style='width: 15%;'>Mã ngựa</th>
+      <th style='width: 25%;'>Tên ngựa</th>
+      <th style='width: 20%;'>Trục thời gian</th>
+      <th style='width: 40%;'>Trạng thái & Nghiệp vụ bao phủ</th>
+    </tr>
+    <tr>
+      <td><b>DEMO-TR-01</b></td>
+      <td>[DEMO] Thunder Bolt</td>
+      <td>Quá khứ & Hiện tại</td>
+      <td>
+        • Plan quá khứ COMPLETED + Buổi Trial Run có video URL.<br>
+        • Buổi tập quá 48h tự động lưu trữ (ARCHIVED_AUTO).<br>
+        • Buổi tập dừng khẩn cấp (STOPPED_EARLY) kèm cảnh báo nhịp tim (THRESHOLD_ALERT) & Báo cáo sự cố (INCIDENT_REPORT).<br>
+        • Buổi tập hôm qua COMPLETED đang chờ HLV chấm (PENDING trong 48h).<br>
+        • Buổi tập trực tiếp thời gian thực đang chạy (RUNNING).<br>
+        • Lịch tập hôm nay & tương lai (SCHEDULED).
+      </td>
+    </tr>
+    <tr>
+      <td><b>DEMO-TR-02</b></td>
+      <td>[DEMO] Silver Arrow</td>
+      <td>Tương lai & Phê duyệt</td>
+      <td>
+        • Tạo giáo án mới 2 giai đoạn (Build & Peak).<br>
+        • Gán Groom phụ trách trực thuộc HLV.<br>
+        • Giáo án đang chờ Chủ ngựa duyệt (PENDING_APPROVAL).
+      </td>
+    </tr>
+    <tr>
+      <td><b>DEMO-TR-03</b></td>
+      <td>[DEMO] Golden Wind</td>
+      <td>Nghiệp vụ nâng cao</td>
+      <td>
+        • Giáo án đang chạy (ACTIVE) nhưng HLV xin điều chỉnh trần nhịp tim (PENDING UPDATE).<br>
+        • Chủ ngựa thẩm định và phê duyệt sửa đổi giáo án đang chạy.
+      </td>
+    </tr>
+  </table>
+
+  <h2>2. PHẦN 1: KỊCH BẢN TRÌNH DIỄN HAPPY CASE (LUỒNG CHUẨN)</h2>
+
+  <h3>CẢNH 1: HEAD TRAINER KHỞI TẠO GIÁO ÁN HUẤN LUYỆN</h3>
+  <p><b>Tài khoản:</b> HEAD_TRAINER (Nguyễn Đức Thắng) | <b>Màn hình:</b> /trainer/training-plans</p>
+  <h4>Thao tác màn hình:</h4>
+  <ol>
+    <li>Đăng nhập tài khoản Head Trainer, vào menu <b>Training Plans</b>.</li>
+    <li>Quan sát bảng danh sách tổng quan: Thấy ngay bảng giáo án hiển thị gọn gàng, cột Period không bị vỡ dòng, mã Plan hiển thị dưới dạng badge tím nhạt.</li>
+    <li>Bấm nút <b>'+ Create new plan'</b> ở góc phải header.</li>
+    <li>Nhập thông tin cho ngựa <b>[DEMO] Silver Arrow (DEMO-TR-02)</b>:
+      <ul>
+        <li>Tên Plan: <i>[DEMO] Giáo án Tốc độ Mùa giải Mới - Silver Arrow</i></li>
+        <li>Horse: Chọn <i>[DEMO] Silver Arrow · DEMO-TR-02 (ELIGIBLE)</i></li>
+        <li>Assigned Groom: Mở menu chọn Groom. Hệ thống hiển thị rõ: <i>Lê Văn Bình (0/2 active plans)</i> -&gt; Chọn Groom Bình.</li>
+        <li>Thời gian: Từ ngày mai đến 45 ngày sau.</li>
+        <li>Phase 1: Khởi động & Thể lực, 1,800m, Sân DIRT, trần tim 175 bpm.</li>
+        <li>Phase 2: Chạy bứt tốc, 1,400m, Sân TURF, trần tim 188 bpm.</li>
+      </ul>
+    </li>
+    <li>Bấm nút <b>'Save plan'</b> (Lưu Draft) -&gt; Bấm tiếp <b>'Send to owner'</b> (Chuyển sang PENDING_APPROVAL).</li>
+  </ol>
+  <div class='callout-quote'>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Kính thưa Hội đồng, em xin bắt đầu ở vai trò Huấn luyện viên trưởng. Để chuẩn bị cho mùa giải, HLV lập một lộ trình phân kỳ bài bản. Tại trang Training Plans, hệ thống ràng buộc chặt chẽ theo Quy tắc V40: HLV bắt buộc phải chọn một Groom trực thuộc và Groom đó hiện không được tiếp nhận quá 2 giáo án đồng thời. Em hoàn tất cấu hình 2 giai đoạn và bấm Send to owner. Hệ thống ghi nhận trạng thái PENDING_APPROVAL và tức thời gửi thông báo đến tài khoản Chủ ngựa."
+  </div>
+
+  <h3>CẢNH 2: CHỦ NGỰA THẨM ĐỊNH KẾ HOẠCH & DUYỆT ĐIỀU CHỈNH</h3>
+  <p><b>Tài khoản:</b> HORSE_OWNER (Trần Anh Tuấn) | <b>Màn hình:</b> /horses và /horse-owner/training</p>
+  <h4>Thao tác màn hình:</h4>
+  <ol>
+    <li>Đăng xuất Trainer, đăng nhập tài khoản <b>Horse Owner</b>.</li>
+    <li>Mở tab <b>Horses (My Horses)</b>: Thấy nút <b>'+ Request a horse registration'</b> được bố trí đồng bộ ngay trong thanh công cụ của bảng Registry.</li>
+    <li>Chuyển sang menu <b>Training</b>:
+      <ul>
+        <li>Thấy giáo án của Silver Arrow đang chờ duyệt.</li>
+        <li>Xem chi tiết từng Phase và trần nhịp tim an toàn.</li>
+        <li>Bấm nút xanh <b>'Approve'</b> -&gt; Giáo án được duyệt (APPROVED).</li>
+      </ul>
+    </li>
+    <li>Kéo xuống mục <b>Pending Plan Modifications</b>: Thấy kế hoạch của ngựa <b>[DEMO] Golden Wind (DEMO-TR-03)</b> có yêu cầu điều chỉnh từ Trainer. Chủ ngựa đọc lý do chuyên môn và bấm <b>'Approve Update'</b>.</li>
+  </ol>
+  <div class='callout-quote'>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Bây giờ em chuyển sang góc nhìn của Chủ ngựa. Về mặt giao diện, nút gửi yêu cầu cấp mã ngựa mới đã được tinh chỉnh đặt gọn gàng trong bảng Registry. Trong tab Training, Chủ ngựa có quyền kiểm soát toàn diện lộ trình luyện tập trên tài sản của mình. Em bấm Duyệt cho giáo án của Silver Arrow. Đồng thời, với chú ngựa Golden Wind đang có giáo án chạy thực tế nhưng HLV muốn tăng cường độ nhịp tim ở giai đoạn Peak, hệ thống lưu vết dưới dạng pending_update để Chủ ngựa thẩm định trước khi áp dụng."
+  </div>
+
+  <h3>CẢNH 3: HLV KÍCH HOẠT GIÁO ÁN & XẾP LỊCH BUỔI TẬP (SCHEDULE)</h3>
+  <p><b>Tài khoản:</b> HEAD_TRAINER | <b>Màn hình:</b> /trainer/training-plans và /trainer/schedule</p>
+  <h4>Thao tác màn hình:</h4>
+  <ol>
+    <li>Đăng nhập lại <b>Head Trainer</b>, vào <b>Training Plans</b>.</li>
+    <li>Giáo án của Silver Arrow đã có nút <b>'Activate'</b>. Bấm kích hoạt -&gt; Giáo án chuyển sang <b>Active</b>.</li>
+    <li>Chuyển sang menu <b>Schedule</b>:
+      <ul>
+        <li>Bấm <b>'+ New session'</b>.</li>
+        <li>Chọn Plan: <i>[DEMO] Giáo án Tốc độ Mùa giải Mới - Silver Arrow</i>, Phase 1.</li>
+        <li>Hệ thống tự động điền Groom phụ trách chính là <i>Lê Văn Bình</i>.</li>
+        <li>Chọn giờ tập: Ngày mai lúc 07:00 AM, thời lượng 60 phút, cự ly 1,800m.</li>
+        <li>Bấm <b>'Create session'</b> -&gt; Buổi tập xuất hiện trên thời khoá biểu tuần ở trạng thái <b>SCHEDULED</b>.</li>
+      </ul>
+    </li>
+  </ol>
+  <div class='callout-quote'>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Sau khi chủ ngựa đồng ý, HLV tiến hành kích hoạt giáo án. Tại thời điểm này, backend tự động kiểm tra xem ngựa có đang bị lệnh khoá y tế TRAINING_LOCK không. Nếu an toàn, plan chính thức chuyển sang ACTIVE. HLV tiếp tục lên lịch buổi tập đầu tiên trên trang Schedule. Hệ thống tự động kiểm tra: Groom không bị trùng lịch, thời lượng là bội số của 5 phút, và thời điểm kết thúc không vượt sang ngày hôm sau."
+  </div>
+
+  <h3>CẢNH 4: THỰC THI SÂN TẬP & GIÁM SÁT TRỰC TIẾP (LIVE TELEMETRY)</h3>
+  <p><b>Tài khoản:</b> HEAD_TRAINER & GROOM | <b>Màn hình:</b> /trainer/live-sessions và /groom</p>
+  <h4>Thao tác màn hình:</h4>
+  <ol>
+    <li>Trên màn hình Trainer, vào <b>Live Session Monitor</b>:
+      <ul>
+        <li>Thấy buổi tập của chú ngựa <b>[DEMO] Thunder Bolt (DEMO-TR-01)</b> đang ở trạng thái <b>RUNNING</b> trực tiếp.</li>
+        <li>Thẻ theo dõi hiển thị sống động: Tốc độ hiện tại 15.8 m/s, nhịp tim đo được 168 bpm, trần tim an toàn 185 bpm.</li>
+      </ul>
+    </li>
+    <li>Tại giao diện Groom: Bấm <b>'Finish session'</b> -&gt; Buổi tập kết thúc (COMPLETED), chuyển sang hàng đợi chờ HLV thẩm định (review_status = 'PENDING').</li>
+  </ol>
+  <div class='callout-quote'>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Tại thời điểm demo thực tế, chú ngựa Thunder Bolt đang thực hiện bài chạy ngoài sân tập. HLV trưởng quan sát từ xa qua màn hình Live Monitor với các chỉ số đo lường Telemetry liên tục. Khi buổi chạy kết thúc đạt cự ly, Groom bấm Finish. Buổi tập hoàn tất và đồng hồ đếm ngược thời hạn đánh giá 48 giờ bắt đầu được kích hoạt."
+  </div>
+
+  <h3>CẢNH 5: THẨM ĐỊNH BUỔI TẬP CHUYÊN MÔN (SESSION EVALUATION)</h3>
+  <p><b>Tài khoản:</b> HEAD_TRAINER | <b>Màn hình:</b> /trainer/session-evaluation</p>
+  <h4>Thao tác màn hình:</h4>
+  <ol>
+    <li>Vào trang <b>Session Review</b>:
+      <ul>
+        <li>Topbar đã dọn sạch các nút bấm thừa, tập trung vào công việc đánh giá.</li>
+        <li>Thấy buổi tập hôm qua của <b>Thunder Bolt</b> đang ở trạng thái <b>PENDING</b> (trong hạn 48 giờ).</li>
+        <li>Chọn buổi tập này, bên phải hiển thị toàn bộ đồ thị nhịp tim và tốc độ do Groom ghi lại.</li>
+        <li>Nhập đánh giá: Chọn <b>EXCELLENT</b>, nhận xét: <i>'Ngựa giữ nhịp tim ổn định ở 168 bpm, guồng chân thanh thoát, sẵn sàng cho cự ly dài hơn.'</i></li>
+        <li>Bấm <b>'Submit review'</b> -&gt; Trạng thái đổi thành REVIEWED, thông báo báo cáo hoàn chỉnh được đẩy cho Chủ ngựa.</li>
+      </ul>
+    </li>
+    <li>Mở dropdown bộ lọc, chọn <b>'Archive (1)'</b>: Chỉ vào buổi tập cách đây 5 ngày của Thunder Bolt có badge tím <i>Archived · Auto-reported (>48h)</i> để giải thích cơ chế Auto Preliminary Report khi quá hạn 48h.</li>
+  </ol>
+  <div class='callout-quote'>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Bước cuối cùng là thẩm định chuyên môn. HLV có thời hạn 48 giờ để chấm điểm bài tập. Khi HLV gửi đánh giá EXCELLENT, báo cáo chính thức sẽ phát hành cho Chủ ngựa. Nếu vì lý do bất khả kháng mà HLV quên chấm quá 48h, hệ thống kích hoạt cơ chế dự phòng an toàn: tự sinh Báo cáo sơ bộ gửi Chủ ngựa và lưu vào Archive. HLV vẫn có thể thẩm định lại để cập nhật đè lên báo cáo sơ bộ bất cứ lúc nào."
+  </div>
+
+  <h2>3. PHẦN 2: DANH SÁCH & TRÌNH DIỄN UNHAPPY CASE (CƠ CHẾ PHÒNG VỆ)</h2>
+
+  <table>
+    <tr>
+      <th style='width: 12%;'>Mã Case</th>
+      <th style='width: 28%;'>Tình huống vi phạm</th>
+      <th style='width: 40%;'>Cơ chế phát hiện & Phản hồi của Hệ thống</th>
+      <th style='width: 20%;'>Trạng thái Demo Data</th>
+    </tr>
+    <tr>
+      <td><b>U1</b></td>
+      <td><b>Groom quá tải</b> (&gt; 2 Active Plans)</td>
+      <td>Dropdown vô hiệu hoá Groom (2/2 active plans — Full). Backend chặn HTTP 400 Bad Request.</td>
+      <td>Kiểm tra tại TrainingPlanService.java</td>
+    </tr>
+    <tr>
+      <td><b>U2</b></td>
+      <td><b>Chuyển Groom đang kẹt plan</b></td>
+      <td>Manager cố chuyển Groom có plan active sang Trainer khác -&gt; Báo lỗi đỏ 409 Conflict.</td>
+      <td>Đã chặn tại StaffService.java</td>
+    </tr>
+    <tr>
+      <td><b>U3</b></td>
+      <td><b>Cự ly nhập quá trần</b> (&gt; 5,000m)</td>
+      <td>Nhập 6,000m -&gt; Form báo lỗi tức thì: 'Planned distance must be maximum 5,000 meters'.</td>
+      <td>Frontend chặn form + Backend ConstraintViolation</td>
+    </tr>
+    <tr>
+      <td><b>U4</b></td>
+      <td><b>Buổi tập xuyên đêm</b> (&gt; 12h hoặc qua ngày)</td>
+      <td>Đặt giờ tập 23:00 kéo dài 90 phút -&gt; Báo lỗi: 'Session duration cannot cross into the next calendar day'.</td>
+      <td>Đã kiểm tra tính toán sameDay</td>
+    </tr>
+    <tr>
+      <td><b>U5</b></td>
+      <td><b>Trùng lịch 1 ngựa / 1 ngày</b></td>
+      <td>Cố tạo thêm 1 buổi tập hôm nay cho Thunder Bolt -&gt; Báo lỗi: '1 horse can only have 1 session per day'.</td>
+      <td>Backend kiểm tra ngày của HORSE_ID</td>
+    </tr>
+    <tr>
+      <td><b>U6</b></td>
+      <td><b>Dừng khẩn cấp trên sân (Incident)</b></td>
+      <td>Ngựa nhịp tim vọt lên 196 bpm (trần 185) -&gt; Groom bấm Stop Early -&gt; Kích hoạt THRESHOLD_ALERT & INCIDENT_REPORT.</td>
+      <td>Có sẵn dữ liệu buổi tập dừng sớm của Thunder Bolt</td>
+    </tr>
+    <tr>
+      <td><b>U7</b></td>
+      <td><b>Khoá y tế ngăn tập nặng</b></td>
+      <td>Ngựa bị chấn thương có TRAINING_LOCK -&gt; Hệ thống chặn kích hoạt giáo án hoặc cấm xếp bài tập nặng.</td>
+      <td>Kiểm tra qua vitalsRepository.findActiveLock</td>
+    </tr>
+    <tr>
+      <td><b>U8</b></td>
+      <td><b>Bỏ quên buổi tập không Start</b></td>
+      <td>Buổi tập SCHEDULED đã quá giờ kết thúc dự kiến -&gt; Job nền tự quét đổi sang CANCELLED.</td>
+      <td>Dữ liệu demo có 1 buổi CANCELLED ngày hôm kia</td>
+    </tr>
+  </table>
+
+  <h3>KỊCH BẢN THỰC THI 2 UNHAPPY CASE TRỰC TIẾP TRƯỚC HỘI ĐỒNG:</h3>
+
+  <div class='callout-alert'>
+    <b>🚨 DEMO UNHAPPY CASE 1: Sự cố dừng khẩn cấp do vượt trần nhịp tim (Emergency Stop & Threshold Alert)</b><br>
+    <b>Thao tác:</b> Tại trang Session Review, chọn filter 'All sessions', mở buổi tập có trạng thái đỏ <b>STOPPED_EARLY</b> của [DEMO] Thunder Bolt.<br>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Thưa Hội đồng, đây là minh chứng cho cơ chế bảo vệ an toàn sinh mạng cho ngựa đua. Trong buổi tập cách đây 3 ngày, ngựa Thunder Bolt chạy đến mét thứ 1,200 thì nhịp tim vọt lên <b>196 bpm</b>, vượt xa ngưỡng an toàn 185 bpm. Groom lập tức bấm <b>Stop Early</b>. Hệ thống ghi nhận trạng thái dừng sớm, tự động kích hoạt một bản ghi cảnh báo nguy hiểm trong bảng <b>THRESHOLD_ALERT</b> (mức độ HIGH) và tạo ngay một phiếu khám khẩn cấp <b>INCIDENT_REPORT</b> gửi đến Bác sĩ thú y để đưa ngựa vào diện theo dõi đặc biệt."
+  </div>
+
+  <div class='callout-alert'>
+    <b>🚨 DEMO UNHAPPY CASE 2: Chặn vi phạm xếp lịch tập vượt quá giới hạn (Duration & Distance Validation)</b><br>
+    <b>Thao tác:</b> Vào menu Schedule, bấm '+ New session'. Nhập Planned distance: 999999 (báo lỗi &gt; 5,000m). Nhập Planned duration: 123 (báo lỗi không chia hết cho 5). Đặt 11:00 PM kéo dài 90 phút (báo lỗi xuyên đêm).<br>
+    <b>🎤 Lời thoại thuyết minh:</b><br>
+    "Tại giao diện xếp lịch tập, hệ thống áp dụng cơ chế phòng vệ đa lớp. Không chỉ chặn lỗi tràn số và ép cự ly thực tế dưới 5,000m, hệ thống còn chuẩn hoá thời lượng thành các block 5 phút và kiểm soát chặt chẽ khung thời gian sinh học: tuyệt đối không cho phép xếp lịch kéo dài xuyên đêm sang ngày hôm sau để đảm bảo thời gian nghỉ ngơi của ngựa."
+  </div>
+
+  <h2>4. PHẦN KẾT LUẬN & ĐIỂM SÁNG BẢO VỆ</h2>
+  <div class='callout-quote' style='border-left-color: #10b981; color: #065f46;'>
+    <b>🎤 Lời kết của Nhóm trước Hội đồng:</b><br>
+    "Kính thưa Hội đồng, thông qua kịch bản demo vừa rồi, nhóm chúng em đã chứng minh phân hệ Training Flow đáp ứng trọn vẹn:
+    <ol>
+      <li><b>Tính khép kín và liên kết chặt chẽ:</b> Từ HLV lập kế hoạch, Chủ ngựa phê duyệt chi phí/mục tiêu, Groom thực thi ngoài sân tập đến Bác sĩ thú y giám sát an toàn.</li>
+      <li><b>Tính chịu lỗi và tự động hoá cao:</b> Tự động huỷ buổi tập quá hạn, tự động xuất báo cáo sơ bộ khi trễ hạn 48h, và chặn đứng mọi xung đột về nhân sự và thiết bị.</li>
+    </ol>
+    Chúng em xin chân thành cảm ơn Quý Thầy Cô và rất mong nhận được những câu hỏi, ý kiến đóng góp từ Hội đồng!"
+  </div>
+
+</div>
+</body>
+</html>

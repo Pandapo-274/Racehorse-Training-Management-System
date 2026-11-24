@@ -52,6 +52,47 @@ public class ContractRepository {
             LEFT JOIN HORSE h ON h.horse_id = c.horse_id
             """;
 
+    /** Số buổi tới hạn trong khoảng huấn luyện của ngựa, cho cam kết ở điều 11 của hợp đồng. */
+    public record SessionCounts(int due, int delivered, int excused) {}
+
+    /**
+     * Buổi đã qua ngày, hoặc đã tập xong trong hôm nay. Buổi không diễn ra được tính "excused"
+     * nếu hôm đó ngựa đang bị bác sĩ khoá tập. Phân loại ở bảng con vì SQL Server không cho
+     * SUM trên biểu thức có subquery.
+     */
+    public SessionCounts sessionCounts(int horseId, LocalDate from, LocalDate to, LocalDate today) {
+        return jdbc.sql("""
+                SELECT COUNT(*) AS due,
+                       ISNULL(SUM(CASE WHEN x.kind = 'DELIVERED' THEN 1 ELSE 0 END), 0) AS delivered,
+                       ISNULL(SUM(CASE WHEN x.kind = 'EXCUSED' THEN 1 ELSE 0 END), 0) AS excused
+                FROM (
+                    SELECT CASE
+                             WHEN s.status IN ('COMPLETED', 'STOPPED_EARLY', 'RECOVERY') THEN 'DELIVERED'
+                             WHEN EXISTS (SELECT 1 FROM TRAINING_LOCK l
+                                          WHERE l.horse_id = s.horse_id
+                                            AND CAST(l.issued_at AS DATE) <= CAST(s.session_date AS DATE)
+                                            AND (l.released_at IS NULL
+                                                 OR CAST(l.released_at AS DATE) >= CAST(s.session_date AS DATE)))
+                                  THEN 'EXCUSED'
+                             ELSE 'MISSED'
+                           END AS kind
+                    FROM TRAINING_SESSION s
+                    WHERE s.horse_id = :horse
+                      AND s.slot_type = 'TRAINING'
+                      AND s.status NOT IN ('REST', 'RUNNING')
+                      AND CAST(s.session_date AS DATE) BETWEEN :from AND :to
+                      AND (CAST(s.session_date AS DATE) < :today
+                           OR s.status IN ('COMPLETED', 'STOPPED_EARLY', 'RECOVERY'))
+                ) x
+                """)
+                .param("horse", horseId)
+                .param("from", from)
+                .param("to", to)
+                .param("today", today)
+                .query((rs, n) -> new SessionCounts(rs.getInt("due"), rs.getInt("delivered"), rs.getInt("excused")))
+                .single();
+    }
+
     private static ContractRow map(ResultSet rs, int n) throws SQLException {
         LocalDate end = rs.getObject("end_date", LocalDate.class);
         String status = rs.getString("status");

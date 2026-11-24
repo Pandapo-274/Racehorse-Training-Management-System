@@ -275,7 +275,7 @@ export function ageProblem(recordType, dateOfBirth) {
   if (!dateOfBirth) return "Date of birth is required for a club horse";
   const age = toAge(dateOfBirth);
   if (age != null && age > AGE_RULES.clubMax) {
-    return `This horse is ${age} years old, above the club limit of ${AGE_RULES.clubMax}. Register it as a pedigree record instead.`;
+    return `This horse is ${toAgeInMonths(dateOfBirth)} months old, above the club limit of ${AGE_RULES.clubMax} years. Register it as a pedigree record instead.`;
   }
   return null;
 }
@@ -387,24 +387,17 @@ export function toAgeInMonths(dateOfBirth, today = new Date()) {
   return months < 0 ? null : months;
 }
 
-/** "7 months", "2 years 3 months (27 months)" - years for reading, months for the rules. */
+/** Góp ý hội đồng: tuổi hiện bằng tháng, không hiện năm. "1 month", "27 months". */
 export function formatAge(dateOfBirth, today = new Date()) {
   const total = toAgeInMonths(dateOfBirth, today);
   if (total == null) return "";
-  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  if (total < 12) return plural(total, "month");
-  const y = Math.floor(total / 12);
-  const m = total % 12;
-  return `${plural(y, "year")}${m ? ` ${plural(m, "month")}` : ""} (${total} months)`;
+  return `${total} month${total === 1 ? "" : "s"}`;
 }
 
-/** Short form for tables and subtitles: "2y 3m", "7m". */
+/** Short form for tables and subtitles: "27 mo". */
 export function formatAgeShort(dateOfBirth, today = new Date()) {
   const total = toAgeInMonths(dateOfBirth, today);
-  if (total == null) return "";
-  const y = Math.floor(total / 12);
-  const m = total % 12;
-  return y ? `${y}y ${m}m` : `${m}m`;
+  return total == null ? "" : `${total} mo`;
 }
 
 export function formatWeight(w) {

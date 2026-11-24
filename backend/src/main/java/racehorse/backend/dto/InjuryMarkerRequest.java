@@ -40,7 +40,7 @@ public record InjuryMarkerRequest(
         BigDecimal coordinateY,
 
         @NotNull(message = "Severity is required")
-        @Pattern(regexp = "GRADE_1|GRADE_2|GRADE_3",
-                 message = "Severity must be GRADE_1, GRADE_2 or GRADE_3")
+        @Pattern(regexp = "GRADE_1|GRADE_2|GRADE_3|GRADE_4|GRADE_5",
+                 message = "Severity must be between GRADE_1 and GRADE_5")
         String severity
 ) {}

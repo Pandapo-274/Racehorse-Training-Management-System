@@ -27,8 +27,8 @@ public record TrainingSessionRequest(
         @Min(value = 15, message = "Duration must be at least 15 minutes")
         @Max(value = 720, message = "Duration cannot exceed 12 hours (720 minutes)")
         Integer plannedDuration,
-        @DecimalMin(value = "1.0", message = "Max allowed speed must be between 1 and 30 m/s")
-        @DecimalMax(value = "30.0", message = "Max allowed speed must be between 1 and 30 m/s")
+        @DecimalMin(value = "1.0", message = "Max allowed speed must be between 1 and 100 km/h")
+        @DecimalMax(value = "100.0", message = "Max allowed speed must be between 1 and 100 km/h")
         BigDecimal velocityCeiling,
         String remarks
 ) {

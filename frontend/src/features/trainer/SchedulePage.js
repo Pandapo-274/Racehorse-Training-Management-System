@@ -176,8 +176,9 @@ function ScheduleSidebar({ onSignOut }) {
 
 // Thẻ một buổi tập trong lưới; chỉ buổi SCHEDULED mới bấm để sửa. due = đã tới giờ mà chưa bắt đầu.
 function SessionCard({ session, onEdit, now }) {
-  const canEdit = session.status === "SCHEDULED";
-  const due = canEdit && session.sessionDate && new Date(session.sessionDate) <= now;
+  const canEdit = session.status === "SCHEDULED" || session.status === "UNASSIGNED";
+  const isRest = session.status === "REST" || session.slotType === "REST";
+  const due = session.status === "SCHEDULED" && session.sessionDate && new Date(session.sessionDate) <= now;
   const durationMins = session.plannedDuration || 60;
 
   return (
@@ -185,9 +186,18 @@ function SessionCard({ session, onEdit, now }) {
       className={`schedule-session status-${String(
         session.status || "",
       ).toLowerCase()}${due ? " is-due" : ""}`}
+      style={
+        session.conflictAlert || session.status === "UNASSIGNED"
+          ? { borderLeft: "4px solid #dc2626", background: "#fef2f2" }
+          : session.overloadWarning
+            ? { borderLeft: "4px solid #ea580c", background: "#fff7ed" }
+            : isRest
+              ? { borderLeft: "4px solid #16a34a", background: "#f0fdf4" }
+              : undefined
+      }
     >
       <div className="schedule-session-time">
-        {formatTime(session.sessionDate)} · {durationMins}m
+        {isRest ? "Rest Day" : `${formatTime(session.sessionDate)} · ${durationMins}m`}
       </div>
 
       <strong className="schedule-session-horse">
@@ -204,14 +214,34 @@ function SessionCard({ session, onEdit, now }) {
         </span>
       )}
 
-      <span className="schedule-session-groom">
-        <span aria-hidden="true">♙</span>{" "}
-        {session.assignedToName || `Groom #${session.assignedTo}`}
-      </span>
+      {!isRest && (
+        <span className="schedule-session-groom">
+          <span aria-hidden="true">♙</span>{" "}
+          {session.assignedToName || (session.assignedTo ? `Groom #${session.assignedTo}` : "Unassigned")}
+        </span>
+      )}
 
       <span className="schedule-status">
-        {due ? "DUE · NOT STARTED" : session.status || "UNKNOWN"}
+        {due
+          ? "DUE · NOT STARTED"
+          : isRest
+            ? "🌿 REST DAY"
+            : session.status === "UNASSIGNED"
+              ? "⚠️ UNASSIGNED"
+              : session.status || "UNKNOWN"}
       </span>
+
+      {(session.conflictAlert || session.status === "UNASSIGNED") && (
+        <span style={{ fontSize: "11px", fontWeight: 700, color: "#b91c1c", backgroundColor: "#fee2e2", border: "1px solid #fca5a5", padding: "2px 6px", borderRadius: "6px", alignSelf: "flex-start", marginTop: "2px" }}>
+          ⚠️ Groom Conflict — Assign Manually
+        </span>
+      )}
+
+      {session.overloadWarning && (
+        <span style={{ fontSize: "11px", fontWeight: 700, color: "#c2410c", backgroundColor: "#ffedd5", border: "1px solid #fdba74", padding: "2px 6px", borderRadius: "6px", alignSelf: "flex-start", marginTop: "2px" }}>
+          🔥 Overload HRR ({session.actualHrr ?? "—"}/{session.targetHrr ?? "—"} bpm)
+        </span>
+      )}
 
       {session.remarks && session.remarks.includes("[Recovery Session]") && (
         <span style={{ fontSize: "11px", fontWeight: 700, color: "#059669", backgroundColor: "#ecfdf5", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: "8px", alignSelf: "flex-start", marginTop: "2px" }}>
@@ -225,7 +255,7 @@ function SessionCard({ session, onEdit, now }) {
           type="button"
           onClick={() => onEdit(session)}
         >
-          Edit schedule
+          {session.status === "UNASSIGNED" ? "Assign Groom" : "Edit schedule"}
         </button>
       )}
     </article>
@@ -810,7 +840,7 @@ function SessionModal({
                           {selectedPhase.targetVelocity && (
                             <div className="schedule-phase-info-item">
                               <span>Target Speed</span>
-                              <strong>{selectedPhase.targetVelocity} m/s</strong>
+                              <strong>{selectedPhase.targetVelocity} km/h</strong>
                             </div>
                           )}
                         </div>
@@ -952,11 +982,11 @@ function SessionModal({
 
           {!editingSession && !isRecovery && (
             <label>
-              Max allowed speed (m/s)
+              Max allowed speed (km/h)
               <input
                 type="number"
                 min="1"
-                max="30"
+                max="100"
                 step="0.1"
                 value={form.velocityCeiling}
                 onChange={(event) =>
@@ -965,7 +995,7 @@ function SessionModal({
                     velocityCeiling: event.target.value,
                   }))
                 }
-                placeholder={selectedPhase?.targetVelocity ? `Default: ${selectedPhase.targetVelocity} m/s` : "e.g. 16.5"}
+                placeholder={selectedPhase?.targetVelocity ? `Default: ${selectedPhase.targetVelocity} km/h` : "e.g. 60.0"}
               />
               <small className="schedule-field-hint">
                 Speed readings exceeding this limit trigger a danger alert (same as heart rate ceiling).
@@ -1216,7 +1246,7 @@ export default function SchedulePage() {
     setForm({
       planId: "",
       phaseId: String(session.phaseId),
-      assignedTo: String(session.assignedTo),
+      assignedTo: session.assignedTo ? String(session.assignedTo) : "",
       sessionDate: toLocalDateTimeInput(session.sessionDate),
       plannedDistance: session.plannedDistance ?? "",
       plannedDuration: String(session.plannedDuration ?? 60),
@@ -1408,13 +1438,38 @@ export default function SchedulePage() {
               <h2>Your training calendar</h2>
               <p>Review upcoming sessions and manage Groom assignments.</p>
             </div>
-            <button
-              type="button"
-              className="schedule-button primary"
-              onClick={() => setSessionTypeChoiceOpen(true)}
-            >
-              <span aria-hidden="true">＋</span> New session
-            </button>
+            <div className="schedule-intro-actions" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              {plans.length > 0 && (
+                <button
+                  type="button"
+                  className="schedule-button secondary"
+                  disabled={saving}
+                  onClick={async () => {
+                    try {
+                      setSaving(true);
+                      setError("");
+                      const targetPlan = plans[0];
+                      const res = await authFetch(`${PLAN_API}/${targetPlan.planId}/auto-schedule`, { method: "POST" });
+                      setNotice(`Auto-scheduled ${res.createdTrainingSessions} session(s) and ${res.createdRestSlots} rest day(s)${res.conflictCount ? ` (${res.conflictCount} conflict alert)` : ""}.`);
+                      await loadData();
+                    } catch (err) {
+                      if (!handleAuthError(err, navigate)) setError(getErrorMessage(err));
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                >
+                  ⚡ Auto-Schedule Plan ({plans[0].horseName})
+                </button>
+              )}
+              <button
+                type="button"
+                className="schedule-button primary"
+                onClick={() => setSessionTypeChoiceOpen(true)}
+              >
+                <span aria-hidden="true">＋</span> New session
+              </button>
+            </div>
           </div>
 
           {error && !modalOpen && (

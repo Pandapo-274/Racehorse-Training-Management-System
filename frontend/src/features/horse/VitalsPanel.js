@@ -223,7 +223,7 @@ export default function VitalsPanel({ vitals }) {
                     ? null
                     : Number(latestSession.peakVelocity).toFixed(1)
                 }
-                unit="m/s"
+                unit="km/h"
               />
               <Stat label="Session status" value={toEnumLabel(latestSession.status)} />
             </div>

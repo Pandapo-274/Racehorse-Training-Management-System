@@ -18,12 +18,15 @@ import ConfirmModal from "../common/ConfirmModal";
 import { isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import {
+  autoScheduleTrainingPlan,
   changeTrainingPlanStatus,
   deleteTrainingPlan,
   createTrainingPlan,
   updateTrainingPlan,
   listTrainingPlans,
   listPlanGrooms,
+  getHorseStandards,
+  getPlanTemplates,
   getTrainingPlan,
 } from "./trainingPlanApi";
 import "./trainer.css";
@@ -35,18 +38,209 @@ function generatePhaseId() {
   return `phase-${Date.now()}-${phaseIdCounter++}`;
 }
 
-// Giai đoạn mặc định khi mở form lần đầu. Mặt sân mặc định DIRT.
+function addDaysIso(isoDate, deltaDays) {
+  if (!isoDate) return "";
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + deltaDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const RUNNING_STYLE_LABEL = {
+  FRONT: "Front-runner",
+  STALKER: "Mid-pack",
+  MIDDLE: "Mid-pack",
+  CLOSER: "Closer",
+  BACK: "Closer",
+};
+
+const DISTANCE_TYPE_LABEL = {
+  SPRINT: "Sprint",
+  MEDIUM: "Medium",
+  LONG: "Long",
+};
+
+function formatRunningStyle(style) {
+  const up = String(style || "").trim().toUpperCase();
+  return RUNNING_STYLE_LABEL[up] || style || "—";
+}
+
+function formatDistanceType(dist) {
+  const up = String(dist || "").trim().toUpperCase();
+  return DISTANCE_TYPE_LABEL[up] || dist || "—";
+}
+
+function formatTemplateName(name) {
+  return String(name || "").replace(/\bStalker\b/gi, "Mid-pack");
+}
+
+// Bảng chuẩn theo giống và tháng tuổi. Ghi rõ số nào đã công bố, số nào là tham chiếu của CLB.
+function StandardsCard() {
+  const [catalog, setCatalog] = useState(null);
+  const [breed, setBreed] = useState("");
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getHorseStandards(ctrl.signal)
+      .then((c) => { setCatalog(c); setBreed(c?.breeds?.[0]?.breed || ""); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+
+  if (!catalog) return null;
+  const table = catalog.breeds.find((b) => b.breed === breed) || catalog.breeds[0];
+  return (
+    <section className="trainer-card plans-overview-card" style={{ marginTop: 20 }}>
+      <div className="plans-overview-head">
+        <div className="trainer-card-title" style={{ marginBottom: 0 }}>
+          <span className="trainer-diamond" />
+          <div>
+            <h2>Standards by breed and age</h2>
+            <p>
+              What a plan is based on. No plan before {catalog.minTrainingMonths} months. A plan cannot go above the speed limit
+              for the horse's breed and age. Past {catalog.growthUntilMonths} months, use the body condition score.
+            </p>
+          </div>
+        </div>
+        <select className="plan-standard-select" value={table.breed} aria-label="Breed"
+                onChange={(e) => setBreed(e.target.value)}>
+          {catalog.breeds.map((b) => <option key={b.breed} value={b.breed}>{b.breed}</option>)}
+        </select>
+      </div>
+      <div className="trainer-table-wrap">
+        <table className="plans-table">
+          <thead>
+            <tr>
+              <th>Age (months)</th>
+              <th>Expected weight</th>
+              <th>Expected height</th>
+              <th>Speed limit</th>
+              <th>Weight and height from</th>
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((r) => (
+              <tr key={r.months}>
+                <td><strong>{r.months > catalog.growthUntilMonths ? `${r.months}+` : r.months}</strong></td>
+                <td>{r.weightKg != null ? `${r.weightKg} kg` : "—"}</td>
+                <td>{r.heightCm != null ? `${r.heightCm} cm` : "—"}</td>
+                <td>{Number(r.speedLimitKmh) > 0 ? `${r.speedLimitKmh} km/h` : "Not in training"}</td>
+                <td>{r.basis === "PUBLISHED" ? "Published (KER 2006)" : "Club reference"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="plan-standard-note">
+        Speed limits are club rules. Breeds without a reference use {catalog.unknownBreedLimitKmh} km/h.
+      </p>
+    </section>
+  );
+}
+
+function normalizeUiSurface(raw) {
+  const up = String(raw || "").trim().toUpperCase();
+  return up === "DIRT" || up === "SYNTHETIC" ? "DIRT" : "TURF";
+}
+
+function computeRatioPhases(planStart, planEnd, currentPhases) {
+  if (!Array.isArray(currentPhases) || currentPhases.length !== 3) {
+    return { phases: currentPhases, dayCounts: null, totalDays: 0 };
+  }
+  const r1 = Number(currentPhases[0].phaseRatio ?? 30);
+  const r2 = Number(currentPhases[1].phaseRatio ?? 45);
+  const hasRange = Boolean(planStart && planEnd && planEnd >= planStart);
+
+  if (!hasRange) {
+    const b1 = Math.floor((7 * r1) / 100);
+    const b2 = Math.floor((7 * r2) / 100);
+    const b3 = Math.max(0, 7 - (b1 + b2));
+    const baseCounts = [b1, b2, b3];
+    const next = currentPhases.map((p, idx) => ({
+      ...p,
+      sessionsPerWeek: String(Math.max(1, baseCounts[idx])),
+    }));
+    return { phases: next, dayCounts: null, totalDays: 0 };
+  }
+
+  const s = new Date(`${planStart}T00:00:00`);
+  const e = new Date(`${planEnd}T00:00:00`);
+  const totalDays = Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+  if (!Number.isFinite(totalDays) || totalDays <= 0) {
+    return { phases: currentPhases, dayCounts: null, totalDays: 0 };
+  }
+  const d1 = Math.floor((totalDays * r1) / 100);
+  const d2 = Math.floor((totalDays * r2) / 100);
+  const d3 = Math.max(0, totalDays - (d1 + d2));
+  const counts = [d1, d2, d3];
+
+  let cursor = planStart;
+  const next = currentPhases.map((p, idx) => {
+    const len = counts[idx];
+    const pStart = idx === 0 ? planStart : cursor > planEnd ? planEnd : cursor;
+    let pEnd = len > 0 ? addDaysIso(pStart, len - 1) : pStart;
+    if (pEnd > planEnd || idx === currentPhases.length - 1) pEnd = planEnd;
+    if (len > 0) cursor = addDaysIso(pEnd, 1);
+    return {
+      ...p,
+      startDate: pStart,
+      endDate: pEnd,
+      sessionsPerWeek: String(Math.max(1, len)),
+    };
+  });
+  return { phases: next, dayCounts: counts, totalDays };
+}
+
+// Giai đoạn mặc định khi mở form lần đầu: 3 giai đoạn chuẩn cố định (30% - 45% - 25%).
 const initialPhases = [
   {
     id: "init-phase-1",
-    phaseName: "Base",
-    distance: "",
-    workload: "",
-    surface: "DIRT",
-    sessionsPerWeek: "",
-    heartRateCeiling: "",
-    minGapMinutes: "",
-    targetVelocity: "",
+    phaseCode: "FOUNDATION",
+    phaseName: "Foundation",
+    phaseRatio: 30,
+    recoveryDurationMinutes: 15,
+    distance: "1200",
+    workload: "Light / Aerobic",
+    surface: "TURF",
+    sessionsPerWeek: "2",
+    heartRateCeiling: "185",
+    minGapMinutes: "90",
+    targetVelocity: "50",
+    startDate: "",
+    endDate: "",
+  },
+  {
+    id: "init-phase-2",
+    phaseCode: "BUILD",
+    phaseName: "Build",
+    phaseRatio: 45,
+    recoveryDurationMinutes: 20,
+    distance: "1600",
+    workload: "Moderate / Interval",
+    surface: "TURF",
+    sessionsPerWeek: "3",
+    heartRateCeiling: "195",
+    minGapMinutes: "90",
+    targetVelocity: "58",
+    startDate: "",
+    endDate: "",
+  },
+  {
+    id: "init-phase-3",
+    phaseCode: "PEAK",
+    phaseName: "Peak",
+    phaseRatio: 25,
+    recoveryDurationMinutes: 30,
+    distance: "1800",
+    workload: "High / Race Pace",
+    surface: "TURF",
+    sessionsPerWeek: "2",
+    heartRateCeiling: "205",
+    minGapMinutes: "90",
+    targetVelocity: "64",
     startDate: "",
     endDate: "",
   },
@@ -135,23 +329,6 @@ function statusClass(status) {
   return String(status || "DRAFT")
     .toLowerCase()
     .replace(/[^a-z-]/g, "-");
-}
-
-function emptyPhase(index, startDate, endDate) {
-  const defaultNames = ["Base", "Build", "Peak"];
-  return {
-    id: generatePhaseId(),
-    phaseName: defaultNames[index] || `Phase ${index + 1}`,
-    distance: "",
-    workload: "",
-    surface: "DIRT",
-    sessionsPerWeek: "",
-    heartRateCeiling: "",
-    minGapMinutes: "",
-    targetVelocity: "",
-    startDate: startDate || "",
-    endDate: endDate || "",
-  };
 }
 
 // Ô trống -> null (backend hiểu là không đặt), có giá trị -> số.
@@ -244,19 +421,34 @@ export default function TrainingPlanPage() {
   const [viewingLoading, setViewingLoading] = useState(false);
   const [horseId, setHorseId] = useState(savedDraft?.horseId || "");
   const [groomId, setGroomId] = useState(savedDraft?.groomId || "");
+  const [backupGroomId, setBackupGroomId] = useState(savedDraft?.backupGroomId || "");
+  const [templateRec, setTemplateRec] = useState(null);
+  const [catalogTemplates, setCatalogTemplates] = useState([]);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(savedDraft?.selectedTemplateId || "");
+  const [intensity, setIntensity] = useState(savedDraft?.intensity || "MEDIUM");
+  const [maxHeartRate, setMaxHeartRate] = useState(savedDraft?.maxHeartRate || "");
+  const [maxSpeed, setMaxSpeed] = useState(savedDraft?.maxSpeed || "");
+  const [restDaysPerWeek, setRestDaysPerWeek] = useState(savedDraft?.restDaysPerWeek ?? 1);
+  const [targetHrr, setTargetHrr] = useState(savedDraft?.targetHrr || "");
   const [planName, setPlanName] = useState(savedDraft?.planName || "");
   const [startDate, setStartDate] = useState(savedDraft?.startDate || "");
   const [endDate, setEndDate] = useState(savedDraft?.endDate || "");
-  const [phases, setPhases] = useState(
-    savedDraft?.phases && savedDraft.phases.length > 0
-      ? savedDraft.phases
-      : initialPhases,
-  );
+  const [phases, setPhases] = useState(() => {
+    const raw =
+      savedDraft?.phases && savedDraft.phases.length === 3
+        ? savedDraft.phases.map((p, idx) => ({
+            ...initialPhases[idx],
+            ...p,
+            surface: normalizeUiSurface(p.surface),
+          }))
+        : initialPhases;
+    return computeRatioPhases(savedDraft?.startDate || "", savedDraft?.endDate || "", raw).phases;
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [phaseNotice, setPhaseNotice] = useState("");
   const [filter, setFilter] = useState("ALL");
 
   // State cho việc cập nhật giáo án (Edit training plan)
@@ -268,17 +460,94 @@ export default function TrainingPlanPage() {
   const [editError, setEditError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, plan: null });
 
+  const applyTemplateToForm = useCallback((tpl, sDate, eDate, lockedSurface) => {
+    if (!tpl) return;
+    setSelectedTemplateId(String(tpl.templateId));
+    setIntensity(tpl.intensity || "MEDIUM");
+    setMaxHeartRate(tpl.maxHeartRate != null ? String(tpl.maxHeartRate) : "");
+    setMaxSpeed(tpl.maxSpeed != null ? String(tpl.maxSpeed) : "");
+    setRestDaysPerWeek(tpl.restDaysPerWeek != null ? tpl.restDaysPerWeek : 1);
+    setTargetHrr(tpl.targetHrr != null ? String(tpl.targetHrr) : "");
+    const rawPhases = (tpl.phases || []).map((ph) => ({
+      id: generatePhaseId(),
+      phaseCode: ph.phaseCode,
+      phaseName: ph.phaseName,
+      phaseRatio: ph.phaseRatio,
+      recoveryDurationMinutes: ph.recoveryDurationMinutes,
+      distance: String(ph.distance ?? ""),
+      workload: ph.workload || "",
+      surface: normalizeUiSurface(lockedSurface || ph.surface || "TURF"),
+      sessionsPerWeek: String(ph.sessionsPerWeek ?? 2),
+      heartRateCeiling: String(ph.heartRateCeiling ?? ""),
+      minGapMinutes: "90",
+      targetVelocity: String(ph.targetVelocity ?? ""),
+      startDate: "",
+      endDate: "",
+    }));
+    const computed = computeRatioPhases(sDate, eDate, rawPhases);
+    setPhases(computed.phases);
+  }, []);
+
+  // Tự động gợi ý template & khoá surface theo hồ sơ ngựa khi Trainer chọn ngựa.
+  useEffect(() => {
+    if (!horseId) {
+      setTemplateRec(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setTemplateLoading(true);
+    getPlanTemplates(horseId, controller.signal)
+      .then((rec) => {
+        setTemplateRec(rec);
+        if (rec?.allTemplates?.length) setCatalogTemplates(rec.allTemplates);
+        if (rec?.recommendedTemplate && String(selectedTemplateId) !== String(rec.recommendedTemplate.templateId)) {
+          applyTemplateToForm(rec.recommendedTemplate, startDate, endDate, rec.lockedSurface);
+        } else if (rec && !rec.recommendedTemplate) {
+          // Giống không có mẫu: bỏ mẫu của con ngựa trước, HLV tự chọn.
+          setSelectedTemplateId("");
+        } else if (rec?.lockedSurface) {
+          const safeSurf = normalizeUiSurface(rec.lockedSurface);
+          setPhases((curr) => curr.map((p) => ({ ...p, surface: safeSurf })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setTemplateLoading(false));
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horseId]);
+
+  // Tự động chia ngày & số buổi (sessionsPerWeek) 3 phase theo tỷ lệ khi startDate/endDate/tỷ lệ đổi.
+  useEffect(() => {
+    if (phases.length === 3 && phases.every((p) => p.phaseRatio != null && p.phaseRatio !== "")) {
+      const { phases: next } = computeRatioPhases(startDate, endDate, phases);
+      const changed = next.some(
+        (np, i) =>
+          np.startDate !== phases[i].startDate ||
+          np.endDate !== phases[i].endDate ||
+          String(np.sessionsPerWeek) !== String(phases[i].sessionsPerWeek),
+      );
+      if (changed) setPhases(next);
+    }
+  }, [startDate, endDate, phases]);
+
   // Mỗi lần một ô trong form tạo đổi thì lưu lại bản nháp.
   useEffect(() => {
     saveDraft({
       horseId,
       groomId,
+      backupGroomId,
+      selectedTemplateId,
+      intensity,
+      maxHeartRate,
+      maxSpeed,
+      restDaysPerWeek,
+      targetHrr,
       planName,
       startDate,
       endDate,
       phases,
     });
-  }, [horseId, groomId, planName, startDate, endDate, phases]);
+  }, [horseId, groomId, backupGroomId, selectedTemplateId, intensity, maxHeartRate, maxSpeed, restDaysPerWeek, targetHrr, planName, startDate, endDate, phases]);
 
   // Tải song song ngựa, giáo án, Groom. Lọc ngựa lập được giáo án; bỏ lựa chọn ngựa / Groom trong bản nháp nếu chúng
   // không còn hợp lệ (ngựa đã có giáo án mở, Groom đã đủ giáo án).
@@ -287,14 +556,18 @@ export default function TrainingPlanPage() {
       setLoading(true);
       setError("");
       try {
-        const [horseRows, planRows, groomRows] = await Promise.all([
+        const [horseRows, planRows, groomRows, tplRec] = await Promise.all([
           listHorses(signal),
           listTrainingPlans({ signal }),
           listPlanGrooms(signal).catch((err) => {
             console.warn("Failed to load plan grooms:", err);
             return [];
           }),
+          getPlanTemplates(null, signal).catch(() => null),
         ]);
+        if (tplRec?.allTemplates?.length) {
+          setCatalogTemplates(tplRec.allTemplates);
+        }
         const myId = getUser()?.userId;
         const myRole = getUser()?.role;
         // V37: Head Trainer chỉ lập giáo án cho các ngựa đã được Club Manager điều phối cho mình
@@ -372,26 +645,35 @@ export default function TrainingPlanPage() {
     }
   };
 
-  // Chép giáo án vào form sửa (Groom, tên, các giai đoạn giữ phaseId để backend biết giai đoạn nào sửa / thêm / xoá).
+  // Chép giáo án vào form sửa (Groom, tên, các giai đoạn giữ phaseId để backend biết giai đoạn nào sửa).
   const startEditing = (plan) => {
     setEditingPlan(plan);
     setEditGroomId(plan.groomId ? String(plan.groomId) : "");
     setEditPlanName(plan.planName || "");
-    setEditPhases(
-      (plan.phases || []).map((p) => ({
-        phaseId: p.phaseId,
-        phaseName: p.phaseName,
-        startDate: p.startDate,
-        endDate: p.endDate,
-        distance: p.distance,
-        surface: p.surface,
-        sessionsPerWeek: p.sessionsPerWeek,
-        heartRateCeiling: p.heartRateCeiling,
-        workload: p.workload || "",
-        minGapMinutes: p.minGapMinutes || 90,
-        targetVelocity: p.targetVelocity ?? "",
-      })),
-    );
+    const defaultCodes = ["FOUNDATION", "BUILD", "PEAK"];
+    const defaultRatios = [30, 45, 25];
+    const defaultRecs = [15, 20, 30];
+    const mapped = (plan.phases || []).map((p, idx) => ({
+      phaseId: p.phaseId,
+      phaseCode: p.phaseCode || (plan.phases?.length === 3 ? defaultCodes[idx] : null),
+      phaseName: p.phaseName,
+      phaseRatio: p.phaseRatio ?? (plan.phases?.length === 3 ? defaultRatios[idx] : ""),
+      recoveryDurationMinutes: p.recoveryDurationMinutes ?? (plan.phases?.length === 3 ? defaultRecs[idx] : 15),
+      startDate: p.startDate,
+      endDate: p.endDate,
+      distance: p.distance,
+      surface: normalizeUiSurface(p.surface),
+      sessionsPerWeek: p.sessionsPerWeek,
+      heartRateCeiling: p.heartRateCeiling,
+      workload: p.workload || "",
+      minGapMinutes: p.minGapMinutes || 90,
+      targetVelocity: p.targetVelocity ?? "",
+    }));
+    if (mapped.length === 3) {
+      setEditPhases(computeRatioPhases(plan.startDate, plan.endDate, mapped).phases);
+    } else {
+      setEditPhases(mapped);
+    }
     setEditError("");
   };
 
@@ -403,19 +685,33 @@ export default function TrainingPlanPage() {
       setEditError("Please select an assigned groom.");
       return;
     }
+    const usesEditRatio = editPhases.length === 3 && editPhases.every((p) => p.phaseRatio !== "" && p.phaseRatio != null);
+    if (usesEditRatio) {
+      const editRatioSum = editPhases.reduce((s, p) => s + Number(p.phaseRatio || 0), 0);
+      if (editRatioSum !== 100) {
+        setEditError(`Phase ratios across the 3 phases must total 100% (currently ${editRatioSum}%).`);
+        return;
+      }
+    }
+    const effectiveEditPhases = usesEditRatio
+      ? computeRatioPhases(editingPlan.startDate, editingPlan.endDate, editPhases).phases
+      : editPhases;
     setEditSaving(true);
     setEditError("");
     try {
       const payload = {
         groomId: Number(editGroomId),
         planName: editPlanName.trim() || editingPlan.planName,
-        phases: editPhases.map((p) => ({
+        phases: effectiveEditPhases.map((p, idx) => ({
           phaseId: p.phaseId || null,
+          phaseCode: p.phaseCode || (effectiveEditPhases.length === 3 ? (idx === 0 ? "FOUNDATION" : idx === 1 ? "BUILD" : "PEAK") : null),
+          phaseRatio: p.phaseRatio !== "" && p.phaseRatio != null ? Number(p.phaseRatio) : null,
+          recoveryDurationMinutes: p.recoveryDurationMinutes !== "" && p.recoveryDurationMinutes != null ? Number(p.recoveryDurationMinutes) : 15,
           phaseName: p.phaseName,
           startDate: p.startDate,
           endDate: p.endDate,
           distance: Number(p.distance),
-          surface: p.surface,
+          surface: normalizeUiSurface(p.surface),
           sessionsPerWeek: Number(p.sessionsPerWeek),
           heartRateCeiling: Number(p.heartRateCeiling),
           workload: p.workload ? p.workload.trim() : null,
@@ -441,40 +737,41 @@ export default function TrainingPlanPage() {
     }
   };
 
-  // Sửa / thêm / xoá giai đoạn trong form tạo: tối đa 12 giai đoạn, giai đoạn mới lấy sẵn ngày của giáo án;
-  // phải còn ít nhất 1 giai đoạn, xoá xong thì đánh số lại các tên dạng "Phase N".
+  // Cập nhật field cho 3 giai đoạn cố định (FOUNDATION, BUILD, PEAK). Khi đổi tỷ lệ %, tự tính lại ngày và số buổi.
   const updatePhase = (index, field, value) =>
-    setPhases((current) =>
-      current.map((phase, i) =>
-        i === index ? { ...phase, [field]: value } : phase,
-      ),
-    );
-  const addPhase = () => {
-    if (phases.length >= 12) return;
-    const nextNum = phases.length + 1;
-    const newPhase = emptyPhase(phases.length, startDate, endDate);
-    setPhases((current) => [...current, newPhase]);
-    const msg = `Phase ${nextNum} added successfully!`;
-    setNotice(msg);
-    setPhaseNotice(msg);
-    setTimeout(() => {
-      setPhaseNotice((prev) => (prev === msg ? "" : prev));
-    }, 4000);
-  };
-  const removePhase = (index) =>
     setPhases((current) => {
-      if (current.length <= 1) return current;
-      const filtered = current.filter((_, i) => i !== index);
-      return filtered.map((p, i) => {
-        if (/^Phase \d+$/i.test(p.phaseName)) {
-          return { ...p, phaseName: `Phase ${i + 1}` };
-        }
-        return p;
-      });
+      const updated = current.map((phase, i) =>
+        i === index ? { ...phase, [field]: value } : phase,
+      );
+      if (field === "phaseRatio" && updated.length === 3 && updated.every((p) => p.phaseRatio !== "" && p.phaseRatio != null)) {
+        return computeRatioPhases(startDate, endDate, updated).phases;
+      }
+      return updated;
     });
 
-  // Tạo giáo án: kiểm ở trình duyệt (có ngựa, ngựa chưa có giáo án mở, có Groom, ngày hợp lệ, các giai đoạn) rồi
-  // createTrainingPlan -> giáo án DRAFT; xoá bản nháp sau khi tạo thành công.
+  const availableHorses = useMemo(
+    () =>
+      horses.filter(
+        (h) => !plans.some((p) => p.horseId === h.horseId && !["COMPLETED", "CANCELLED"].includes(p.status)),
+      ),
+    [horses, plans],
+  );
+  const templateOptions = useMemo(
+    () => (templateRec?.allTemplates?.length ? templateRec.allTemplates : catalogTemplates),
+    [templateRec, catalogTemplates],
+  );
+
+  const usesRatioMode = phases.length === 3 && phases.every((p) => p.phaseRatio != null && p.phaseRatio !== "");
+  const totalRatio = phases.reduce(
+    (sum, p) => sum + (p.phaseRatio != null && p.phaseRatio !== "" ? Number(p.phaseRatio) : 0),
+    0,
+  );
+  const ratioPreview = useMemo(
+    () => (usesRatioMode ? computeRatioPhases(startDate, endDate, phases) : { phases, dayCounts: null, totalDays: 0 }),
+    [usesRatioMode, startDate, endDate, phases],
+  );
+
+  // Tạo giáo án: kiểm ở trình duyệt (có ngựa, ngựa chưa có giáo án mở, có Primary/Backup Groom, tỷ lệ 3 phase = 100%).
   const submit = async (event) => {
     event.preventDefault();
     setError("");
@@ -491,44 +788,69 @@ export default function TrainingPlanPage() {
       return;
     }
     if (!groomId) {
-      setError("Select an assigned groom before saving the plan.");
+      setError("Select a primary groom before saving the plan.");
+      return;
+    }
+    if (backupGroomId && String(backupGroomId) === String(groomId)) {
+      setError("Backup groom must be different from primary groom.");
       return;
     }
     if (endDate < startDate) {
       setError("Plan end date must be on or after the start date.");
       return;
     }
+    if (usesRatioMode && totalRatio !== 100) {
+      setError(`Phase time ratios across the 3 phases must total exactly 100% (currently ${totalRatio}%).`);
+      return;
+    }
+    const effectivePhases = usesRatioMode ? ratioPreview.phases : phases;
     const payload = {
       horseId: Number(horseId),
       groomId: Number(groomId),
+      primaryGroomId: Number(groomId),
+      backupGroomId: backupGroomId ? Number(backupGroomId) : null,
+      templateId: selectedTemplateId ? Number(selectedTemplateId) : null,
+      preferredSurface: templateRec?.lockedSurface || null,
+      intensity: intensity || null,
+      maxHeartRate: optionalNumber(maxHeartRate),
+      maxSpeed: optionalNumber(maxSpeed),
+      restDaysPerWeek: restDaysPerWeek === "" || restDaysPerWeek == null ? 1 : Number(restDaysPerWeek),
+      targetHrr: optionalNumber(targetHrr),
+      autoSchedule: false,
       planName: planName.trim(),
       startDate,
       endDate,
-      phases: phases.map((p) => ({
+      phases: effectivePhases.map((p, idx) => ({
+        phaseCode: p.phaseCode || (effectivePhases.length === 3 ? (idx === 0 ? "FOUNDATION" : idx === 1 ? "BUILD" : "PEAK") : null),
+        phaseRatio: p.phaseRatio !== "" && p.phaseRatio != null ? Number(p.phaseRatio) : null,
+        recoveryDurationMinutes: p.recoveryDurationMinutes !== "" && p.recoveryDurationMinutes != null ? Number(p.recoveryDurationMinutes) : 15,
         phaseName: p.phaseName.trim(),
         distance: p.distance === "" ? null : Number(p.distance),
         workload: p.workload.trim() || null,
-        surface: p.surface,
+        surface: templateRec?.lockedSurface || p.surface,
         sessionsPerWeek:
           p.sessionsPerWeek === "" ? null : Number(p.sessionsPerWeek),
         heartRateCeiling:
           p.heartRateCeiling === "" ? null : Number(p.heartRateCeiling),
         minGapMinutes: optionalNumber(p.minGapMinutes),
         targetVelocity: optionalNumber(p.targetVelocity),
-        startDate: p.startDate,
-        endDate: p.endDate,
+        startDate: p.startDate || startDate,
+        endDate: p.endDate || endDate,
       })),
     };
     setSaving(true);
     try {
       const created = await createTrainingPlan(payload);
       setNotice(
-        `Training plan “${created.planName}” was saved as a draft. Send it to the owner for approval before activating it.`,
+        `Training plan “${created.planName}” was created and sent to the horse owner for review. It will become Active and auto-schedule once approved.`,
       );
       clearDraft();
       setPlanName("");
       setHorseId("");
       setGroomId("");
+      setBackupGroomId("");
+      setSelectedTemplateId("");
+      setTemplateRec(null);
       setStartDate("");
       setEndDate("");
       setPhases(initialPhases);
@@ -540,6 +862,22 @@ export default function TrainingPlanPage() {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAutoSchedulePlan = async (plan) => {
+    setError("");
+    setNotice("");
+    try {
+      const res = await autoScheduleTrainingPlan(plan.planId);
+      setNotice(
+        `Auto-scheduled “${plan.planName}”: ${res.createdTrainingSessions} training session(s), ${res.createdRestSlots} rest day(s)${res.conflictCount ? `, ${res.conflictCount} UNASSIGNED conflict alert(s)` : ""}.`,
+      );
+      await load();
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setError(err.message || "Failed to auto-schedule training plan.");
+      }
     }
   };
 
@@ -665,6 +1003,7 @@ export default function TrainingPlanPage() {
           )}
 
           {!isCreating ? (
+            <>
             <section className="trainer-card plans-overview-card">
               <div className="plans-overview-head">
                 <div className="trainer-card-title" style={{ marginBottom: 0 }}>
@@ -815,6 +1154,13 @@ export default function TrainingPlanPage() {
                                 <>
                                   <button
                                     type="button"
+                                    className="plan-action-btn plan-action-btn--primary"
+                                    onClick={() => handleAutoSchedulePlan(plan)}
+                                  >
+                                    ⚡ Auto-Schedule
+                                  </button>
+                                  <button
+                                    type="button"
                                     className="plan-action-btn"
                                     onClick={() => updateStatus(plan, "PAUSED")}
                                   >
@@ -865,6 +1211,70 @@ export default function TrainingPlanPage() {
                 </div>
               )}
             </section>
+
+            <section className="trainer-card plans-overview-card" style={{ marginTop: 20 }}>
+              <div className="plans-overview-head">
+                <div className="trainer-card-title" style={{ marginBottom: 0 }}>
+                  <span className="trainer-diamond" />
+                  <div>
+                    <h2>Training Plan Templates (9 Standard Templates)</h2>
+                    <p>
+                      3 Breeds × 3 Running Styles · Default 3-phase allocation: Foundation (30%, 15m recovery) · Build (45%, 20m recovery) · Peak (25%, 30m recovery)
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {catalogTemplates.length === 0 ? (
+                <p className="training-empty">Loading training plan templates…</p>
+              ) : (
+                <div className="trainer-table-wrap">
+                  <table className="plans-table">
+                    <thead>
+                      <tr>
+                        <th>Template Name</th>
+                        <th>Breed</th>
+                        <th>Running Style</th>
+                        <th>Intensity</th>
+                        <th>Max HR</th>
+                        <th>Max Speed</th>
+                        <th>Rest / Wk</th>
+                        <th>Target HRR</th>
+                        <th>Base Dist.</th>
+                        <th>3 Phases (Ratio · Rec)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {catalogTemplates.map((tpl) => (
+                        <tr key={tpl.templateId || tpl.templateCode}>
+                          <td>
+                            <div className="plan-name-strong">{formatTemplateName(tpl.templateName)}</div>
+                          </td>
+                          <td>{tpl.breed}</td>
+                          <td>
+                            <span className="plan-horse-badge">
+                              {formatRunningStyle(tpl.runningStyle)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="training-status-pill">{tpl.intensity}</span>
+                          </td>
+                          <td>{tpl.maxHeartRate} bpm</td>
+                          <td>{tpl.maxSpeed} km/h</td>
+                          <td>{tpl.restDaysPerWeek} d/wk</td>
+                          <td>{tpl.targetHrr} bpm</td>
+                          <td>{Number(tpl.baseDistanceM || 0).toLocaleString()} m</td>
+                          <td style={{ fontSize: 12, color: "#475569" }}>
+                            {(tpl.phases || []).map((ph) => `${ph.phaseName} ${ph.phaseRatio}% (${ph.recoveryDurationMinutes}m)`).join(" · ")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+            <StandardsCard />
+            </>
           ) : (
             <form onSubmit={submit}>
               <div className="training-plan-layout">
@@ -878,6 +1288,155 @@ export default function TrainingPlanPage() {
                       </div>
                     </div>
                     <div className="training-plan-form-grid">
+                      <label className="training-field">
+                        <span className="training-field-title">1. Horse *</span>
+                        <select
+                          value={horseId}
+                          onChange={(e) => setHorseId(e.target.value)}
+                          required
+                        >
+                          <option value="">
+                            {availableHorses.length === 0
+                              ? "— No horse available without an active plan —"
+                              : "Choose a horse"}
+                          </option>
+                          {availableHorses.map((h) => (
+                            <option key={h.horseId} value={h.horseId}>
+                              {h.horseName} · {h.registrationCode || `#${h.horseId}`} ({h.breed || "Racehorse"} · {h.status})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="training-field">
+                        <span className="training-field-title">
+                          2. Training Plan Template *{templateLoading ? " · Loading…" : ""}
+                        </span>
+                        <select
+                          value={selectedTemplateId}
+                          onChange={(e) => {
+                            const tpl = templateOptions.find(
+                              (t) => String(t.templateId) === e.target.value,
+                            );
+                            if (tpl) {
+                              applyTemplateToForm(
+                                tpl,
+                                startDate,
+                                endDate,
+                                templateRec?.lockedSurface || phases[0]?.surface || "TURF",
+                              );
+                            } else {
+                              setSelectedTemplateId("");
+                            }
+                          }}
+                          required
+                        >
+                          <option value="">Choose a training template</option>
+                          {templateOptions.map((tpl) => {
+                            const isRec = templateRec?.recommendedTemplate?.templateId === tpl.templateId;
+                            return (
+                              <option key={tpl.templateId} value={tpl.templateId}>
+                                {formatTemplateName(tpl.templateName)} ({tpl.breed} · {formatRunningStyle(tpl.runningStyle)})
+                                {isRec ? " ★ Recommended" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+
+                      {selectedHorse && (
+                        <div
+                          className="training-field training-field--wide selected-horse-strip"
+                          style={{ marginTop: 2, flexDirection: "column", alignItems: "stretch", gap: "12px" }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "11px" }}>
+                            <span className="training-horse-mark">♞</span>
+                            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <strong style={{ color: "#202a49", fontSize: "13.5px" }}>{selectedHorse.horseName}</strong>
+                              <span style={{ color: "#8e96ad", fontSize: "11.5px" }}>
+                                {selectedHorse.registrationCode || `Horse #${selectedHorse.horseId}`} · {selectedHorse.breed || "Racehorse"}
+                              </span>
+                            </div>
+                            <span className={`training-status-pill ${statusClass(selectedHorse.status)}`}>
+                              {selectedHorse.status}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                              gap: "10px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "10px",
+                                background: "#fff",
+                                border: "1px solid #f2dee8",
+                              }}
+                            >
+                              <div style={{ fontSize: "10.5px", color: "#8e96ad", fontWeight: 700, textTransform: "uppercase" }}>
+                                Distance Type
+                              </div>
+                              <div style={{ fontSize: "13px", color: "#202a49", fontWeight: 700, marginTop: "2px" }}>
+                                {templateLoading ? "Loading…" : formatDistanceType(templateRec?.distanceType)}
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "10px",
+                                background: "#fff",
+                                border: "1px solid #f2dee8",
+                              }}
+                            >
+                              <div style={{ fontSize: "10.5px", color: "#8e96ad", fontWeight: 700, textTransform: "uppercase" }}>
+                                Running Style
+                              </div>
+                              <div style={{ fontSize: "13px", color: "#202a49", fontWeight: 700, marginTop: "2px" }}>
+                                {templateLoading ? "Loading…" : formatRunningStyle(templateRec?.runningStyle)}
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "10px",
+                                background: "#fff",
+                                border: "1px solid #f2dee8",
+                              }}
+                            >
+                              <div style={{ fontSize: "10.5px", color: "#8e96ad", fontWeight: 700, textTransform: "uppercase" }}>
+                                Preferred Surface
+                              </div>
+                              <div style={{ fontSize: "13px", color: "#202a49", fontWeight: 700, marginTop: "2px" }}>
+                                {templateLoading ? "Loading…" : (templateRec?.lockedSurface === "DIRT" ? "Dirt" : "Turf")}
+                              </div>
+                            </div>
+                          </div>
+                          {!templateLoading && templateRec?.standard && (
+                            <div className="plan-standard-strip">
+                              <div><span>Age</span><strong>{templateRec.standard.ageMonths ?? "—"} months</strong></div>
+                              <div>
+                                <span>Expected weight</span>
+                                <strong>{templateRec.standard.expectedWeightKg != null ? `${templateRec.standard.expectedWeightKg} kg` : "—"}</strong>
+                              </div>
+                              <div>
+                                <span>Expected height</span>
+                                <strong>{templateRec.standard.expectedHeightCm != null ? `${templateRec.standard.expectedHeightCm} cm` : "—"}</strong>
+                              </div>
+                              <div>
+                                <span>Speed limit</span>
+                                <strong>{Number(templateRec.standard.speedLimitKmh) > 0 ? `${templateRec.standard.speedLimitKmh} km/h` : "Not in training"}</strong>
+                              </div>
+                              {templateRec.standard.note && (
+                                <p className={templateRec.standard.canTrain ? "" : "plan-standard-strip__stop"}>{templateRec.standard.note}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <label className="training-field training-field--wide">
                         Plan name
                         <input
@@ -888,29 +1447,9 @@ export default function TrainingPlanPage() {
                           placeholder="e.g. Tracen Cup preparation"
                         />
                       </label>
+
                       <label className="training-field">
-                        <span className="training-field-title">Horse</span>
-                        <select
-                          value={horseId}
-                          onChange={(e) => setHorseId(e.target.value)}
-                          required
-                        >
-                          <option value="">Choose a horse</option>
-                          {horses.map((h) => {
-                            const ongoing = plans.find(
-                              (p) => p.horseId === h.horseId && !["COMPLETED", "CANCELLED"].includes(p.status)
-                            );
-                            return (
-                              <option key={h.horseId} value={h.horseId} disabled={Boolean(ongoing)}>
-                                {h.horseName} · {h.registrationCode || `#${h.horseId}`} ({h.status})
-                                {ongoing ? ` — In progress (Plan #${ongoing.planId}: ${PLAN_STATUS_LABEL[ongoing.status] || ongoing.status})` : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </label>
-                      <label className="training-field">
-                        <span className="training-field-title">Assigned Groom</span>
+                        <span className="training-field-title">Primary Groom *</span>
                         <select
                           value={groomId}
                           onChange={(e) => setGroomId(e.target.value)}
@@ -919,7 +1458,7 @@ export default function TrainingPlanPage() {
                           <option value="">
                             {grooms.length === 0
                               ? "— No groom assigned to you —"
-                              : "Choose a groom"}
+                              : "Choose primary groom"}
                           </option>
                           {grooms.map((g) => (
                             <option
@@ -934,101 +1473,170 @@ export default function TrainingPlanPage() {
                         </select>
                       </label>
                       <label className="training-field">
-                        Start date
+                        <span className="training-field-title">Backup Groom *</span>
+                        <select
+                          value={backupGroomId}
+                          onChange={(e) => setBackupGroomId(e.target.value)}
+                          required
+                        >
+                          <option value="">Choose backup groom</option>
+                          {grooms.map((g) => (
+                            <option
+                              key={g.userId}
+                              value={g.userId}
+                              disabled={String(g.userId) === String(groomId)}
+                            >
+                              {g.fullName}
+                              {String(g.userId) === String(groomId) ? " (Selected as Primary)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="training-field">
+                        Start date *
                         <input
                           type="date"
                           value={startDate}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setStartDate(val);
-                            setPhases((current) => {
-                              if (current.length === 1 && (!current[0].startDate || current[0].startDate === startDate)) {
-                                return [{ ...current[0], startDate: val }];
-                              }
-                              return current;
-                            });
-                          }}
+                          onChange={(e) => setStartDate(e.target.value)}
                           required
                         />
                       </label>
                       <label className="training-field">
-                        End date
+                        End date *
                         <input
                           type="date"
                           value={endDate}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEndDate(val);
-                            setPhases((current) => {
-                              if (current.length === 1 && (!current[0].endDate || current[0].endDate === endDate)) {
-                                return [{ ...current[0], endDate: val }];
-                              }
-                              return current;
-                            });
-                          }}
+                          onChange={(e) => setEndDate(e.target.value)}
                           min={startDate}
                           required
                         />
                       </label>
+
+                      {(templateRec || selectedTemplateId) && (
+                        <>
+                          {templateRec && (
+                            <label className="training-field">
+                              Preferred Surface
+                              <input
+                                type="text"
+                                readOnly
+                                value={templateRec.lockedSurface === "DIRT" ? "Dirt" : "Turf"}
+                                style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
+                              />
+                            </label>
+                          )}
+                          <label className="training-field">
+                            Intensity
+                            <select value={intensity} onChange={(e) => setIntensity(e.target.value)}>
+                              <option value="LOW">LOW</option>
+                              <option value="MEDIUM">MEDIUM</option>
+                              <option value="HIGH">HIGH</option>
+                            </select>
+                          </label>
+                          <label className="training-field">
+                            Max Heart Rate (bpm)
+                            <input
+                              type="number"
+                              min="100"
+                              max="260"
+                              value={maxHeartRate}
+                              onChange={(e) => setMaxHeartRate(e.target.value)}
+                              placeholder="e.g. 205"
+                            />
+                          </label>
+                          <label className="training-field">
+                            Max Speed Ceiling (km/h)
+                            <input
+                              type="number"
+                              min="1"
+                              max="90"
+                              step="0.1"
+                              value={maxSpeed}
+                              onChange={(e) => setMaxSpeed(e.target.value)}
+                              placeholder="e.g. 64.0"
+                            />
+                          </label>
+                          <label className="training-field">
+                            Rest Days / Week
+                            <input
+                              type="number"
+                              min="0"
+                              max="6"
+                              value={restDaysPerWeek}
+                              onChange={(e) => setRestDaysPerWeek(e.target.value)}
+                            />
+                          </label>
+                          <label className="training-field">
+                            Target Recovery HR (bpm)
+                            <input
+                              type="number"
+                              min="40"
+                              max="220"
+                              value={targetHrr}
+                              onChange={(e) => setTargetHrr(e.target.value)}
+                              placeholder="e.g. 115"
+                            />
+                          </label>
+                          <div
+                            className="training-field training-field--wide"
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: "10px",
+                              background: "#fff8fb",
+                              border: "1px solid #f2dee8",
+                              color: "#626a83",
+                              fontSize: "12px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Submitting this plan sends it to the horse owner for review. Once approved by the owner, the plan becomes <strong>Active</strong> and its training schedule is automatically generated.
+                          </div>
+                        </>
+                      )}
                     </div>
-                    {selectedHorse && (
-                      <div className="selected-horse-strip">
-                        <span className="training-horse-mark">♞</span>
-                        <div>
-                          <strong>{selectedHorse.horseName}</strong>
-                          <span>
-                            {selectedHorse.registrationCode ||
-                              `Horse #${selectedHorse.horseId}`}{" "}
-                            · {selectedHorse.status}
-                          </span>
-                        </div>
-                        <span
-                          className={`training-status-pill ${statusClass(selectedHorse.status)}`}
-                        >
-                          {selectedHorse.status}
-                        </span>
-                      </div>
-                    )}
                   </section>
 
                 <section className="trainer-card plan-builder-card phases-card">
                   <div className="trainer-card-title">
                     <span className="trainer-diamond" />
                     <div>
-                      <h2>Phases</h2>
+                      <h2>Fixed 3 Phases (Foundation · Build · Peak)</h2>
                       <p>
-                        Build the programme from base work to race-day
-                        simulation.
+                        Total phase ratios must equal 100%. Phase dates & sessions are auto-calculated from plan start/end dates.
                       </p>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      {phaseNotice && (
-                        <span
-                          className="phase-notice-badge"
-                          style={{
-                            color: "#2e7d32",
-                            backgroundColor: "#e8f5e9",
-                            border: "1px solid #c8e6c9",
-                            padding: "4px 10px",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                          }}
-                          role="status"
-                        >
-                          ✓ {phaseNotice}
+                  </div>
+                  {usesRatioMode && (
+                    <div
+                      style={{
+                        marginBottom: "14px",
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        background: totalRatio === 100 ? "#ecfdf5" : "#fef2f2",
+                        border: `1px solid ${totalRatio === 100 ? "#86efac" : "#fca5a5"}`,
+                        color: totalRatio === 100 ? "#166534" : "#991b1b",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "8px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>
+                        {totalRatio === 100
+                          ? `✓ 3-Phase Time Allocation: ${phases.map((p) => `${p.phaseRatio}%`).join(" / ")} = 100%`
+                          : `⚠️ Phase ratios must equal 100% (currently ${totalRatio}%)`}
+                      </span>
+                      {ratioPreview.dayCounts && (
+                        <span>
+                          Days split ({ratioPreview.totalDays} total): Foundation {ratioPreview.dayCounts[0]}d · Build {ratioPreview.dayCounts[1]}d · Peak {ratioPreview.dayCounts[2]}d
                         </span>
                       )}
-                      <button
-                        type="button"
-                        className="training-add-phase"
-                        onClick={addPhase}
-                        disabled={phases.length >= 12}
-                      >
-                        + Add phase
-                      </button>
                     </div>
-                  </div>
+                  )}
+
                   <div className="training-phase-list">
                     {phases.map((phase, index) => (
                       <article
@@ -1041,7 +1649,7 @@ export default function TrainingPlanPage() {
                           </span>
                           <div>
                             <strong>
-                              Phase {index + 1}
+                              {phase.phaseCode || `Phase ${index + 1}`}
                               {phase.phaseName && phase.phaseName !== `Phase ${index + 1}`
                                 ? ` · ${phase.phaseName}`
                                 : ""}
@@ -1053,16 +1661,6 @@ export default function TrainingPlanPage() {
                               </span>
                             )}
                           </div>
-                          {phases.length > 1 && (
-                            <button
-                              type="button"
-                              className="training-remove-phase"
-                              onClick={() => removePhase(index)}
-                              aria-label={`Remove phase ${index + 1}`}
-                            >
-                              ×
-                            </button>
-                          )}
                         </div>
                         <div className="training-phase-fields">
                           <label className="training-field">
@@ -1074,7 +1672,34 @@ export default function TrainingPlanPage() {
                               }
                               maxLength={100}
                               required
-                              placeholder="e.g. Base, Build, Peak"
+                              placeholder="e.g. Foundation, Build, Peak"
+                            />
+                          </label>
+                          <label className="training-field">
+                            Phase ratio (%)
+                            <input
+                              type="number"
+                              min="1"
+                              max="98"
+                              value={phase.phaseRatio ?? ""}
+                              onChange={(e) =>
+                                updatePhase(index, "phaseRatio", e.target.value === "" ? "" : Number(e.target.value))
+                              }
+                              placeholder="e.g. 30"
+                            />
+                          </label>
+                          <label className="training-field">
+                            Recovery duration (min) *
+                            <input
+                              type="number"
+                              min="5"
+                              max="120"
+                              required
+                              value={phase.recoveryDurationMinutes ?? 15}
+                              onChange={(e) =>
+                                updatePhase(index, "recoveryDurationMinutes", e.target.value === "" ? "" : Number(e.target.value))
+                              }
+                              placeholder="e.g. 15"
                             />
                           </label>
                           <label className="training-field">
@@ -1087,7 +1712,7 @@ export default function TrainingPlanPage() {
                                 updatePhase(index, "distance", e.target.value)
                               }
                               required
-                              placeholder="e.g. 3200"
+                              placeholder="e.g. 1600"
                             />
                           </label>
                           <label className="training-field">
@@ -1098,38 +1723,33 @@ export default function TrainingPlanPage() {
                                 updatePhase(index, "workload", e.target.value)
                               }
                               maxLength={50}
-                              placeholder="e.g. 60% VO2 max"
+                              placeholder="e.g. Moderate / Interval"
                             />
                           </label>
                           <label className="training-field">
                             Surface
                             <select
-                              value={phase.surface}
+                              value={normalizeUiSurface(templateRec?.lockedSurface || phase.surface)}
+                              disabled={Boolean(templateRec?.lockedSurface)}
                               onChange={(e) =>
                                 updatePhase(index, "surface", e.target.value)
                               }
                             >
                               <option value="TURF">Turf</option>
                               <option value="DIRT">Dirt</option>
-                              <option value="SYNTHETIC">Synthetic dirt</option>
                             </select>
                           </label>
                           <label className="training-field">
-                            Sessions / week
+                            Sessions / week (Auto · {phase.phaseRatio ?? 0}%)
                             <input
                               type="number"
                               min="1"
-                              max="14"
+                              max="365"
                               value={phase.sessionsPerWeek}
-                              onChange={(e) =>
-                                updatePhase(
-                                  index,
-                                  "sessionsPerWeek",
-                                  e.target.value,
-                                )
-                              }
+                              readOnly
+                              title="Auto-calculated from phase ratio (%) and total plan days"
+                              style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
                               required
-                              placeholder="e.g. 3"
                             />
                           </label>
                           <label className="training-field">
@@ -1168,11 +1788,11 @@ export default function TrainingPlanPage() {
                             />
                           </label>
                           <label className="training-field">
-                            Target speed (m/s) *
+                            Target speed (km/h) *
                             <input
                               type="number"
                               min="1"
-                              max="25"
+                              max="90"
                               step="0.1"
                               required
                               value={phase.targetVelocity ?? ""}
@@ -1183,32 +1803,28 @@ export default function TrainingPlanPage() {
                                   e.target.value,
                                 )
                               }
-                              placeholder="e.g. 10"
+                              placeholder="e.g. 55"
                             />
                           </label>
                           <label className="training-field">
-                            Phase start
+                            Phase start (Auto)
                             <input
                               type="date"
                               value={phase.startDate}
-                              min={startDate || undefined}
-                              max={endDate || undefined}
-                              onChange={(e) =>
-                                updatePhase(index, "startDate", e.target.value)
-                              }
+                              readOnly
+                              title="Auto-calculated from active plan start date and phase ratios"
+                              style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
                               required
                             />
                           </label>
                           <label className="training-field">
-                            Phase end
+                            Phase end (Auto)
                             <input
                               type="date"
                               value={phase.endDate}
-                              min={phase.startDate || startDate || undefined}
-                              max={endDate || undefined}
-                              onChange={(e) =>
-                                updatePhase(index, "endDate", e.target.value)
-                              }
+                              readOnly
+                              title="Auto-calculated from active plan end date and phase ratios"
+                              style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
                               required
                             />
                           </label>
@@ -1220,9 +1836,9 @@ export default function TrainingPlanPage() {
                     <button
                       className="training-save-button"
                       type="submit"
-                      disabled={saving || loading}
+                      disabled={saving || loading || (usesRatioMode && totalRatio !== 100)}
                     >
-                      {saving ? "Saving…" : "Save plan"}
+                      {saving ? "Submitting…" : "Save & Send to Owner"}
                     </button>
                     <button
                       className="training-back-button"
@@ -1265,8 +1881,7 @@ export default function TrainingPlanPage() {
                       {{
                         TURF: "Turf",
                         DIRT: "Dirt",
-                        SYNTHETIC: "Synthetic dirt",
-                      }[phases[0]?.surface] || "—"}
+                      }[normalizeUiSurface(phases[0]?.surface)] || "—"}
                     </strong>
                   </div>
                   <div className="training-setting-row">
@@ -1405,7 +2020,7 @@ export default function TrainingPlanPage() {
                             {ph.targetVelocity && (
                               <div className="plan-phase-card-item">
                                 <span>Target Speed</span>
-                                <strong>{ph.targetVelocity} m/s</strong>
+                                <strong>{ph.targetVelocity} km/h</strong>
                               </div>
                             )}
                           </div>
@@ -1516,36 +2131,13 @@ export default function TrainingPlanPage() {
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1e1b4b" }}>
-                        Training Phases ({editPhases.length})
+                        Fixed Training Phases ({editPhases.length})
                       </h3>
-                      <button
-                        type="button"
-                        className="training-btn training-btn--ghost"
-                        style={{ fontSize: 12, padding: "5px 12px" }}
-                        disabled={editPhases.length >= 12}
-                        onClick={() => {
-                          const lastPhase = editPhases[editPhases.length - 1];
-                          const newStart = lastPhase?.endDate || editingPlan.startDate;
-                          setEditPhases([
-                            ...editPhases,
-                            {
-                              phaseId: null,
-                              phaseName: `Phase ${editPhases.length + 1}`,
-                              startDate: newStart,
-                              endDate: editingPlan.endDate,
-                              distance: 1200,
-                              surface: "DIRT",
-                              sessionsPerWeek: 3,
-                              heartRateCeiling: 180,
-                              workload: "Medium",
-                              minGapMinutes: 90,
-                              targetVelocity: "",
-                            },
-                          ]);
-                        }}
-                      >
-                        + Add Phase
-                      </button>
+                      {editPhases.length === 3 && (
+                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                          Total ratio: {editPhases.reduce((s, p) => s + Number(p.phaseRatio || 0), 0)}% (must be 100%)
+                        </span>
+                      )}
                     </div>
 
                     <div className="plan-phase-edit-list">
@@ -1553,15 +2145,6 @@ export default function TrainingPlanPage() {
                         <div key={ph.phaseId || idx} className="plan-phase-edit-card">
                           <div className="plan-phase-edit-header">
                             <strong>Phase {idx + 1}: {ph.phaseName}</strong>
-                            {editPhases.length > 1 && (
-                              <button
-                                type="button"
-                                className="plan-phase-remove-btn"
-                                onClick={() => setEditPhases(editPhases.filter((_, i) => i !== idx))}
-                              >
-                                Remove
-                              </button>
-                            )}
                           </div>
 
                           <div className="plan-phase-edit-grid">
@@ -1578,33 +2161,62 @@ export default function TrainingPlanPage() {
                               />
                             </label>
 
+                            {editPhases.length === 3 && (
+                              <label>
+                                Phase Ratio (%)
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="98"
+                                  required
+                                  value={ph.phaseRatio ?? ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value === "" ? "" : Number(e.target.value);
+                                    const next = editPhases.map((p, i) => i === idx ? { ...p, phaseRatio: val } : p);
+                                    if (next.every((p) => p.phaseRatio !== "" && p.phaseRatio != null)) {
+                                      setEditPhases(computeRatioPhases(editingPlan.startDate, editingPlan.endDate, next).phases);
+                                    } else {
+                                      setEditPhases(next);
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+
                             <label>
-                              Start Date
+                              Recovery Duration (min)
                               <input
-                                type="date"
+                                type="number"
+                                min="5"
+                                max="120"
                                 required
-                                min={editingPlan.startDate}
-                                max={editingPlan.endDate}
-                                value={ph.startDate}
+                                value={ph.recoveryDurationMinutes ?? 15}
                                 onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, startDate: val } : p));
+                                  const val = e.target.value === "" ? "" : Number(e.target.value);
+                                  setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, recoveryDurationMinutes: val } : p));
                                 }}
                               />
                             </label>
 
                             <label>
-                              End Date
+                              Start Date (Auto)
                               <input
                                 type="date"
                                 required
-                                min={ph.startDate || editingPlan.startDate}
-                                max={editingPlan.endDate}
+                                readOnly
+                                style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
+                                value={ph.startDate}
+                              />
+                            </label>
+
+                            <label>
+                              End Date (Auto)
+                              <input
+                                type="date"
+                                required
+                                readOnly
+                                style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
                                 value={ph.endDate}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, endDate: val } : p));
-                                }}
                               />
                             </label>
 
@@ -1626,7 +2238,7 @@ export default function TrainingPlanPage() {
                             <label>
                               Surface
                               <select
-                                value={ph.surface}
+                                value={normalizeUiSurface(ph.surface)}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, surface: val } : p));
@@ -1634,22 +2246,19 @@ export default function TrainingPlanPage() {
                               >
                                 <option value="TURF">Turf</option>
                                 <option value="DIRT">Dirt</option>
-                                <option value="SYNTHETIC">Synthetic</option>
                               </select>
                             </label>
 
                             <label>
-                              Sessions / Week
+                              Sessions / Week (Auto)
                               <input
                                 type="number"
                                 required
+                                readOnly
                                 min="1"
-                                max="14"
+                                max="365"
+                                style={{ backgroundColor: "#f1f5f9", color: "#334155", cursor: "not-allowed", fontWeight: 600 }}
                                 value={ph.sessionsPerWeek}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, sessionsPerWeek: val } : p));
-                                }}
                               />
                             </label>
 
@@ -1696,13 +2305,14 @@ export default function TrainingPlanPage() {
                             </label>
 
                             <label>
-                              Target Speed (m/s)
+                              Target Speed (km/h)
                               <input
                                 type="number"
                                 step="0.1"
                                 min="1.0"
-                                max="25.0"
-                                placeholder="Optional"
+                                max="90.0"
+                                required
+                                placeholder="e.g. 55"
                                 value={ph.targetVelocity || ""}
                                 onChange={(e) => {
                                   const val = e.target.value;

@@ -12,7 +12,9 @@ import { useNavigate } from "react-router-dom";
 import { Card, StatusChip } from "./HorseShell";
 import { formatDate, BCS_GROUPS } from "./horseApi";
 import { toGrowth } from "./horseRequestApi";
-import { contractsForHorse, toContractStatus, stayLine, REMINDER_DAYS } from "./contractApi";
+import {
+  contractsForHorse, getCommitment, toContractStatus, stayLine, REMINDER_DAYS, COMMITMENT_STATUS,
+} from "./contractApi";
 
 function Line({ label, children }) {
   return (
@@ -33,6 +35,16 @@ export default function HorseStayPanel({ horse, user, intake }) {
     contractsForHorse(horse.horseId, ctrl.signal).then(setContracts).catch(() => setContracts([]));
     return () => ctrl.abort();
   }, [horse.horseId]);
+
+  // Điều 11 của hợp đồng đang chạy. Hợp đồng ký trước khi có điều này thì không hiện.
+  const [commitment, setCommitment] = useState(null);
+  const runningId = contracts?.find((c) => c.status === "ACTIVE" || c.status === "EXPIRED")?.contractId;
+  useEffect(() => {
+    if (!runningId) { setCommitment(null); return undefined; }
+    const ctrl = new AbortController();
+    getCommitment(runningId, ctrl.signal).then(setCommitment).catch(() => setCommitment(null));
+    return () => ctrl.abort();
+  }, [runningId]);
 
   if (contracts === null) return null;
 
@@ -59,6 +71,29 @@ export default function HorseStayPanel({ horse, user, intake }) {
               {running.trainingWeeks ? ` (${running.trainingWeeks} weeks)` : ""}
             </Line>
           ) : running.trainingWeeks ? <Line label="Training asked">{running.trainingWeeks} weeks</Line> : null}
+          {commitment?.applies && commitment.delivery && (() => {
+            const d = commitment.delivery;
+            const st = COMMITMENT_STATUS[d.status] || COMMITMENT_STATUS.NOT_STARTED;
+            const counted = d.due - d.excused;
+            const plural = d.sessionsShort === 1 ? "" : "s";
+            return (
+              <>
+                <Line label="Training commitment"><StatusChip tone={st.tone} label={st.label} /></Line>
+                <Line label="Sessions delivered">
+                  {d.delivered} of {counted}{d.deliveredPct != null ? ` (${d.deliveredPct}%)` : ""} · target {d.targetPct}%
+                  {d.excused > 0 ? ` · ${d.excused} excused by a vet lock` : ""}
+                </Line>
+                {d.status === "AT_RISK" && (
+                  <p className="hz-muted hz-note">{d.sessionsShort} more session{plural} needed to reach {d.targetPct}%.</p>
+                )}
+                {d.status === "NOT_MET" && (
+                  <p className="hz-field__error">
+                    The club owes {d.sessionsShort} free make-up session{plural} within 30 days, or a proportional refund (contract clause 12).
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </>
       ) : (
         <p className="hz-muted hz-note">

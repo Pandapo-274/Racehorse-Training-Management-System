@@ -16,6 +16,19 @@ export function contractsForHorse(horseId, signal) {
   return authFetch(`${API}/horse/${horseId}`, { signal });
 }
 
+/** Điều 11 của hợp đồng: đã giao bao nhiêu buổi so với cam kết. */
+export function getCommitment(id, signal) {
+  return authFetch(`${API}/${id}/commitment`, { signal });
+}
+
+export const COMMITMENT_STATUS = {
+  NOT_STARTED: { label: "No sessions due yet", tone: "neutral" },
+  ON_TRACK: { label: "On track", tone: "good" },
+  AT_RISK: { label: "Behind the commitment", tone: "warning" },
+  MET: { label: "Commitment met", tone: "good" },
+  NOT_MET: { label: "Commitment not met", tone: "critical" },
+};
+
 export function signContract(id, { fullName, agree, termsSha256 }) {
   return authFetch(`${API}/${id}/sign`, {
     method: "POST",

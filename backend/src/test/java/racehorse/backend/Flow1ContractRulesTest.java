@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,7 +45,9 @@ import racehorse.backend.service.HorsePhotoService;
 import racehorse.backend.service.HorsePolicy;
 import racehorse.backend.service.HorseRequestService;
 import racehorse.backend.service.HorseService;
+import racehorse.backend.service.HorseStandards;
 import racehorse.backend.service.NotificationService;
+import racehorse.backend.service.payment.PayOsGateway;
 import racehorse.backend.service.payment.PaymentGateway;
 
 /*
@@ -267,12 +270,132 @@ class Flow1ContractRulesTest {
                 new BigDecimal("250"), new BigDecimal("135"), today));
         assertEquals(HorsePolicy.GROWTH_BELOW, HorsePolicy.growthFor("Thoroughbred", sixMonthsOld,
                 new BigDecimal("200"), new BigDecimal("135"), today));
-        assertNull(HorsePolicy.growthFor("Thoroughbred", today.minusYears(3),
-                new BigDecimal("480"), new BigDecimal("160"), today)); // past 18 months: no reference
-        assertNull(HorsePolicy.growthFor("Arabian", sixMonthsOld,
-                new BigDecimal("200"), new BigDecimal("135"), today));
+        assertEquals(HorsePolicy.GROWTH_WITHIN, HorsePolicy.growthFor("Thoroughbred", today.minusYears(3),
+                new BigDecimal("480"), new BigDecimal("160"), today));
+        assertNull(HorsePolicy.growthFor("Thoroughbred", today.minusYears(6),
+                new BigDecimal("480"), new BigDecimal("160"), today)); // fully grown: BCS only
+        assertEquals(HorsePolicy.GROWTH_WITHIN, HorsePolicy.growthFor("Arabian", sixMonthsOld,
+                new BigDecimal("200"), new BigDecimal("130"), today));
+        assertNull(HorsePolicy.growthFor("Mustang", sixMonthsOld,
+                new BigDecimal("200"), new BigDecimal("135"), today)); // no reference for this breed
         assertEquals("IDEAL", HorsePolicy.bcsGroup(5));
         assertEquals("THIN", HorsePolicy.bcsGroup(3));
+    }
+
+    // ------------------------------------------------------------ standards by breed and age
+
+    @Test
+    void speedLimitFollowsBreedAndAgeInMonths() {
+        assertEquals(new BigDecimal("0.0"), HorseStandards.speedLimit("Thoroughbred", 17));
+        assertEquals(new BigDecimal("52.8"), HorseStandards.speedLimit("Thoroughbred", 20));
+        assertEquals(new BigDecimal("59.4"), HorseStandards.speedLimit("Thoroughbred", 30));
+        assertEquals(new BigDecimal("66.0"), HorseStandards.speedLimit("Thoroughbred", 48));
+        assertEquals(new BigDecimal("59.4"), HorseStandards.speedLimit("Thoroughbred", 140));
+        assertEquals(new BigDecimal("58.0"), HorseStandards.speedLimit("Arabian", 48));
+        assertEquals(new BigDecimal("70.0"), HorseStandards.speedLimit("Quarter Horse", 48));
+        assertEquals(new BigDecimal("58.0"), HorseStandards.speedLimit("Mustang", 48));
+    }
+
+    @Test
+    void standardsSayWhichFiguresArePublished() {
+        assertEquals(HorseStandards.PUBLISHED, HorseStandards.expected("Thoroughbred", 12).basis());
+        assertEquals(HorseStandards.CLUB_REFERENCE, HorseStandards.expected("Thoroughbred", 24).basis());
+        assertEquals(HorseStandards.CLUB_REFERENCE, HorseStandards.expected("Arabian", 12).basis());
+        assertNull(HorseStandards.expected("Arabian", 3));
+        assertEquals(3, HorseStandards.catalog().breeds().size());
+    }
+
+    // ------------------------------------------------------------ training commitment
+
+    @Test
+    void commitmentCountsDeliveredSessionsAndExcusesVetLocks() {
+        HorsePolicy.Delivery atRisk = HorsePolicy.delivery(12, 7, 2, false);  // 7 of 10 counted
+        assertEquals("AT_RISK", atRisk.status());
+        assertEquals(70, atRisk.deliveredPct());
+        assertEquals(1, atRisk.sessionsShort());
+
+        assertEquals("NOT_MET", HorsePolicy.delivery(12, 7, 2, true).status());
+        assertEquals("MET", HorsePolicy.delivery(12, 8, 2, true).status());
+        assertEquals("ON_TRACK", HorsePolicy.delivery(5, 4, 0, false).status());
+        assertEquals("NOT_STARTED", HorsePolicy.delivery(0, 0, 0, false).status());
+    }
+
+    @Test
+    void contractStatesTheCommitmentAndTheContacts() {
+        ContractTerms terms = new ContractTerms(2000, "3:5", 7, 5_000_000, "Tracen Club");
+        String text = terms.text(new ContractTerms.Parties("Owner", "Sakura", "Thoroughbred", "COLT",
+                        LocalDate.now().minusYears(2), "Bay", null, null, 4, LocalDate.now(), "Manager", false, null,
+                        LocalDate.now(), LocalDate.now().plusDays(28),
+                        "Bao Viet", "0901234567", "Tran Van An", "0912345678"),
+                terms.priceFor(1), LocalDate.now().plusDays(7));
+        assertTrue(text.contains(ContractTerms.COMMITMENT_HEADING));
+        assertTrue(text.contains("does not promise a race result"));
+        assertTrue(text.contains("12. If the commitment is not met"));
+        assertTrue(text.contains("Bao Viet, 0901234567"));
+        assertTrue(text.contains("Tran Van An, 0912345678"));
+    }
+
+    // ------------------------------------------------------------ payOS
+
+    @Test
+    void paymentDescriptionFitsThePayOsLimit() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findById(1_234_567)).thenReturn(Optional.of(contract(1_234_567, "SIGNED", 100_000)));
+        when(contracts.setPaymentLink(anyInt(), anyLong(), any(), any())).thenReturn(1);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.createLink(anyLong(), anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyLong()))
+                .thenReturn(new PaymentGateway.Link(1L, "link", "https://pay.example/checkout"));
+        ContractService service = contractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), gateway, mock(UserRepository.class));
+
+        service.startPayment(1_234_567, OWNER_7);
+
+        ArgumentCaptor<String> description = ArgumentCaptor.forClass(String.class);
+        verify(gateway).createLink(anyLong(), anyLong(), description.capture(), anyString(), any(),
+                anyString(), anyString(), anyLong());
+        assertTrue(description.getValue().length() <= 9, description.getValue());
+    }
+
+    /** The real SDK and a real signature, no network: the webhook body arrives as a raw JSON string. */
+    @Test
+    void realSignedWebhookBodyIsAcceptedAndATamperedOneIsNot() throws Exception {
+        String checksum = "test-checksum-key";
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("orderCode", 4000123);
+        data.put("amount", 2000);
+        data.put("description", "HD40");
+        data.put("accountNumber", "12345678");
+        data.put("reference", "FT123");
+        data.put("transactionDateTime", "2026-11-24 10:00:00");
+        data.put("currency", "VND");
+        data.put("paymentLinkId", "abc123");
+        data.put("code", "00");
+        data.put("desc", "success");
+        data.put("counterAccountBankId", "");
+        data.put("counterAccountBankName", "");
+        data.put("counterAccountName", "");
+        data.put("counterAccountNumber", "");
+        data.put("virtualAccountName", "");
+        data.put("virtualAccountNumber", "");
+        String signature = new vn.payos.PayOS("client", "api", checksum).getCrypto()
+                .createSignatureFromObj(data, checksum);
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("code", "00");
+        body.put("desc", "success");
+        body.put("success", true);
+        body.put("data", data);
+        body.put("signature", signature);
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+        String raw = json.writeValueAsString(body);
+
+        PayOsGateway gateway = new PayOsGateway("client", "api", checksum);
+        PaymentGateway.Payment payment = gateway.verifyWebhook(raw);
+        assertEquals(4000123L, payment.orderCode());
+        assertEquals(2000L, payment.amount());
+        assertTrue(payment.paid());
+
+        String tampered = raw.replace("\"amount\":2000", "\"amount\":9000");
+        assertThrows(IllegalArgumentException.class, () -> gateway.verifyWebhook(tampered));
     }
 
     // ------------------------------------------------------------ helpers
@@ -300,7 +423,8 @@ class Flow1ContractRulesTest {
                 null, null, null, null, null, null, null, null, null,
                 photoUrl, new BigDecimal("450"), new BigDecimal("155"), "TURF", "MEDIUM", "MIDDLE",
                 null, 4, months, trainerId, null, null, null, 0, null, null, null,
-                LocalDate.now().plusDays(3), LocalDate.now().plusDays(31));
+                LocalDate.now().plusDays(3), LocalDate.now().plusDays(31),
+                "Bao Viet", "0901234567", "Tran Van An", "0912345678");
     }
 
     private static ContractRow contract(int id, String status, long total) {

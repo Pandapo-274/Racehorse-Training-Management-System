@@ -60,23 +60,15 @@ public class TrainingSessionRepository {
                 .param("id", userId).query(Integer.class).single() > 0;
     }
 
-    /** V37: Kiểm tra Groom có thuộc quyền quản lý của Head Trainer này không, hoặc là Groom phụ trách giáo án của Trainer. */
-    // Groom "thuộc" HLV nếu trainer_id = HLV, HOẶC đang được giao một giáo án do HLV tạo/phụ trách
-    // (trường hợp Groom đã chuyển đội nhưng còn giáo án cũ).
+    /** Groom thuộc đội của Head Trainer này (APP_USER.trainer_id, do Club Manager phân công). */
+    // Góp ý hội đồng: trước đây Groom từng có giáo án với HLV cũng tính là "thuộc", kể cả giáo án đã
+    // xong, nên HLV vẫn chọn được Groom đã chuyển đội.
     public boolean isGroomOfTrainer(int groomId, int trainerId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM APP_USER u JOIN ROLE r ON r.role_id = u.role_id
                 WHERE u.user_id = :groomId AND r.role_name = 'GROOM'
                   AND u.status = 'ACTIVE'
-                  AND (
-                      u.trainer_id = :trainerId
-                      OR EXISTS (
-                          SELECT 1 FROM TRAINING_PLAN tp
-                          JOIN HORSE h ON h.horse_id = tp.horse_id
-                          WHERE tp.groom_id = u.user_id
-                            AND (tp.created_by = :trainerId OR h.trainer_id = :trainerId)
-                      )
-                  )
+                  AND u.trainer_id = :trainerId
                 """)
                 .param("groomId", groomId)
                 .param("trainerId", trainerId)
@@ -93,18 +85,26 @@ public class TrainingSessionRepository {
                    (SELECT COUNT(*) FROM THRESHOLD_ALERT a WHERE a.session_id = s.session_id) AS alert_count,
                    s.is_trial_run, s.video_url,
                    s.planned_duration, s.started_at, s.ended_at, s.early_stop_reason, s.review_status,
-                   s.velocity_ceiling
+                   s.velocity_ceiling,
+                   s.slot_type, s.conflict_alert,
+                   COALESCE(s.recovery_duration_minutes, ph.recovery_duration_minutes, 15) AS recovery_duration_minutes,
+                   s.recovery_started_at, s.recovery_ends_at,
+                   s.actual_hrr, s.overload_warning, tp.target_hrr
             FROM TRAINING_SESSION s
-            JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
-            JOIN HORSE h       ON h.horse_id  = s.horse_id
-            JOIN APP_USER u    ON u.user_id   = s.assigned_to
+            JOIN PLAN_PHASE ph   ON ph.phase_id = s.phase_id
+            JOIN TRAINING_PLAN tp ON tp.plan_id = ph.plan_id
+            JOIN HORSE h         ON h.horse_id  = s.horse_id
+            LEFT JOIN APP_USER u ON u.user_id   = s.assigned_to
             """;
 
     private static TrainingSessionResponse mapSession(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        Integer assignedObj = rs.getObject("assigned_to", Integer.class);
+        Boolean conflictObj = rs.getObject("conflict_alert", Boolean.class);
+        Boolean overloadObj = rs.getObject("overload_warning", Boolean.class);
         return new TrainingSessionResponse(
                 rs.getInt("session_id"), rs.getInt("phase_id"), rs.getInt("phase_no"),
                 rs.getString("phase_name"), rs.getInt("horse_id"), rs.getString("horse_name"),
-                rs.getInt("assigned_to"), rs.getString("assigned_to_name"),
+                assignedObj != null ? assignedObj : 0, rs.getString("assigned_to_name"),
                 rs.getObject("session_date", LocalDateTime.class),
                 rs.getObject("planned_distance", Integer.class),
                 rs.getObject("actual_distance", Integer.class),
@@ -121,7 +121,15 @@ public class TrainingSessionRepository {
                 rs.getObject("ended_at", LocalDateTime.class),
                 rs.getString("early_stop_reason"),
                 rs.getString("review_status"),
-                rs.getBigDecimal("velocity_ceiling"));
+                rs.getBigDecimal("velocity_ceiling"),
+                rs.getString("slot_type"),
+                conflictObj != null && conflictObj,
+                rs.getObject("recovery_duration_minutes", Integer.class),
+                rs.getObject("recovery_started_at", LocalDateTime.class),
+                rs.getObject("recovery_ends_at", LocalDateTime.class),
+                rs.getObject("actual_hrr", Integer.class),
+                overloadObj != null && overloadObj,
+                rs.getObject("target_hrr", Integer.class));
     }
 
     public Optional<TrainingSessionResponse> findById(int sessionId) {
@@ -408,13 +416,147 @@ public class TrainingSessionRepository {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION
                 SET assigned_to = :assignedTo,
-                    session_date = :sessionDate
+                    session_date = :sessionDate,
+                    status = CASE WHEN status = 'UNASSIGNED' THEN 'SCHEDULED' ELSE status END,
+                    conflict_alert = 0
                 WHERE session_id = :sessionId
-                  AND status = 'SCHEDULED'
+                  AND status IN ('SCHEDULED', 'UNASSIGNED')
                 """)
                 .param("assignedTo", assignedTo)
                 .param("sessionDate", sessionDate)
                 .param("sessionId", sessionId)
+                .update();
+    }
+
+    public int countSessionsByPlan(int planId) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*)
+                FROM TRAINING_SESSION s
+                JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
+                WHERE ph.plan_id = :planId
+                """)
+                .param("planId", planId)
+                .query(Integer.class)
+                .single();
+        return count != null ? count : 0;
+    }
+
+    public int deleteUnstartedByPlan(int planId) {
+        return jdbc.sql("""
+                DELETE s
+                FROM TRAINING_SESSION s
+                JOIN PLAN_PHASE ph ON ph.phase_id = s.phase_id
+                WHERE ph.plan_id = :planId
+                  AND s.status IN ('SCHEDULED', 'UNASSIGNED', 'REST')
+                """)
+                .param("planId", planId)
+                .update();
+    }
+
+    public boolean isGroomBusyOnDate(int groomId, LocalDate day) {
+        Integer count = jdbc.sql("""
+                SELECT COUNT(*)
+                FROM TRAINING_SESSION
+                WHERE assigned_to = :groomId
+                  AND CAST(session_date AS DATE) = :day
+                  AND status IN ('SCHEDULED', 'RUNNING', 'RECOVERY', 'COMPLETED', 'STOPPED_EARLY')
+                """)
+                .param("groomId", groomId)
+                .param("day", day)
+                .query(Integer.class)
+                .single();
+        return count != null && count > 0;
+    }
+
+    public int insertAutoSlot(int phaseId, int horseId, Integer assignedTo, LocalDateTime sessionDate,
+                              Integer plannedDistance, int plannedDuration, BigDecimal velocityCeiling,
+                              String status, String slotType, boolean conflictAlert,
+                              Integer recoveryDurationMinutes, String remarks) {
+        return jdbc.sql("""
+                INSERT INTO TRAINING_SESSION (
+                    phase_id, horse_id, assigned_to, session_date, planned_distance,
+                    planned_duration, velocity_ceiling, status, slot_type, conflict_alert,
+                    recovery_duration_minutes, remarks
+                )
+                OUTPUT INSERTED.session_id
+                VALUES (
+                    :phaseId, :horseId, :assignedTo, :sessionDate, :plannedDistance,
+                    :plannedDuration, :velocityCeiling, :status, :slotType, :conflictAlert,
+                    :recoveryDurationMinutes, :remarks
+                )
+                """)
+                .param("phaseId", phaseId)
+                .param("horseId", horseId)
+                .param("assignedTo", assignedTo)
+                .param("sessionDate", sessionDate)
+                .param("plannedDistance", plannedDistance)
+                .param("plannedDuration", plannedDuration)
+                .param("velocityCeiling", velocityCeiling)
+                .param("status", status)
+                .param("slotType", slotType)
+                .param("conflictAlert", conflictAlert)
+                .param("recoveryDurationMinutes", recoveryDurationMinutes)
+                .param("remarks", remarks)
+                .query(Integer.class)
+                .single();
+    }
+
+    public Optional<Integer> findPhaseRecoveryMinutes(int phaseId) {
+        return jdbc.sql("SELECT recovery_duration_minutes FROM PLAN_PHASE WHERE phase_id = :id")
+                .param("id", phaseId)
+                .query(Integer.class)
+                .optional();
+    }
+
+    public Optional<Integer> findPlanTargetHrr(int phaseId) {
+        return jdbc.sql("""
+                SELECT tp.target_hrr
+                FROM TRAINING_PLAN tp
+                JOIN PLAN_PHASE ph ON ph.plan_id = tp.plan_id
+                WHERE ph.phase_id = :id
+                """)
+                .param("id", phaseId)
+                .query(Integer.class)
+                .optional();
+    }
+
+    public int markRecoveryStarted(int sessionId, int recoveryDurationMinutes,
+                                   LocalDateTime startedAt, LocalDateTime endsAt) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'RECOVERY',
+                    recovery_duration_minutes = :mins,
+                    recovery_started_at = :startedAt,
+                    recovery_ends_at = :endsAt
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("mins", recoveryDurationMinutes)
+                .param("startedAt", startedAt)
+                .param("endsAt", endsAt)
+                .param("id", sessionId)
+                .update();
+    }
+
+    public int markRecoveryCompleted(int sessionId, int actualHrr, boolean overloadWarning, String remarks) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'COMPLETED',
+                    actual_hrr = :actualHrr,
+                    recovery_heart_rate = :actualHrr,
+                    overload_warning = :overloadWarning,
+                    ended_at = ISNULL(ended_at, SYSUTCDATETIME()),
+                    review_status = 'PENDING',
+                    remarks = CASE
+                        WHEN :remarks IS NOT NULL AND LTRIM(RTRIM(:remarks)) <> ''
+                        THEN COALESCE(remarks + ' | ', '') + :remarks
+                        ELSE remarks
+                    END
+                WHERE session_id = :id AND status IN ('RECOVERY', 'RUNNING')
+                """)
+                .param("actualHrr", actualHrr)
+                .param("overloadWarning", overloadWarning)
+                .param("remarks", remarks)
+                .param("id", sessionId)
                 .update();
     }
 }

@@ -28,7 +28,7 @@ public class SessionRepository {
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
             JOIN HORSE h ON h.horse_id = s.horse_id
-            JOIN APP_USER g ON g.user_id = s.assigned_to
+            LEFT JOIN APP_USER g ON g.user_id = s.assigned_to
             """;
 
     private final JdbcClient jdbc;
@@ -39,11 +39,12 @@ public class SessionRepository {
 
     private static SessionResponse map(ResultSet rs, int rowNum) throws SQLException {
         LocalDateTime date = rs.getObject("session_date", LocalDateTime.class);
+        Integer assignedObj = rs.getObject("assigned_to", Integer.class);
         return new SessionResponse(
                 rs.getInt("session_id"), rs.getInt("phase_id"), rs.getString("phase_name"),
                 rs.getObject("heart_rate_ceiling", Integer.class),
                 rs.getInt("horse_id"), rs.getString("horse_name"),
-                rs.getInt("assigned_to"), rs.getString("groom_name"),
+                assignedObj != null ? assignedObj : 0, rs.getString("groom_name"),
                 date,
                 rs.getObject("planned_distance", Integer.class),
                 rs.getObject("actual_distance", Integer.class),

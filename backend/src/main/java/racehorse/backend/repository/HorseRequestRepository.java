@@ -43,7 +43,8 @@ public class HorseRequestRepository {
                     WHERE oh.owner_id = q.owner_id AND oh.activity_status = 'ACTIVE'
                       AND oh.record_type = 'ACADEMY') AS owner_active_horses,
                    c.contract_id, c.status AS contract_status,
-                   q.training_start, q.training_end
+                   q.training_start, q.training_end,
+                   q.insurer_name, q.insurer_phone, q.emergency_name, q.emergency_phone
             FROM HORSE_REQUEST q
             JOIN APP_USER o ON o.user_id = q.owner_id
             LEFT JOIN APP_USER r ON r.user_id = q.reviewed_by
@@ -87,7 +88,9 @@ public class HorseRequestRepository {
                 rs.getInt("owner_active_horses"),
                 HorsePolicy.growthFor(breed, dob, weight, height, LocalDate.now()),
                 rs.getObject("contract_id", Integer.class), rs.getString("contract_status"),
-                rs.getObject("training_start", LocalDate.class), rs.getObject("training_end", LocalDate.class));
+                rs.getObject("training_start", LocalDate.class), rs.getObject("training_end", LocalDate.class),
+                rs.getString("insurer_name"), rs.getString("insurer_phone"),
+                rs.getString("emergency_name"), rs.getString("emergency_phone"));
     }
 
     public Optional<HorseRequestRow> findById(int requestId) {
@@ -133,11 +136,13 @@ public class HorseRequestRepository {
                                            date_of_birth, color, note, record_type, sire_id, dam_id,
                                            weight, height_cm, surface, distance_pref, running_style,
                                            preferred_start, training_weeks, contract_months,
-                                           preferred_trainer_id, training_start, training_end)
+                                           preferred_trainer_id, training_start, training_end,
+                                           insurer_name, insurer_phone, emergency_name, emergency_phone)
                 OUTPUT INSERTED.request_id
                 VALUES (:owner, :name, :breed, :gender, :dob, :color, :note, :recordType, :sire, :dam,
                         :weight, :height, :surface, :distance, :style,
-                        :start, :weeks, :months, :trainer, :trainingStart, :trainingEnd)
+                        :start, :weeks, :months, :trainer, :trainingStart, :trainingEnd,
+                        :insurerName, :insurerPhone, :emergencyName, :emergencyPhone)
                 """)
                 .param("owner", ownerId)
                 .param("name", r.horseName())
@@ -160,6 +165,10 @@ public class HorseRequestRepository {
                 .param("trainer", r.preferredTrainerId())
                 .param("trainingStart", r.trainingStart())
                 .param("trainingEnd", r.trainingEnd())
+                .param("insurerName", r.insurerName())
+                .param("insurerPhone", r.insurerPhone())
+                .param("emergencyName", r.emergencyName())
+                .param("emergencyPhone", r.emergencyPhone())
                 .query(Integer.class)
                 .single();
     }

@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import racehorse.backend.dto.CompleteRecoveryRequest;
 import racehorse.backend.dto.FinishSessionRequest;
 import racehorse.backend.dto.HorseResponse;
 import racehorse.backend.dto.TrainingPlanResponse;
@@ -115,11 +116,9 @@ public class TrainingSessionService {
 
     /** V37: Head Trainer chỉ thấy các Groom được Club Manager phân quyền cho mình (hoặc phụ trách giáo án). */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms(AuthenticatedUser user) {
+        // Góp ý hội đồng: HLV chưa có đội thì danh sách rỗng, không hiện Groom của người khác.
         if (user != null && "HEAD_TRAINER".equals(user.role())) {
-            List<TrainingSessionRepository.GroomOption> assigned = repository.findActiveGroomsByTrainer(user.userId());
-            if (!assigned.isEmpty()) {
-                return assigned;
-            }
+            return repository.findActiveGroomsByTrainer(user.userId());
         }
         return repository.findActiveGrooms();
     }
@@ -156,8 +155,13 @@ public class TrainingSessionService {
 
         BigDecimal velocityCeiling = r.velocityCeiling() != null ? r.velocityCeiling() : ctx.targetVelocity();
         if (velocityCeiling != null && (velocityCeiling.compareTo(BigDecimal.ONE) < 0
-                || velocityCeiling.compareTo(new BigDecimal("30.0")) > 0)) {
-            errors.put("velocityCeiling", "Max allowed speed must be between 1 and 30 m/s");
+                || velocityCeiling.compareTo(new BigDecimal("100.0")) > 0)) {
+            errors.put("velocityCeiling", "Max allowed speed must be between 1 and 100 km/h");
+        } else if (r.velocityCeiling() != null) {
+            String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), r.velocityCeiling(), LocalDate.now());
+            if (over != null) {
+                errors.put("velocityCeiling", over);
+            }
         }
 
         validateGroomAssignee(r.assignedTo(), user, errors);
@@ -346,6 +350,78 @@ public class TrainingSessionService {
     }
 
     /**
+     * V50: Groom hoàn tất bài chạy: RUNNING -> RECOVERY và bắt đầu đếm ngược recovery theo Phase.
+     */
+    @Transactional
+    public TrainingSessionResponse enterRecovery(int sessionId, AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can start recovery phase");
+        }
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if (!"RUNNING".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a RUNNING session can enter recovery (currently " + s.status() + ")");
+        }
+        int recMinutes = repository.findPhaseRecoveryMinutes(s.phaseId())
+                .orElse(s.recoveryDurationMinutes() != null ? s.recoveryDurationMinutes() : 15);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime endsAt = now.plusMinutes(recMinutes);
+        if (repository.markRecoveryStarted(sessionId, recMinutes, now, endsAt) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just changed status");
+        }
+        userRepository.writeAudit(user == null ? null : user.userId(),
+                "TRAINING_SESSION_RECOVERY_START", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+        return getOrThrow(sessionId);
+    }
+
+    /**
+     * V50: Groom gửi nhịp tim hồi phục thực tế (actual_hrr) -> COMPLETED.
+     * Nếu actual_hrr > target_hrr của plan thì bật overload_warning = true và cảnh báo Trainer.
+     */
+    @Transactional
+    public TrainingSessionResponse completeRecovery(int sessionId, CompleteRecoveryRequest req,
+                                                    AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can complete recovery");
+        }
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if (!"RECOVERY".equals(s.status()) && !"RUNNING".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a RECOVERY or RUNNING session can be completed with recovery HR (currently " + s.status() + ")");
+        }
+        Integer targetHrr = repository.findPlanTargetHrr(s.phaseId()).orElse(s.targetHrr());
+        boolean overload = targetHrr != null && req.actualHrr() > targetHrr;
+
+        if (repository.markRecoveryCompleted(sessionId, req.actualHrr(), overload, req.remarks()) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session has just been completed or modified by someone else");
+        }
+        userRepository.writeAudit(user == null ? null : user.userId(),
+                "TRAINING_SESSION_COMPLETE_RECOVERY", "TRAINING_SESSION", sessionId, "SUCCESS", ip,
+                "actualHrr=" + req.actualHrr() + (overload ? " OVERLOAD" : ""));
+
+        if (overload) {
+            notifications.notifyHorseTrainer(s.horseId(), user, new Notice(
+                    "SESSION_OVERLOAD_WARNING",
+                    "Overload warning: " + s.horseName(),
+                    s.horseName() + " recorded recovery HR " + req.actualHrr()
+                            + " bpm, exceeding target HRR (" + targetHrr + " bpm). Monitor for overtraining.",
+                    Notice.TRAINING_SESSION, sessionId));
+        } else {
+            notifications.notifyHorseTrainer(s.horseId(), user, new Notice(
+                    "TRAINING_SESSION_FINISHED",
+                    "Training session finished",
+                    s.horseName() + " completed training and recovery (HRR: " + req.actualHrr()
+                            + " bpm). Ready for evaluation (within 48h).",
+                    Notice.TRAINING_SESSION, sessionId));
+        }
+        return getOrThrow(sessionId);
+    }
+
+    /**
      * V37: Tự động kết thúc các buổi RUNNING đã quá thời lượng và tự động huỷ các buổi SCHEDULED quá giờ.
      * Gọi định kỳ từ MissedTaskJob / TrainingAutomationJob và trước khi đọc danh sách.
      */
@@ -410,10 +486,10 @@ public class TrainingSessionService {
 
         TrainingSessionResponse current = getOrThrow(sessionId);
 
-        if (!"SCHEDULED".equals(current.status())) {
+        if (!"SCHEDULED".equals(current.status()) && !"UNASSIGNED".equals(current.status())) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
-                    "Only a SCHEDULED session can be rescheduled");
+                    "Only a SCHEDULED or UNASSIGNED session can be rescheduled");
         }
 
         TrainingSessionRepository.PhaseContext ctx =
@@ -480,18 +556,22 @@ public class TrainingSessionService {
         String when = updatedSession.sessionDate().format(WHEN);
 
         if (current.assignedTo() != updatedSession.assignedTo()) {
-            notifications.notifyUser(current.assignedTo(), new Notice(
-                    "TRAINING_SESSION_UNASSIGNED",
-                    "Training session reassigned",
-                    updatedSession.horseName() + " is now handled by "
-                            + updatedSession.assignedToName() + ".",
-                    null, null));
-            notifications.notifyUser(updatedSession.assignedTo(), new Notice(
-                    "TRAINING_SESSION_ASSIGNED",
-                    "New training session assigned",
-                    updatedSession.horseName() + " on " + when + ".",
-                    Notice.TRAINING_SESSION, sessionId));
-        } else {
+            if (current.assignedTo() > 0) {
+                notifications.notifyUser(current.assignedTo(), new Notice(
+                        "TRAINING_SESSION_UNASSIGNED",
+                        "Training session reassigned",
+                        updatedSession.horseName() + " is now handled by "
+                                + updatedSession.assignedToName() + ".",
+                        null, null));
+            }
+            if (updatedSession.assignedTo() > 0) {
+                notifications.notifyUser(updatedSession.assignedTo(), new Notice(
+                        "TRAINING_SESSION_ASSIGNED",
+                        "New training session assigned",
+                        updatedSession.horseName() + " on " + when + ".",
+                        Notice.TRAINING_SESSION, sessionId));
+            }
+        } else if (updatedSession.assignedTo() > 0) {
             notifications.notifyUser(updatedSession.assignedTo(), new Notice(
                     "TRAINING_SESSION_RESCHEDULED",
                     "Training session rescheduled",

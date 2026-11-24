@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
  * Các điều khoản lấy từ những mục mà mẫu hợp đồng huấn luyện / gửi nuôi ngựa
  * thường có: rủi ro chấn thương, quyền xử lý thú y khẩn cấp, an tử, bảo hiểm,
  * người liên hệ khẩn cấp, chấm dứt trước hạn, gia hạn, tranh chấp.
+ * Điều 11-12 (góp ý hội đồng): cam kết về việc huấn luyện, và xử lý khi không đạt.
  * Chữ trên UI là tiếng Anh, như mọi chữ khác của hệ thống.
  */
 @Component
@@ -94,7 +95,12 @@ public class ContractTerms {
                           LocalDate dateOfBirth, String color, String sireName, String damName,
                           Integer trainingWeeks, LocalDate plannedStart, String managerName,
                           boolean renewal, LocalDate renewalStart,
-                          LocalDate trainingStart, LocalDate trainingEnd) {}
+                          LocalDate trainingStart, LocalDate trainingEnd,
+                          String insurerName, String insurerPhone,
+                          String emergencyName, String emergencyPhone) {}
+
+    /** Heading of clause 11: a contract without it was signed before the commitment existed. */
+    public static final String COMMITMENT_HEADING = "11. Training commitment";
 
     /** The contract text, frozen at sending. Plain text, one clause per paragraph. */
     public String text(Parties p, Price price, LocalDate respondBy) {
@@ -165,7 +171,9 @@ public class ContractTerms {
         t.append("8. Insurance and emergency contact\n");
         t.append("The owner insures the horse (mortality and medical) and gives the club the insurer's ")
          .append("emergency number, and names a second person who may decide for the horse when the ")
-         .append("owner cannot be reached.\n\n");
+         .append("owner cannot be reached.\n");
+        t.append("Insurer: ").append(contact(p.insurerName(), p.insurerPhone())).append(".\n");
+        t.append("Second contact: ").append(contact(p.emergencyName(), p.emergencyPhone())).append(".\n\n");
 
         t.append("9. Ending early\n");
         t.append("The owner may end the stay with 15 days' notice through a withdrawal request. ")
@@ -176,7 +184,19 @@ public class ContractTerms {
          .append("following on from this one; nothing renews or is charged automatically. If the term ends ")
          .append("without renewal, the horse takes no new training plan until it is renewed or withdrawn.\n\n");
 
-        t.append("11. Disputes\n");
+        t.append(COMMITMENT_HEADING).append("\n");
+        t.append("The club delivers the training plan during the training period and completes at least ")
+         .append(HorsePolicy.COMMITMENT_PCT).append("% of the sessions due. Sessions missed while the horse is under a ")
+         .append("veterinary training lock are not counted. The owner can follow every session in the system. ")
+         .append("The club does not promise a race result, a prize or a particular speed.\n\n");
+
+        t.append("12. If the commitment is not met\n");
+        t.append("If fewer than ").append(HorsePolicy.COMMITMENT_PCT).append("% of the sessions due were delivered when ")
+         .append("the training period ends, the club gives the missing sessions free of charge within 30 days. If it ")
+         .append("cannot, it refunds a share of the fee in proportion to the sessions missed. Nothing is owed for ")
+         .append("sessions missed because of injury, illness, a veterinary lock or the owner's own decision.\n\n");
+
+        t.append("13. Disputes\n");
         t.append("The parties first try to settle a dispute between themselves; failing that, under the laws of Viet Nam.\n\n");
 
         t.append("Signed online by typing the owner's full name. The club records the name typed, the time, ")
@@ -200,6 +220,11 @@ public class ContractTerms {
     private static String gender(String g) {
         if (g == null) return null;
         return g.charAt(0) + g.substring(1).toLowerCase(Locale.ROOT);
+    }
+
+    private static String contact(String name, String phone) {
+        if (name == null || name.isBlank()) return "to be given to the club before the horse arrives";
+        return phone == null || phone.isBlank() ? name : name + ", " + phone;
     }
 
     private static String join(String... parts) {

@@ -19,10 +19,14 @@ import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
 import {
+  completeRecoverySession, enterRecoverySession,
   finishSession, formatSessionDay, isFinished, listMySessions, sendVitals, sessionDay, sessionTime,
   startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
   COMMON_SYMPTOMS, URGENCY_OPTIONS, EARLY_STOP_REASON_OPTIONS,
 } from "./groomApi";
+import {
+  MEALS, MEAL_TEXT, TASK_TEXT, byHorse, completeTask, formatClock, formatQty, listFeeding, listTasks, undoTask,
+} from "../care/careApi";
 
 function HorseshoeIcon() {
   return (
@@ -91,6 +95,92 @@ function StatCard({ value, label, type, active, onClick }) {
       <span className="groom-stat-value">{value}</span>
       <span className="groom-stat-label">{label}</span>
     </button>
+  );
+}
+
+/* =====================================================
+   TO-DO ĐẦU NGÀY (góp ý hội đồng)
+   Một danh sách cho cả ngày: buổi tập theo giờ, rồi việc chăm sóc của từng ngựa.
+===================================================== */
+
+// Khẩu phần một dòng, để việc Feeding cho biết luôn cho ăn gì.
+function rationText(items) {
+  if (!items?.length) return "";
+  return MEALS.map((meal) => {
+    const rows = items.filter((i) => i.mealTime === meal);
+    if (!rows.length) return null;
+    return `${MEAL_TEXT[meal]}: ${rows.map((r) => `${r.feedType} ${formatQty(r.quantity)} ${r.unit}`).join(", ")}`;
+  }).filter(Boolean).join(" · ");
+}
+
+function DailyTodoCard({ sessions, tasks, rations, busyId, error, onToggle, onOpenSession }) {
+  const training = sessions.filter((s) => s.status !== "CANCELLED");
+  const care = [...tasks].sort((a, b) => String(a.stallNo || "").localeCompare(String(b.stallNo || ""), "en", { numeric: true }));
+  const done = training.filter((s) => isFinished(s.status)).length + care.filter((t) => t.completed).length;
+  const total = training.length + care.length;
+
+  return (
+    <div className="groom-card groom-todo">
+      <div className="groom-card-title">
+        <span className="groom-diamond" aria-hidden="true" />
+        <div>
+          <h2>Today's to-do list</h2>
+          <p>{total === 0 ? "Nothing assigned to you today" : `${done} of ${total} done`}</p>
+        </div>
+      </div>
+      {total > 0 && (
+        <div className="groom-todo-progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+          <i style={{ width: `${(done / total) * 100}%` }} />
+        </div>
+      )}
+      {error && <p className="groom-todo-error" role="alert">{error}</p>}
+      {total > 0 && (
+        <div className="groom-todo-columns">
+          <section aria-label="Training">
+            <h3>Training</h3>
+            {training.length === 0 ? <p className="groom-todo-empty">No session today.</p> : (
+              <ul>
+                {training.map((s) => {
+                  const st = toSessionStatus(s.status);
+                  return (
+                    <li key={s.sessionId} className={isFinished(s.status) ? "done" : ""}>
+                      <button type="button" className="groom-todo-session" onClick={() => onOpenSession(s.sessionId)}>
+                        <b>{sessionTime(s.sessionDate)}</b>
+                        <span>{s.horseName} · {s.phaseName}</span>
+                      </button>
+                      <span className={`task-status ${st.slug}`}>{st.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+          <section aria-label="Stable care">
+            <h3>Stable care</h3>
+            {care.length === 0 ? <p className="groom-todo-empty">No care task today.</p> : (
+              <ul>
+                {care.map((t) => {
+                  const ration = t.taskType === "FEEDING" ? rationText(rations.get(t.horseId)) : "";
+                  return (
+                    <li key={t.taskId} className={t.completed ? "done" : ""}>
+                      <label>
+                        <input type="checkbox" checked={t.completed} disabled={busyId === t.taskId} onChange={() => onToggle(t)} />
+                        <span>
+                          <strong>{TASK_TEXT[t.taskType] || t.taskType}</strong> · {t.horseName}{t.stallNo ? ` (${t.stallNo})` : ""}
+                          {ration && <small>{ration}</small>}
+                          {t.note && <small>{t.note}</small>}
+                        </span>
+                      </label>
+                      {t.completed && <small className="groom-todo-time">{formatClock(t.completedAt)}</small>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -187,6 +277,8 @@ function SessionPanel({ session, onChanged, navigate }) {
   const [earlyReason, setEarlyReason] = useState("TARGET_REACHED");
   const [stop, setStop] = useState({ symptoms: "", description: "", urgency: "HIGH" });
   const [stopResult, setStopResult] = useState(null);
+  const [recoveryHrr, setRecoveryHrr] = useState("");
+  const [recoveryRemarks, setRecoveryRemarks] = useState("");
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [confirmConfig, setConfirmConfig] = useState({
     isOpen: false,
@@ -198,12 +290,30 @@ function SessionPanel({ session, onChanged, navigate }) {
     onConfirm: () => {},
   });
 
-  // Đồng hồ nội bộ: chỉ chạy khi buổi còn SCHEDULED / RUNNING, cleanup dừng setInterval.
+  // Đồng hồ nội bộ: chạy mỗi 3s khi SCHEDULED/RUNNING hoặc 1s khi RECOVERY (đếm ngược recovery).
   useEffect(() => {
-    if (session?.status !== "SCHEDULED" && session?.status !== "RUNNING") return undefined;
-    const interval = setInterval(() => setCurrentTime(Date.now()), 3000);
+    if (session?.status !== "SCHEDULED" && session?.status !== "RUNNING" && session?.status !== "RECOVERY") return undefined;
+    const ms = session?.status === "RECOVERY" ? 1000 : 3000;
+    const interval = setInterval(() => setCurrentTime(Date.now()), ms);
     return () => clearInterval(interval);
   }, [session?.status]);
+
+  const recoveryEndMs = useMemo(() => {
+    if (session?.recoveryEndsAt) {
+      const d = new Date(session.recoveryEndsAt);
+      if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+    if (session?.recoveryStartedAt && session?.recoveryDurationMinutes) {
+      const d = new Date(session.recoveryStartedAt);
+      if (!Number.isNaN(d.getTime())) return d.getTime() + session.recoveryDurationMinutes * 60000;
+    }
+    return 0;
+  }, [session?.recoveryEndsAt, session?.recoveryStartedAt, session?.recoveryDurationMinutes]);
+
+  const recoveryRemainingSeconds = recoveryEndMs > 0
+    ? Math.max(0, Math.ceil((recoveryEndMs - currentTime) / 1000))
+    : (session?.recoveryDurationMinutes || 15) * 60;
+  const recoveryCountdown = `${String(Math.floor(recoveryRemainingSeconds / 60)).padStart(2, "0")}:${String(recoveryRemainingSeconds % 60).padStart(2, "0")}`;
 
   // sessionDate là giờ địa phương không múi giờ (giờ người dùng nhập), new Date() đọc đúng là giờ địa phương.
   // plannedEndMs = giờ bắt đầu + thời lượng dự kiến (mặc định 60 phút).
@@ -234,6 +344,8 @@ function SessionPanel({ session, onChanged, navigate }) {
     setEarlyReason("TARGET_REACHED");
     setStop({ symptoms: "", description: "", urgency: "HIGH" });
     setStopResult(null);
+    setRecoveryHrr("");
+    setRecoveryRemarks("");
   }, [session?.sessionId]);
 
   if (!session) {
@@ -275,6 +387,31 @@ function SessionPanel({ session, onChanged, navigate }) {
     if (updated) onChanged(updated);
   };
 
+  // V50: RUNNING -> RECOVERY: hoàn tất chạy và kích hoạt đếm ngược recovery của Phase.
+  const startRecovery = async () => {
+    const updated = await run(() => enterRecoverySession(session.sessionId));
+    if (updated) onChanged(updated);
+  };
+
+  // V50: RECOVERY -> COMPLETED: gửi actual_hrr và hoàn tất buổi tập.
+  const submitRecovery = async (event) => {
+    event.preventDefault();
+    const hrr = Number(recoveryHrr);
+    if (!recoveryHrr || !Number.isInteger(hrr) || hrr < 20 || hrr > 300) {
+      setError("Actual recovery heart rate must be a whole number between 20 and 300 bpm.");
+      return;
+    }
+    const updated = await run(() => completeRecoverySession(session.sessionId, {
+      actualHrr: hrr,
+      remarks: recoveryRemarks,
+    }));
+    if (updated) {
+      setRecoveryHrr("");
+      setRecoveryRemarks("");
+      onChanged(updated);
+    }
+  };
+
   // Gửi một lần đo: kiểm khoảng hợp lệ (nhịp tim 20-300 nguyên, vận tốc 0-99.99) rồi POST vitals. Kết quả cho biết
   // có sinh cảnh báo hay không (alertRaised, severity) để hiện ngay cho Groom.
   const submitVitals = async (event) => {
@@ -286,7 +423,7 @@ function SessionPanel({ session, onChanged, navigate }) {
     }
     const v = velocity === "" ? null : Number(velocity);
     if (v != null && (!Number.isFinite(v) || v < 0 || v > 99.99)) {
-      setError("Speed must be between 0 and 99.99 m/s.");
+      setError("Speed must be between 0 and 99.99 km/h.");
       return;
     }
     if (hr === null && v === null) {
@@ -415,7 +552,7 @@ function SessionPanel({ session, onChanged, navigate }) {
         </div>
         <div>
           <dt>Peak speed so far</dt>
-          <dd>{session.peakVelocity != null ? `${session.peakVelocity} m/s` : "—"}</dd>
+          <dd>{session.peakVelocity != null ? `${session.peakVelocity} km/h` : "—"}</dd>
         </div>
       </dl>
 
@@ -487,11 +624,11 @@ function SessionPanel({ session, onChanged, navigate }) {
             />
           </label>
           <label>
-            Speed (m/s)
+            Speed (km/h)
             <input
               type="number" inputMode="decimal" min="0" max="99.99" step="0.01"
               value={velocity} onChange={(e) => setVelocity(e.target.value)}
-              placeholder="e.g. 14.5"
+              placeholder="e.g. 55.0"
             />
           </label>
           <button type="submit" className="start-session" disabled={busy || (heartRate === "" && velocity === "")}>
@@ -521,6 +658,15 @@ function SessionPanel({ session, onChanged, navigate }) {
 
       {session.status === "RUNNING" && !earlyOpen && (
         <>
+          <button
+            type="button"
+            className="start-session"
+            onClick={startRecovery}
+            disabled={busy}
+            style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", marginBottom: "8px" }}
+          >
+            {busy ? "Starting recovery…" : `⏱️ Complete Run & Start Recovery (${session.recoveryDurationMinutes || 15} min)`}
+          </button>
           {isEndReached && (
             <button type="button" className="start-session" onClick={finishNormally} disabled={busy}>
               {busy ? "Saving…" : "Finish session (Scheduled duration completed)"}
@@ -535,6 +681,92 @@ function SessionPanel({ session, onChanged, navigate }) {
             End session early / Call Vet
           </button>
         </>
+      )}
+
+      {session.status === "RECOVERY" && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "14px",
+            borderRadius: "12px",
+            background: "#f0f9ff",
+            border: "1px solid #bae6fd",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "10px", flexWrap: "wrap" }}>
+            <div>
+              <strong style={{ color: "#0369a1", fontSize: "15px" }}>
+                ❄️ Recovery Phase Countdown
+              </strong>
+              <div style={{ fontSize: "12px", color: "#475569" }}>
+                Phase cooldown: {session.recoveryDurationMinutes || 15} mins
+                {session.targetHrr ? ` · Target HRR: ≤ ${session.targetHrr} bpm` : ""}
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: "24px",
+                fontWeight: 800,
+                fontVariantNumeric: "tabular-nums",
+                color: recoveryRemainingSeconds === 0 ? "#15803d" : "#0c4a6e",
+                background: "#ffffff",
+                padding: "6px 14px",
+                borderRadius: "10px",
+                border: "1px solid #7dd3fc",
+              }}
+            >
+              {recoveryRemainingSeconds === 0 ? "00:00 · Done" : recoveryCountdown}
+            </div>
+          </div>
+
+          <form onSubmit={submitRecovery} style={{ display: "grid", gap: "10px" }}>
+            <label style={{ display: "grid", gap: "4px", fontSize: "13px", fontWeight: 600 }}>
+              Actual Recovery Heart Rate (actual_hrr, bpm) *
+              <input
+                type="number"
+                inputMode="numeric"
+                min="20"
+                max="300"
+                required
+                value={recoveryHrr}
+                onChange={(e) => setRecoveryHrr(e.target.value)}
+                placeholder={session.targetHrr ? `e.g. ${session.targetHrr}` : "e.g. 112"}
+              />
+            </label>
+
+            {session.targetHrr != null && recoveryHrr !== "" && Number(recoveryHrr) > session.targetHrr && (
+              <div
+                role="alert"
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  border: "1px solid #fca5a5",
+                  color: "#b91c1c",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                ⚠️ Overload Warning: Actual HRR ({recoveryHrr} bpm) exceeds plan target HRR ({session.targetHrr} bpm). An overload alert will be sent to the Head Trainer.
+              </div>
+            )}
+
+            <label style={{ display: "grid", gap: "4px", fontSize: "13px", fontWeight: 600 }}>
+              Recovery notes (optional)
+              <input
+                type="text"
+                maxLength={500}
+                value={recoveryRemarks}
+                onChange={(e) => setRecoveryRemarks(e.target.value)}
+                placeholder="Breathing rate, stride cooldown, hydration..."
+              />
+            </label>
+
+            <button type="submit" className="start-session" disabled={busy || !recoveryHrr}>
+              {busy ? "Submitting…" : "✓ Submit Recovery HR & Complete Session"}
+            </button>
+          </form>
+        </div>
       )}
 
       {session.status === "RUNNING" && earlyOpen && (
@@ -636,8 +868,8 @@ function SessionPanel({ session, onChanged, navigate }) {
             : lastReading.severity
               ? `${lastReading.message || `${lastReading.heartRate} bpm is still over the ceiling`}. The head trainer has already been alerted.`
               : lastReading.heartRate != null
-                ? `Recorded ${lastReading.heartRate} bpm${lastReading.velocity != null ? ` at ${lastReading.velocity} m/s` : ""}.`
-                : `Recorded speed ${lastReading.velocity} m/s.`}
+                ? `Recorded ${lastReading.heartRate} bpm${lastReading.velocity != null ? ` at ${lastReading.velocity} km/h` : ""}.`
+                : `Recorded speed ${lastReading.velocity} km/h.`}
         </p>
       )}
 
@@ -647,7 +879,7 @@ function SessionPanel({ session, onChanged, navigate }) {
             ? "This session was cancelled."
             : session.evaluation
               ? `Evaluated by the head trainer: ${session.evaluation.charAt(0)}${session.evaluation.slice(1).toLowerCase()}.`
-              : `Finished${session.earlyStopReason ? ` (Early reason: ${session.earlyStopReason})` : ""}. Waiting for the head trainer's evaluation.`}
+              : `Finished${session.earlyStopReason ? ` (Early reason: ${session.earlyStopReason})` : ""}${session.actualHrr ? ` · Recovery HRR: ${session.actualHrr} bpm` : ""}.${session.overloadWarning ? " 🔥 Overload warning flagged!" : ""} Waiting for the head trainer's evaluation.`}
         </p>
       )}
 
@@ -723,6 +955,11 @@ export default function GroomDashboard() {
   const [selectedId, setSelectedId] = useState(null);
   const noticeRef = useRef(null);
   const upcomingRef = useRef(null);
+  const sessionsRef = useRef(null);
+  const [careTasks, setCareTasks] = useState([]);
+  const [feeding, setFeeding] = useState([]);
+  const [taskBusyId, setTaskBusyId] = useState(null);
+  const [todoError, setTodoError] = useState("");
 
   const load = useCallback(
     async (signal) => {
@@ -746,6 +983,44 @@ export default function GroomDashboard() {
   }, [load]);
 
   const today = todayIso();
+
+  // Việc chăm sóc và khẩu phần hôm nay. Lỗi ở đây không được làm mất lịch tập.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    Promise.all([listTasks({ date: today }, ctrl.signal), listFeeding(null, ctrl.signal)])
+      .then(([t, f]) => {
+        setCareTasks(t || []);
+        setFeeding(f || []);
+        setTodoError("");
+      })
+      .catch((err) => {
+        if (err.name === "AbortError" || handleAuthError(err, navigate)) return;
+        setTodoError(err.message || "Could not load today's care tasks.");
+      });
+    return () => ctrl.abort();
+  }, [today, navigate]);
+
+  const rations = useMemo(() => byHorse(feeding), [feeding]);
+
+  const toggleCareTask = async (task) => {
+    setTaskBusyId(task.taskId);
+    setTodoError("");
+    try {
+      const updated = task.completed ? await undoTask(task.taskId) : await completeTask(task.taskId);
+      setCareTasks((rows) => rows.map((t) => (t.taskId === updated.taskId ? updated : t)));
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setTodoError(err.message);
+    } finally {
+      setTaskBusyId(null);
+    }
+  };
+
+  const openSession = (id) => {
+    setStatusFilter("all");
+    setQuery("");
+    setSelectedId(id);
+    sessionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const todays = useMemo(
     () =>
@@ -902,10 +1177,22 @@ export default function GroomDashboard() {
             </div>
           )}
 
+          {sessions !== null && (
+            <DailyTodoCard
+              sessions={todays}
+              tasks={careTasks}
+              rations={rations}
+              busyId={taskBusyId}
+              error={todoError}
+              onToggle={toggleCareTask}
+              onOpenSession={openSession}
+            />
+          )}
+
           {sessions === null && !loadError ? (
             <div className="groom-inline-state">Loading your sessions…</div>
           ) : (
-            <div className="groom-grid">
+            <div className="groom-grid" ref={sessionsRef}>
               <SessionsCard
                 items={visible}
                 total={todays.length}

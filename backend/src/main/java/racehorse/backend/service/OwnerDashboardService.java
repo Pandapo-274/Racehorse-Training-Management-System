@@ -43,8 +43,8 @@ public class OwnerDashboardService {
     private static final int TREND_WEEKS = 8;
     /** Cửa sổ tính năm chỉ số huấn luyện. */
     static final int STATS_DAYS = 28;
-    /** Vận tốc đỉnh (m/s) ứng với 100 điểm Speed. Ngựa đua thuần chủng chạy nước rút khoảng 18 m/s. */
-    private static final double SPEED_FULL_MARK = 18.0;
+    /** Vận tốc đỉnh (km/h) ứng với 100 điểm Speed. Ngựa đua thuần chủng chạy nước rút khoảng 65 km/h. */
+    private static final double SPEED_FULL_MARK = 65.0;
     private static final int REMARK_COUNT = 3;
 
     private static final DateTimeFormatter WEEK_LABEL = DateTimeFormatter.ofPattern("dd/MM");

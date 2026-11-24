@@ -45,6 +45,9 @@ npm start
 ```
 
 ## Changelogs
+> ### `Nov 24, 2026`
+- `[10:58]` `tqt195` - Fix committee review points, add `docs/SUA_SAU_HOI_DONG.docx`
+
 > ### `Nov 18, 2026`
 - `[09:31]` `tqt195` - Only Confirm recovery sets a horse back to Eligible
 - `[09:18]` `tqt195` - Add code comments, set light-work limit to 800 m

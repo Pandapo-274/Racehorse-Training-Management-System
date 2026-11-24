@@ -64,6 +64,32 @@ public class TrainingPlanController {
         return service.listGroomsForPlan(user);
     }
 
+    /** Chuẩn cân nặng, chiều cao, trần tốc độ theo giống và tháng tuổi (góp ý hội đồng). */
+    @GetMapping("/standards")
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    public racehorse.backend.service.HorseStandards.Catalog standards() {
+        return racehorse.backend.service.HorseStandards.catalog();
+    }
+
+    /** V50: Lấy danh sách 9 Template mặc định + gợi ý & quy đổi theo Horse Profile. */
+    @GetMapping("/templates")
+    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    public TrainingPlanResponse.TemplateRecommendation getTemplates(
+            @RequestParam(required = false) Integer horseId,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.getTemplates(horseId, user);
+    }
+
+    /** V50: Chạy Auto-Scheduling Engine cho giáo án. */
+    @PostMapping("/{id}/auto-schedule")
+    @RequireRole({"HEAD_TRAINER"})
+    public TrainingPlanResponse.AutoScheduleResult autoSchedule(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.autoSchedule(id, user, http.getRemoteAddr());
+    }
+
     @GetMapping
     @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER", "HORSE_OWNER"})
     public List<TrainingPlanResponse.Summary> list(@RequestParam(required = false) Integer horseId,

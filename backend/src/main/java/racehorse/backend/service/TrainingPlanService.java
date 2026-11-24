@@ -1,11 +1,16 @@
 package racehorse.backend.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import racehorse.backend.dto.HorseResponse;
 import racehorse.backend.dto.TrainingPlanRequest;
 import racehorse.backend.dto.TrainingPlanResponse;
+import racehorse.backend.dto.TrainingSessionResponse;
 import racehorse.backend.entity.Notice;
 import racehorse.backend.entity.StaffRow;
 import racehorse.backend.exception.ApiException;
@@ -24,6 +30,7 @@ import racehorse.backend.repository.HorseRepository;
 import racehorse.backend.repository.HorseVitalsRepository;
 import racehorse.backend.repository.StaffRepository;
 import racehorse.backend.repository.TrainingPlanRepository;
+import racehorse.backend.repository.TrainingSessionRepository;
 import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 
@@ -71,24 +78,33 @@ public class TrainingPlanService {
     private final UserRepository userRepository;
     private final NotificationService notifications;
     private final StaffRepository staffRepository;
+    private final TrainingSessionRepository sessionRepository;
 
     @Autowired
     public TrainingPlanService(TrainingPlanRepository planRepository, HorseRepository horseRepository,
                                HorseVitalsRepository vitalsRepository, UserRepository userRepository,
-                               NotificationService notifications, StaffRepository staffRepository) {
+                               NotificationService notifications, StaffRepository staffRepository,
+                               TrainingSessionRepository sessionRepository) {
         this.planRepository = planRepository;
         this.horseRepository = horseRepository;
         this.vitalsRepository = vitalsRepository;
         this.userRepository = userRepository;
         this.notifications = notifications;
         this.staffRepository = staffRepository;
+        this.sessionRepository = sessionRepository;
+    }
+
+    public TrainingPlanService(TrainingPlanRepository planRepository, HorseRepository horseRepository,
+                               HorseVitalsRepository vitalsRepository, UserRepository userRepository,
+                               NotificationService notifications, StaffRepository staffRepository) {
+        this(planRepository, horseRepository, vitalsRepository, userRepository, notifications, staffRepository, null);
     }
 
     // Constructor phụ (không có StaffRepository) cho unit test cũ: các phép kiểm Groom bị bỏ qua.
     public TrainingPlanService(TrainingPlanRepository planRepository, HorseRepository horseRepository,
                                HorseVitalsRepository vitalsRepository, UserRepository userRepository,
                                NotificationService notifications) {
-        this(planRepository, horseRepository, vitalsRepository, userRepository, notifications, null);
+        this(planRepository, horseRepository, vitalsRepository, userRepository, notifications, null, null);
     }
 
     // Một Groom trong ô chọn: activePlanCount = số giáo án chưa COMPLETED; eligible = còn nhận được
@@ -132,14 +148,47 @@ public class TrainingPlanService {
     @Transactional
     public TrainingPlanResponse create(TrainingPlanRequest r, AuthenticatedUser user, String ip) {
         validate(r, user);
-        int planId = planRepository.insertPlan(r.horseId(), user.userId(), r.groomId(), r.planName().trim(),
+        Integer primaryGroomId = r.resolvedPrimaryGroomId();
+        int planId = planRepository.insertPlan(r.horseId(), user.userId(), primaryGroomId, r.planName().trim(),
                 r.startDate(), r.endDate());
+
+        String lockedSurface = resolveLockedHorseSurface(r.horseId(), r.preferredSurface());
+        boolean hasV50Config = r.templateId() != null || r.backupGroomId() != null || lockedSurface != null
+                || r.intensity() != null || r.maxHeartRate() != null || r.maxSpeed() != null
+                || r.restDaysPerWeek() != null || r.targetHrr() != null;
+        if (hasV50Config || r.primaryGroomId() != null) {
+            planRepository.updatePlanConfig(
+                    planId,
+                    r.templateId(),
+                    primaryGroomId,
+                    r.backupGroomId(),
+                    lockedSurface,
+                    r.intensity(),
+                    r.maxHeartRate(),
+                    r.maxSpeed(),
+                    r.restDaysPerWeek(),
+                    r.targetHrr());
+        }
+
+        List<TrainingPlanRequest.PhaseRequest> resolvedPhases = resolvePhaseDatesAndSurface(
+                r.startDate(), r.endDate(), r.phases(), lockedSurface);
+
         // phaseNo đánh số 1, 2, 3... theo thứ tự trong danh sách gửi lên (client không tự đặt).
         int phaseNo = 1;
-        for (TrainingPlanRequest.PhaseRequest p : r.phases()) {
+        for (TrainingPlanRequest.PhaseRequest p : resolvedPhases) {
             planRepository.insertPhase(planId, phaseNo++, p);
         }
         userRepository.writeAudit(user.userId(), "TRAINING_PLAN_CREATE", "TRAINING_PLAN", planId, "SUCCESS", ip);
+
+        // New plan always goes to Owner review first (PENDING_APPROVAL) before becoming ACTIVE & auto-scheduled.
+        if (planRepository.updateStatus(planId, "DRAFT", "PENDING_APPROVAL") == 1) {
+            userRepository.writeAudit(user.userId(), "TRAINING_PLAN_PENDING_APPROVAL", "TRAINING_PLAN", planId, "SUCCESS", ip);
+            horseRepository.findById(r.horseId()).ifPresent(horse -> notifications.notifyUser(horse.ownerId(),
+                    new Notice("TRAINING_PLAN_APPROVAL_REQUESTED", "Training plan needs your approval",
+                            horse.horseName() + ": \"" + r.planName().trim() + "\" (" + r.startDate() + " to "
+                                    + r.endDate() + "). Please review, request adjustments if needed, or approve it on the Training page.",
+                            Notice.TRAINING_PLAN, planId)));
+        }
         return getOrThrow(planId);
     }
 
@@ -188,6 +237,11 @@ public class TrainingPlanService {
             String key = "phases[" + i + "]";
             if (p.targetVelocity() == null) {
                 errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            } else {
+                String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), p.targetVelocity(), LocalDate.now());
+                if (over != null) {
+                    errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed: " + over);
+                }
             }
             if (p.endDate().isBefore(p.startDate())) {
                 errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
@@ -377,6 +431,12 @@ public class TrainingPlanService {
                                     + plan.endDate() + ") has been activated. You are the assigned Groom in charge.",
                             Notice.TRAINING_PLAN, planId)));
         }
+        if ("ACTIVE".equals(newStatus) && sessionRepository != null
+                && sessionRepository.countSessionsByPlan(planId) == 0
+                && plan.phases() != null && !plan.phases().isEmpty()
+                && plan.phases().stream().anyMatch(ph -> ph.phaseRatio() != null)) {
+            autoScheduleInternal(getOrThrow(planId), user, ip);
+        }
         return getOrThrow(planId);
     }
 
@@ -393,20 +453,48 @@ public class TrainingPlanService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data",
                     Map.of("note", "Tell the head trainer why you are rejecting this plan"));
         }
-        // Duyệt -> APPROVED (HLV kích hoạt sau); từ chối -> về DRAFT kèm lý do (owner_note).
-        String next = approve ? "APPROVED" : "DRAFT";
-        if (planRepository.recordOwnerReview(planId, next, trimmed) == 0) {
-            throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
+        // Duyệt -> ACTIVE + tự động xếp lịch; từ chối -> về DRAFT kèm lý do (owner_note) để Trainer chỉnh sửa.
+        if (approve) {
+            checkCanActivate(plan);
+        }
+        String next = approve ? "ACTIVE" : "DRAFT";
+        try {
+            if (planRepository.recordOwnerReview(planId, next, trimmed) == 0) {
+                throw new ApiException(HttpStatus.CONFLICT, "Someone else has just changed this plan's status");
+            }
+        } catch (DuplicateKeyException e) {
+            throw new ApiException(HttpStatus.CONFLICT, "This horse already has an active training plan");
         }
         userRepository.writeAudit(owner.userId(), approve ? "TRAINING_PLAN_OWNER_APPROVE" : "TRAINING_PLAN_OWNER_REJECT",
                 "TRAINING_PLAN", planId, "SUCCESS", ip);
-        notifications.notifyUser(plan.createdBy(), approve
-                ? new Notice("TRAINING_PLAN_APPROVED", "Training plan approved",
-                        plan.horseName() + ": the owner approved \"" + plan.planName() + "\". You can activate it now.",
-                        Notice.TRAINING_PLAN, planId)
-                : new Notice("TRAINING_PLAN_REJECTED", "Training plan rejected",
-                        clip(plan.horseName() + ": the owner rejected \"" + plan.planName() + "\". " + trimmed, 500),
-                        Notice.TRAINING_PLAN, planId));
+        if (approve) {
+            userRepository.writeAudit(owner.userId(), "TRAINING_PLAN_ACTIVE", "TRAINING_PLAN", planId, "SUCCESS", ip);
+            TrainingPlanResponse activated = getOrThrow(planId);
+            if (sessionRepository != null
+                    && sessionRepository.countSessionsByPlan(planId) == 0
+                    && activated.phases() != null && !activated.phases().isEmpty()
+                    && activated.phases().stream().anyMatch(ph -> ph.phaseRatio() != null)) {
+                autoScheduleInternal(activated, owner, ip);
+            }
+            notifications.notifyUser(plan.createdBy(),
+                    new Notice("TRAINING_PLAN_APPROVED", "Training plan approved & auto-scheduled",
+                            plan.horseName() + ": the owner approved \"" + plan.planName()
+                                    + "\". The plan is now ACTIVE and training sessions have been auto-scheduled.",
+                            Notice.TRAINING_PLAN, planId));
+            Integer targetGroomId = activated.primaryGroomId() != null ? activated.primaryGroomId() : activated.groomId();
+            if (targetGroomId != null) {
+                notifications.notifyUser(targetGroomId,
+                        new Notice("TRAINING_PLAN_ACTIVATED", "Assigned to active training plan",
+                                plan.horseName() + ": Training plan \"" + plan.planName() + "\" (" + plan.startDate() + " to "
+                                        + plan.endDate() + ") has been approved by the owner, activated, and auto-scheduled.",
+                                Notice.TRAINING_PLAN, planId));
+            }
+        } else {
+            notifications.notifyUser(plan.createdBy(),
+                    new Notice("TRAINING_PLAN_REJECTED", "Training plan rejected",
+                            clip(plan.horseName() + ": the owner rejected \"" + plan.planName() + "\". " + trimmed, 500),
+                            Notice.TRAINING_PLAN, planId));
+        }
         return getOrThrow(planId);
     }
 
@@ -600,6 +688,10 @@ public class TrainingPlanService {
         if (horseRepository.hasExpiredContract(horse.horseId())) {
             throw new ApiException(HttpStatus.CONFLICT, HorsePolicy.stayEndedProblem(horse));
         }
+        String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
+        if (tooYoung != null) {
+            throw new ApiException(HttpStatus.CONFLICT, tooYoung);
+        }
         if (plan.endDate().isBefore(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This plan ended on " + plan.endDate() + ". Create a new plan instead");
@@ -638,6 +730,11 @@ public class TrainingPlanService {
             } else if (horseRepository.hasExpiredContract(horse.horseId())) {
                 // V49: the stay ran out and was not renewed.
                 errors.put("horseId", HorsePolicy.stayEndedProblem(horse));
+            } else {
+                String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
+                if (tooYoung != null) {
+                    errors.put("horseId", tooYoung);
+                }
             }
             checkTrainerManagesHorse(horse, user, errors);
             if (r.horseId() != null && r.horseId() > 0 && planRepository.existsOpenPlan(r.horseId(), 0)) {
@@ -645,21 +742,34 @@ public class TrainingPlanService {
             }
         }
 
-        // V40: Bắt buộc chọn 1 groom đang thuộc quyền quản lý của Head Trainer đó
-        // và 1 groom chỉ được tiếp nhận tối đa 2 plan cùng 1 lúc.
-        if (r.groomId() == null) {
+        // V40: Bắt buộc chọn 1 groom chính (primaryGroomId / groomId) thuộc quyền quản lý của Head Trainer đó
+        Integer primaryGroomId = r.resolvedPrimaryGroomId();
+        if (primaryGroomId == null) {
             errors.put("groomId", "Assigned groom is required");
         } else if (staffRepository != null) {
-            StaffRow groom = staffRepository.findRow(r.groomId()).orElse(null);
+            StaffRow groom = staffRepository.findRow(primaryGroomId).orElse(null);
             if (groom == null || !"GROOM".equals(groom.roleName()) || !"ACTIVE".equals(groom.status())) {
                 errors.put("groomId", "Selected user is not an active groom");
             } else if (groom.trainerId() == null || !groom.trainerId().equals(user.userId())) {
                 errors.put("groomId", "Selected groom is not under your management");
             } else {
-                int activePlans = planRepository.countActivePlansByGroom(r.groomId());
+                int activePlans = planRepository.countActivePlansByGroom(primaryGroomId);
                 if (activePlans >= 2) {
                     errors.put("groomId", "Groom " + groom.fullName()
                             + " is already assigned to 2 active training plans (maximum allowed)");
+                }
+            }
+        }
+
+        if (r.backupGroomId() != null) {
+            if (primaryGroomId != null && r.backupGroomId().equals(primaryGroomId)) {
+                errors.put("backupGroomId", "Backup groom must be different from primary groom");
+            } else if (staffRepository != null) {
+                StaffRow backup = staffRepository.findRow(r.backupGroomId()).orElse(null);
+                if (backup == null || !"GROOM".equals(backup.roleName()) || !"ACTIVE".equals(backup.status())) {
+                    errors.put("backupGroomId", "Selected backup user is not an active groom");
+                } else if (backup.trainerId() == null || !backup.trainerId().equals(user.userId())) {
+                    errors.put("backupGroomId", "Selected backup groom is not under your management");
                 }
             }
         }
@@ -671,27 +781,477 @@ public class TrainingPlanService {
             errors.put("startDate", "Plan start date cannot be in the past. Please choose today or a future date");
         }
 
+        boolean usesRatio = r.phases().stream().anyMatch(p -> p.phaseRatio() != null);
+        if (usesRatio) {
+            if (r.phases().size() != 3) {
+                errors.put("phases", "Phase-ratio plans must contain exactly 3 phases (FOUNDATION, BUILD, PEAK)");
+            } else {
+                int ratioSum = 0;
+                for (int i = 0; i < r.phases().size(); i++) {
+                    Integer ratio = r.phases().get(i).phaseRatio();
+                    if (ratio == null || ratio <= 0) {
+                        errors.putIfAbsent("phases[" + i + "].phaseRatio", "Phase ratio must be positive");
+                    } else {
+                        ratioSum += ratio;
+                    }
+                }
+                if (ratioSum != 100) {
+                    errors.put("phases", "Total ratio across the 3 phases must equal exactly 100% (currently " + ratioSum + "%)");
+                }
+            }
+        }
+
+        if (horse != null) {
+            String overMax = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), r.maxSpeed(), LocalDate.now());
+            if (overMax != null) {
+                errors.put("maxSpeed", "Max speed: " + overMax);
+            }
+        }
+
         LocalDate prevEnd = null;
         for (int i = 0; i < r.phases().size(); i++) {
             TrainingPlanRequest.PhaseRequest p = r.phases().get(i);
             String key = "phases[" + i + "]";
             if (p.targetVelocity() == null) {
                 errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed is required");
+            } else if (horse != null) {
+                String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), p.targetVelocity(), LocalDate.now());
+                if (over != null) {
+                    errors.putIfAbsent(key + ".targetVelocity", "Phase " + (i + 1) + " target speed: " + over);
+                }
             }
-            if (p.endDate().isBefore(p.startDate())) {
-                errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
+            if (!usesRatio) {
+                if (p.startDate() == null) {
+                    errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " start date is required");
+                }
+                if (p.endDate() == null) {
+                    errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date is required");
+                }
+                if (p.startDate() != null && p.endDate() != null) {
+                    if (p.endDate().isBefore(p.startDate())) {
+                        errors.putIfAbsent(key + ".endDate", "Phase " + (i + 1) + " end date must be on or after its start date");
+                    }
+                    if (p.startDate().isBefore(r.startDate()) || p.endDate().isAfter(r.endDate())) {
+                        errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " must fall within the plan period (" + r.startDate() + " to " + r.endDate() + ")");
+                    }
+                    if (prevEnd != null && p.startDate().isBefore(prevEnd)) {
+                        errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " starts before Phase " + i + " ends");
+                    }
+                    prevEnd = p.endDate();
+                }
             }
-            if (p.startDate().isBefore(r.startDate()) || p.endDate().isAfter(r.endDate())) {
-                errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " must fall within the plan period (" + r.startDate() + " to " + r.endDate() + ")");
-            }
-            if (prevEnd != null && p.startDate().isBefore(prevEnd)) {
-                errors.putIfAbsent(key + ".startDate", "Phase " + (i + 1) + " starts before Phase " + i + " ends");
-            }
-            prevEnd = p.endDate();
         }
 
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data", errors);
         }
+    }
+
+    // =========================================================================
+    // V50: 9 Templates (3 Breeds x 3 Running Styles) + Auto-Scheduling Engine
+    // =========================================================================
+
+    public TrainingPlanResponse.TemplateRecommendation getTemplates(Integer horseId, AuthenticatedUser user) {
+        String breed = null;
+        String horseName = null;
+        String runningStyle = "STALKER";
+        String distanceType = "MEDIUM";
+        String lockedSurface = "TURF";
+        HorseStandards.Reference standard = null;
+
+        if (horseId != null) {
+            HorseResponse horse = horseRepository.findById(horseId)
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + horseId + " not found"));
+            checkTrainerManagesHorse(horse, user, null);
+            horseName = horse.horseName();
+            breed = horse.breed();
+            standard = HorseStandards.reference(horse.breed(), horse.dateOfBirth(), LocalDate.now());
+
+            var apt = planRepository.findHorseAptitude(horseId).orElse(null);
+            if (apt != null) {
+                runningStyle = normalizeRunningStyle(apt.runningStyle());
+                distanceType = normalizeDistanceType(apt.distancePref());
+                lockedSurface = normalizeSurface(apt.surface());
+            }
+        }
+
+        double distScale = switch (distanceType) {
+            case "SPRINT" -> 0.75;
+            case "LONG" -> 1.35;
+            default -> 1.00;
+        };
+        double speedScale = switch (distanceType) {
+            case "SPRINT" -> 1.08;
+            case "LONG" -> 0.92;
+            default -> 1.00;
+        };
+        int hrDelta = switch (distanceType) {
+            case "SPRINT" -> 5;
+            case "LONG" -> -5;
+            default -> 0;
+        };
+
+        List<TrainingPlanRepository.RawTemplate> rawTemplates = planRepository.findAllTemplates();
+        if (rawTemplates == null || rawTemplates.isEmpty()) {
+            rawTemplates = defaultTemplateCatalog();
+        }
+
+        List<TrainingPlanResponse.TemplateDto> scaledTemplates = new ArrayList<>();
+        for (TrainingPlanRepository.RawTemplate t : rawTemplates) {
+            List<TrainingPlanRepository.RawTemplatePhase> rawPhases = planRepository.findTemplatePhases(t.templateId());
+            if (rawPhases == null || rawPhases.isEmpty()) {
+                rawPhases = defaultTemplatePhases();
+            }
+
+            int scaledMaxHr = clamp(t.baseMaxHeartRate() + hrDelta, 150, 240);
+            BigDecimal scaledMaxSpeed = t.baseMaxSpeed()
+                    .multiply(BigDecimal.valueOf(speedScale))
+                    .setScale(1, RoundingMode.HALF_UP);
+            if (scaledMaxSpeed.compareTo(new BigDecimal("90.0")) > 0) {
+                scaledMaxSpeed = new BigDecimal("90.0");
+            }
+            // Không vượt trần tốc độ của giống và tháng tuổi con ngựa đang chọn.
+            if (standard != null && standard.speedLimitKmh().signum() > 0
+                    && scaledMaxSpeed.compareTo(standard.speedLimitKmh()) > 0) {
+                scaledMaxSpeed = standard.speedLimitKmh();
+            }
+            int scaledBaseDist = (int) Math.round(t.baseDistanceM() * distScale);
+
+            List<TrainingPlanResponse.TemplatePhaseDto> phaseDtos = new ArrayList<>();
+            for (TrainingPlanRepository.RawTemplatePhase rp : rawPhases) {
+                int pDist = (int) Math.round((scaledBaseDist * rp.distanceMultiplier().doubleValue()) / 50.0) * 50;
+                pDist = Math.max(400, Math.min(4800, pDist));
+                int pHr = clamp(scaledMaxHr + rp.hrOffset(), 120, 240);
+                BigDecimal pSpeed = scaledMaxSpeed
+                        .multiply(rp.speedMultiplier())
+                        .setScale(1, RoundingMode.HALF_UP);
+                String workload = switch (rp.phaseCode()) {
+                    case "FOUNDATION" -> "Light / Aerobic";
+                    case "BUILD" -> "Moderate / Interval";
+                    default -> "High / Race Pace";
+                };
+                int spw = Math.max(2, 7 - t.defaultRestDays());
+                phaseDtos.add(new TrainingPlanResponse.TemplatePhaseDto(
+                        rp.phaseNo(), rp.phaseCode(), rp.phaseName(), rp.defaultRatio(),
+                        rp.recoveryDurationMinutes(), pDist, pHr, pSpeed, lockedSurface, workload, spw));
+            }
+
+            scaledTemplates.add(new TrainingPlanResponse.TemplateDto(
+                    t.templateId(), t.templateCode(), t.templateName(), t.breed(), t.runningStyle(),
+                    t.defaultIntensity(), scaledMaxHr, scaledMaxSpeed, t.defaultRestDays(),
+                    t.defaultTargetHrr(), scaledBaseDist, phaseDtos));
+        }
+
+        String finalBreed = breed;
+        String finalStyle = runningStyle;
+        TrainingPlanResponse.TemplateDto recommended = scaledTemplates.stream()
+                .filter(t -> finalBreed != null && t.breed().equalsIgnoreCase(finalBreed)
+                        && t.runningStyle().equalsIgnoreCase(finalStyle))
+                .findFirst()
+                .or(() -> scaledTemplates.stream()
+                        .filter(t -> finalBreed != null && t.breed().equalsIgnoreCase(finalBreed))
+                        .findFirst())
+                // Giống không có mẫu: không gợi ý mẫu của giống khác, HLV tự chọn.
+                .orElse(null);
+
+        return new TrainingPlanResponse.TemplateRecommendation(
+                horseId, horseName, breed, runningStyle, distanceType, lockedSurface, recommended, scaledTemplates,
+                standard);
+    }
+
+    @Transactional
+    public TrainingPlanResponse.AutoScheduleResult autoSchedule(int planId, AuthenticatedUser user, String ip) {
+        if (user != null && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can auto-schedule training sessions");
+        }
+        TrainingPlanResponse plan = getOrThrow(planId);
+        HorseResponse horse = horseRepository.findById(plan.horseId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
+        checkTrainerManagesHorse(horse, user, null);
+        return autoScheduleInternal(plan, user, ip);
+    }
+
+    private TrainingPlanResponse.AutoScheduleResult autoScheduleInternal(TrainingPlanResponse plan,
+                                                                        AuthenticatedUser user, String ip) {
+        if (sessionRepository == null) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Session repository is not available");
+        }
+        List<TrainingPlanResponse.Phase> phases = plan.phases();
+        if (phases == null || phases.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Training plan has no phases to schedule");
+        }
+
+        LocalDate start = plan.startDate();
+        LocalDate end = plan.endDate();
+        long totalDaysLong = ChronoUnit.DAYS.between(start, end) + 1;
+        if (totalDaysLong <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid plan date range");
+        }
+        int totalDays = (int) totalDaysLong;
+
+        // 1. Chia số ngày cho 3 Phases (FOUNDATION, BUILD dùng Math.floor; PEAK = phần còn lại)
+        record PhaseWindow(TrainingPlanResponse.Phase phase, LocalDate start, LocalDate end) {}
+        List<PhaseWindow> windows = new ArrayList<>();
+        if (phases.size() == 3) {
+            int r1 = phases.get(0).phaseRatio() != null ? phases.get(0).phaseRatio() : 30;
+            int r2 = phases.get(1).phaseRatio() != null ? phases.get(1).phaseRatio() : 45;
+            int d1 = (int) Math.floor(totalDays * r1 / 100.0);
+            int d2 = (int) Math.floor(totalDays * r2 / 100.0);
+            int d3 = Math.max(0, totalDays - (d1 + d2));
+            int[] counts = { d1, d2, d3 };
+            LocalDate cursor = start;
+            for (int i = 0; i < 3; i++) {
+                int len = counts[i];
+                LocalDate pStart = cursor.isAfter(end) ? end : cursor;
+                LocalDate pEnd = len > 0 ? pStart.plusDays(len - 1L) : pStart;
+                if (pEnd.isAfter(end)) pEnd = end;
+                planRepository.updatePhaseDates(phases.get(i).phaseId(), pStart, pEnd);
+                windows.add(new PhaseWindow(phases.get(i), pStart, pEnd));
+                cursor = len > 0 ? pEnd.plusDays(1) : cursor;
+            }
+        } else {
+            for (TrainingPlanResponse.Phase ph : phases) {
+                windows.add(new PhaseWindow(ph,
+                        ph.startDate() != null ? ph.startDate() : start,
+                        ph.endDate() != null ? ph.endDate() : end));
+            }
+        }
+
+        // Dọn các session chưa chạy của plan trước khi sinh lịch mới
+        sessionRepository.deleteUnstartedByPlan(plan.planId());
+
+        Integer primaryGroomId = plan.primaryGroomId() != null ? plan.primaryGroomId() : plan.groomId();
+        Integer backupGroomId = plan.backupGroomId();
+        int restPerWeek = plan.restDaysPerWeek() != null ? Math.max(0, Math.min(6, plan.restDaysPerWeek())) : 1;
+
+        Set<LocalDate> primaryLocalBusy = new HashSet<>();
+        Set<LocalDate> backupLocalBusy = new HashSet<>();
+        int createdTraining = 0;
+        int createdRest = 0;
+        int conflicts = 0;
+
+        // 2. Chia lịch trình thành các block 7 ngày liên tiếp từ start_date
+        for (int blockStartOffset = 0; blockStartOffset < totalDays; blockStartOffset += 7) {
+            int blockLen = Math.min(7, totalDays - blockStartOffset);
+            int blockRestQuota = Math.min(restPerWeek, blockLen);
+            boolean[] isRest = buildEvenRestFlags(blockLen, blockRestQuota);
+
+            for (int d = 0; d < blockLen; d++) {
+                LocalDate day = start.plusDays(blockStartOffset + d);
+                // Tìm phase tương ứng với ngày này
+                TrainingPlanResponse.Phase activePhase = windows.get(windows.size() - 1).phase();
+                for (PhaseWindow w : windows) {
+                    if (!day.isBefore(w.start()) && !day.isAfter(w.end())) {
+                        activePhase = w.phase();
+                        break;
+                    }
+                }
+                LocalDateTime slotTime = day.atTime(8, 0);
+                int recMins = activePhase.recoveryDurationMinutes() != null ? activePhase.recoveryDurationMinutes() : 15;
+                BigDecimal ceiling = activePhase.targetVelocity() != null ? activePhase.targetVelocity() : plan.maxSpeed();
+
+                if (isRest[d]) {
+                    sessionRepository.insertAutoSlot(
+                            activePhase.phaseId(), plan.horseId(), null, slotTime,
+                            0, 60, ceiling, "REST", "REST", false, recMins,
+                            "Scheduled Rest Day");
+                    createdRest++;
+                    continue;
+                }
+
+                // 3. Điều phối Groom tự động theo độ rảnh
+                boolean primaryFree = primaryGroomId != null
+                        && !primaryLocalBusy.contains(day)
+                        && !sessionRepository.isGroomBusyOnDate(primaryGroomId, day);
+                if (primaryFree) {
+                    primaryLocalBusy.add(day);
+                    sessionRepository.insertAutoSlot(
+                            activePhase.phaseId(), plan.horseId(), primaryGroomId, slotTime,
+                            activePhase.distance(), 60, ceiling, "SCHEDULED", "TRAINING", false, recMins, null);
+                    createdTraining++;
+                    continue;
+                }
+
+                boolean backupFree = backupGroomId != null
+                        && !backupLocalBusy.contains(day)
+                        && !sessionRepository.isGroomBusyOnDate(backupGroomId, day);
+                if (backupFree) {
+                    backupLocalBusy.add(day);
+                    sessionRepository.insertAutoSlot(
+                            activePhase.phaseId(), plan.horseId(), backupGroomId, slotTime,
+                            activePhase.distance(), 60, ceiling, "SCHEDULED", "TRAINING", false, recMins,
+                            "Assigned to backup groom");
+                    createdTraining++;
+                    continue;
+                }
+
+                // Cả 2 Groom đều bận -> thử hoán đổi với một ngày nghỉ kế tiếp trong block 7 ngày
+                int swapIdx = -1;
+                for (int next = d + 1; next < blockLen; next++) {
+                    if (isRest[next]) {
+                        swapIdx = next;
+                        break;
+                    }
+                }
+                if (swapIdx != -1) {
+                    isRest[d] = true;
+                    isRest[swapIdx] = false;
+                    sessionRepository.insertAutoSlot(
+                            activePhase.phaseId(), plan.horseId(), null, slotTime,
+                            0, 60, ceiling, "REST", "REST", false, recMins,
+                            "Auto-swapped to Rest Day due to groom schedule conflict");
+                    createdRest++;
+                } else {
+                    // Đã hết quỹ ngày nghỉ trong block -> tạo session UNASSIGNED + conflict_alert = true
+                    sessionRepository.insertAutoSlot(
+                            activePhase.phaseId(), plan.horseId(), null, slotTime,
+                            activePhase.distance(), 60, ceiling, "UNASSIGNED", "TRAINING", true, recMins,
+                            "Both primary and backup grooms busy; manual assignment needed");
+                    conflicts++;
+                }
+            }
+        }
+
+        if (conflicts > 0) {
+            notifications.notifyHorseTrainer(plan.horseId(), user, new Notice(
+                    "TRAINING_SCHEDULE_CONFLICT",
+                    "Schedule conflict: manual groom assignment needed",
+                    plan.horseName() + ": Auto-scheduling found " + conflicts
+                            + " training day(s) where both primary and backup grooms were busy and rest quota was exhausted.",
+                    Notice.TRAINING_PLAN, plan.planId()));
+        }
+
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_PLAN_AUTO_SCHEDULE",
+                "TRAINING_PLAN", plan.planId(), "SUCCESS", ip,
+                "training=" + createdTraining + ", rest=" + createdRest + ", conflicts=" + conflicts);
+
+        List<TrainingSessionResponse> allSessions = sessionRepository.findAll(plan.horseId(), null, null, null, false);
+        return new TrainingPlanResponse.AutoScheduleResult(
+                plan.planId(), createdTraining, createdRest, conflicts, allSessions);
+    }
+
+    private static boolean[] buildEvenRestFlags(int blockLen, int restQuota) {
+        boolean[] rest = new boolean[blockLen];
+        if (restQuota <= 0 || blockLen <= 0) return rest;
+        if (restQuota >= blockLen) {
+            java.util.Arrays.fill(rest, true);
+            return rest;
+        }
+        // Rải đều các ngày nghỉ, ưu tiên tránh nằm sát nhau
+        for (int k = 1; k <= restQuota; k++) {
+            int idx = (int) Math.floor((k * (double) blockLen) / (restQuota + 1));
+            idx = Math.max(0, Math.min(blockLen - 1, idx));
+            while (rest[idx]) {
+                idx = (idx + 1) % blockLen;
+            }
+            rest[idx] = true;
+        }
+        return rest;
+    }
+
+    private String resolveLockedHorseSurface(int horseId, String fallback) {
+        var apt = planRepository.findHorseAptitude(horseId).orElse(null);
+        if (apt != null && apt.surface() != null && !apt.surface().isBlank()) {
+            return normalizeSurface(apt.surface());
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return normalizeSurface(fallback);
+        }
+        return null;
+    }
+
+    private List<TrainingPlanRequest.PhaseRequest> resolvePhaseDatesAndSurface(
+            LocalDate planStart, LocalDate planEnd,
+            List<TrainingPlanRequest.PhaseRequest> phases, String lockedSurface) {
+        boolean usesRatio = phases.size() == 3 && phases.stream().anyMatch(p -> p.phaseRatio() != null);
+        if (!usesRatio && lockedSurface == null) {
+            return phases;
+        }
+        List<TrainingPlanRequest.PhaseRequest> out = new ArrayList<>();
+        int totalDays = (int) (ChronoUnit.DAYS.between(planStart, planEnd) + 1);
+        int[] counts = usesRatio ? new int[] {
+                (int) Math.floor(totalDays * (phases.get(0).phaseRatio() != null ? phases.get(0).phaseRatio() : 30) / 100.0),
+                (int) Math.floor(totalDays * (phases.get(1).phaseRatio() != null ? phases.get(1).phaseRatio() : 45) / 100.0),
+                0
+        } : null;
+        if (counts != null) {
+            counts[2] = Math.max(0, totalDays - (counts[0] + counts[1]));
+        }
+
+        LocalDate cursor = planStart;
+        for (int i = 0; i < phases.size(); i++) {
+            TrainingPlanRequest.PhaseRequest p = phases.get(i);
+            LocalDate sDate = p.startDate();
+            LocalDate eDate = p.endDate();
+            int spw = p.sessionsPerWeek();
+            if (counts != null) {
+                int len = counts[i];
+                sDate = i == 0 ? planStart : (cursor.isAfter(planEnd) ? planEnd : cursor);
+                eDate = len > 0 ? sDate.plusDays(len - 1L) : sDate;
+                if (eDate.isAfter(planEnd) || i == phases.size() - 1) {
+                    eDate = planEnd;
+                }
+                cursor = len > 0 ? eDate.plusDays(1) : cursor;
+                spw = Math.max(1, len);
+            }
+            String surface = lockedSurface != null ? lockedSurface : normalizeSurface(p.surface());
+            String code = p.phaseCode();
+            if (code == null && phases.size() == 3) {
+                code = i == 0 ? "FOUNDATION" : (i == 1 ? "BUILD" : "PEAK");
+            }
+            out.add(new TrainingPlanRequest.PhaseRequest(
+                    p.phaseId(), p.phaseName(), p.distance(), p.workload(), surface,
+                    spw, p.heartRateCeiling(), p.minGapMinutes(),
+                    p.targetVelocity(), sDate, eDate, code, p.phaseRatio(),
+                    p.recoveryDurationMinutes() != null ? p.recoveryDurationMinutes() : (i == 0 ? 15 : (i == 1 ? 20 : 30))));
+        }
+        return out;
+    }
+
+    private static String normalizeSurface(String raw) {
+        if (raw == null || raw.isBlank()) return "TURF";
+        return "DIRT".equalsIgnoreCase(raw.trim()) ? "DIRT" : "TURF";
+    }
+
+    private static String normalizeDistanceType(String raw) {
+        if (raw == null) return "MEDIUM";
+        String up = raw.trim().toUpperCase(Locale.ROOT);
+        if ("SPRINT".equals(up) || "SHORT".equals(up)) return "SPRINT";
+        if ("LONG".equals(up)) return "LONG";
+        return "MEDIUM";
+    }
+
+    private static String normalizeRunningStyle(String raw) {
+        if (raw == null) return "STALKER";
+        String up = raw.trim().toUpperCase(Locale.ROOT);
+        if ("FRONT".equals(up)) return "FRONT";
+        if ("BACK".equals(up) || "CLOSER".equals(up)) return "CLOSER";
+        return "STALKER";
+    }
+
+    private static int clamp(int val, int min, int max) {
+        return Math.max(min, Math.min(max, val));
+    }
+
+    private static List<TrainingPlanRepository.RawTemplate> defaultTemplateCatalog() {
+        return List.of(
+                new TrainingPlanRepository.RawTemplate(1, "TB_FRONT", "Thoroughbred · Front-Runner Program", "Thoroughbred", "FRONT", "HIGH", 210, new BigDecimal("66.0"), 1, 118, 1600),
+                new TrainingPlanRepository.RawTemplate(2, "TB_STALKER", "Thoroughbred · Mid-pack Balanced", "Thoroughbred", "STALKER", "MEDIUM", 202, new BigDecimal("63.0"), 1, 115, 1800),
+                new TrainingPlanRepository.RawTemplate(3, "TB_CLOSER", "Thoroughbred · Closer Late-Kick", "Thoroughbred", "CLOSER", "HIGH", 206, new BigDecimal("65.0"), 2, 112, 2000),
+                new TrainingPlanRepository.RawTemplate(4, "AR_FRONT", "Arabian · Front-Runner Pace", "Arabian", "FRONT", "MEDIUM", 196, new BigDecimal("58.0"), 1, 110, 2000),
+                new TrainingPlanRepository.RawTemplate(5, "AR_STALKER", "Arabian · Mid-pack Endurance", "Arabian", "STALKER", "MEDIUM", 192, new BigDecimal("56.0"), 2, 108, 2200),
+                new TrainingPlanRepository.RawTemplate(6, "AR_CLOSER", "Arabian · Closer Surge", "Arabian", "CLOSER", "MEDIUM", 195, new BigDecimal("57.5"), 2, 110, 2400),
+                new TrainingPlanRepository.RawTemplate(7, "QH_FRONT", "Quarter Horse · Gate-to-Wire Sprint", "Quarter Horse", "FRONT", "HIGH", 215, new BigDecimal("70.0"), 2, 122, 1000),
+                new TrainingPlanRepository.RawTemplate(8, "QH_STALKER", "Quarter Horse · Tactical Sprint", "Quarter Horse", "STALKER", "HIGH", 208, new BigDecimal("67.5"), 2, 120, 1100),
+                new TrainingPlanRepository.RawTemplate(9, "QH_CLOSER", "Quarter Horse · Power Finish", "Quarter Horse", "CLOSER", "MEDIUM", 205, new BigDecimal("66.0"), 2, 118, 1200)
+        );
+    }
+
+    private static List<TrainingPlanRepository.RawTemplatePhase> defaultTemplatePhases() {
+        return List.of(
+                new TrainingPlanRepository.RawTemplatePhase(1, "FOUNDATION", "Foundation", 30, 15, new BigDecimal("0.80"), new BigDecimal("0.84"), -15),
+                new TrainingPlanRepository.RawTemplatePhase(2, "BUILD", "Build", 45, 20, new BigDecimal("1.00"), new BigDecimal("0.94"), -5),
+                new TrainingPlanRepository.RawTemplatePhase(3, "PEAK", "Peak", 25, 30, new BigDecimal("1.15"), new BigDecimal("1.00"), 0)
+        );
     }
 }
