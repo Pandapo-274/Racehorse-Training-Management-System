@@ -35,7 +35,8 @@ import racehorse.backend.service.RaceService;
  *  PUT  /api/races/{id}/scratch     rút khỏi giải trước ngày đua: chủ ngựa; Head Trainer chỉ rút lại đề xuất chủ chưa quyết
  *  PUT  /api/races/{id}/withdraw-advice  Head Trainer khuyên chủ rút ngựa (V55)
  *  GET  /api/races/events?upcoming= races (V22)
- *  POST /api/races/events           create a race (Head Trainer, Club Manager)
+ *  POST /api/races/events           create a race and say who runs it (Club Manager)
+ *  PUT  /api/races/{id}/submitted   the club sent a confirmed entry to the organizer (Club Manager)
  *  PUT  /api/races/events/{id}/cancel  cancel a race, scratching its entries (Club Manager)
  */
 // Ngoài bảng trên: PUT /api/races/{id}/approve và /reject - chủ ngựa duyệt / từ chối đề xuất đăng ký (V28).
@@ -77,7 +78,7 @@ public class RaceController {
     }
 
     @PostMapping("/events")
-    @RequireRole({"HEAD_TRAINER", "CLUB_MANAGER"})
+    @RequireRole({"CLUB_MANAGER"})
     public ResponseEntity<RaceModels.RaceEvent> createEvent(@Valid @RequestBody RaceModels.RaceEventRequest req,
                                                             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                                             HttpServletRequest http) {
@@ -113,6 +114,16 @@ public class RaceController {
                                                        @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                                        HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.ownerRegister(req, user, http.getRemoteAddr()));
+    }
+
+    /** V59: Club Manager đánh dấu đã nộp suất cho đơn vị tổ chức giải. */
+    @PutMapping("/{id}/submitted")
+    @RequireRole({"CLUB_MANAGER"})
+    public RaceModels.Entry submitted(@PathVariable int id,
+                                      @Valid @RequestBody(required = false) RaceModels.SubmittedRequest req,
+                                      @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+                                      HttpServletRequest http) {
+        return service.markSubmitted(id, req == null ? null : req.organizerRef(), user, http.getRemoteAddr());
     }
 
     @PutMapping("/{id}/result")

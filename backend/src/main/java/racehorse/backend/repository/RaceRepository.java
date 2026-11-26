@@ -31,7 +31,8 @@ public class RaceRepository {
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
                    r.finish_position, r.finish_time_ms, r.scratch_reason,
                    r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id,
-                   r.withdraw_advice, r.withdraw_advice_at, wa.full_name AS withdraw_advice_by_name
+                   r.withdraw_advice, r.withdraw_advice_at, wa.full_name AS withdraw_advice_by_name,
+                   rc.organizer, r.submitted_at, r.organizer_ref
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
@@ -86,7 +87,9 @@ public class RaceRepository {
                 rs.getObject("trainer_id", Integer.class),
                 rs.getString("withdraw_advice"),
                 rs.getObject("withdraw_advice_at", java.time.LocalDateTime.class),
-                rs.getString("withdraw_advice_by_name"));
+                rs.getString("withdraw_advice_by_name"),
+                rs.getString("organizer"), rs.getObject("submitted_at", java.time.LocalDateTime.class),
+                rs.getString("organizer_ref"));
     }
 
     /**
@@ -292,7 +295,7 @@ public class RaceRepository {
     /** entries = live entries (LIVE_ENTRY); needs the :today parameter. */
     private static final String SELECT_RACE = """
             SELECT rc.race_id, rc.race_name, rc.race_date, rc.distance_m, rc.venue, rc.entry_deadline,
-                   rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason,
+                   rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason, rc.organizer,
                    (SELECT COUNT(*) FROM RACE_REGISTRATION r
                     WHERE r.race_id = rc.race_id AND
             """ + LIVE_ENTRY + """
@@ -306,7 +309,7 @@ public class RaceRepository {
                 rs.getObject("distance_m", Integer.class), rs.getString("venue"),
                 rs.getObject("entry_deadline", LocalDate.class), rs.getBigDecimal("entry_fee"),
                 rs.getObject("max_entries", Integer.class), rs.getString("status"),
-                rs.getString("cancel_reason"), rs.getInt("entries"));
+                rs.getString("cancel_reason"), rs.getInt("entries"), rs.getString("organizer"));
     }
 
     public Optional<RaceModels.RaceEvent> findRace(int raceId) {
@@ -338,15 +341,31 @@ public class RaceRepository {
     public int insertRace(RaceModels.RaceEventRequest r, String name, int userId) {
         return jdbc.sql("""
                 INSERT INTO RACE (race_name, race_date, distance_m, venue, entry_deadline, entry_fee,
-                                  max_entries, created_by)
+                                  max_entries, created_by, organizer)
                 OUTPUT INSERTED.race_id
-                VALUES (:name, :date, :dist, :venue, :deadline, :fee, :max, :by)
+                VALUES (:name, :date, :dist, :venue, :deadline, :fee, :max, :by, :organizer)
                 """)
+                .param("organizer", r.organizer().trim())
                 .param("name", name).param("date", r.raceDate()).param("dist", r.distanceM())
                 .param("venue", r.venue() == null || r.venue().isBlank() ? null : r.venue().trim())
                 .param("deadline", r.entryDeadline()).param("fee", r.entryFee())
                 .param("max", r.maxEntries()).param("by", userId)
                 .query(Integer.class).single();
+    }
+
+    /**
+     * V59: the Club Manager sent a confirmed entry to the race's organizer. Only once, only for an
+     * entry the owner confirmed and that has no result and was not scratched.
+     */
+    public int markSubmitted(int id, int by, String organizerRef) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET submitted_at = SYSUTCDATETIME(), submitted_by = :by, organizer_ref = :ref
+                WHERE registration_id = :id AND approval_status = 'APPROVED'
+                  AND result IS NULL AND submitted_at IS NULL
+                """)
+                .param("by", by).param("ref", organizerRef).param("id", id)
+                .update();
     }
 
     /**

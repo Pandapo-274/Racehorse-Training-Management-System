@@ -111,9 +111,11 @@ export function notificationTarget(n, user) {
   /* Thông báo nhắc lịch phòng ngừa là tin tóm tắt cho cả đàn nên không trỏ tới
      một entity nào (targetEntity null); nhận ra nó bằng loại thông báo. */
   // (Ghi chú ngay trên thực ra nói về PREVENTIVE_CARE_DUE ở dưới; khối if này xử lý thông báo giải đua.)
-  if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED") {
+  if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED"
+      || n?.type === "RACE_TO_SUBMIT" || n?.type === "RACE_SUBMITTED") {
     if (role === "HORSE_OWNER") return "/horse-owner/races";
     if (role === "HEAD_TRAINER") return "/trainer/races";
+    if (role === "CLUB_MANAGER") return "/manager/races";
   }
   if (n?.type === "PREVENTIVE_CARE_DUE") {
     return role === "VETERINARIAN" ? "/veterinarian/preventive-care" : null;

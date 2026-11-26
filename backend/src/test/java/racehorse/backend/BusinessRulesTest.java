@@ -1819,7 +1819,7 @@ class BusinessRulesTest {
 
     private static RaceModels.RaceEvent raceEvent(String status) {
         return new RaceModels.RaceEvent(50, "Japan Cup", TODAY.plusDays(20), 2400, "Tokyo",
-                TODAY.plusDays(13), new BigDecimal("50000000"), 18, status, null, 3);
+                TODAY.plusDays(13), new BigDecimal("50000000"), 18, status, null, 3, "JRA");
     }
 
     private static RaceModels.Entry entry(int id, String state, String approval, LocalDate raceDate) {
@@ -1830,7 +1830,7 @@ class BusinessRulesTest {
     private static RaceModels.Entry entry(int id, String state, String approval, LocalDate raceDate, Integer trainerId) {
         return new RaceModels.Entry(id, 100, "Horse 100", "A-100", 7, "Owner", "Japan Cup", raceDate, 2, "Trainer",
                 null, null, null, state, 50, 2400, "Tokyo", "OPEN", null, null, null, approval, null, trainerId,
-                null, null, null);
+                null, null, null, "JRA", "APPROVED".equals(approval) ? LocalDateTime.now() : null, null);
     }
 
     private static RaceService raceService(RaceRepository races, HorseRepository horses) {
@@ -1850,7 +1850,7 @@ class BusinessRulesTest {
 
     private static RaceModels.RaceEvent raceWithDeadline(LocalDate deadline) {
         return new RaceModels.RaceEvent(50, "Japan Cup", TODAY.plusDays(20), 2400, "Tokyo",
-                deadline, new BigDecimal("50000000"), 18, "OPEN", null, 3);
+                deadline, new BigDecimal("50000000"), 18, "OPEN", null, 3, "JRA");
     }
 
     @Test
@@ -2006,7 +2006,8 @@ class BusinessRulesTest {
         RaceRepository races = mock(RaceRepository.class);
         when(races.findById(1)).thenReturn(Optional.of(new RaceModels.Entry(1, 100, "Horse 100", "A-100", 7, "Owner",
                 "Japan Cup", TODAY.minusDays(10), 2, "Trainer", "WON", new BigDecimal("100000000"), null, "FINISHED",
-                50, 2400, "Tokyo", "OPEN", 1, null, null, "APPROVED", null, 2, null, null, null)));
+                50, 2400, "Tokyo", "OPEN", 1, null, null, "APPROVED", null, 2, null, null, null,
+                "JRA", LocalDateTime.now(), null)));
         RaceService service = raceService(races, mock(HorseRepository.class));
 
         // 409, không phải 403: frontend chuyển mọi 403 sang /access-denied.
@@ -2201,6 +2202,49 @@ class BusinessRulesTest {
         expect(ApiException.class, 409, () -> service.ownerRegister(
                 new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip"));
         verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+    }
+
+    // ---------------------------------------------------------------- V59: đơn vị tổ chức giải, nộp đơn
+
+    private static RaceModels.Entry unsubmitted(int id, LocalDate raceDate, String state) {
+        return new RaceModels.Entry(id, 100, "Horse 100", "A-100", 7, "Owner", "Japan Cup", raceDate, 2, "Trainer",
+                null, null, null, state, 50, 2400, "Tokyo", "OPEN", null, null, null, "APPROVED", null, 2,
+                null, null, null, "JRA", null, null);
+    }
+
+    @Test
+    void resultCannotBeRecordedForAnEntryNeverSubmittedToTheOrganizer() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(unsubmitted(1, TODAY.minusDays(1), "AWAITING_RESULT")));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 409, () -> service.recordResult(1,
+                new RaceModels.ResultRequest("WON", new BigDecimal("5000"), null, 1, null, null), TRAINER, "ip"));
+        verify(races, never()).saveResult(anyInt(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void managerMarksAConfirmedEntrySubmittedAndTheOwnerIsTold() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(unsubmitted(1, TODAY.plusDays(20), "UPCOMING")));
+        when(races.markSubmitted(1, 1, "JRA-123")).thenReturn(1);
+        NotificationService notifications = mock(NotificationService.class);
+        RaceService service = raceService(races, mock(HorseRepository.class), mock(ExpenseRepository.class), notifications);
+
+        service.markSubmitted(1, "JRA-123", MANAGER, "ip");
+
+        verify(races).markSubmitted(1, 1, "JRA-123");
+        verify(notifications).notifyUser(eq(7), argThat(n -> "RACE_SUBMITTED".equals(n.type())));
+    }
+
+    @Test
+    void anEntryCannotBeSubmittedTwice() {
+        RaceRepository races = mock(RaceRepository.class);
+        when(races.findById(1)).thenReturn(Optional.of(entry(1, "UPCOMING", "APPROVED", TODAY.plusDays(20))));
+        RaceService service = raceService(races, mock(HorseRepository.class));
+
+        expect(ApiException.class, 409, () -> service.markSubmitted(1, null, MANAGER, "ip"));
+        verify(races, never()).markSubmitted(anyInt(), anyInt(), any());
     }
 
     // ---------------------------------------------------------------- Hội đồng: Groom thuộc đội HLV

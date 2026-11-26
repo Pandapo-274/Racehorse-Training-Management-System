@@ -46,6 +46,7 @@ npm start
 
 ## Changelogs
 > ### `Nov 26, 2026`
+- `[22:15]` `tqt195` - Races have an organizer; Club Manager submits confirmed entries
 - `[21:33]` `tqt195` - Online payment of medical costs and race fees, test-size prices, Groom sees own team only, UI fixes
 
 > ### `Nov 24, 2026`

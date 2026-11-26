@@ -49,6 +49,10 @@ import racehorse.backend.security.AuthenticatedUser;
  * Head Trainer chỉ đề xuất và tư vấn cho ngựa mình phụ trách (HORSE.trainer_id) hoặc
  * ngựa chưa giao cho ai. Nhập kết quả thì Head Trainer nào cũng được.
  *
+ * V59 (phương án A): giải do một đơn vị tổ chức (JRA...) hoặc chính CLB tổ chức. Chỉ Club Manager
+ * tạo giải. Chủ xác nhận suất thì CLB thay chủ nộp đơn cho đơn vị tổ chức (ngoài hệ thống) và Club
+ * Manager đánh dấu "đã nộp" (markSubmitted). Chỉ suất đã nộp mới nhập được kết quả.
+ *
  * Đề xuất chủ chưa duyệt khi hết hạn đăng ký thành EXPIRED (RaceModels.proposalExpired).
  *
  * A result can be changed freely for app.race.result.edit-window-days after
@@ -158,6 +162,14 @@ public class RaceService {
         }
         users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
         String fee = chargeEntryFee(e, race, user, ip);
+        // V59: the club sends the entry to the organizer on the owner's behalf.
+        notifications.notifyRole("CLUB_MANAGER", user, new Notice(
+                "RACE_TO_SUBMIT", "Submit a race entry",
+                clip(e.horseName() + " (" + e.ownerName() + ") is confirmed for " + e.raceName() + " on "
+                        + race.raceDate().format(DAY) + ". Submit the entry to " + organizerOf(race)
+                        + (race.entryDeadline() == null ? "" : " by " + race.entryDeadline().format(DAY))
+                        + ", then mark it submitted.", 500),
+                Notice.HORSE, e.horseId()));
         notifyTrainers(e, h.trainerId(), user, new Notice(
                 "RACE_APPROVED", "Race entry approved",
                 "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName()
@@ -518,6 +530,12 @@ public class RaceService {
                     ? "The owner never approved this entry, so the horse did not run"
                     : "The owner declined this entry, so the horse did not run");
         }
+        // V59: an entry never sent to the organizer did not run.
+        if (e.submittedAt() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry was never submitted to "
+                    + (e.organizer() == null ? "the organizer" : e.organizer())
+                    + ". If it was, the Club Manager marks it submitted first");
+        }
         if (e.raceDate().isAfter(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "The race is on " + e.raceDate().format(DAY) + ". Record the result after it has run");
@@ -602,6 +620,15 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, "The race has already run. Record its result instead");
         }
         doScratch(e, reason.trim(), false, user, ip);
+        if (e.submittedAt() != null) {
+            // V59: the organizer already has this entry; the club withdraws it there too.
+            notifications.notifyRole("CLUB_MANAGER", user, new Notice("RACE_SCRATCHED", "Withdraw a submitted entry",
+                    clip(e.horseName() + " was withdrawn from " + e.raceName() + ". The entry was already submitted to "
+                            + (e.organizer() == null ? "the organizer" : e.organizer())
+                            + (e.organizerRef() == null ? "" : " (ref " + e.organizerRef() + ")")
+                            + ": withdraw it there as well.", 500),
+                    Notice.HORSE, e.horseId()));
+        }
         if ("HORSE_OWNER".equals(user.role())) {
             notifyTrainers(e, e.trainerId(), user, new Notice("RACE_SCRATCHED", "Owner withdrew a race entry",
                     clip("Owner " + e.ownerName() + " withdrew " + e.horseName() + " from " + e.raceName()
@@ -609,6 +636,47 @@ public class RaceService {
                     Notice.HORSE, e.horseId()));
         }
         return require(id);
+    }
+
+    /**
+     * V59: Club Manager đánh dấu đã nộp một suất chủ đã xác nhận cho đơn vị tổ chức giải, kèm mã
+     * xác nhận của họ nếu có. Chủ ngựa và Head Trainer được báo.
+     */
+    @Transactional
+    public RaceModels.Entry markSubmitted(int id, String organizerRef, AuthenticatedUser user, String ip) {
+        RaceModels.Entry e = require(id);
+        if (!"APPROVED".equals(e.approvalStatus()) || e.result() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only an entry the owner confirmed, not scratched and "
+                    + "without a result, can be submitted");
+        }
+        if (e.submittedAt() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry was already submitted to "
+                    + (e.organizer() == null ? "the organizer" : e.organizer()));
+        }
+        if (!"OPEN".equals(e.raceStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, e.raceName() + " has been cancelled");
+        }
+        String ref = blankToNull(organizerRef);
+        if (races.markSubmitted(id, user.userId(), ref) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
+        }
+        String to = e.organizer() == null ? "the organizer" : e.organizer();
+        users.writeAudit(user.userId(), "RACE_SUBMITTED", "RACE_REGISTRATION", id, "SUCCESS", ip,
+                e.horseName() + " in " + e.raceName() + " on " + e.raceDate() + " submitted to " + to
+                        + (ref == null ? "" : ", ref " + ref));
+        Notice notice = new Notice("RACE_SUBMITTED", "Race entry submitted",
+                clip(e.horseName() + "'s entry for " + e.raceName() + " on " + e.raceDate().format(DAY)
+                        + " was submitted to " + to + (ref == null ? "" : " (ref " + ref + ")") + ".", 500),
+                Notice.HORSE, e.horseId());
+        notifications.notifyUser(e.ownerId(), notice);
+        if (e.trainerId() != null) {
+            notifications.notifyHorseTrainer(e.horseId(), user, notice);
+        }
+        return require(id);
+    }
+
+    private static String organizerOf(RaceModels.RaceEvent race) {
+        return race.organizer() == null ? "the organizer" : race.organizer();
     }
 
     /**
@@ -677,6 +745,7 @@ public class RaceService {
 
     private static String describe(RaceModels.RaceEvent r) {
         return r.raceName() + " on " + r.raceDate()
+                + (r.organizer() == null ? "" : ", run by " + r.organizer())
                 + (r.distanceM() == null ? "" : ", " + r.distanceM() + " m")
                 + (r.venue() == null ? "" : ", " + r.venue())
                 + (r.entryDeadline() == null ? "" : ", entries close " + r.entryDeadline())

@@ -6,7 +6,8 @@
 //   GET  /api/races/candidates?raceId=  horses the Head Trainer may enter, with every reason if not
 //   GET  /api/races/summary?year=    club performance and prize total (Manager, Head Trainer)
 //   GET  /api/races/events?upcoming= races (V22): distance, venue, deadline, fee, field size
-//   POST /api/races/events           create a race (Head Trainer, Club Manager)
+//   POST /api/races/events           create a race and say who runs it (Club Manager)
+//   PUT  /api/races/{id}/submitted   the club sent a confirmed entry to the organizer (Club Manager)
 //   PUT  /api/races/events/{id}/cancel  cancel a race; its entries are scratched (Club Manager)
 //   POST /api/races                  recommend a race to the owner (Head Trainer)
 //   POST /api/races/owner-entry      register the owner's horse in a race (Horse Owner)
@@ -42,6 +43,24 @@ export function listRaceEvents({ upcoming = false } = {}, signal) {
 
 export function createRaceEvent(body) {
   return authFetch("/api/races/events", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** V59: organizers the club usually enters horses with; any other name can be typed. */
+export const ORGANIZERS = ["Japan Racing Association (JRA)", "Tracen Club"];
+
+// V59: the Club Manager marks a confirmed entry as sent to the race's organizer.
+export function markSubmitted(id, organizerRef) {
+  return authFetch(`/api/races/${id}/submitted`, {
+    method: "PUT",
+    body: JSON.stringify({ organizerRef: organizerRef?.trim() || null }),
+  });
+}
+
+/** "Submitted to JRA · ref JRA-123" or "Not submitted to JRA yet", for a confirmed entry. */
+export function submissionText(entry) {
+  const to = entry.organizer || "the organizer";
+  if (entry.submittedAt) return `Submitted to ${to}${entry.organizerRef ? ` · ref ${entry.organizerRef}` : ""}`;
+  return `Not submitted to ${to} yet`;
 }
 
 export function cancelRaceEvent(id, reason) {

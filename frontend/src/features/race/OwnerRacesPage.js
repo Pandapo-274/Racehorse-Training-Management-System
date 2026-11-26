@@ -8,7 +8,7 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import { useAppDialog } from "../common/AppDialog";
 import {
   approveEntry, errorText, formatPrize, formatRaceDate, listCandidates, listRaceEvents, listRaces,
-  ownerRegisterRace, rejectEntry, scratchEntry, toEntryChip, todayIso,
+  ownerRegisterRace, rejectEntry, scratchEntry, submissionText, toEntryChip, todayIso,
 } from "./raceApi";
 import "./race.css";
 
@@ -89,7 +89,7 @@ function RegisterCard({ onRegistered, navigate }) {
               <option value="">{races.length ? "Choose a race…" : "No race is open for entries"}</option>
               {races.map((r) => (
                 <option key={r.raceId} value={r.raceId}>
-                  {[r.raceName, formatRaceDate(r.raceDate), r.distanceM ? `${r.distanceM} m` : null].filter(Boolean).join(" · ")}
+                  {[r.raceName, r.organizer, formatRaceDate(r.raceDate), r.distanceM ? `${r.distanceM} m` : null].filter(Boolean).join(" · ")}
                 </option>
               ))}
             </select>
@@ -373,6 +373,8 @@ export default function OwnerRacesPage() {
                     <div>
                       <strong>{e.raceName}</strong>
                       <p>{e.horseName} · {formatRaceDate(e.raceDate)}{(e.distanceM || e.venue) ? ` · ${[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}` : ""}{e.note ? ` · ${e.note}` : ""}</p>
+                      {/* V59: the club sends the entry to the organizer for the owner. */}
+                      <p className="hz-muted">{e.submittedAt ? submissionText(e) : `The club will submit this entry to ${e.organizer || "the organizer"}`}</p>
                       {/* V55: the Head Trainer advises; the owner decides whether to withdraw. */}
                       {e.withdrawAdvice && (
                         <p className="hz-field__error">
