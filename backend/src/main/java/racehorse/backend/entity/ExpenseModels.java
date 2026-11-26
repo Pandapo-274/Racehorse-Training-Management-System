@@ -35,8 +35,15 @@ public final class ExpenseModels {
     public record Expense(int expenseId, int horseId, String horseName, String registrationCode,
                           String category, BigDecimal amount, LocalDate expenseDate,
                           Integer recordedBy, String recordedByName, String note,
-                          /* V29 */ String status, String disputeReason) {
+                          /* V29 */ String status, String disputeReason,
+                          /* V57: paid online through payOS, null while unpaid */ java.time.LocalDateTime paidAt) {
     }
+
+    /**
+     * V57: feed and training are part of the monthly boarding fee (the contract), so they
+     * are no longer billed as separate costs. Old rows of these categories stay readable.
+     */
+    public static final List<String> SEPARATELY_BILLED = List.of("MEDICAL", "OTHER");
 
     public record DisputeRequest(
             @NotBlank(message = "Dispute reason is required")

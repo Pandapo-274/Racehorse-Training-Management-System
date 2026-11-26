@@ -226,11 +226,15 @@ public class RaceService {
             return " The entry fee is not refunded: entries closed on " + lastFreeDay.format(DAY) + ".";
         }
         String why = raceCancelled ? "Race cancelled by the club" : "Withdrawn before entries closed";
+        // V57: a fee already paid online cannot be taken back here; the club refunds it.
+        boolean paidOnline = expenses.findById(expenseId).map(x -> x.paidAt() != null).orElse(false);
         if (expenses.cancel(expenseId, user.userId(), why) == 1) {
             users.writeAudit(user.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
                     e.horseName() + ", race entry fee for " + e.raceName() + ". Reason: " + why);
         }
-        return " The entry fee has been refunded.";
+        return paidOnline
+                ? " The entry fee was already paid online: the club refunds it to you."
+                : " The entry fee has been refunded.";
     }
 
     private static String clip(String s, int max) {

@@ -398,6 +398,124 @@ class Flow1ContractRulesTest {
         assertThrows(IllegalArgumentException.class, () -> gateway.verifyWebhook(tampered));
     }
 
+    // ------------------------------------------------------------ separately billed costs (V57)
+
+    private static final long COST_ORDER = 50_000_300_123L;
+
+    private static racehorse.backend.entity.CostPaymentModels.Item cost(int id, String amount) {
+        return new racehorse.backend.entity.CostPaymentModels.Item(id, 100, "Sakura", "MEDICAL",
+                new BigDecimal(amount), LocalDate.now(), null);
+    }
+
+    private static racehorse.backend.entity.CostPaymentModels.Payment costPayment(int id, long total) {
+        return new racehorse.backend.entity.CostPaymentModels.Payment(id, 7, total, "PENDING", COST_ORDER,
+                "https://pay.example/c", LocalDateTime.now(), null, null, null, 1);
+    }
+
+    private static racehorse.backend.service.CostPaymentService costService(
+            racehorse.backend.repository.CostPaymentRepository repo, PaymentGateway gateway) {
+        return new racehorse.backend.service.CostPaymentService(repo, mock(UserRepository.class),
+                mock(NotificationService.class), gateway, "http://localhost:3000");
+    }
+
+    private static PaymentGateway linkingGateway() {
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.createLink(anyLong(), anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyLong()))
+                .thenReturn(new PaymentGateway.Link(COST_ORDER, "link", "https://pay.example/new"));
+        return gateway;
+    }
+
+    @Test
+    void payingCostsChargesTheRoundedTotalWithAShortDescription() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.outstanding(7)).thenReturn(List.of(cost(11, "1500.00"), cost(12, "500.50")));
+        when(repo.insert(7, 2001)).thenReturn(3);
+        when(repo.setLink(eq(3), anyLong(), any(), any())).thenReturn(1);
+        PaymentGateway gateway = linkingGateway();
+
+        costService(repo, gateway).start(OWNER_7);
+
+        verify(repo).insertItem(3, 11, new BigDecimal("1500.00"));
+        verify(repo).insertItem(3, 12, new BigDecimal("500.50"));
+        verify(gateway).createLink(anyLong(), eq(2001L), eq("CP3"), anyString(), any(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    void nothingToPayIsRefused() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.outstanding(7)).thenReturn(List.of());
+        PaymentGateway gateway = linkingGateway();
+
+        expect(409, () -> costService(repo, gateway).start(OWNER_7));
+        verify(gateway, never()).createLink(anyLong(), anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    void anOpenLinkForTheSameCostsIsReused() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.outstanding(7)).thenReturn(List.of(cost(11, "2000")));
+        when(repo.findOpen(7)).thenReturn(Optional.of(costPayment(3, 2000)));
+        when(repo.itemIds(3)).thenReturn(List.of(11));
+        PaymentGateway gateway = linkingGateway();
+        when(gateway.fetch(COST_ORDER)).thenReturn(new PaymentGateway.Payment(COST_ORDER, 0, null, false, "PENDING"));
+
+        var start = costService(repo, gateway).start(OWNER_7);
+
+        assertEquals("https://pay.example/c", start.checkoutUrl());
+        verify(gateway, never()).cancel(anyLong(), any());
+        verify(gateway, never()).createLink(anyLong(), anyLong(), anyString(), anyString(), any(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    void changedCostsCancelTheOldLinkBeforeMakingANewOne() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.outstanding(7)).thenReturn(List.of(cost(11, "2000"), cost(12, "1000")));
+        when(repo.findOpen(7)).thenReturn(Optional.of(costPayment(3, 2000)));
+        when(repo.itemIds(3)).thenReturn(List.of(11));
+        when(repo.insert(7, 3000)).thenReturn(4);
+        when(repo.setLink(eq(4), anyLong(), any(), any())).thenReturn(1);
+        PaymentGateway gateway = linkingGateway();
+        when(gateway.fetch(COST_ORDER)).thenReturn(new PaymentGateway.Payment(COST_ORDER, 0, null, false, "PENDING"));
+
+        costService(repo, gateway).start(OWNER_7);
+
+        verify(gateway).cancel(eq(COST_ORDER), any());
+        verify(repo).markCancelled(3);
+        verify(gateway).createLink(anyLong(), eq(3000L), eq("CP4"), anyString(), any(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    void webhookForACostPaymentMarksTheCostsPaid() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.findIdByOrderCode(COST_ORDER)).thenReturn(Optional.of(4));
+        when(repo.findById(4)).thenReturn(Optional.of(costPayment(4, 3000)));
+        when(repo.markPaid(4, 3000, "FT1")).thenReturn(1);
+        when(repo.markExpensesPaid(4)).thenReturn(2);
+        when(repo.unappliedAmount(4)).thenReturn(BigDecimal.ZERO);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyWebhook("{body}")).thenReturn(new PaymentGateway.Payment(COST_ORDER, 3000, "FT1", true, null));
+        ContractService contracts = new ContractService(mock(ContractRepository.class), mock(HorseRequestRepository.class),
+                mock(HorseService.class), mock(HorseRepository.class), mock(HorsePhotoService.class),
+                mock(UserRepository.class), mock(NotificationService.class),
+                new ContractTerms(100_000, "3:5", 7, 5_000_000, "Tracen Club"), gateway,
+                costService(repo, gateway), "http://localhost:3000");
+
+        assertTrue(contracts.handleWebhook("{body}"));
+        verify(repo).markExpensesPaid(4);
+    }
+
+    @Test
+    void shortCostTransferIsNotCountedAsPaid() {
+        var repo = mock(racehorse.backend.repository.CostPaymentRepository.class);
+        when(repo.findIdByOrderCode(COST_ORDER)).thenReturn(Optional.of(4));
+        when(repo.findById(4)).thenReturn(Optional.of(costPayment(4, 3000)));
+
+        assertTrue(costService(repo, mock(PaymentGateway.class))
+                .applyWebhook(new PaymentGateway.Payment(COST_ORDER, 1000, "FT1", true, null)));
+        verify(repo, never()).markPaid(anyInt(), anyLong(), any());
+        verify(repo, never()).markExpensesPaid(anyInt());
+    }
+
     // ------------------------------------------------------------ helpers
 
     private static HorseRequestService requestService(HorseRequestRepository requests, HorseService horses,
@@ -410,7 +528,8 @@ class Flow1ContractRulesTest {
                                                    HorseService horses, PaymentGateway gateway, UserRepository users) {
         return new ContractService(contracts, requests, horses, mock(HorseRepository.class),
                 mock(HorsePhotoService.class), users, mock(NotificationService.class),
-                new ContractTerms(100_000, "3:5", 7, 5_000_000, "Tracen Club"), gateway, "http://localhost:3000");
+                new ContractTerms(100_000, "3:5", 7, 5_000_000, "Tracen Club"), gateway,
+                mock(racehorse.backend.service.CostPaymentService.class), "http://localhost:3000");
     }
 
     private static ReviewRequest checks(boolean photo, boolean papers) {

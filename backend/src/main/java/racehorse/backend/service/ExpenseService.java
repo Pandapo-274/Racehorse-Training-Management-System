@@ -30,6 +30,8 @@ import racehorse.backend.security.AuthenticatedUser;
  *   - RaceService ghi lệ phí giải (OTHER) khi chủ duyệt đăng ký, huỷ khi được hoàn.
  * Không có "sửa": ghi sai thì HUỶ (cancel, bắt buộc lý do) rồi ghi lại, như sổ kế toán.
  * Chủ ngựa khiếu nại (dispute): BILLED -> DISPUTED.
+ * V57: ăn uống và huấn luyện nằm trong tiền tháng nên không ghi thành khoản riêng nữa; khoản đã
+ * trả online (payOS) thì không huỷ và không khiếu nại được trong hệ thống.
  */
 @Service
 public class ExpenseService {
@@ -108,6 +110,10 @@ public class ExpenseService {
                         Map.of("horseId", "Horse #" + raw.horseId() + " does not exist")));
 
         Map<String, String> errors = new LinkedHashMap<>();
+        if (!ExpenseModels.SEPARATELY_BILLED.contains(raw.category())) {
+            errors.put("category", "Feed and training are part of the monthly boarding fee. "
+                    + "Record only medical or other costs");
+        }
         /* Báo cáo chi phí của chủ ngựa chỉ tính ngựa ACADEMY; hồ sơ PEDIGREE
            không ở học viện nên không phát sinh chi phí. */
         if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType()))) {
@@ -167,6 +173,10 @@ public class ExpenseService {
         }
         Expense target = expenses.findById(expenseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Cost #" + expenseId + " does not exist"));
+        if (target.paidAt() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "Cost #" + expenseId
+                    + " was already paid online. Refund the owner outside the system instead of voiding it");
+        }
         if (expenses.cancel(expenseId, me.userId(), why) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Cost #" + expenseId + " has already been voided");
         }
@@ -191,7 +201,8 @@ public class ExpenseService {
             throw new ApiException(HttpStatus.FORBIDDEN, "This horse is not yours");
         }
         if (expenses.markDisputed(expenseId, why) == 0) {
-            throw new ApiException(HttpStatus.CONFLICT, "Cost cannot be disputed (already voided or not in billed state)");
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Cost cannot be disputed (already voided, already paid, or not in billed state)");
         }
         users.writeAudit(owner.userId(), "EXPENSE_DISPUTE", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
                 describe(target) + ". Dispute reason: " + why);

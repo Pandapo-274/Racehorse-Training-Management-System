@@ -61,6 +61,31 @@ export function listOwnerExpenses({ horseId, from, to, limit = 100 } = {}, signa
   return authFetch(`/api/owner/expenses?${p.toString()}`, { signal });
 }
 
+// V57: trả online các khoản tính riêng ngoài tiền tháng (y tế, lệ phí giải, phí khác).
+// GET: khoản đang phải trả + lần thanh toán đang chờ + các lần đã trả. POST: mở link payOS.
+// POST /sync: hỏi lại payOS (khi quay về từ trang thanh toán).
+export function getCostPayments(signal) {
+  return authFetch("/api/owner/payments", { signal });
+}
+
+export function startCostPayment() {
+  return authFetch("/api/owner/payments", { method: "POST" });
+}
+
+export function syncCostPayments() {
+  return authFetch("/api/owner/payments/sync", { method: "POST" });
+}
+
+/**
+ * V57: feed and training are part of the monthly boarding fee (the contract). Old cost lines of
+ * these categories stay on record but are shown as included, never added to what the owner owes.
+ */
+export const INCLUDED_IN_FEE = new Set(["FEEDING", "TRAINING"]);
+
+export function isIncludedInFee(category) {
+  return INCLUDED_IN_FEE.has(category);
+}
+
 export function toCostLabel(category) {
   return COST_LABELS[category] || category;
 }

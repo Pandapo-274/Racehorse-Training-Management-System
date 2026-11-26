@@ -443,8 +443,9 @@ public class HorseService {
         if ("HORSE_OWNER".equals(user.role())) {
             return horseRepository.findByOwner(user.userId());
         }
+        // Góp ý hội đồng: Groom đi theo Head Trainer, nên chỉ thấy ngựa của đội mình.
         if ("GROOM".equals(user.role())) {
-            return horseRepository.findActive();
+            return horseRepository.findForGroom(user.userId());
         }
         // V37: Head Trainer chỉ thấy những ngựa Club Manager đã giao cho mình quản lý.
         if ("HEAD_TRAINER".equals(user.role())) {
@@ -532,6 +533,9 @@ public class HorseService {
     void checkCanView(HorseResponse horse, AuthenticatedUser user) {
         if ("HORSE_OWNER".equals(user.role()) && horse.ownerId() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only view your own horses");
+        }
+        if ("GROOM".equals(user.role()) && !horseRepository.isInGroomTeam(horse.horseId(), user.userId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, horse.horseName() + " is not in your Head Trainer's team");
         }
     }
 

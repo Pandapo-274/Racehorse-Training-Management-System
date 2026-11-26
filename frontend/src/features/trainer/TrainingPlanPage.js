@@ -110,7 +110,7 @@ function StandardsCard() {
           {catalog.breeds.map((b) => <option key={b.breed} value={b.breed}>{b.breed}</option>)}
         </select>
       </div>
-      <div className="trainer-table-wrap">
+      <div className="plans-table-wrap">
         <table className="plans-table">
           <thead>
             <tr>
@@ -1227,8 +1227,8 @@ export default function TrainingPlanPage() {
               {catalogTemplates.length === 0 ? (
                 <p className="training-empty">Loading training plan templates…</p>
               ) : (
-                <div className="trainer-table-wrap">
-                  <table className="plans-table">
+                <div className="plans-table-wrap">
+                  <table className="plans-table plans-table--wide">
                     <thead>
                       <tr>
                         <th>Template Name</th>

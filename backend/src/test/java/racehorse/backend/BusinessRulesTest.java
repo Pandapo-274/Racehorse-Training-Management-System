@@ -2282,6 +2282,75 @@ class BusinessRulesTest {
         assertEquals(new BigDecimal("58.0"), rec.standard().speedLimitKmh());
     }
 
+    // ---------------------------------------------------------------- V57: khoản tính riêng ngoài tiền tháng
+
+    @Test
+    void feedAndTrainingAreNotBilledSeparately() {
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        var service = new racehorse.backend.service.ExpenseService(expenses, horses, mock(UserRepository.class));
+
+        ApiException ex = expect(ApiException.class, 400, () -> service.create(
+                new racehorse.backend.entity.ExpenseModels.ExpenseRequest(100, "FEEDING", new BigDecimal("2000"),
+                        TODAY, null), MANAGER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("category"), ex.getFieldErrors().toString());
+        verify(expenses, never()).insert(any(), anyInt());
+    }
+
+    @Test
+    void aCostPaidOnlineCannotBeVoided() {
+        ExpenseRepository expenses = mock(ExpenseRepository.class);
+        when(expenses.findById(5)).thenReturn(Optional.of(new racehorse.backend.entity.ExpenseModels.Expense(
+                5, 100, "Horse 100", "TM-100", "MEDICAL", new BigDecimal("2000"), TODAY, 1, "Manager", null,
+                "BILLED", null, LocalDateTime.now())));
+        var service = new racehorse.backend.service.ExpenseService(expenses, mock(HorseRepository.class),
+                mock(UserRepository.class));
+
+        expect(ApiException.class, 409, () -> service.cancel(5, "Typed twice", MANAGER, "ip"));
+        verify(expenses, never()).cancel(anyInt(), anyInt(), any());
+    }
+
+    // ---------------------------------------------------------------- Hội đồng: Groom chỉ thấy ngựa của đội
+
+    private static final AuthenticatedUser GROOM_5 = user(5, "GROOM");
+
+    @Test
+    void groomListsOnlyTheHorsesOfTheirTeam() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findForGroom(5)).thenReturn(List.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        assertEquals(1, service.list(GROOM_5).size());
+        verify(horses, never()).findActive();
+    }
+
+    @Test
+    void groomCannotOpenAHorseOfAnotherTeam() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(horses.isInGroomTeam(100, 5)).thenReturn(false);
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        expect(ApiException.class, 403, () -> service.get(100, GROOM_5));
+    }
+
+    @Test
+    void groomSeesOnlyTheRationsOfTheirTeam() {
+        CareRepository care = mock(CareRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        CareModels.FeedingItem mine = new CareModels.FeedingItem(1, 100, "Horse 100", "A-100", "MORNING", "Oats",
+                new BigDecimal("4"), "kg", null, null, null, null);
+        CareModels.FeedingItem other = new CareModels.FeedingItem(2, 200, "Horse 200", "B-200", "MORNING", "Oats",
+                new BigDecimal("4"), "kg", null, null, null, null);
+        when(care.findFeeding(null, null)).thenReturn(List.of(mine, other));
+        when(horses.findForGroom(5)).thenReturn(List.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        CareService service = careService(care, horses, mock(TrainingSessionRepository.class),
+                mock(NotificationService.class));
+
+        assertEquals(List.of(mine), service.feeding(null, GROOM_5));
+    }
+
     // ---------------------------------------------------------------- Flow 4: phân công chăm sóc
 
     private static CareService careService(CareRepository care, HorseRepository horses,

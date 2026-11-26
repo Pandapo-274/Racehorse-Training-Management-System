@@ -132,10 +132,10 @@ export default function StableMapPage() {
   return (
     <HorseShell
       title="Stable map"
-      subtitle="Stalls, approved rations and today's care tasks"
+      subtitle="Your Head Trainer's horses: stalls, approved rations and today's care tasks"
       actions={
         <div className="hz-segment" role="group" aria-label="Which stalls">
-          <button type="button" aria-pressed={!mineOnly} onClick={() => setMineOnly(false)}>All stalls</button>
+          <button type="button" aria-pressed={!mineOnly} onClick={() => setMineOnly(false)}>Team stalls</button>
           <button type="button" aria-pressed={mineOnly} onClick={() => setMineOnly(true)}>
             My tasks <b>{tasksBy.size}</b>
           </button>
@@ -151,28 +151,30 @@ export default function StableMapPage() {
 
       {horses && (
         <>
-          <div className="care-summary">
-            <div className="hz-stat">
-              <span>Today's tasks</span>
-              <strong>{done} / {tasks.length}</strong>
-              <div className="care-progress" aria-hidden="true">
-                <i style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} />
-              </div>
-            </div>
-            <div className="hz-stat">
-              <span>Stalls with my tasks</span>
-              <strong>{tasksBy.size}</strong>
-            </div>
-            <div className="hz-stat">
-              <span>Horses in the stable</span>
+          {/* Một dòng tóm tắt thay cho ba ô số lớn; số ngựa có việc đã nằm trên nút "My tasks". */}
+          <div className="care-overview" role="status">
+            <span>
               <strong>{(horses || []).filter((h) => !isPedigreeOnly(h) && !isWithdrawn(h) && h.stallNo).length}</strong>
-            </div>
+              {" "}horses in your team
+            </span>
+            <span className="care-overview__dot" aria-hidden="true">·</span>
+            {tasks.length === 0 ? (
+              <span>No care tasks for you today</span>
+            ) : (
+              <>
+                <span><strong>{done} / {tasks.length}</strong> care tasks done today</span>
+                <div className="care-progress" aria-hidden="true">
+                  <i style={{ width: `${(done / tasks.length) * 100}%` }} />
+                </div>
+              </>
+            )}
           </div>
 
           {actionError && <p className="hz-form-error" role="alert">{actionError}</p>}
 
           {blocks.length === 0 && (
-            <Card><p className="hz-empty">{mineOnly ? "No tasks assigned to you today." : "No horses in the stable."}</p></Card>
+            <Card><p className="hz-empty">{mineOnly ? "No tasks assigned to you today."
+              : "No horses in your team. If you are not in a Head Trainer's team yet, ask the Club Manager."}</p></Card>
           )}
 
           {blocks.map(([block, list]) => (
@@ -199,10 +201,13 @@ export default function StableMapPage() {
                         <p className="care-section-label">Ration</p>
                         <RationList items={rationBy.get(h.horseId)} />
                       </div>
-                      <div>
-                        <p className="care-section-label">My tasks today</p>
-                        <TaskList tasks={mine} busyId={busyId} onToggle={toggle} />
-                      </div>
+                      {/* Chỉ hiện khi ngựa có việc: trước đây mọi thẻ đều lặp "No tasks for you today". */}
+                      {mine.length > 0 && (
+                        <div>
+                          <p className="care-section-label">My tasks today</p>
+                          <TaskList tasks={mine} busyId={busyId} onToggle={toggle} />
+                        </div>
+                      )}
                       <div className="care-stall__foot">
                         <Link to={`/groom/incidents?horseId=${h.horseId}`}>Report a problem</Link>
                       </div>

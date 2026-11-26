@@ -50,6 +50,8 @@ export function markAllRead() {
  * trang nào. Tên loại là tham số đầu của new Notice(...) ở backend.
  */
 const PAGE_BY_TYPE = {
+  // V57: khoản tính riêng đã được trả online.
+  COST_PAYMENT_PAID: { HORSE_OWNER: "/horse-owner/payments", CLUB_MANAGER: "/manager/expenses" },
   // Flow 4: giao việc chăm sóc (giao hàng loạt không gắn ngựa) và việc bỏ lỡ.
   DAILY_TASK_ASSIGNED: { GROOM: "/groom/stable" },
   DAILY_TASK_REASSIGNED: { GROOM: "/groom/stable" },
@@ -140,7 +142,8 @@ export function notificationTarget(n, user) {
   // loại khác) thì thử bảng PAGE_BY_TYPE theo loại thông báo.
   switch (n?.targetEntity) {
     case "HORSE":
-      if (role === "HEAD_TRAINER") return "/trainer/schedule";
+      // Thông báo về lịch (khoá tập, sức khoẻ, buổi tập) đã được đưa tới Schedule ở nhánh theo loại phía trên.
+      // Còn lại, kể cả "New horse assigned to your management", mở hồ sơ con ngựa: HLV cần biết ngựa trước khi lập kế hoạch.
       return `${getHorseBasePath(user)}/${n.targetId}`;
     case "TRAINING_LOCK":
       if (role === "HEAD_TRAINER") return "/trainer/schedule";

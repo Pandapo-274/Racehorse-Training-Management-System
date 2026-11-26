@@ -16,7 +16,7 @@ import { useAppDialog } from "../common/AppDialog";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import { formatDate, formatDateTime } from "./horseApi";
-import { formatVnd, CONTRACT_MONTH_OPTIONS } from "./horseRequestApi";
+import { formatVnd, getPricing, CONTRACT_MONTH_OPTIONS } from "./horseRequestApi";
 import {
   listContracts, getContract, signContract, payContract, syncContract, cancelContract, renewContract,
   toContractStatus, stayLine,
@@ -93,15 +93,25 @@ function ContractDetail({ id }) {
   const [fullName, setFullName] = useState("");
   const [agree, setAgree] = useState(false);
   const [renewMonths, setRenewMonths] = useState("1");
+  // Lỗi khi hỏi payOS: chỉ hiện cảnh báo, vẫn giữ hợp đồng trên màn hình.
+  const [syncWarning, setSyncWarning] = useState("");
+  // false = server chưa cài khóa payOS; null = chưa biết (vẫn hiện nút, backend báo lỗi nếu cần).
+  const [onlinePayment, setOnlinePayment] = useState(null);
   const cameBackFromPayOS = search.has("orderCode") || search.has("status") || search.has("cancel");
 
   const load = useCallback(async () => {
     setError("");
     try {
       let row = await getContract(id);
+      setSyncWarning("");
       // Back from payOS, or still waiting: ask payOS through the backend instead of waiting for the webhook.
       if (row.status === "SIGNED" && row.orderCode) {
-        row = await syncContract(id);
+        try {
+          row = await syncContract(id);
+        } catch (err) {
+          if (handleAuthError(err, navigate)) return;
+          setSyncWarning(err.message || "Could not reach payOS");
+        }
       }
       setC(row);
     } catch (err) {
@@ -111,6 +121,17 @@ function ContractDetail({ id }) {
   }, [id, navigate]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getPricing(ctrl.signal).then((p) => setOnlinePayment(p?.onlinePayment !== false)).catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+
+  const checkPayment = () => act(async () => {
+    setC(await syncContract(id));
+    setSyncWarning("");
+  });
 
   const act = async (fn) => {
     setBusy(true);
@@ -232,14 +253,25 @@ function ContractDetail({ id }) {
       {c.status === "SIGNED" && (
         <Card title="Pay" hint="payOS: scan the VietQR code with your banking app">
           <p>Amount: <strong>{formatVnd(c.totalAmount)}</strong>. The transfer note is filled in by payOS; do not change it.</p>
+          {onlinePayment === false && (
+            <p className="hz-field__error">
+              Online payment is not set up on this server yet. Ask the club to turn it on, then come back to pay.
+            </p>
+          )}
+          {syncWarning && !actionError && (
+            <p className="hz-form-error" role="alert">
+              Could not check the payment with payOS just now ({syncWarning}). Press Check payment to try again.
+            </p>
+          )}
           {actionError && <p className="hz-form-error" role="alert">{actionError}</p>}
           <div className="hz-form-footer">
-            <button type="button" className="hz-btn" disabled={busy} onClick={pay}>
-              {busy ? "Opening payOS…" : `Pay ${formatVnd(c.totalAmount)}`}
-            </button>
-            {c.orderCode && (
-              <button type="button" className="hz-btn hz-btn--ghost" disabled={busy}
-                      onClick={() => act(async () => setC(await syncContract(id)))}>
+            {onlinePayment !== false && (
+              <button type="button" className="hz-btn" disabled={busy} onClick={pay}>
+                {busy ? "Opening payOS…" : `Pay ${formatVnd(c.totalAmount)}`}
+              </button>
+            )}
+            {c.orderCode && onlinePayment !== false && (
+              <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={checkPayment}>
                 Check payment
               </button>
             )}

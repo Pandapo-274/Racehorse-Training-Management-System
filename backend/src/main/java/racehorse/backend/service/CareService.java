@@ -82,7 +82,14 @@ public class CareService {
 
     public List<CareModels.FeedingItem> feeding(Integer horseId, AuthenticatedUser user) {
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        return care.findFeeding(horseId, ownerId);
+        List<CareModels.FeedingItem> items = care.findFeeding(horseId, ownerId);
+        if ("GROOM".equals(user.role())) {
+            // Groom chỉ thấy khẩu phần của ngựa trong đội mình.
+            java.util.Set<Integer> team = horses.findForGroom(user.userId()).stream()
+                    .map(HorseResponse::horseId).collect(java.util.stream.Collectors.toSet());
+            return items.stream().filter(f -> team.contains(f.horseId())).toList();
+        }
+        return items;
     }
 
     /**

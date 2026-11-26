@@ -86,6 +86,40 @@ public class HorseRepository {
                 .list();
     }
 
+    /**
+     * Ngựa thuộc đội của một Groom: ngựa của Head Trainer mà Groom đó được Club Manager phân vào
+     * (APP_USER.trainer_id), cộng với ngựa Groom đang có buổi tập hoặc việc chăm sóc được giao
+     * (trường hợp được nhờ làm tạm cho đội khác). Groom chưa thuộc đội nào chỉ thấy phần sau.
+     */
+    private static final String GROOM_SCOPE = """
+            (
+                (h.trainer_id IS NOT NULL
+                 AND h.trainer_id = (SELECT g.trainer_id FROM APP_USER g WHERE g.user_id = :groomId))
+                OR EXISTS (SELECT 1 FROM TRAINING_SESSION s
+                           WHERE s.horse_id = h.horse_id AND s.assigned_to = :groomId
+                             AND s.status IN ('SCHEDULED', 'RUNNING', 'RECOVERY'))
+                OR EXISTS (SELECT 1 FROM DAILY_TASK t
+                           WHERE t.horse_id = h.horse_id AND t.assigned_to = :groomId
+                             AND t.task_date >= CAST(SYSDATETIME() AS DATE))
+            )
+            """;
+
+    public List<HorseResponse> findForGroom(int groomId) {
+        return jdbc.sql(SELECT_HORSE + " WHERE h.activity_status = 'ACTIVE' AND " + GROOM_SCOPE
+                        + " ORDER BY h.horse_name")
+                .param("groomId", groomId)
+                .query(HorseRepository::mapHorse)
+                .list();
+    }
+
+    public boolean isInGroomTeam(int horseId, int groomId) {
+        return jdbc.sql("SELECT COUNT(*) FROM HORSE h WHERE h.horse_id = :horseId AND " + GROOM_SCOPE)
+                .param("horseId", horseId)
+                .param("groomId", groomId)
+                .query(Integer.class)
+                .single() > 0;
+    }
+
     public List<HorseResponse> findByOwner(int ownerId) {
         return jdbc.sql(SELECT_HORSE + " WHERE h.owner_id = :ownerId ORDER BY h.horse_name")
                 .param("ownerId", ownerId)

@@ -378,12 +378,19 @@
   display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;
 }
 
+/* minmax(0, 1fr): cột giá trị được co lại theo thẻ. Với "1fr" cột không nhỏ hơn nội dung, nên một
+   chip dài ("Until 26 Dec 2026 · 30 days left") đẩy tràn ra ngoài thẻ khi màn hình hẹp. */
 .hz-detail-row {
-  display: grid; grid-template-columns: 130px 1fr; gap: 12px;
+  display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px;
   padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 12.5px;
 }
 .hz-detail-row:last-child { border-bottom: 0; }
 .hz-detail-row > span { font-weight: 700; color: var(--text-600); font-size: 11px; }
+.hz-detail-row > div { min-width: 0; overflow-wrap: anywhere; }
+/* Trong ô hẹp, chip xuống dòng thay vì tràn; dấu chấm màu giữ nguyên kích thước. */
+.hz-detail-row .hz-chip,
+.hz-basis__item .hz-chip { white-space: normal; max-width: 100%; }
+.hz-chip__dot { flex: none; }
 
 /* ---------- phả hệ ---------- */
 

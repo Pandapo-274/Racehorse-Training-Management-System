@@ -81,6 +81,10 @@ public class IncidentFilingService {
         if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType())) || horse.isWithdrawn()) {
             throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is not stabled at the club");
         }
+        if ("GROOM".equals(user.role()) && !horses.isInGroomTeam(horseId, user.userId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, horse.horseName()
+                    + " is not in your Head Trainer's team. Tell your Head Trainer or the Club Manager");
+        }
 
         String photoUrl = photo == null || photo.isEmpty() ? null : storePhoto(horseId, photo);
         int reportId;

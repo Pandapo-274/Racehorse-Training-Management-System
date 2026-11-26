@@ -39,10 +39,10 @@ public class ContractTerms {
     private final long vetEmergencyCap;
     private final String clubName;
 
-    public ContractTerms(@Value("${app.contract.monthly-fee:15000000}") long monthlyFee,
+    public ContractTerms(@Value("${app.contract.monthly-fee:1000}") long monthlyFee,
                          @Value("${app.contract.discounts:3:5,6:8,12:12}") String discounts,
                          @Value("${app.contract.offer-days:7}") int offerDays,
-                         @Value("${app.contract.vet-emergency-cap:5000000}") long vetEmergencyCap,
+                         @Value("${app.contract.vet-emergency-cap:5000}") long vetEmergencyCap,
                          @Value("${app.contract.club-name:Tracen Club}") String clubName) {
         this.monthlyFee = monthlyFee;
         this.discounts = parseDiscounts(discounts);
@@ -153,7 +153,7 @@ public class ContractTerms {
          .append(". After that date this offer lapses and nothing is owed.\n");
         t.append("The fee covers the stall, feed, daily care and training under the agreed plan. ")
          .append("Veterinary treatment beyond routine checks, medicines, race entry fees and transport ")
-         .append("are charged separately.\n\n");
+         .append("are charged separately and paid online from the owner's Payments page.\n\n");
 
         t.append("5. Risk of injury, illness or death\n");
         t.append("Training a racehorse carries risk the club cannot remove. The club is not liable for injury, ")

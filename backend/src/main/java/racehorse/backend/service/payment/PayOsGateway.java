@@ -109,6 +109,18 @@ public class PayOsGateway implements PaymentGateway {
         }
     }
 
+    @Override
+    public void cancel(long orderCode, String reason) {
+        PayOS payos = require();
+        try {
+            payos.paymentRequests().cancel(orderCode, reason);
+        } catch (PayOSException e) {
+            log.warn("payOS could not cancel order {}: {}", orderCode, e.getMessage());
+            throw new ApiException(HttpStatus.BAD_GATEWAY,
+                    "Could not replace the previous payment link. Try again in a moment.");
+        }
+    }
+
     private PayOS require() {
         if (client == null) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,

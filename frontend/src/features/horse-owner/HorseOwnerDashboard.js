@@ -19,7 +19,7 @@ import NotificationBell from "../notification/NotificationBell";
 import NavItems, { useScrollToHash } from "../navigation/NavItems";
 import {
   COST_PERIODS, DEFAULT_COST_PERIOD, TRAINING_STATS, formatKm, formatMoney,
-  formatShortDate, getOwnerDashboard, isPrizeRow, listOwnerExpenses, toCostLabel, toEvaluation, toStars,
+  formatShortDate, getOwnerDashboard, isIncludedInFee, isPrizeRow, listOwnerExpenses, toCostLabel, toEvaluation, toStars,
 } from "./horseOwnerApi";
 
 // Ghi chú chi phí thuốc từ backend có dạng "(Qty: 2 @ 150000)"; hàm này đổi thành "(2 tablets)", "(2 vials)"...
@@ -428,8 +428,11 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
      added into it, so the table cannot be read as the club earning it. */
   const costRows = costs.rows.filter((row) => !isPrizeRow(row.category));
   const prizeRow = costs.rows.find((row) => isPrizeRow(row.category));
+  // Feed and training are in the monthly fee: shown as included, not added to the total.
+  const includedRows = costRows.filter((row) => isIncludedInFee(row.category));
+  const billedRows = costRows.filter((row) => !isIncludedInFee(row.category));
   const costTotals = costs.horses.map((_, index) =>
-    costRows.reduce((sum, row) => sum + Number(row.amounts[index] || 0), 0)
+    billedRows.reduce((sum, row) => sum + Number(row.amounts[index] || 0), 0)
   );
   /* Cột Line item 190px + mỗi cột tiền (từng ngựa và Total) ít nhất 120px, đủ
      cho "₫12,500,000" ở cỡ chữ 13px. Màn hẹp hơn thì khung bảng cuộn ngang. */
@@ -445,6 +448,9 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
           </h3>
 
           <p>{range}</p>
+          <Link to="/horse-owner/payments" style={{ fontSize: 13, fontWeight: 600 }}>
+            Pay medical costs and race fees
+          </Link>
         </div>
 
         <select
@@ -472,7 +478,15 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
           </thead>
 
           <tbody>
-            {costRows.map((row) => (
+            {includedRows.map((row) => (
+              <tr key={row.category}>
+                <td className="line-item">{toCostLabel(row.category)}</td>
+                <td colSpan={costs.horses.length + 1} style={{ color: "var(--color-muted, #8e96ad)", fontStyle: "italic" }}>
+                  Included in the monthly fee
+                </td>
+              </tr>
+            ))}
+            {billedRows.map((row) => (
               <tr key={row.category}>
                 <td className="line-item">{toCostLabel(row.category)}</td>
                 {row.amounts.map((amount, index) => (
@@ -482,7 +496,7 @@ function CostsAndPrizeMoney({ costs, period, onPeriodChange }) {
               </tr>
             ))}
             <tr className="cost-subtotal">
-              <td className="line-item">Total costs</td>
+              <td className="line-item">Costs billed on top of the fee</td>
               {costTotals.map((amount, index) => (
                 <td key={costs.horses[index].horseId}>{formatMoney(amount)}</td>
               ))}
@@ -547,7 +561,7 @@ function CostLines({ from, to }) {
                     <td>{formatDate(e.expenseDate)}</td>
                     <td>{e.horseName}</td>
                     <td>{toCostLabel(e.category)}{e.note ? ` · ${formatExpenseNote(e.note)}` : ""}</td>
-                    <td>{formatMoney(e.amount)}</td>
+                    <td>{isIncludedInFee(e.category) ? "In monthly fee" : formatMoney(e.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -652,8 +666,8 @@ export default function HorseOwnerDashboard() {
 
   const horse = data?.horses.find((h) => h.horseId === selectedId);
 
-  // Mục "Results & races" / "Costs & prizes" ở sidebar là lối tắt #hash; từ trang
-  // ngựa bấm sang thì phải đợi dữ liệu về, phần tử có id mới nằm trên trang.
+  // Link có #hash (vd. /horse-owner#costs-prizes) cuộn tới đúng thẻ; từ trang khác
+  // bấm sang thì phải đợi dữ liệu về, phần tử có id mới nằm trên trang.
   useScrollToHash(!!data);
 
   let content;

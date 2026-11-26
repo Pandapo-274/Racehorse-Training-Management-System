@@ -60,12 +60,13 @@ public class ContractService {
     private final NotificationService notifications;
     private final ContractTerms terms;
     private final PaymentGateway gateway;
+    private final CostPaymentService costPayments;
     private final String frontendBaseUrl;
 
     public ContractService(ContractRepository contracts, HorseRequestRepository requests,
                            HorseService horseService, HorseRepository horses, HorsePhotoService photos,
                            UserRepository users, NotificationService notifications, ContractTerms terms,
-                           PaymentGateway gateway,
+                           PaymentGateway gateway, CostPaymentService costPayments,
                            @Value("${app.frontend-base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.contracts = contracts;
         this.requests = requests;
@@ -76,6 +77,7 @@ public class ContractService {
         this.notifications = notifications;
         this.terms = terms;
         this.gateway = gateway;
+        this.costPayments = costPayments;
         this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1) : frontendBaseUrl;
     }
@@ -304,7 +306,10 @@ public class ContractService {
         // for an order we never made. Acknowledge it and do nothing.
         var id = contracts.findIdByOrderCode(p.orderCode());
         if (id.isEmpty()) {
-            log.info("payOS webhook for unknown order {} acknowledged", p.orderCode());
+            // V57: the same payOS channel also collects separately billed costs.
+            if (!costPayments.applyWebhook(p)) {
+                log.info("payOS webhook for unknown order {} acknowledged", p.orderCode());
+            }
             return true;
         }
         if (p.paid()) {
