@@ -103,14 +103,15 @@ function MemberRow({
             title="Assign Groom to Head Trainer (max 3 active grooms per trainer)"
           >
             <option value="">— No Head Trainer —</option>
-            {activeTrainers.map((t) => {
-              const full = (t.groomCount || 0) >= 3 && t.userId !== row.trainerId;
-              return (
-                <option key={t.userId} value={t.userId} disabled={full}>
+            {/* Góp ý hội đồng mục 5: HLV không chọn được thì không hiện (trước đây hiện mờ).
+                HLV hiện tại của Groom vẫn giữ trong danh sách vì đó là giá trị đang chọn. */}
+            {activeTrainers
+              .filter((t) => (t.groomCount || 0) < 3 || t.userId === row.trainerId)
+              .map((t) => (
+                <option key={t.userId} value={t.userId}>
                   {t.fullName} ({t.groomCount || 0}/3 grooms)
                 </option>
-              );
-            })}
+              ))}
           </select>
         )}
 
@@ -620,12 +621,16 @@ export default function StaffPage() {
                 Assign to Head Trainer (max 3 grooms/trainer)
                 <select value={form.trainerId} onChange={setField("trainerId")}>
                   <option value="">— Select Head Trainer —</option>
-                  {activeTrainers.map((t) => (
-                    <option key={t.userId} value={t.userId} disabled={(t.groomCount || 0) >= 3}>
+                  {/* Mục 5: chỉ HLV còn nhận thêm Groom. */}
+                  {activeTrainers.filter((t) => (t.groomCount || 0) < 3).map((t) => (
+                    <option key={t.userId} value={t.userId}>
                       {t.fullName} ({t.groomCount || 0}/3 grooms)
                     </option>
                   ))}
                 </select>
+                {activeTrainers.length > 0 && activeTrainers.every((t) => (t.groomCount || 0) >= 3) && (
+                  <span className="st-field__error">Every Head Trainer already has 3 grooms. Add a Head Trainer first.</span>
+                )}
                 {fieldErrors.trainerId && <span className="st-field__error">{fieldErrors.trainerId}</span>}
               </label>
             )}
