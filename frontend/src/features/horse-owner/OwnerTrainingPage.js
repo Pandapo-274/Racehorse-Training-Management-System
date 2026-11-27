@@ -360,9 +360,50 @@ function LogEntry({ s }) {
       )}
 
       {s.videoUrl && (
-        <a className="ot-video" href={s.videoUrl} target="_blank" rel="noopener noreferrer">
-          ▶ Watch the trial run video
-        </a>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <strong style={{ fontSize: 12.5, color: "#1e1b4b" }}>
+              {s.trialRun ? "▶ Trial run video" : "▶ Training session video"}
+            </strong>
+            <a className="ot-video" href={s.videoUrl} target="_blank" rel="noopener noreferrer" style={{ margin: 0, fontSize: 12 }}>
+              Open in new tab ↗
+            </a>
+          </div>
+          <video
+            key={s.videoUrl}
+            controls
+            playsInline
+            preload="metadata"
+            src={s.videoUrl}
+            onError={(e) => {
+              const fallback = e.currentTarget?.nextElementSibling;
+              if (fallback) fallback.style.display = "block";
+            }}
+            style={{
+              width: "100%",
+              maxHeight: 340,
+              borderRadius: 10,
+              background: "#000",
+              display: "block",
+            }}
+          />
+          <p
+            role="alert"
+            style={{
+              display: "none",
+              margin: "8px 0 0",
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "#fef2f2",
+              border: "1px solid #fca5a5",
+              color: "#991b1b",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            ⚠️ Unable to play this video directly in the browser (unsupported format/codec or unreachable file). Click &ldquo;Open in new tab ↗&rdquo; above.
+          </p>
+        </div>
       )}
     </li>
   );

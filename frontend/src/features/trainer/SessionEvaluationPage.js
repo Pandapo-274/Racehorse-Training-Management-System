@@ -235,6 +235,7 @@ export default function SessionEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [videoError, setVideoError] = useState("");
   const [sendingToVet, setSendingToVet] = useState(false);
   const [sentToVetList, setSentToVetList] = useState([]);
 
@@ -276,6 +277,7 @@ export default function SessionEvaluationPage() {
   useEffect(() => {
     setForm(emptyForm(selectedSession));
     setNotice("");
+    setVideoError("");
   }, [selectedSession]);
 
   const archivedCount = useMemo(
@@ -761,8 +763,24 @@ export default function SessionEvaluationPage() {
                       {selectedSession.videoUrl ? (
                         <div>
                           <video
+                            key={selectedSession.videoUrl}
                             controls
+                            playsInline
+                            preload="metadata"
                             src={selectedSession.videoUrl}
+                            onLoadedMetadata={() => setVideoError("")}
+                            onError={(e) => {
+                              const code = e.currentTarget?.error?.code;
+                              const reason =
+                                code === 2
+                                  ? "Network error or video file not found (404)."
+                                  : code === 3
+                                    ? "Video decoding failed (corrupted or unsupported stream)."
+                                    : code === 4
+                                      ? "Video format/codec or URL is not supported by this browser (e.g. external link or H.265/HEVC)."
+                                      : "Could not load video in browser player.";
+                              setVideoError(reason);
+                            }}
                             style={{
                               width: "100%",
                               maxHeight: 320,
@@ -771,6 +789,23 @@ export default function SessionEvaluationPage() {
                               marginBottom: 8,
                             }}
                           />
+                          {videoError && (
+                            <div
+                              role="alert"
+                              style={{
+                                marginBottom: 8,
+                                padding: "8px 12px",
+                                borderRadius: 8,
+                                background: "#fef2f2",
+                                border: "1px solid #fca5a5",
+                                color: "#991b1b",
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                              }}
+                            >
+                              ⚠️ {videoError} Try &ldquo;Open video in new tab ↗&rdquo; below, or ask the Groom to upload a standard MP4 (H.264) / WebM file.
+                            </div>
+                          )}
                           <a
                             className="trial-run-link"
                             href={selectedSession.videoUrl}
