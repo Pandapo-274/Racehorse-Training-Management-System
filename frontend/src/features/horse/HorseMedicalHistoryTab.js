@@ -1,5 +1,5 @@
 // src/features/horse/HorseMedicalHistoryTab.js
-// Lifetime medical records, treatment plans, injuries, training locks, and referrals for a horse.
+// Lifetime medical records, treatment plans, injuries, and training locks for a horse.
 // Supports timeframe filtering (All, 30 days, 3 months, 6 months, 1 year, custom range),
 // event category filtering, and keyword search.
 
@@ -9,7 +9,6 @@ import {
   listInjuries,
   listLocksForHorse,
   listTreatmentsForHorse,
-  listExternalReferrals,
   listAllIncidentReportsForHorse,
   lockLevelLabel,
   statusLabel,
@@ -23,7 +22,6 @@ const EVENT_TYPE_OPTIONS = [
   { value: "INJURY", label: "Injuries & Recovery" },
   { value: "TREATMENT", label: "Prescriptions & Treatments" },
   { value: "LOCK", label: "Training Locks" },
-  { value: "REFERRAL", label: "External Referrals" },
   { value: "INCIDENT", label: "Track Incidents" },
 ];
 
@@ -75,10 +73,9 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
       listInjuries(horse.horseId, ctrl.signal),
       listLocksForHorse(horse.horseId, ctrl.signal),
       listTreatmentsForHorse(horse.horseId, ctrl.signal),
-      listExternalReferrals({ horseId: horse.horseId, status: "ALL" }, ctrl.signal),
       listAllIncidentReportsForHorse(horse.horseId, ctrl.signal),
     ])
-      .then(([examsRes, injuriesRes, locksRes, rxRes, referralsRes, incidentsRes]) => {
+      .then(([examsRes, injuriesRes, locksRes, rxRes, incidentsRes]) => {
         const unified = [];
 
         // 1. Clinical Examination Records
@@ -193,37 +190,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
           });
         }
 
-        // 5. External Referrals
-        if (referralsRes.status === "fulfilled" && Array.isArray(referralsRes.value)) {
-          referralsRes.value.forEach((ref) => {
-            const date = new Date(ref.referredAt);
-            const isHospitalized = ref.status === "HOSPITALIZED";
-            unified.push({
-              id: `ref-${ref.referralId}`,
-              type: "REFERRAL",
-              date,
-              categoryLabel: "External Referral",
-              title: `Hospital: ${ref.hospitalName}`,
-              tone: "pink",
-              actorName: ref.referredByName ? `Dr. ${ref.referredByName}` : "Attending Vet",
-              actorRole: "Referring Vet",
-              status: isHospitalized ? "Hospitalized" : "Discharged to Club",
-              searchableText: `${ref.hospitalName} ${ref.referralReason} ${ref.dischargeNotes || ""}`,
-              details: {
-                hospitalName: ref.hospitalName,
-                urgency: ref.urgency,
-                referralReason: ref.referralReason,
-                expectedReturn: ref.expectedReturn,
-                isHospitalized,
-                dischargedAt: ref.dischargedAt,
-                dischargedByName: ref.dischargedByName,
-                dischargeNotes: ref.dischargeNotes,
-              },
-            });
-          });
-        }
-
-        // 6. Track Incidents
+        // 5. Track Incidents
         if (incidentsRes.status === "fulfilled" && Array.isArray(incidentsRes.value)) {
           incidentsRes.value.forEach((inc) => {
             const date = new Date(inc.reportedAt);
@@ -316,18 +283,16 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
     let exams = 0;
     let injuries = 0;
     let treatments = 0;
-    let referrals = 0;
     let locks = 0;
 
     filteredEvents.forEach((e) => {
       if (e.type === "EXAM") exams++;
       else if (e.type === "INJURY") injuries++;
       else if (e.type === "TREATMENT") treatments++;
-      else if (e.type === "REFERRAL") referrals++;
       else if (e.type === "LOCK") locks++;
     });
 
-    return { total, exams, injuries, treatments, referrals, locks };
+    return { total, exams, injuries, treatments, locks };
   }, [filteredEvents]);
 
   if (loading) {
@@ -356,7 +321,7 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
               Medical History & Treatment Records · {horse.horseName}
             </h3>
             <p style={{ margin: 0, fontSize: "13px", color: "#69728f" }}>
-              Append-only clinical audit log recording all examinations, confirmed injuries, treatments, training locks, and external referrals.
+              Append-only clinical audit log recording all examinations, confirmed injuries, treatments, and training locks.
             </p>
           </div>
 
@@ -468,10 +433,6 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
         <div className="mh-stat-box">
           <span className="mh-stat-num" style={{ color: "#ff9800" }}>{stats.locks}</span>
           <span className="mh-stat-title">Training Locks</span>
-        </div>
-        <div className="mh-stat-box">
-          <span className="mh-stat-num" style={{ color: "#f55fa9" }}>{stats.referrals}</span>
-          <span className="mh-stat-title">External Referrals</span>
         </div>
       </div>
 
@@ -610,36 +571,6 @@ export default function HorseMedicalHistoryTab({ horse, user }) {
                           <strong>
                             {evt.details.releasedByName} (at {formatDateTime(evt.details.releasedAt)})
                           </strong>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {evt.type === "REFERRAL" && (
-                    <div className="mh-fact-grid">
-                      <div>
-                        <span>Receiving Hospital:</span>
-                        <strong style={{ color: "#b32569" }}>{evt.details.hospitalName}</strong>
-                      </div>
-                      <div className="mh-nowrap">
-                        <span>Urgency:</span>
-                        <strong>{evt.details.urgency}</strong>
-                      </div>
-                      <div className="mh-nowrap">
-                        <span>Estimated Return:</span>
-                        <strong>{evt.details.expectedReturn ? formatDate(evt.details.expectedReturn) : "TBD"}</strong>
-                      </div>
-                      <div className="mh-span-full">
-                        <span>Referral Reason:</span>
-                        <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.referralReason}</p>
-                      </div>
-                      {!evt.details.isHospitalized && evt.details.dischargeNotes && (
-                        <div className="mh-span-full" style={{ background: "#f8f9fc", padding: "8px 12px", borderRadius: "8px" }}>
-                          <span style={{ fontWeight: 700, color: "#1976d2" }}>Discharge & Return Summary:</span>
-                          <p style={{ margin: "2px 0 0", color: "#3a415a" }}>{evt.details.dischargeNotes}</p>
-                          <small style={{ color: "#8e96b1", display: "block", marginTop: "4px" }}>
-                            Readmitted on {formatDate(evt.details.dischargedAt)} by Dr. {evt.details.dischargedByName}
-                          </small>
                         </div>
                       )}
                     </div>

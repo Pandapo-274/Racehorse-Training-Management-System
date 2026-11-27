@@ -11,8 +11,6 @@ import {
   formatReportTime,
   listVeterinarians,
   handoverIncidentReport,
-  listExternalReferrals,
-  dischargeExternalReferral,
 } from "./vetApi";
 import { isPedigreeOnly, isWithdrawn } from "../horse/horseApi";
 import { listVetCalls } from "../vetcall/vetCallApi";
@@ -277,74 +275,6 @@ function WaitingList({ items, total, onExamine, onReceive, onOpenHandover, busyI
   );
 }
 
-// Ngựa đang nằm viện bên ngoài (chuyển viện V40) với nút Discharge (cho xuất viện).
-function HospitalizedList({ items, total, onDischarge }) {
-  if (total === 0) return null;
-
-  return (
-    <div className="vet-card waiting-card" style={{ marginTop: "24px" }}>
-      <div className="waiting-header">
-        <div className="vet-card-title">
-          <span className="vet-diamond" style={{ background: "#f55fa9" }} aria-hidden="true" />
-          <div>
-            <h2>External Hospital Referrals (Chuyển viện ngoài)</h2>
-            <p>{total} horse{total === 1 ? "" : "s"} currently hospitalized</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="waiting-table-wrapper">
-        <table className="waiting-table">
-          <thead>
-            <tr>
-              <th>Horse</th>
-              <th>Hospital & Urgency</th>
-              <th>Referral Reason</th>
-              <th>Expected Return</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((ref) => (
-              <tr key={ref.referralId}>
-                <td className="horse-name">
-                  {ref.horseName}
-                  {ref.stallNo && <span className="waiting-sub">Stall {ref.stallNo}</span>}
-                </td>
-                <td>
-                  <strong>{ref.hospitalName}</strong>
-                  <span className="waiting-sub">
-                    <span className={`waiting-status ${ref.urgency === "CRITICAL" ? "urgent" : "soon"}`}>
-                      {ref.urgency}
-                    </span>
-                  </span>
-                </td>
-                <td>
-                  {ref.referralReason}
-                  <span className="waiting-sub">Referred by Dr. {ref.referredByName}</span>
-                </td>
-                <td>
-                  {ref.expectedReturn ? ref.expectedReturn : "TBD"}
-                  <span className="waiting-sub">Since {formatReportTime(ref.referredAt)}</span>
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="waiting-action waiting-action--main"
-                    onClick={() => onDischarge(ref)}
-                  >
-                    Discharge / Đón về CLB
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 // Hộp thoại bàn giao ca: ca của mình thì mặc định trả về hàng chờ (""), ca của người khác thì mặc định nhận về mình.
 // handoverNotes bắt buộc. Gửi { targetVetId, handoverNotes } -> PUT /api/incident-reports/{id}/handover.
 function HandoverModal({ report, vets, currentUser, onClose, onSubmit, submitting }) {
@@ -430,86 +360,9 @@ function HandoverModal({ report, vets, currentUser, onClose, onSubmit, submittin
   );
 }
 
-// Hộp thoại xuất viện: ghi chú bắt buộc và trạng thái sức khoẻ sau xuất viện (mặc định INJURED).
-function DischargeModal({ referral, onClose, onSubmit, submitting }) {
-  const [notes, setNotes] = useState("");
-  const [postStatus, setPostStatus] = useState("INJURED");
-  const [error, setError] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!notes.trim()) {
-      setError("Please enter discharge notes and instructions.");
-      return;
-    }
-    setError("");
-    onSubmit({
-      dischargeNotes: notes.trim(),
-      postDischargeStatus: postStatus,
-    });
-  };
-
-  return (
-    <div className="vet-modal-backdrop" onClick={onClose}>
-      <div className="vet-modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="vet-modal-header">
-          <h3>Hospital Discharge & Return: {referral.horseName}</h3>
-          <button type="button" className="vet-modal-close" onClick={onClose}>&times;</button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="vet-modal-body">
-            {error && <p className="waiting-error" style={{ margin: 0 }}>{error}</p>}
-            <p style={{ margin: 0, color: "#505872", fontSize: "13.5px" }}>
-              Tiếp nhận ngựa <strong>{referral.horseName}</strong> xuất viện từ <strong>{referral.hospitalName}</strong> trở về CLB.
-            </p>
-
-            <div className="vx-form-field">
-              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Post-discharge Status / Trạng thái sức khoẻ sau xuất viện:
-              </label>
-              <select
-                className="vx-input"
-                value={postStatus}
-                onChange={(e) => setPostStatus(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px" }}
-              >
-                <option value="INJURED">Injured (Tiếp tục phác đồ phục hồi/nghỉ ngơi tại CLB)</option>
-                <option value="MONITOR">Monitor (Vết thương ổn định, chuyển sang theo dõi)</option>
-              </select>
-            </div>
-
-            <div className="vx-form-field">
-              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Discharge Notes & Care Instructions / Đánh giá xuất viện & dặn dò <span style={{ color: "#e43e8c" }}>*</span>:
-              </label>
-              <textarea
-                className="vx-input vx-textarea"
-                rows={4}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Kết quả phẫu thuật/điều trị tại viện ngoài, tình trạng hiện tại, chế độ thuốc men và phục hồi tại CLB..."
-                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
-                required
-              />
-            </div>
-          </div>
-          <div className="vet-modal-footer">
-            <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancel
-            </button>
-            <button type="submit" className="vx-btn vx-btn--primary" disabled={submitting}>
-              {submitting ? "Processing..." : "Complete Discharge & Return"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 /*
  * Trang /veterinarian (Herd health board). Tải riêng từng nguồn (mỗi nguồn một useEffect): ngựa, báo cáo sự cố mở,
- * ca chuyển viện đang mở, danh sách bác sĩ (để bàn giao), các cuộc gọi bác sĩ đang chờ (banner V27).
+ * danh sách bác sĩ (để bàn giao), các cuộc gọi bác sĩ đang chờ (banner V27).
  * reload tăng để tải lại sau thao tác. location.state có thể mang thông báo từ trang khác (vd. sau khi khám xong).
  * Lưu ý: route /veterinarian không bọc RoleRoute (xem App.js); bảo vệ thật nằm ở backend.
  */
@@ -525,7 +378,6 @@ export default function VetDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [reports, setReports] = useState([]);
-  const [referrals, setReferrals] = useState([]);
   const [vets, setVets] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [actionError, setActionError] = useState("");
@@ -533,7 +385,6 @@ export default function VetDashboard() {
 
   // Modals state
   const [handoverModalReport, setHandoverModalReport] = useState(null);
-  const [dischargeModalRef, setDischargeModalRef] = useState(null);
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
   useEffect(() => {
@@ -562,17 +413,6 @@ export default function VetDashboard() {
         if (err.name === "AbortError") return;
         if (handleAuthError(err, navigate)) return;
         setActionError(err.message);
-      });
-    return () => ctrl.abort();
-  }, [navigate, reload]);
-
-  // Danh sách chuyển viện ngoài
-  useEffect(() => {
-    const ctrl = new AbortController();
-    listExternalReferrals({ status: "HOSPITALIZED" }, ctrl.signal)
-      .then((rows) => setReferrals(rows || []))
-      .catch((err) => {
-        if (err.name !== "AbortError") handleAuthError(err, navigate);
       });
     return () => ctrl.abort();
   }, [navigate, reload]);
@@ -637,13 +477,6 @@ export default function VetDashboard() {
       r.symptoms.toLowerCase().includes(normalizedQuery)
   );
 
-  const visibleReferrals = referrals.filter(
-    (ref) =>
-      !normalizedQuery ||
-      ref.horseName.toLowerCase().includes(normalizedQuery) ||
-      ref.hospitalName.toLowerCase().includes(normalizedQuery)
-  );
-
   const openExamination = (horse) => navigate(`/veterinarian/examination/${horse.id}`);
 
   const examineWaiting = (report) =>
@@ -675,21 +508,6 @@ export default function VetDashboard() {
       .catch((err) => {
         if (handleAuthError(err, navigate)) return;
         alert(err.message || "Failed to handover case");
-      })
-      .finally(() => setModalSubmitting(false));
-  };
-
-  const handleDischargeSubmit = (body) => {
-    if (!dischargeModalRef) return;
-    setModalSubmitting(true);
-    dischargeExternalReferral(dischargeModalRef.referralId, body)
-      .then(() => {
-        setDischargeModalRef(null);
-        setReload((n) => n + 1);
-      })
-      .catch((err) => {
-        if (handleAuthError(err, navigate)) return;
-        alert(err.message || "Failed to discharge horse");
       })
       .finally(() => setModalSubmitting(false));
   };
@@ -802,12 +620,6 @@ export default function VetDashboard() {
             currentUser={currentUser}
           />
 
-          <HospitalizedList
-            items={visibleReferrals}
-            total={referrals.length}
-            onDischarge={(ref) => setDischargeModalRef(ref)}
-          />
-
           {handoverModalReport && (
             <HandoverModal
               report={handoverModalReport}
@@ -815,15 +627,6 @@ export default function VetDashboard() {
               currentUser={currentUser}
               onClose={() => setHandoverModalReport(null)}
               onSubmit={handleHandoverSubmit}
-              submitting={modalSubmitting}
-            />
-          )}
-
-          {dischargeModalRef && (
-            <DischargeModal
-              referral={dischargeModalRef}
-              onClose={() => setDischargeModalRef(null)}
-              onSubmit={handleDischargeSubmit}
               submitting={modalSubmitting}
             />
           )}

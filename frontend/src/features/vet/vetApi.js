@@ -72,33 +72,6 @@ export function handoverIncidentReport(reportId, body) {
   });
 }
 
-/* ---------- V40: Ca chuyển viện ngoài (External Hospital Referral) ---------- */
-
-/** GET /api/external-referrals?status=&horseId= */
-// Chuyển viện ngoài (V40): ngựa được đưa tới bệnh viện thú y bên ngoài; khi về (discharge) bác sĩ ghi kết quả
-// và backend có thể đặt lại sức khoẻ ELIGIBLE (ExternalReferralService.discharge).
-export function listExternalReferrals(params = {}, signal) {
-  const q = new URLSearchParams();
-  if (params.horseId) q.set("horseId", params.horseId);
-  if (params.status) q.set("status", params.status);
-  if (params.limit) q.set("limit", params.limit);
-  const qs = q.toString() ? `?${q.toString()}` : "";
-  return authFetch(`/api/external-referrals${qs}`, { signal });
-}
-
-/** POST /api/external-referrals */
-export function createExternalReferral(body) {
-  return post("/api/external-referrals", body);
-}
-
-/** PUT /api/external-referrals/{id}/discharge */
-export function dischargeExternalReferral(referralId, body) {
-  return authFetch(`/api/external-referrals/${referralId}/discharge`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-}
-
 /** Mức khẩn cấp của báo cáo. cls là lớp CSS của chip trong vet.css. */
 // Lưu ý: HIGH và MEDIUM đang cùng nhãn "Soon" (cùng màu); chỉ LOW là "Routine".
 const URGENCY = {

@@ -31,12 +31,35 @@ import {
   todayInputValue,
   examTimestamp,
   describeError,
-  createExternalReferral,
 } from "./vetApi";
 
 /* Khoảng cân nặng hợp lệ (kg), khớp MedicalExamRequest.weight ở backend. */
 const WEIGHT_MIN = 30;
 const WEIGHT_MAX = 1500;
+
+const COMMON_INJURIES = [
+  {
+    id: "SDFT",
+    label: "Superficial Digital Flexor Tendonitis (SDFT)",
+    text: "Superficial digital flexor tendon (SDFT) micro-tear / tendonitis",
+    sev: "GRADE_3",
+    lock: "FULL",
+  },
+  {
+    id: "FETLOCK_SYNOVITIS",
+    label: "Fetlock Joint Synovitis (Joint Inflammation)",
+    text: "Fetlock joint synovitis / mild joint capsule inflammation",
+    sev: "GRADE_2",
+    lock: "LIGHT",
+  },
+  {
+    id: "EGUS",
+    label: "Equine Gastric Ulcer Syndrome (EGUS)",
+    text: "Equine gastric ulcer syndrome (EGUS Grade 2)",
+    sev: "GRADE_2",
+    lock: "LIGHT",
+  },
+];
 
 /* ---------- MÔ HÌNH NGỰA 3D CHUẨN ĐỒ HOẠ BASE MESH POLYGON (THREE.JS WEBGL) ---------- */
 
@@ -455,7 +478,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Perspective") ? "vx-3d-btn--active" : ""}`}
             onClick={() => setCameraPreset("3/4 Perspective", 0.65, 0.12)}
-            title="Góc nhìn 3D 3/4 phối cảnh"
+            title="3D 3/4 Perspective"
           >
             3D 3/4
           </button>
@@ -463,33 +486,33 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Left") ? "vx-3d-btn--active" : ""}`}
             onClick={() => setCameraPreset("Left Lateral", 0, 0)}
-            title="Mặt bên trái (Left Lateral)"
+            title="Left Lateral"
           >
-            Trái (0°)
+            Left (0°)
           </button>
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Right") ? "vx-3d-btn--active" : ""}`}
             onClick={() => setCameraPreset("Right Lateral", Math.PI, 0)}
-            title="Mặt bên phải (Right Lateral)"
+            title="Right Lateral"
           >
-            Phải (180°)
+            Right (180°)
           </button>
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Front") ? "vx-3d-btn--active" : ""}`}
             onClick={() => setCameraPreset("Front View", Math.PI / 2, 0)}
-            title="Mặt trước (Ngực & Chân trước)"
+            title="Front View (Chest & Forelimbs)"
           >
-            Trước (90°)
+            Front (90°)
           </button>
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Hind") ? "vx-3d-btn--active" : ""}`}
             onClick={() => setCameraPreset("Hind View", -Math.PI / 2, 0)}
-            title="Mặt sau (Hông & Chân sau)"
+            title="Hind View (Hindquarters & Hindlimbs)"
           >
-            Sau (270°)
+            Hind (270°)
           </button>
         </div>
       </div>
@@ -505,7 +528,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
       />
 
       <div className="vx-3d-hint">
-        <span>🖱️ Giữ chuột kéo để xoay 360° · Bấm trực tiếp vào khối 3D để cắm vết thương</span>
+        <span>🖱️ Drag to rotate 360° · Click directly on the 3D model to mark an injury</span>
       </div>
     </div>
   );
@@ -552,123 +575,6 @@ const LOCK_SELECTION_OPTIONS = [
   { value: "NONE", label: "No lock", hint: "Normal training permitted" },
 ];
 
-// Hộp thoại chuyển viện ngoài: tên bệnh viện, lý do, mức khẩn cấp, ngày dự kiến trở về.
-function ReferralModal({ horse, report, diagnosisDefault, onClose, onSubmit, submitting }) {
-  const [hospitalName, setHospitalName] = useState("");
-  const [referralReason, setReferralReason] = useState(diagnosisDefault || report?.symptoms || "");
-  const [urgency, setUrgency] = useState(report?.urgency === "HIGH" ? "HIGH" : "HIGH");
-  const [expectedReturn, setExpectedReturn] = useState("");
-  const [error, setError] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!hospitalName.trim() || !referralReason.trim()) {
-      setError("Please provide both the hospital name and the referral reason.");
-      return;
-    }
-    setError("");
-    onSubmit({
-      horseId: horse.horseId,
-      reportId: report?.reportId || null,
-      hospitalName: hospitalName.trim(),
-      referralReason: referralReason.trim(),
-      urgency,
-      expectedReturn: expectedReturn || null,
-    });
-  };
-
-  return (
-    <div className="vet-modal-backdrop" onClick={onClose}>
-      <div className="vet-modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="vet-modal-header">
-          <h3>External Hospital Referral · {horse.horseName}</h3>
-          <button type="button" className="vet-modal-close" onClick={onClose}>&times;</button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="vet-modal-body">
-            {error && <p className="waiting-error" style={{ margin: 0 }}>{error}</p>}
-            <div className="vx-banner vx-banner--warn" style={{ margin: 0 }}>
-              <strong>Emergency Referral Protocol:</strong>
-              <span>
-                The horse will be updated to <strong>INJURED</strong> status, automatically issuing a <strong>FULL Training Lock</strong> (stopping all training workouts), and alerting scheduled races. Emergency notifications will be sent to the Horse Owner and Head Trainer.
-              </span>
-            </div>
-
-            <div className="vx-form-field">
-              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Receiving Hospital (Equine Hospital) <span style={{ color: "#e43e8c" }}>*</span>:
-              </label>
-              <input
-                type="text"
-                className="vx-input"
-                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
-                value={hospitalName}
-                onChange={(e) => setHospitalName(e.target.value)}
-                placeholder="e.g. Equine Referral Surgery Hospital / SG Veterinary Center"
-                required
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div className="vx-form-field">
-                <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                  Urgency Level:
-                </label>
-                <select
-                  className="vx-input"
-                  style={{ width: "100%", padding: "8px 12px" }}
-                  value={urgency}
-                  onChange={(e) => setUrgency(e.target.value)}
-                >
-                  <option value="HIGH">HIGH (Urgent)</option>
-                  <option value="CRITICAL">CRITICAL (Life-threatening emergency)</option>
-                </select>
-              </div>
-
-              <div className="vx-form-field">
-                <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                  Expected Return Date:
-                </label>
-                <input
-                  type="date"
-                  className="vx-input"
-                  style={{ width: "100%", padding: "8px 12px" }}
-                  value={expectedReturn}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setExpectedReturn(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="vx-form-field">
-              <label style={{ display: "block", fontWeight: 700, marginBottom: "6px" }}>
-                Referral Reason & Initial Diagnosis <span style={{ color: "#e43e8c" }}>*</span>:
-              </label>
-              <textarea
-                className="vx-input vx-textarea"
-                rows={4}
-                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px" }}
-                value={referralReason}
-                onChange={(e) => setReferralReason(e.target.value)}
-                placeholder="Complex bone fracture, acute colic requiring surgical intervention, severe ophthalmic trauma..."
-                required
-              />
-            </div>
-          </div>
-          <div className="vet-modal-footer">
-            <button type="button" className="vx-btn vx-btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancel
-            </button>
-            <button type="submit" className="vx-btn vx-btn--danger" disabled={submitting}>
-              {submitting ? "Processing…" : "Confirm External Referral"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 /*
  * Form khám của một ngựa. Props: horseId, reportId (nếu khám cho một báo cáo sự cố).
  * Tải: hồ sơ ngựa, lệnh khoá, các điểm chấn thương cũ (và báo cáo sự cố nếu có reportId).
@@ -702,11 +608,8 @@ function ExaminationForm({ horseId, reportId }) {
   const [otherStatus, setOtherStatus] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Tiên lượng y khoa & Lối thoát hồ sơ khi chấn thương vĩnh viễn / chấm dứt sự nghiệp
-  const [prognosis, setPrognosis] = useState("FAVORABLE");
-  const [terminalAction, setTerminalAction] = useState("NONE");
-  const insuranceClaimRef = "EQ-INS-2026-VET";
-  // Cân nặng đo lúc khám (kg). Để trống = lần khám này không cân.
+  const [commonInjury, setCommonInjury] = useState("");
+  // Weight measured during exam (kg). Leave blank if not weighed.
   const [weight, setWeight] = useState("");
 
   const [marker, setMarker] = useState(null);
@@ -720,8 +623,6 @@ function ExaminationForm({ horseId, reportId }) {
   const [submitting, setSubmitting] = useState(null);
   const [error, setError] = useState(null);
   const [releasing, setReleasing] = useState(false);
-  const [showReferralModal, setShowReferralModal] = useState(false);
-  const [referralSubmitting, setReferralSubmitting] = useState(false);
 
   const saved = useRef({ record: null, injury: null });
 
@@ -960,25 +861,6 @@ function ExaminationForm({ horseId, reportId }) {
   };
 
 
-  // Tạo ca chuyển viện (POST /api/external-referrals) rồi về Herd health board kèm thông báo (location.state.notice).
-  const handleReferralSubmit = async (data) => {
-    setReferralSubmitting(true);
-    try {
-      await createExternalReferral(data);
-      setShowReferralModal(false);
-      navigate("/veterinarian", {
-        state: {
-          notice: `External hospital referral completed for ${horse.horseName}. Training lock is in force.`,
-        },
-      });
-    } catch (err) {
-      if (handleAuthError(err, navigate)) return;
-      alert(err.message || "Failed to submit external referral");
-    } finally {
-      setReferralSubmitting(false);
-    }
-  };
-
   // Gỡ lệnh khoá đang có (hỏi xác nhận). Lệnh dựa trên chấn thương chưa lành sẽ bị backend từ chối: phải dùng
   // trang Recovery để xác nhận hồi phục.
   const handleRelease = async () => {
@@ -1112,30 +994,13 @@ function ExaminationForm({ horseId, reportId }) {
             <span>Marked location</span>
 
             {injuryConfirmed && marker ? (
-              <>
-                <input
-                  className="vx-input vx-input--location"
-                  value={bodyLocation}
-                  maxLength={100}
-                  onChange={(e) => setBodyLocation(e.target.value)}
-                  aria-label="Marked location"
-                />
-
-                <div className="vx-marked-row">
-                  <select
-                    className="vx-input vx-input--compact"
-                    value={severity}
-                    onChange={(e) => setSeverity(e.target.value)}
-                    aria-label="Severity"
-                  >
-                    {SEVERITIES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <input
+                className="vx-input vx-input--location"
+                value={bodyLocation}
+                maxLength={100}
+                onChange={(e) => setBodyLocation(e.target.value)}
+                aria-label="Marked location"
+              />
             ) : (
               <strong className="vx-marked-empty">
                 {injuryConfirmed
@@ -1173,39 +1038,42 @@ function ExaminationForm({ horseId, reportId }) {
                 />
               </Field>
 
+              <Field label="Common injury preset" full>
+                <select
+                  className="vx-input"
+                  value={commonInjury}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setCommonInjury(id);
+                    const preset = COMMON_INJURIES.find((p) => p.id === id);
+                    if (preset) {
+                      setDiagnosis(preset.text);
+                      setConfirmed("yes");
+                      setSeverity(preset.sev);
+                      setLockLevel(preset.lock);
+                    }
+                  }}
+                >
+                  <option value="">-- Select a common injury (optional) --</option>
+                  {COMMON_INJURIES.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
               <Field label="Diagnosis" full>
                 <input
                   className="vx-input"
                   value={diagnosis}
                   maxLength={255}
-                  onChange={(e) => setDiagnosis(e.target.value)}
+                  onChange={(e) => {
+                    setDiagnosis(e.target.value);
+                    if (commonInjury) setCommonInjury("");
+                  }}
                   placeholder="e.g. Grade 2 tendon sheath inflammation, left hind hock"
                 />
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px", alignItems: "center" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Gợi ý chẩn đoán:</span>
-                  {[
-                    { label: "Viêm gân SDFT", text: "Tổn thương rách vi thể gân gấp ngón nông (SDFT)", sev: "GRADE_3", lock: "FULL" },
-                    { label: "Loét dạ dày EGUS", text: "Hội chứng loét dạ dày ngựa đua (EGUS Grade 2)", sev: "GRADE_2", lock: "LIGHT" },
-                    { label: "Viêm bao hoạt dịch cổ chân", text: "Viêm bao hoạt dịch khớp cổ chân (Fetlock Joint Synovitis)", sev: "GRADE_2", lock: "LIGHT" },
-                    { label: "Viêm phế quản co thắt", text: "Viêm đường hô hấp dưới / Viêm phế quản co thắt (Asthma)", sev: "GRADE_2", lock: "FULL" },
-                    { label: "Sốc nhiệt / Kiệt sức", text: "Hội chứng kiệt sức & mất nước sau thi đấu (Heat Exhaustion)", sev: "GRADE_4", lock: "FULL" },
-                  ].map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      className="vx-link"
-                      style={{ fontSize: "11px", padding: "2px 8px", background: "#f1f5f9", borderRadius: "12px", border: "1px solid #cbd5e1" }}
-                      onClick={() => {
-                        setDiagnosis(p.text);
-                        setConfirmed("yes");
-                        setSeverity(p.sev);
-                        setLockLevel(p.lock);
-                      }}
-                    >
-                      + {p.label}
-                    </button>
-                  ))}
-                </div>
               </Field>
 
               <Field label="Injury confirmed">
@@ -1219,84 +1087,21 @@ function ExaminationForm({ horseId, reportId }) {
                 </select>
               </Field>
 
-              <Field label="Clinical Prognosis (Tiên lượng y khoa)">
+              <Field label="Injury grade">
                 <select
                   className="vx-input"
-                  value={prognosis}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setPrognosis(val);
-                    if (val === "CAREER_ENDING") {
-                      setConfirmed("yes");
-                      setSeverity("GRADE_5");
-                      setLockLevel("FULL");
-                      setTerminalAction("BREEDING_CONVERT");
-                      setDiagnosis("[CAREER-ENDING] Permanent musculoskeletal impairment. Horse cannot return to high-speed racing.");
-                    }
-                  }}
-                  style={{ fontWeight: prognosis === "CAREER_ENDING" ? 700 : 400, color: prognosis === "CAREER_ENDING" ? "#b91c1c" : "inherit" }}
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value)}
+                  disabled={!injuryConfirmed}
+                  aria-label="Injury grade"
                 >
-                  <option value="FAVORABLE">Favorable / Good (Tiên lượng khả quan - hồi phục tốt)</option>
-                  <option value="EXCELLENT">Excellent (Rất tốt - hồi phục nhanh không di chứng)</option>
-                  <option value="GUARDED">Guarded / Uncertain (Dè dặt - có nguy cơ tái phát mãn tính)</option>
-                  <option value="CAREER_ENDING">Career-Ending / Paralysis (Chấn thương vĩnh viễn / Liệt / Chấm dứt sự nghiệp)</option>
+                  {SEVERITIES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
                 </select>
               </Field>
-
-              {prognosis === "CAREER_ENDING" && (
-                <div style={{ gridColumn: "1 / -1", padding: "14px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", marginTop: "4px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#991b1b", fontWeight: 700, fontSize: "14px" }}>
-                    <span>⚠️ Terminal Resolution & Owner Protection Protocol</span>
-                  </div>
-                  <p style={{ margin: "6px 0 10px", fontSize: "12.5px", color: "#7f1d1d" }}>
-                    Ngựa bị chấn thương nghiêm trọng / liệt vĩnh viễn không thể tiếp tục sự nghiệp thi đấu. Hệ thống kích hoạt các phương án bảo vệ quyền lợi tài chính cho Chủ ngựa:
-                  </p>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#374151" }}>
-                      Phương án xử lý hồ sơ (Resolution Pathway):
-                    </label>
-                    <select
-                      className="vx-input"
-                      value={terminalAction}
-                      onChange={(e) => {
-                        const act = e.target.value;
-                        setTerminalAction(act);
-                        if (act === "BREEDING_CONVERT") {
-                          setDiagnosis("[CAREER-ENDING] Chấn thương vĩnh viễn kết thúc sự nghiệp đua. Đề xuất chuyển công năng sang Ngựa giống (PEDIGREE Stud/Broodmare) bảo tồn giá trị gen.");
-                        } else if (act === "MEDICAL_RETIRE") {
-                          setDiagnosis("[CAREER-ENDING] Tổn thương cơ xương khớp mãn tính. Đề xuất nghỉ hưu y tế (RETIRED), thanh lý hợp đồng lưu trú và hoàn trả chi phí lưu trú chưa sử dụng.");
-                        } else if (act === "RECOMMEND_EUTHANASIA") {
-                          setDiagnosis("[CATASTROPHIC] Đau đớn cùng cực / bại liệt không thể cứu chữa. Hội đồng Thú y đề xuất An tử nhân đạo (Euthanasia) theo chuẩn AAEP. Cấp chứng nhận nộp Bảo hiểm Equine Mortality Claim.");
-                        }
-                      }}
-                      style={{ fontWeight: 600 }}
-                    >
-                      <option value="BREEDING_CONVERT">1. Chuyển sang Ngựa giống (Convert to PEDIGREE) — Khai thác giá trị phối giống, giải phóng chuồng đua</option>
-                      <option value="MEDICAL_RETIRE">2. Cho nghỉ hưu an dưỡng (Medical Retirement) — Rút ngựa về trang trại, hoàn tiền hợp đồng chưa dùng</option>
-                      <option value="RECOMMEND_EUTHANASIA">3. Đề xuất An tử nhân đạo (Humane Euthanasia) — Cấp chứng nhận y khoa nộp Bảo hiểm đền bù 100% (Cần chủ ngựa ký)</option>
-                    </select>
-
-                    {terminalAction === "BREEDING_CONVERT" && (
-                      <div style={{ fontSize: "12px", color: "#166534", background: "#f0fdf4", padding: "8px 12px", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
-                        ✓ <strong>Bảo toàn quyền lợi:</strong> Ngựa được chuyển từ hồ sơ học viện (ACADEMY) sang làm ngựa giống (PEDIGREE). Chủ ngựa bảo tồn được giá trị kinh tế qua hợp đồng phối giống (Stud fees) cho thế hệ sau.
-                      </div>
-                    )}
-
-                    {terminalAction === "MEDICAL_RETIRE" && (
-                      <div style={{ fontSize: "12px", color: "#1e40af", background: "#eff6ff", padding: "8px 12px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
-                        ✓ <strong>Hoàn phí lưu trú:</strong> Hợp đồng lưu trú (HORSE_CONTRACT) sẽ được thanh lý trước hạn. CLB tự động tính toán số ngày lưu trú chưa sử dụng để hoàn tiền (Prorated refund) cho Chủ ngựa.
-                      </div>
-                    )}
-
-                    {terminalAction === "RECOMMEND_EUTHANASIA" && (
-                      <div style={{ fontSize: "12px", color: "#991b1b", background: "#fff1f2", padding: "8px 12px", borderRadius: "6px", border: "1px solid #fecdd3" }}>
-                        ⚠️ <strong>Đền bù Bảo hiểm Tử vong (Equine Mortality Claim):</strong> Hồ sơ bệnh án điện tử và kết quả chẩn đoán hình ảnh sẽ được đóng băng (Freeze/Audit Log) làm căn cứ pháp lý để Chủ ngựa yêu cầu Công ty Bảo hiểm bồi thường 100% giá trị con ngựa (Mã bảo hiểm dự kiến: {insuranceClaimRef}). Bắt buộc có chữ ký đồng thuận của Chủ ngựa (Owner Consent) trước khi thực hiện.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {injuryConfirmed ? (
                 <Field label="Expected rest (days)">
@@ -1351,32 +1156,32 @@ function ExaminationForm({ horseId, reportId }) {
           <VetCard title="Equine Normal Vital Signs Reference" tone="teal" hint="AAEP Clinical Benchmark Standards">
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "4px" }}>
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>🌡️ Thân nhiệt (Temp)</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>🌡️ Temperature (Temp)</div>
                 <div style={{ fontSize: "16px", fontWeight: 800, color: "#15803d", marginTop: "2px" }}>37.2°C – 38.3°C</div>
-                <div style={{ fontSize: "11.5px", color: "#166534", marginTop: "2px" }}>Sốt (Fever): ≥ 38.5°C</div>
+                <div style={{ fontSize: "11.5px", color: "#166534", marginTop: "2px" }}>Fever: ≥ 38.5°C</div>
               </div>
 
               <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "10px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase" }}>💓 Nhịp tim lúc nghỉ (HR)</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase" }}>💓 Resting Heart Rate (HR)</div>
                 <div style={{ fontSize: "16px", fontWeight: 800, color: "#1d4ed8", marginTop: "2px" }}>28 – 44 bpm</div>
-                <div style={{ fontSize: "11.5px", color: "#1e40af", marginTop: "2px" }}>Ngựa non &lt;2t: 60–80 bpm · Đau/Stress: &gt;60</div>
+                <div style={{ fontSize: "11.5px", color: "#1e40af", marginTop: "2px" }}>Foals &lt;2y: 60–80 bpm · Pain/Stress: &gt;60</div>
               </div>
 
               <div style={{ background: "#fdf4ff", border: "1px solid #f5d0fe", borderRadius: "8px", padding: "10px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#86198f", textTransform: "uppercase" }}>🫁 Nhịp thở lúc nghỉ (RR)</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#86198f", textTransform: "uppercase" }}>🫁 Resting Respiratory Rate (RR)</div>
                 <div style={{ fontSize: "16px", fontWeight: 800, color: "#a21caf", marginTop: "2px" }}>8 – 16 bpm</div>
-                <div style={{ fontSize: "11.5px", color: "#86198f", marginTop: "2px" }}>Thở dốc / Sốc: &gt;25 lần/phút</div>
+                <div style={{ fontSize: "11.5px", color: "#86198f", marginTop: "2px" }}>Tachypnea / Shock: &gt;25 breaths/min</div>
               </div>
 
               <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "10px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "#92400e", textTransform: "uppercase" }}>⚖️ Cân nặng chuẩn</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#92400e", textTransform: "uppercase" }}>⚖️ Standard Weight</div>
                 <div style={{ fontSize: "16px", fontWeight: 800, color: "#b45309", marginTop: "2px" }}>450 – 550 kg</div>
-                <div style={{ fontSize: "11.5px", color: "#92400e", marginTop: "2px" }}>Thoroughbred đua tiêu chuẩn</div>
+                <div style={{ fontSize: "11.5px", color: "#92400e", marginTop: "2px" }}>Standard racing Thoroughbred</div>
               </div>
             </div>
 
             <div style={{ marginTop: "10px", fontSize: "12px", color: "#475569", background: "#f8fafc", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-              💡 <strong>Căn cứ lâm sàng:</strong> Khi Thân nhiệt &gt; 38.5°C hoặc Nhịp tim &gt; 60 bpm, khuyến nghị bác sĩ thú y chỉ định khóa tập luyện <strong>FULL LOCK</strong> và chuyển sang chế độ theo dõi (MONITOR) hoặc cách ly (QUARANTINE).
+              💡 <strong>Clinical Guideline:</strong> When Temperature &gt; 38.5°C or Heart Rate &gt; 60 bpm, veterinarians are recommended to issue a <strong>FULL LOCK</strong> and transition the horse to <strong>MONITOR</strong> or <strong>QUARANTINE</strong> status.
             </div>
           </VetCard>
 
@@ -1435,16 +1240,6 @@ function ExaminationForm({ horseId, reportId }) {
             <div className="vx-actions">
               <button
                 type="button"
-                className="vx-btn"
-                style={{ background: "#c9317a", color: "#fff", borderColor: "#c9317a" }}
-                disabled={busy}
-                onClick={() => setShowReferralModal(true)}
-              >
-                External Referral
-              </button>
-
-              <button
-                type="button"
                 className="vx-btn vx-btn--danger"
                 disabled={busy}
                 onClick={() => submit(lockLevel !== "NONE")}
@@ -1455,16 +1250,6 @@ function ExaminationForm({ horseId, reportId }) {
           </VetCard>
         </div>
       </div>
-      {showReferralModal && (
-        <ReferralModal
-          horse={horse}
-          report={report}
-          diagnosisDefault={diagnosis}
-          onClose={() => setShowReferralModal(false)}
-          onSubmit={handleReferralSubmit}
-          submitting={referralSubmitting}
-        />
-      )}
     </VetShell>
   );
 }

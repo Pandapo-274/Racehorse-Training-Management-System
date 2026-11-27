@@ -74,74 +74,83 @@ const COMMON_MEDICINES = [
   { supplyName: "Ivermectin (Dewormer)", unit: "tube", unitPrice: 160000, category: "Intestinal parasites" },
 ];
 
-/** 5 Phác đồ điều trị mẫu chuẩn y khoa cho bệnh phổ biến của ngựa đua */
+/** 5 standard clinical treatment protocols for common racehorse conditions */
 export const CLINICAL_PROTOCOLS = [
   {
     id: "SDFT",
-    name: "1. Viêm gân gấp ngón nông (Superficial Digital Flexor Tendonitis - SDFT)",
-    shortName: "Viêm gân SDFT",
-    medicineName: "Phenylbutazone (Bute)",
-    dosage: 2,
-    frequency: "Once daily",
+    name: "1. Tendonitis (SDFT)",
+    shortName: "SDFT Tendonitis",
     days: 7,
     lockLevel: "FULL",
-    instruction: "Uống kèm cám sáng. Chườm lạnh / đắp gel lạnh chân đau 2 lần/ngày. Chỉ dắt đi bộ tại chỗ (stall rest).",
-    note: "[Phác đồ SDFT] Viêm gân cấp tính. Khóa tập hoàn toàn 7-14 ngày. Tránh vận động bứt tốc.",
-    category: "Gân cơ & Khớp",
+    note: "[SDFT Protocol] Acute tendonitis. Full training lock 7-14 days. Avoid sprinting.",
+    medicines: [
+      { medicineName: "Phenylbutazone (Bute)", dosage: 2, frequency: "Once daily", instruction: "Mix with morning feed." },
+      { medicineName: "Povidone antiseptic ointment", dosage: 1, frequency: "Twice daily", instruction: "Apply topically after cold hosing." },
+      { medicineName: "Glucosamine + Chondroitin", dosage: 1, frequency: "Once daily", instruction: "Tendon & cartilage support." },
+    ],
   },
   {
     id: "EGUS",
-    name: "2. Hội chứng loét dạ dày ngựa đua (Equine Gastric Ulcer Syndrome - EGUS)",
-    shortName: "Loét dạ dày EGUS",
-    medicineName: "Omeprazole (GastroGard)",
-    dosage: 1,
-    frequency: "Once daily",
+    name: "2. Gastric Ulcer (EGUS)",
+    shortName: "Gastric Ulcer (EGUS)",
     days: 14,
     lockLevel: "HEAVY_WORK_ONLY",
-    instruction: "Bơm miệng lúc đói 30 phút trước bữa sáng. Chia nhỏ khẩu phần cỏ khô trong ngày.",
-    note: "[Phác đồ EGUS] Viêm loét dạ dày do stress tập nặng. Cho phép đi bộ và chạy trot nhẹ, cấm nước rút.",
-    category: "Tiêu hóa",
+    note: "[EGUS Protocol] Stress-induced gastric ulcer. Light walk/trot allowed, no galloping.",
+    medicines: [
+      { medicineName: "Omeprazole (GastroGard)", dosage: 1, frequency: "Once daily", instruction: "Administer orally 30 min before morning feed." },
+      { medicineName: "Digestive probiotic (Probiotic)", dosage: 2, frequency: "Twice daily", instruction: "Mix with feed to support gut flora." },
+    ],
   },
   {
     id: "FETLOCK",
-    name: "3. Viêm bao khớp cổ chân / Tràn dịch khớp (Fetlock Synovitis / Arthritis)",
-    shortName: "Viêm khớp Fetlock",
-    medicineName: "Flunixin Meglumine (Banamine)",
-    dosage: 1,
-    frequency: "Once daily",
+    name: "3. Fetlock Synovitis",
+    shortName: "Fetlock Synovitis",
     days: 5,
     lockLevel: "FULL",
-    instruction: "Tiêm tĩnh mạch hoặc uống theo liều. Băng ép gạc lạnh sau vận động nhẹ.",
-    note: "[Phác đồ Fetlock] Tràn dịch sưng nóng khớp cổ chân. Nghỉ ngơi tuyệt đối trong 5 ngày đầu.",
-    category: "Gân cơ & Khớp",
+    note: "[Fetlock Protocol] Joint effusion & swelling. Strict rest for the first 5 days.",
+    medicines: [
+      { medicineName: "Flunixin Meglumine (Banamine)", dosage: 1, frequency: "Once daily", instruction: "Administer IV or orally per dose." },
+      { medicineName: "Hyaluronic Acid (Joint injection)", dosage: 1, frequency: "Once daily", instruction: "Joint lubrication support." },
+      { medicineName: "Glucosamine + Chondroitin", dosage: 1, frequency: "Once daily", instruction: "Daily joint maintenance." },
+    ],
   },
   {
     id: "BRONCHITIS",
-    name: "4. Nhiễm trùng & Co thắt đường hô hấp (Equine Bronchitis & Respiratory Spasm)",
-    shortName: "Viêm phế quản",
-    medicineName: "Clenbuterol (Ventipulmin)",
-    dosage: 1,
-    frequency: "Twice daily",
+    name: "4. Equine Bronchitis",
+    shortName: "Equine Bronchitis",
     days: 7,
     lockLevel: "FULL",
-    instruction: "Trộn thức ăn mỗi 12 giờ. Giữ chuồng thông thoáng, tưới ẩm rơm tránh bụi mịn.",
-    note: "[Phác đồ Viêm phế quản] Giãn phế quản, giảm ho sốt. Cách ly tại chuồng y tế, cấm chạy gắng sức.",
-    category: "Hô hấp",
+    note: "[Bronchitis Protocol] Bronchodilator & cough relief. Isolate in medical stall, no heavy work.",
+    medicines: [
+      { medicineName: "Clenbuterol (Ventipulmin)", dosage: 1, frequency: "Twice daily", instruction: "Mix with feed every 12 hours." },
+      { medicineName: "Amoxicillin Trihydrate", dosage: 1, frequency: "Twice daily", instruction: "Broad-spectrum antibiotic course." },
+      { medicineName: "Prednisolone", dosage: 2, frequency: "Once daily", instruction: "Airway anti-inflammatory." },
+    ],
   },
   {
     id: "HEAT_EXHAUSTION",
-    name: "5. Sốc nhiệt & Mất cân bằng điện giải (Exertional Heat Exhaustion & Dehydration)",
-    shortName: "Sốc nhiệt & Kiệt sức",
-    medicineName: "Electrolyte solution (Electrolytes)",
-    dosage: 2,
-    frequency: "Twice daily",
+    name: "5. Heat Exhaustion",
+    shortName: "Heat Exhaustion",
     days: 3,
     lockLevel: "FULL",
-    instruction: "Pha nước uống sạch hoặc drench qua miệng. Tắm nước mát hạ nhiệt tức thì.",
-    note: "[Phác đồ Sốc nhiệt] Thân nhiệt cao, mất nước sau bài tập nặng. Nghỉ stall mát có quạt thông gió.",
-    category: "Cấp cứu vận động",
+    note: "[Heat Exhaustion Protocol] Hyperthermia & dehydration. Rest in cool, ventilated stall.",
+    medicines: [
+      { medicineName: "Electrolyte solution (Electrolytes)", dosage: 2, frequency: "Twice daily", instruction: "Dilute in clean drinking water or oral drench." },
+      { medicineName: "Flunixin Meglumine (Banamine)", dosage: 1, frequency: "Once daily", instruction: "Reduce fever & muscle soreness." },
+    ],
   },
 ];
+
+const CUSTOM_PROTOCOLS_KEY = "rtms_custom_clinical_protocols";
+function loadCustomProtocols() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PROTOCOLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 /*
  * Trang /veterinarian/prescriptions. Ba tab (đồng bộ với ?tab= trên URL, replace: true để không làm dày lịch sử):
@@ -873,30 +882,58 @@ function PrescribeDialog({ onClose, onDone }) {
   const [endDate, setEndDate] = useState("");
   const [trainingLock, setTrainingLock] = useState("FULL");
 
-  // Phác đồ điều trị mẫu (Clinical Treatment Protocol Template)
+  // Clinical Treatment Protocol Templates (built-in + custom saved in localStorage)
+  const [customProtocols, setCustomProtocols] = useState(() => loadCustomProtocols());
+  const allProtocols = [...CLINICAL_PROTOCOLS, ...customProtocols];
   const [selectedProtocolId, setSelectedProtocolId] = useState("");
+  const [showNewProtocol, setShowNewProtocol] = useState(false);
+  const [newProtoName, setNewProtoName] = useState("");
+  const [newProtoDays, setNewProtoDays] = useState("7");
+  const [newProtoLock, setNewProtoLock] = useState("FULL");
+  const [newProtoNote, setNewProtoNote] = useState("");
+  const [newProtoMeds, setNewProtoMeds] = useState([]);
+  const [newProtoMedKey, setNewProtoMedKey] = useState("");
+  const [newProtoMedQty, setNewProtoMedQty] = useState("1");
+  const [newProtoMedFreq, setNewProtoMedFreq] = useState("Twice daily");
+  const [newProtoError, setNewProtoError] = useState("");
 
-  const handleProtocolChange = (protocolId) => {
+  const handleProtocolChange = (protocolId, listOverride) => {
     setSelectedProtocolId(protocolId);
     if (!protocolId) return;
-    const proto = CLINICAL_PROTOCOLS.find((p) => p.id === protocolId);
+    const pool = listOverride || allProtocols;
+    const proto = pool.find((p) => p.id === protocolId);
     if (!proto) return;
 
-    // Tìm thuốc trong catalog
-    const matched = medCatalog.find((m) =>
-      m.supplyName.toLowerCase().includes(proto.medicineName.toLowerCase().split(" ")[0])
-    ) || { supplyName: proto.medicineName, unit: "dose", currentQty: 10 };
+    const autoMeds = (proto.medicines || []).map((pm) => {
+      const matched = medCatalog.find((m) =>
+        m.supplyName.toLowerCase() === pm.medicineName.toLowerCase() ||
+        m.supplyName.toLowerCase().includes(pm.medicineName.toLowerCase().split(" ")[0])
+      );
+      const unit = matched?.unit || "unit";
+      const unitPrice = matched?.unitPrice || 0;
+      const qty = pm.dosage || 1;
+      return {
+        supplyId: matched?.supplyId || null,
+        name: matched?.supplyName || pm.medicineName,
+        unit,
+        unitPrice,
+        quantity: qty,
+        dosage: `${qty} ${unit}`,
+        frequency: pm.frequency || "Twice daily",
+        instruction: pm.instruction || null,
+      };
+    });
 
-    setChosenMedKey(matched.supplyName);
+    setSelectedMeds(autoMeds);
+    setChosenMedKey("");
     setCustomMed("");
-    setDoseQty(String(proto.dosage));
-    setDoseUnit(matched.unit || "dose");
-    setFrequency(proto.frequency);
-    setInstruction(proto.instruction);
+    setDoseQty("");
+    setDoseUnit("");
+    setInstruction("");
     setTrainingLock(proto.lockLevel);
     setPrescriptionNote(proto.note);
 
-    // Tính end date: startDate + days
+    // Compute end date: startDate + days
     try {
       const base = startDate ? new Date(startDate) : new Date();
       base.setDate(base.getDate() + proto.days);
@@ -905,6 +942,97 @@ function PrescribeDialog({ onClose, onDone }) {
       const dd = String(base.getDate()).padStart(2, "0");
       setEndDate(`${yyyy}-${mm}-${dd}`);
     } catch (_) {}
+  };
+
+  const openNewProtocolForm = () => {
+    setNewProtoError("");
+    setNewProtoName("");
+    setNewProtoDays("7");
+    setNewProtoLock("FULL");
+    setNewProtoNote("");
+    setNewProtoMedKey("");
+    setNewProtoMedQty("1");
+    setNewProtoMedFreq("Twice daily");
+    // Pre-fill from selectedMeds if vet already added medicines below
+    setNewProtoMeds(
+      selectedMeds.map((m) => ({
+        medicineName: m.name,
+        dosage: m.quantity || 1,
+        frequency: m.frequency || "Twice daily",
+        instruction: m.instruction || "",
+      }))
+    );
+    setShowNewProtocol(true);
+  };
+
+  const addMedToNewProtocol = () => {
+    setNewProtoError("");
+    if (!newProtoMedKey) {
+      setNewProtoError("Choose a medicine first.");
+      return;
+    }
+    const qty = Number(newProtoMedQty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setNewProtoError("Quantity must be greater than 0.");
+      return;
+    }
+    setNewProtoMeds((prev) => [
+      ...prev,
+      {
+        medicineName: newProtoMedKey,
+        dosage: qty,
+        frequency: newProtoMedFreq.trim() || "Twice daily",
+        instruction: "",
+      },
+    ]);
+    setNewProtoMedKey("");
+    setNewProtoMedQty("1");
+  };
+
+  const saveCustomProtocol = () => {
+    setNewProtoError("");
+    const name = newProtoName.trim();
+    const days = Number(newProtoDays);
+    if (!name) {
+      setNewProtoError("Enter a protocol name.");
+      return;
+    }
+    if (!Number.isFinite(days) || days < 1) {
+      setNewProtoError("Duration must be at least 1 day.");
+      return;
+    }
+    if (newProtoMeds.length === 0) {
+      setNewProtoError("Add at least 1 medicine to the protocol.");
+      return;
+    }
+    const newProto = {
+      id: `CUSTOM_${Date.now()}`,
+      isCustom: true,
+      name: `${allProtocols.length + 1}. ${name}`,
+      shortName: name,
+      days,
+      lockLevel: newProtoLock,
+      note: newProtoNote.trim() || `[${name}]`,
+      medicines: newProtoMeds,
+    };
+    const nextCustom = [...customProtocols, newProto];
+    setCustomProtocols(nextCustom);
+    try {
+      localStorage.setItem(CUSTOM_PROTOCOLS_KEY, JSON.stringify(nextCustom));
+    } catch (_) {}
+    setShowNewProtocol(false);
+    handleProtocolChange(newProto.id, [...CLINICAL_PROTOCOLS, ...nextCustom]);
+  };
+
+  const deleteCustomProtocol = (id) => {
+    const nextCustom = customProtocols.filter((p) => p.id !== id);
+    setCustomProtocols(nextCustom);
+    try {
+      localStorage.setItem(CUSTOM_PROTOCOLS_KEY, JSON.stringify(nextCustom));
+    } catch (_) {}
+    if (selectedProtocolId === id) {
+      setSelectedProtocolId("");
+    }
   };
 
   const [busy, setBusy] = useState(false);
@@ -1362,13 +1490,23 @@ function PrescribeDialog({ onClose, onDone }) {
           </div>
         )}
 
-        {/* Phác đồ điều trị mẫu chuẩn (Clinical Treatment Protocols) */}
+        {/* Clinical Treatment Protocols */}
         <div style={{ marginTop: "14px", padding: "12px 14px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", gap: "8px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>
-              📋 Phác đồ điều trị mẫu (Clinical Protocol Template)
+              📋 Clinical Protocol
             </span>
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Tự động điền thuốc, liều lượng, số ngày & mức khóa</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "11px", color: "#64748b" }}>Auto-fills medication, duration &amp; lock</span>
+              <button
+                type="button"
+                className="vx-link"
+                style={{ fontSize: "11.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#fff" }}
+                onClick={() => (showNewProtocol ? setShowNewProtocol(false) : openNewProtocolForm())}
+              >
+                {showNewProtocol ? "Cancel" : "+ New protocol"}
+              </button>
+            </div>
           </div>
           <select
             className="vx-input vc-select"
@@ -1376,16 +1514,138 @@ function PrescribeDialog({ onClose, onDone }) {
             onChange={(e) => handleProtocolChange(e.target.value)}
             style={{ fontWeight: selectedProtocolId ? 600 : 400, borderColor: selectedProtocolId ? "#3b82f6" : "#cbd5e1" }}
           >
-            <option value="">-- Chọn 1 trong 5 phác đồ mẫu chuẩn (hoặc tự kê đơn thủ công) --</option>
-            {CLINICAL_PROTOCOLS.map((p) => (
+            <option value="">-- Select a protocol (or enter manually) --</option>
+            {allProtocols.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} [{p.category} · {p.days} ngày · Khóa: {p.lockLevel === "FULL" ? "Full Lock" : "Heavy work only"}]
+                {p.name} · {p.days}d · {p.lockLevel === "FULL" ? "Full Lock" : "Heavy Work Only"}
               </option>
             ))}
           </select>
-          {selectedProtocolId && (
-            <div style={{ marginTop: "8px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "center", gap: "6px" }}>
-              <span>✓ Đã áp dụng: <strong>{CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.shortName}</strong>. Thuốc, thời gian điều trị ({CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.days} ngày), hướng dẫn và lệnh khóa ({CLINICAL_PROTOCOLS.find((p) => p.id === selectedProtocolId)?.lockLevel}) đã được điền sẵn. Bạn có thể tinh chỉnh thêm nếu cần.</span>
+          {selectedProtocolId && (() => {
+            const activeProto = allProtocols.find((p) => p.id === selectedProtocolId);
+            if (!activeProto) return null;
+            return (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "#0369a1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                <span>✓ Applied: <strong>{activeProto.shortName}</strong> ({activeProto.days}d, {activeProto.lockLevel}).</span>
+                {activeProto.isCustom && (
+                  <button
+                    type="button"
+                    className="vx-link"
+                    style={{ fontSize: "11px", color: "#b91c1c" }}
+                    onClick={() => deleteCustomProtocol(activeProto.id)}
+                  >
+                    Delete custom
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {showNewProtocol && (
+            <div style={{ marginTop: "10px", padding: "12px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b" }}>Create Custom Clinical Protocol</div>
+              <input
+                className="vx-input"
+                style={{ width: "100%", minWidth: 0 }}
+                placeholder="Protocol name (e.g. Hoof Abscess)"
+                value={newProtoName}
+                onChange={(e) => setNewProtoName(e.target.value)}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "8px" }}>
+                <input
+                  className="vx-input"
+                  style={{ minWidth: 0 }}
+                  type="number"
+                  min={1}
+                  placeholder="Days (e.g. 7)"
+                  value={newProtoDays}
+                  onChange={(e) => setNewProtoDays(e.target.value)}
+                />
+                <select
+                  className="vx-input"
+                  style={{ minWidth: 0 }}
+                  value={newProtoLock}
+                  onChange={(e) => setNewProtoLock(e.target.value)}
+                >
+                  <option value="FULL">Full Lock</option>
+                  <option value="HEAVY_WORK_ONLY">Heavy Work Only</option>
+                </select>
+              </div>
+              <input
+                className="vx-input"
+                style={{ width: "100%", minWidth: 0 }}
+                placeholder="Protocol note (optional)"
+                value={newProtoNote}
+                onChange={(e) => setNewProtoNote(e.target.value)}
+              />
+              <select
+                className="vx-input"
+                style={{ width: "100%", minWidth: 0 }}
+                value={newProtoMedKey}
+                onChange={(e) => setNewProtoMedKey(e.target.value)}
+              >
+                <option value="">-- Choose medicine to add --</option>
+                {medCatalog.map((m) => (
+                  <option key={m.supplyName} value={m.supplyName}>
+                    {m.supplyName} ({m.unit})
+                  </option>
+                ))}
+              </select>
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr auto", gap: "8px", alignItems: "center" }}>
+                <input
+                  className="vx-input"
+                  style={{ minWidth: 0 }}
+                  type="number"
+                  min={0.5}
+                  step="any"
+                  value={newProtoMedQty}
+                  onChange={(e) => setNewProtoMedQty(e.target.value)}
+                  placeholder="Qty"
+                />
+                <input
+                  className="vx-input"
+                  style={{ minWidth: 0 }}
+                  value={newProtoMedFreq}
+                  onChange={(e) => setNewProtoMedFreq(e.target.value)}
+                  placeholder="Frequency"
+                />
+                <button
+                  type="button"
+                  className="vx-btn"
+                  style={{ padding: "8px 16px", whiteSpace: "nowrap" }}
+                  onClick={addMedToNewProtocol}
+                >
+                  + Add
+                </button>
+              </div>
+              {newProtoMeds.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {newProtoMeds.map((m, idx) => (
+                    <span key={`${m.medicineName}-${idx}`} style={{ fontSize: "11.5px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "14px", padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      {m.medicineName} × {m.dosage} ({m.frequency})
+                      <button
+                        type="button"
+                        onClick={() => setNewProtoMeds((prev) => prev.filter((_, i) => i !== idx))}
+                        style={{ border: "none", background: "transparent", cursor: "pointer", color: "#b91c1c", fontWeight: 700, padding: 0 }}
+                        aria-label="Remove"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {newProtoError && (
+                <div style={{ fontSize: "11.5px", color: "#b91c1c" }}>{newProtoError}</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                <button type="button" className="vx-btn" onClick={() => setShowNewProtocol(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="vx-btn vx-btn--primary" onClick={saveCustomProtocol}>
+                  Save protocol
+                </button>
+              </div>
             </div>
           )}
         </div>
