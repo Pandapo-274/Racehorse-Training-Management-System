@@ -55,9 +55,9 @@ describe("isResultLocked", () => {
 });
 
 describe("isTrainersHorse", () => {
-  test("own horse and unassigned horse yes, another trainer's horse no", () => {
+  test("own horse yes; unassigned or another trainer's horse no", () => {
     expect(isTrainersHorse({ trainerId: 2 }, 2)).toBe(true);
-    expect(isTrainersHorse({ trainerId: null }, 2)).toBe(true);
+    expect(isTrainersHorse({ trainerId: null }, 2)).toBe(false);
     expect(isTrainersHorse({ trainerId: 3 }, 2)).toBe(false);
   });
 });

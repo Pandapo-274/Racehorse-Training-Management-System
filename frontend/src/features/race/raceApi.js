@@ -73,7 +73,7 @@ export function getSummary(year, signal) {
 
 // POST /api/races: HLV đề xuất -> suất ở PENDING_OWNER chờ chủ ngựa duyệt. RaceService.check kiểm toàn bộ
 // điều kiện (tuổi 2..10, ELIGIBLE, không khoá, có và chưa quá hạn tiêm phòng, có chạy thử trong 30 ngày, nghỉ 14 ngày
-// giữa hai giải, giải chưa đầy...). HLV chỉ đề xuất / rút ngựa mình phụ trách (hoặc ngựa chưa giao cho ai).
+// giữa hai giải, giải chưa đầy...). HLV chỉ đề xuất / rút ngựa mình phụ trách.
 export function registerRace({ horseId, raceId, note }) {
   return authFetch("/api/races", {
     method: "POST",
@@ -206,9 +206,9 @@ export function isResultLocked(entry, today = todayIso()) {
   return today > isoOf(new Date(y, m - 1, d + RESULT_EDIT_WINDOW_DAYS));
 }
 
-/** A Head Trainer may enter or scratch only their own horses, or horses not assigned to anyone. */
+/** A Head Trainer advises only on the horses they train; an unassigned horse waits for the manager. */
 export function isTrainersHorse(entry, userId) {
-  return entry.trainerId == null || entry.trainerId === userId;
+  return entry.trainerId != null && entry.trainerId === userId;
 }
 
 /**

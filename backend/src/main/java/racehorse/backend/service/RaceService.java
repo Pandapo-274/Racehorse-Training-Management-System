@@ -46,8 +46,9 @@ import racehorse.backend.security.AuthenticatedUser;
  * tư vấn: đề xuất một giải kèm ghi chú (register), chủ bấm đăng ký mới thành suất đua.
  * Rút ngựa cũng vậy (V55): chỉ chủ rút suất đã xác nhận; Head Trainer chỉ rút lại đề xuất
  * chủ chưa quyết, còn lại thì gửi lời khuyên rút ngựa (recommendWithdrawal).
- * Head Trainer chỉ đề xuất và tư vấn cho ngựa mình phụ trách (HORSE.trainer_id) hoặc
- * ngựa chưa giao cho ai. Nhập kết quả thì Head Trainer nào cũng được.
+ * Head Trainer chỉ đề xuất và tư vấn cho ngựa mình phụ trách (HORSE.trainer_id). Ngựa chưa
+ * giao cho ai thì không ai tư vấn, như Flow 3 không cho lập lịch: lời tư vấn là của người
+ * huấn luyện con ngựa. Chủ vẫn tự đăng ký được. Nhập kết quả thì Head Trainer nào cũng được.
  *
  * V59 (phương án A): giải do một đơn vị tổ chức (JRA...) hoặc chính CLB tổ chức. Chỉ Club Manager
  * tạo giải. Chủ xác nhận suất thì CLB thay chủ nộp đơn cho đơn vị tổ chức (ngoài hệ thống) và Club
@@ -281,17 +282,20 @@ public class RaceService {
     }
 
     /**
-     * Head Trainer chỉ đăng ký / rút ngựa mình phụ trách (HORSE.trainer_id), như ở
-     * TrainingPlanService; ngựa chưa giao cho ai thì Head Trainer nào cũng làm được.
-     * Vai trò khác không bị giới hạn ở đây (@RequireRole đã lọc).
+     * Head Trainer chỉ tư vấn cho ngựa mình phụ trách (HORSE.trainer_id), như ở
+     * TrainingPlanService. Ngựa chưa giao cho ai (Head Trainer cũ bị khoá, chờ manager giao
+     * người mới) thì không Head Trainer nào tư vấn. Vai trò khác không bị giới hạn ở đây
+     * (@RequireRole đã lọc).
      */
     private static boolean managedBy(Integer trainerId, AuthenticatedUser user) {
-        return !"HEAD_TRAINER".equals(user.role()) || trainerId == null || trainerId.intValue() == user.userId();
+        return !"HEAD_TRAINER".equals(user.role()) || (trainerId != null && trainerId.intValue() == user.userId());
     }
 
-    private static ApiException notYourHorse(String horseName) {
-        return new ApiException(HttpStatus.FORBIDDEN, horseName + " is assigned to another Head Trainer",
-                Map.of("horseId", "Only the horse's own Head Trainer can enter or scratch it"));
+    private static ApiException notYourHorse(String horseName, Integer trainerId) {
+        return new ApiException(HttpStatus.FORBIDDEN, trainerId == null
+                ? horseName + " has not been assigned to you by the Club Manager yet"
+                : horseName + " is assigned to another Head Trainer",
+                Map.of("horseId", "Only the horse's own Head Trainer advises on its races"));
     }
 
     public List<Integer> years() {
@@ -403,7 +407,7 @@ public class RaceService {
         HorseResponse h = horses.findById(r.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + r.horseId() + " not found"));
         if (!managedBy(h.trainerId(), user)) {
-            throw notYourHorse(h.horseName());
+            throw notYourHorse(h.horseName(), h.trainerId());
         }
         RaceModels.RaceEvent race = requireRace(r.raceId());
         int id = createEntry(h, race, r.note(), user, ip);
@@ -604,7 +608,7 @@ public class RaceService {
         RaceModels.Entry e = require(id);
         checkCanManageEntry(e, user);
         if (!managedBy(e.trainerId(), user)) {
-            throw notYourHorse(e.horseName());
+            throw notYourHorse(e.horseName(), e.trainerId());
         }
         if ("HEAD_TRAINER".equals(user.role()) && !"PENDING_OWNER".equals(e.approvalStatus())) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -687,7 +691,7 @@ public class RaceService {
     public RaceModels.Entry recommendWithdrawal(int id, String reason, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
         if (!managedBy(e.trainerId(), user)) {
-            throw notYourHorse(e.horseName());
+            throw notYourHorse(e.horseName(), e.trainerId());
         }
         if (!"APPROVED".equals(e.approvalStatus()) || e.result() != null) {
             throw new ApiException(HttpStatus.CONFLICT,

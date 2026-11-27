@@ -1939,7 +1939,7 @@ class BusinessRulesTest {
     void declinedEntryCanBeProposedAgain() {
         RaceRepository races = mock(RaceRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
-        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(horses.findById(100)).thenReturn(Optional.of(horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer")));
         when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(true);
         when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
         when(races.findEntry(100, 50)).thenReturn(Optional.of(new RaceRepository.ExistingEntry(9, null, "REJECTED")));
@@ -1956,7 +1956,7 @@ class BusinessRulesTest {
     void horseWithoutARecentTrialRunCannotBeEntered() {
         RaceRepository races = mock(RaceRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
-        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(horses.findById(100)).thenReturn(Optional.of(horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer")));
         when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
         when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(false);
         RaceService service = raceService(races, horses);
@@ -1988,7 +1988,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    void candidatesAreTheTrainersOwnHorsesAndUnassignedOnes() {
+    void candidatesAreOnlyTheTrainersOwnHorses() {
         RaceRepository races = mock(RaceRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
         when(horses.findActive()).thenReturn(List.of(
@@ -1998,7 +1998,34 @@ class BusinessRulesTest {
 
         List<Integer> ids = raceService(races, horses).candidates(null, TRAINER).stream()
                 .map(RaceModels.Candidate::horseId).toList();
-        assertEquals(List.of(100, 102), ids);
+        assertEquals(List.of(100), ids);
+    }
+
+    @Test
+    void headTrainerCannotRecommendARaceForAnUnassignedHorse() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+
+        ApiException ex = expect(ApiException.class, 403, () -> raceService(races, horses)
+                .register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip"));
+        assertTrue(ex.getMessage().contains("not been assigned to you"), ex.getMessage());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
+    }
+
+    @Test
+    void ownerRegistersAnUnassignedHorseThemselves() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(races.insert(eq(100), eq(7), any(), eq(7), any())).thenReturn(9);
+        when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
+        when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
+
+        raceService(races, horses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
+        verify(races).updateApproval(9, "APPROVED", null);
     }
 
     @Test
@@ -2080,8 +2107,10 @@ class BusinessRulesTest {
 
     // ---------------------------------------------------------------- Hội đồng: chủ ngựa đăng ký, HLV tư vấn
 
+    /** Horse 100 of owner 7, trained by Head Trainer 2 (TRAINER). */
     private static void openRaceFor(RaceRepository races, HorseRepository horses) {
-        when(horses.findById(100)).thenReturn(Optional.of(horse(100, "ELIGIBLE", TODAY.minusYears(4), "COLT")));
+        when(horses.findById(100)).thenReturn(Optional.of(
+                horseWithTrainer(100, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer")));
         when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
         when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(true);
     }

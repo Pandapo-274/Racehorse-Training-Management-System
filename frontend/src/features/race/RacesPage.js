@@ -216,7 +216,7 @@ function EntryForm({ races, onRegistered }) {
   };
 
   return (
-    <Card title="Recommend a race to the owner" hint="The owner decides and registers the horse. Your horses (or horses not yet assigned to a Head Trainer): club horses aged 24–131 months, staying at the club through race day, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
+    <Card title="Recommend a race to the owner" hint="The owner decides and registers the horse. Only the horses you train: club horses aged 24–131 months, staying at the club through race day, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
