@@ -76,6 +76,21 @@ public class HorseRequestController {
     }
 
     /** Head Trainer chủ ngựa có thể xin: chỉ người còn nhận thêm ngựa, chỉ tên. */
+    /**
+     * V64: bring a horse that left back to the club. Same body as a registration; the horse's
+     * identity is taken from its record. Reviewed, contracted and received like a new one.
+     */
+    @PostMapping("/return/{horseId}")
+    @RequireRole({"HORSE_OWNER"})
+    public org.springframework.http.ResponseEntity<HorseRequestRow> submitReturn(
+            @PathVariable int horseId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody racehorse.backend.dto.SubmitRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(service.submitReturn(horseId, request, user, http.getRemoteAddr()));
+    }
+
     @GetMapping("/trainer-options")
     @RequireRole({"HORSE_OWNER"})
     public List<Map<String, Object>> trainerOptions() {

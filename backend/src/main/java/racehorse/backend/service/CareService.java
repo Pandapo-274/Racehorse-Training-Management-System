@@ -82,7 +82,14 @@ public class CareService {
 
     public List<CareModels.FeedingItem> feeding(Integer horseId, AuthenticatedUser user) {
         Integer ownerId = "HORSE_OWNER".equals(user.role()) ? user.userId() : null;
-        return care.findFeeding(horseId, ownerId);
+        List<CareModels.FeedingItem> items = care.findFeeding(horseId, ownerId);
+        if ("GROOM".equals(user.role())) {
+            // Groom chỉ thấy khẩu phần của ngựa trong đội mình.
+            java.util.Set<Integer> team = horses.findForGroom(user.userId()).stream()
+                    .map(HorseResponse::horseId).collect(java.util.stream.Collectors.toSet());
+            return items.stream().filter(f -> team.contains(f.horseId())).toList();
+        }
+        return items;
     }
 
     /**
@@ -199,6 +206,7 @@ public class CareService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Assignee must be an active Groom",
                     Map.of("assignedTo", "Choose an active Groom"));
         }
+        requireOwnGroom(r.assignedTo(), user);
         if (r.taskDate().isBefore(LocalDate.now())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot assign tasks in the past",
                     Map.of("taskDate", "Choose today or a later day"));
@@ -249,6 +257,7 @@ public class CareService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Assignee must be an active Groom",
                     Map.of("assignedTo", "Choose an active Groom"));
         }
+        requireOwnGroom(r.assignedTo(), user);
         LocalDate today = LocalDate.now();
         if (r.fromDate().isBefore(today)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot assign tasks in the past",
@@ -406,6 +415,14 @@ public class CareService {
         return requireTask(taskId, user);
     }
 
+    /** Góp ý hội đồng: Head Trainer chỉ giao việc cho Groom trong đội của mình. */
+    private void requireOwnGroom(int groomId, AuthenticatedUser user) {
+        if ("HEAD_TRAINER".equals(user.role()) && !sessions.isGroomOfTrainer(groomId, user.userId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This Groom is not in your team",
+                    Map.of("assignedTo", "Choose a Groom the Club Manager assigned to you"));
+        }
+    }
+
     /** #15: hand an open task to another groom. Both grooms are told. */
     @Transactional
     public CareModels.AssignResult reassign(int taskId, int newGroom, AuthenticatedUser user, String ip) {
@@ -424,6 +441,7 @@ public class CareService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Assignee must be an active Groom",
                     Map.of("assignedTo", "Choose an active Groom"));
         }
+        requireOwnGroom(newGroom, user);
         if (care.reassign(taskId, newGroom) == 0) {
             throw new ApiException(HttpStatus.CONFLICT, "This task has just been completed");
         }

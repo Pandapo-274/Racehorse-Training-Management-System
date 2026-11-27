@@ -25,17 +25,20 @@ public class RaceRepository {
 
     // SELECT dùng chung: một dòng đăng ký JOIN giải (RACE), ngựa, chủ, người đăng ký.
     private static final String SELECT = """
-            SELECT r.registration_id, r.horse_id, h.horse_name, h.stall_no, h.owner_id,
+            SELECT r.registration_id, r.horse_id, h.horse_name, h.stall_no, r.owner_id,
                    o.full_name AS owner_name, r.race_name, r.race_date, r.registered_by,
                    u.full_name AS registered_by_name, r.result, r.prize_money, r.note,
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
                    r.finish_position, r.finish_time_ms, r.scratch_reason,
-                   r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id
+                   r.approval_status, r.reject_reason, rc.entry_deadline, h.trainer_id,
+                   r.withdraw_advice, r.withdraw_advice_at, wa.full_name AS withdraw_advice_by_name,
+                   rc.organizer, r.submitted_at, r.organizer_ref
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
-            JOIN APP_USER o ON o.user_id  = h.owner_id
+            JOIN APP_USER o ON o.user_id  = r.owner_id   -- V65: the owner who entered the horse
             JOIN APP_USER u ON u.user_id  = r.registered_by
+            LEFT JOIN APP_USER wa ON wa.user_id = r.withdraw_advice_by
             """;
 
     /**
@@ -81,7 +84,12 @@ public class RaceRepository {
                 rs.getString("race_status"), rs.getObject("finish_position", Integer.class),
                 rs.getObject("finish_time_ms", Integer.class), rs.getString("scratch_reason"),
                 rs.getString("approval_status"), rs.getString("reject_reason"),
-                rs.getObject("trainer_id", Integer.class));
+                rs.getObject("trainer_id", Integer.class),
+                rs.getString("withdraw_advice"),
+                rs.getObject("withdraw_advice_at", java.time.LocalDateTime.class),
+                rs.getString("withdraw_advice_by_name"),
+                rs.getString("organizer"), rs.getObject("submitted_at", java.time.LocalDateTime.class),
+                rs.getString("organizer_ref"));
     }
 
     /**
@@ -107,7 +115,10 @@ public class RaceRepository {
         return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
 
-    /** year null = mọi năm; ownerId khác null = chỉ ngựa của chủ đó. */
+    /**
+     * year null = mọi năm; ownerId khác null = chỉ suất của chủ đó (V65: chủ lúc đăng ký,
+     * nên ngựa đã bán vẫn để lại lịch sử và tiền thưởng cho người bán).
+     */
     public List<RaceModels.Entry> find(Integer year, Integer horseId, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
         Map<String, Object> p = new HashMap<>();
@@ -120,7 +131,7 @@ public class RaceRepository {
             p.put("horseId", horseId);
         }
         if (ownerId != null) {
-            sql.append(" AND h.owner_id = :ownerId");
+            sql.append(" AND r.owner_id = :ownerId");
             p.put("ownerId", ownerId);
         }
         sql.append(" ORDER BY r.race_date DESC, r.race_name, h.horse_name");
@@ -166,16 +177,19 @@ public class RaceRepository {
      * `AND result = 'SCRATCHED'` is in the UPDATE itself, so two people
      * re-entering the same horse at once cannot both succeed.
      */
-    public int reinstate(int id, int by, String note) {
+    public int reinstate(int id, int ownerId, int by, String note) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION
                 SET result = NULL, prize_money = NULL, registered_by = :by, note = :note,
+                    owner_id = :owner,  -- V65: the horse may have been sold since the old row
+                    submitted_at = NULL, submitted_by = NULL, organizer_ref = NULL,  -- V59: not sent yet
                     scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL,
                     approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL,
-                    fee_expense_id = NULL   -- V36: the old fee is settled; a new approval charges again
+                    fee_expense_id = NULL,  -- V36: the old fee is settled; a new approval charges again
+                    withdraw_advice = NULL, withdraw_advice_at = NULL, withdraw_advice_by = NULL  -- V55
                 WHERE registration_id = :id
                   AND (result = 'SCRATCHED' OR (result IS NULL AND approval_status = 'REJECTED'))
-                """).param("id", id).param("by", by).param("note", note).update();
+                """).param("id", id).param("owner", ownerId).param("by", by).param("note", note).update();
     }
 
     /**
@@ -205,12 +219,14 @@ public class RaceRepository {
                 """).param("id", id).param("status", status).param("reason", reason).update();
     }
 
-    public int insert(int horseId, RaceModels.RaceEvent race, int by, String note) {
+    /** V65: ownerId is the horse's owner now; results and prize money stay with them. */
+    public int insert(int horseId, int ownerId, RaceModels.RaceEvent race, int by, String note) {
         return jdbc.sql("""
-                INSERT INTO RACE_REGISTRATION (horse_id, race_id, race_name, race_date, registered_by, note, approval_status)
+                INSERT INTO RACE_REGISTRATION (horse_id, owner_id, race_id, race_name, race_date, registered_by,
+                                               note, approval_status)
                 OUTPUT INSERTED.registration_id
-                VALUES (:h, :race, :n, :d, :by, :note, 'PENDING_OWNER')
-                """).param("h", horseId).param("race", race.raceId()).param("n", race.raceName())
+                VALUES (:h, :owner, :race, :n, :d, :by, :note, 'PENDING_OWNER')
+                """).param("h", horseId).param("owner", ownerId).param("race", race.raceId()).param("n", race.raceName())
                 .param("d", race.raceDate()).param("by", by).param("note", note)
                 .query(Integer.class).single();
     }
@@ -228,6 +244,18 @@ public class RaceRepository {
     }
 
     /** V23: the reason goes to its own column; the note is left as it was. */
+    /**
+     * V55: the Head Trainer advises the owner to withdraw a confirmed entry. Only an entry
+     * the owner confirmed and that has no result can carry advice; the owner decides.
+     */
+    public int setWithdrawAdvice(int id, String advice, int by) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET withdraw_advice = :advice, withdraw_advice_at = SYSUTCDATETIME(), withdraw_advice_by = :by
+                WHERE registration_id = :id AND result IS NULL AND approval_status = 'APPROVED'
+                """).param("advice", advice).param("by", by).param("id", id).update();
+    }
+
     public int scratch(int id, String reason) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION SET result = 'SCRATCHED', prize_money = NULL, scratch_reason = :reason
@@ -274,7 +302,7 @@ public class RaceRepository {
     /** entries = live entries (LIVE_ENTRY); needs the :today parameter. */
     private static final String SELECT_RACE = """
             SELECT rc.race_id, rc.race_name, rc.race_date, rc.distance_m, rc.venue, rc.entry_deadline,
-                   rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason,
+                   rc.entry_fee, rc.max_entries, rc.status, rc.cancel_reason, rc.organizer,
                    (SELECT COUNT(*) FROM RACE_REGISTRATION r
                     WHERE r.race_id = rc.race_id AND
             """ + LIVE_ENTRY + """
@@ -288,7 +316,7 @@ public class RaceRepository {
                 rs.getObject("distance_m", Integer.class), rs.getString("venue"),
                 rs.getObject("entry_deadline", LocalDate.class), rs.getBigDecimal("entry_fee"),
                 rs.getObject("max_entries", Integer.class), rs.getString("status"),
-                rs.getString("cancel_reason"), rs.getInt("entries"));
+                rs.getString("cancel_reason"), rs.getInt("entries"), rs.getString("organizer"));
     }
 
     public Optional<RaceModels.RaceEvent> findRace(int raceId) {
@@ -320,15 +348,31 @@ public class RaceRepository {
     public int insertRace(RaceModels.RaceEventRequest r, String name, int userId) {
         return jdbc.sql("""
                 INSERT INTO RACE (race_name, race_date, distance_m, venue, entry_deadline, entry_fee,
-                                  max_entries, created_by)
+                                  max_entries, created_by, organizer)
                 OUTPUT INSERTED.race_id
-                VALUES (:name, :date, :dist, :venue, :deadline, :fee, :max, :by)
+                VALUES (:name, :date, :dist, :venue, :deadline, :fee, :max, :by, :organizer)
                 """)
+                .param("organizer", r.organizer().trim())
                 .param("name", name).param("date", r.raceDate()).param("dist", r.distanceM())
                 .param("venue", r.venue() == null || r.venue().isBlank() ? null : r.venue().trim())
                 .param("deadline", r.entryDeadline()).param("fee", r.entryFee())
                 .param("max", r.maxEntries()).param("by", userId)
                 .query(Integer.class).single();
+    }
+
+    /**
+     * V59: the Club Manager sent a confirmed entry to the race's organizer. Only once, only for an
+     * entry the owner confirmed and that has no result and was not scratched.
+     */
+    public int markSubmitted(int id, int by, String organizerRef) {
+        return jdbc.sql("""
+                UPDATE RACE_REGISTRATION
+                SET submitted_at = SYSUTCDATETIME(), submitted_by = :by, organizer_ref = :ref
+                WHERE registration_id = :id AND approval_status = 'APPROVED'
+                  AND result IS NULL AND submitted_at IS NULL
+                """)
+                .param("by", by).param("ref", organizerRef).param("id", id)
+                .update();
     }
 
     /**

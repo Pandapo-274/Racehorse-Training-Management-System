@@ -27,8 +27,19 @@
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;
 }
 
+/* Stable map: một dòng tóm tắt thay cho ba ô số lớn. */
+.care-overview {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  padding: 10px 16px; border-radius: 14px; background: #fff;
+  font-size: 13px; color: var(--text-600);
+}
+.care-overview strong { font: 800 15px var(--font-heading); color: var(--navy-900); }
+.care-overview__dot { color: var(--text-400); }
+.care-overview .care-progress { flex: 1 1 120px; max-width: 220px; margin-top: 0; }
+
+/* Cột flex: các thẻ cùng hàng cao bằng nhau và "Report a problem" luôn nằm ở đáy thẻ. */
 .care-stall {
-  display: grid; gap: 10px; align-content: start;
+  display: flex; flex-direction: column; gap: 10px;
   padding: 14px 16px; border-radius: 14px; background: #fff;
   border-top: 3px solid var(--line);
 }
@@ -72,7 +83,10 @@
 .care-link-btn:disabled { opacity: .5; cursor: default; text-decoration: none; }
 .care-link-btn--danger { color: var(--danger); }
 
-.care-stall__foot { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); }
+.care-stall__foot {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-top: auto;
+  padding-top: 4px; border-top: 1px solid var(--line);
+}
 .care-stall__foot a { font: 700 11px var(--font-body); color: var(--pink-700); text-decoration: none; padding-top: 6px; }
 .care-stall__foot a:hover { text-decoration: underline; }
 

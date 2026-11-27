@@ -33,6 +33,7 @@ public class WithdrawalRepository {
                    w.reason, w.status, w.created_at,
                    w.reviewed_by, r.full_name AS reviewer_name, w.reviewed_at, w.review_note,
                    w.released_stall, w.cancelled_sessions, w.ended_plans,
+                   w.leave_on, w.notice_until, w.refund_months, w.refund_amount, w.contract_id, w.by_club,
                    (SELECT COUNT(*) FROM TRAINING_SESSION s
                      WHERE s.horse_id = w.horse_id AND s.status = 'SCHEDULED') AS scheduled_sessions,
                    (SELECT COUNT(*) FROM TRAINING_PLAN p
@@ -58,7 +59,11 @@ public class WithdrawalRepository {
                 rs.getString("released_stall"),
                 rs.getObject("cancelled_sessions", Integer.class),
                 rs.getObject("ended_plans", Integer.class),
-                rs.getInt("scheduled_sessions"), rs.getInt("open_plans"));
+                rs.getInt("scheduled_sessions"), rs.getInt("open_plans"),
+                rs.getObject("leave_on", LocalDate.class), rs.getObject("notice_until", LocalDate.class),
+                rs.getObject("refund_months", Integer.class),
+                rs.getBigDecimal("refund_amount") == null ? null : rs.getBigDecimal("refund_amount").longValue(),
+                rs.getObject("contract_id", Integer.class), rs.getBoolean("by_club"));
     }
 
     public Optional<WithdrawalRow> findById(int withdrawalId) {
@@ -94,15 +99,17 @@ public class WithdrawalRepository {
                 .query(Integer.class).single() > 0;
     }
 
-    public int insert(int horseId, int requestedBy, String reason) {
+    public int insert(int horseId, int requestedBy, String reason, LocalDate leaveOn, boolean byClub) {
         return jdbc.sql("""
-                INSERT INTO HORSE_WITHDRAWAL (horse_id, requested_by, reason)
+                INSERT INTO HORSE_WITHDRAWAL (horse_id, requested_by, reason, leave_on, by_club)
                 OUTPUT INSERTED.withdrawal_id
-                VALUES (:horseId, :requestedBy, :reason)
+                VALUES (:horseId, :requestedBy, :reason, :leaveOn, :byClub)
                 """)
                 .param("horseId", horseId)
                 .param("requestedBy", requestedBy)
                 .param("reason", reason)
+                .param("leaveOn", leaveOn)
+                .param("byClub", byClub)
                 .query(Integer.class)
                 .single();
     }
@@ -183,15 +190,22 @@ public class WithdrawalRepository {
 
     /** Duyệt, kèm những gì việc duyệt đã làm. Cùng điều kiện PENDING như close(). */
     public int markApproved(int withdrawalId, int reviewerId, String note,
-                            String releasedStall, int cancelledSessions, int endedPlans) {
+                            String releasedStall, int cancelledSessions, int endedPlans,
+                            LocalDate noticeUntil, int refundMonths, long refundAmount, Integer contractId) {
         return jdbc.sql("""
                 UPDATE HORSE_WITHDRAWAL
                 SET status = 'APPROVED', reviewed_by = :reviewer,
                     reviewed_at = SYSUTCDATETIME(), review_note = :note,
                     released_stall = :stall,
-                    cancelled_sessions = :sessions, ended_plans = :plans
+                    cancelled_sessions = :sessions, ended_plans = :plans,
+                    notice_until = :notice, refund_months = :refundMonths,
+                    refund_amount = :refund, contract_id = :contract
                 WHERE withdrawal_id = :id AND status = 'PENDING'
                 """)
+                .param("notice", noticeUntil)
+                .param("refundMonths", refundMonths)
+                .param("refund", java.math.BigDecimal.valueOf(refundAmount))
+                .param("contract", contractId)
                 .param("reviewer", reviewerId)
                 .param("note", note)
                 .param("stall", releasedStall)
@@ -199,5 +213,71 @@ public class WithdrawalRepository {
                 .param("plans", endedPlans)
                 .param("id", withdrawalId)
                 .update();
+    }
+
+    /* ---------- V62: what the manager decides on ---------- */
+
+    /** An entry still to be raced, with its fee line (V36) if one was charged. */
+    public record UpcomingEntry(int registrationId, String raceName, LocalDate raceDate, LocalDate entryDeadline,
+                                Integer feeExpenseId, boolean feePaid) {}
+
+    public List<UpcomingEntry> findUpcomingEntries(int horseId, LocalDate from) {
+        return jdbc.sql("""
+                SELECT r.registration_id, r.race_name, r.race_date, rc.entry_deadline,
+                       CASE WHEN e.cancelled_at IS NULL THEN r.fee_expense_id END AS fee_expense_id,
+                       CASE WHEN e.paid_at IS NOT NULL THEN 1 ELSE 0 END AS fee_paid
+                FROM RACE_REGISTRATION r
+                LEFT JOIN RACE rc ON rc.race_id = r.race_id
+                LEFT JOIN EXPENSE_LOG e ON e.expense_id = r.fee_expense_id
+                WHERE r.horse_id = :horseId AND r.result IS NULL AND r.race_date >= :from
+                ORDER BY r.race_date
+                """)
+                .param("horseId", horseId).param("from", from)
+                .query((rs, n) -> new UpcomingEntry(rs.getInt("registration_id"), rs.getString("race_name"),
+                        rs.getObject("race_date", LocalDate.class), rs.getObject("entry_deadline", LocalDate.class),
+                        rs.getObject("fee_expense_id", Integer.class), rs.getInt("fee_paid") == 1))
+                .list();
+    }
+
+    public record Costs(int unpaidCount, long unpaidAmount, int disputedCount) {}
+
+    /** Costs billed to the owner for this horse and not paid yet (same lines as the Payments page). */
+    public Costs unpaidCosts(int horseId) {
+        return jdbc.sql("""
+                SELECT ISNULL(SUM(CASE WHEN e.status IN ('BILLED', 'RESOLVED') THEN 1 ELSE 0 END), 0) AS unpaid,
+                       ISNULL(SUM(CASE WHEN e.status IN ('BILLED', 'RESOLVED') THEN e.amount ELSE 0 END), 0) AS amount,
+                       ISNULL(SUM(CASE WHEN e.status = 'DISPUTED' THEN 1 ELSE 0 END), 0) AS disputed
+                FROM EXPENSE_LOG e
+                WHERE e.horse_id = :horseId AND e.cancelled_at IS NULL AND e.paid_at IS NULL
+                  AND e.category IN ('MEDICAL', 'OTHER')
+                """)
+                .param("horseId", horseId)
+                .query((rs, n) -> new Costs(rs.getInt("unpaid"), rs.getBigDecimal("amount").longValue(),
+                        rs.getInt("disputed")))
+                .single();
+    }
+
+    /** The reason of a veterinary training lock still in force, if any. */
+    public Optional<String> activeLock(int horseId) {
+        return jdbc.sql("""
+                SELECT TOP 1 reason FROM TRAINING_LOCK
+                WHERE horse_id = :horseId AND released_at IS NULL
+                ORDER BY issued_at DESC
+                """)
+                .param("horseId", horseId).query(String.class).optional();
+    }
+
+    public record Activity(int scheduledSessions, int openPlans) {}
+
+    public Activity activity(int horseId) {
+        return jdbc.sql("""
+                SELECT (SELECT COUNT(*) FROM TRAINING_SESSION s
+                         WHERE s.horse_id = :horseId AND s.status = 'SCHEDULED') AS scheduled_sessions,
+                       (SELECT COUNT(*) FROM TRAINING_PLAN p
+                         WHERE p.horse_id = :horseId AND p.status <> 'COMPLETED') AS open_plans
+                """)
+                .param("horseId", horseId)
+                .query((rs, n) -> new Activity(rs.getInt("scheduled_sessions"), rs.getInt("open_plans")))
+                .single();
     }
 }

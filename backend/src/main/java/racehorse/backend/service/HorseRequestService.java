@@ -35,6 +35,7 @@ import racehorse.backend.security.AuthenticatedUser;
 @Service
 public class HorseRequestService {
 
+    private final racehorse.backend.repository.ContactRepository contactBook;
     private final HorseRequestRepository requests;
     private final HorseService horseService;
     private final UserRepository users;
@@ -43,7 +44,8 @@ public class HorseRequestService {
 
     public HorseRequestService(HorseRequestRepository requests, HorseService horseService,
                                UserRepository users, NotificationService notifications,
-                               ContractService contracts) {
+                               ContractService contracts, racehorse.backend.repository.ContactRepository contactBook) {
+        this.contactBook = contactBook;
         this.requests = requests;
         this.horseService = horseService;
         this.users = users;
@@ -58,6 +60,42 @@ public class HorseRequestService {
     // Không có @Transactional: INSERT, audit và thông báo mỗi câu tự commit riêng. Nếu một bước sau
     // lỗi thì yêu cầu vẫn đã được lưu (không gây sai dữ liệu nghiêm trọng vì chỉ là lời đề nghị).
     public HorseRequestRow submit(SubmitRequest raw, AuthenticatedUser me, String ip) {
+        return submit(raw, me, ip, null);
+    }
+
+    /**
+     * V64: the owner asks to bring a horse that left back to the club. Identity comes from the
+     * horse, not from the form (name, breed, sex, date of birth, colour, parents); the rest is
+     * given fresh and checked like a new registration. Reviewed, offered, signed and paid the
+     * same way; at "Receive" the club brings the same horse back.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public HorseRequestRow submitReturn(int horseId, SubmitRequest raw, AuthenticatedUser me, String ip) {
+        HorseResponse horse = horseService.getOrThrow(horseId);
+        if (horse.ownerId() != me.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can only bring back your own horses");
+        }
+        if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType()))) {
+            throw new ApiException(HttpStatus.CONFLICT, "A pedigree record is not kept at the club");
+        }
+        if (!horse.isWithdrawn()) {
+            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is still at the club");
+        }
+        if (requests.hasOpenReturn(horseId)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "A request to bring " + horse.horseName() + " back is already open");
+        }
+        SubmitRequest fromHorse = new SubmitRequest(
+                horse.horseName(), horse.breed(), horse.horseGender(), horse.dateOfBirth(), horse.color(),
+                raw.note(), HorsePolicy.ACADEMY, horse.sireId(), horse.damId(),
+                raw.weight(), raw.heightCm(), raw.surface(), raw.distancePref(), raw.runningStyle(),
+                raw.preferredStart(), null, raw.contractMonths(), raw.preferredTrainerId(),
+                raw.trainingStart(), raw.trainingEnd(),
+                raw.insurerName(), raw.insurerPhone(), raw.emergencyName(), raw.emergencyPhone());
+        return submit(fromHorse, me, ip, horseId);
+    }
+
+    private HorseRequestRow submit(SubmitRequest raw, AuthenticatedUser me, String ip, Integer returnOf) {
         String name = raw.horseName().trim();
         if (requests.hasOpenRequest(me.userId(), name)) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -72,9 +110,12 @@ public class HorseRequestService {
         }
         boolean club = HorsePolicy.ACADEMY.equals(type);
         if (club) {
-            checkClubHorseFields(raw);
+            checkClubHorseFields(raw, me.userId());
         }
-        horseService.checkDeclaredParents(raw.sireId(), raw.damId(), raw.dateOfBirth(), me.userId());
+        if (returnOf == null) {
+            // A returning horse keeps the parents on its record; they were checked when it first came.
+            horseService.checkDeclaredParents(raw.sireId(), raw.damId(), raw.dateOfBirth(), me.userId());
+        }
 
         // A pedigree record never stays at the club: its stay fields are dropped, not stored.
         // training_weeks is derived from the window, never taken from the client.
@@ -84,27 +125,48 @@ public class HorseRequestService {
                 raw.sireId(), raw.damId(),
                 club ? raw.weight() : null, club ? raw.heightCm() : null,
                 club ? blankToNull(raw.surface()) : null, club ? blankToNull(raw.distancePref()) : null,
-                club ? blankToNull(raw.runningStyle()) : null,
+                club ? HorsePolicy.normalizeRunningStyle(raw.runningStyle()) : null,
                 club ? raw.preferredStart() : null,
                 club ? HorsePolicy.trainingWeeks(raw.trainingStart(), raw.trainingEnd()) : null,
                 club ? raw.contractMonths() : null, club ? raw.preferredTrainerId() : null,
-                club ? raw.trainingStart() : null, club ? raw.trainingEnd() : null);
+                club ? raw.trainingStart() : null, club ? raw.trainingEnd() : null,
+                club ? blankToNull(raw.insurerName()) : null, club ? blankToNull(raw.insurerPhone()) : null,
+                club ? blankToNull(raw.emergencyName()) : null, club ? blankToNull(raw.emergencyPhone()) : null);
         int id = requests.insert(me.userId(), clean);
-        users.writeAudit(me.userId(), "HORSE_REQUEST_SUBMIT", "HORSE_REQUEST", id, "SUCCESS", ip);
+        if (returnOf != null) {
+            requests.setReturnOf(id, returnOf);
+        }
+        users.writeAudit(me.userId(), returnOf == null ? "HORSE_REQUEST_SUBMIT" : "HORSE_RETURN_REQUEST",
+                "HORSE_REQUEST", id, "SUCCESS", ip);
         HorseRequestRow saved = getOrThrow(id);
         notifications.notifyRole("CLUB_MANAGER", me, new Notice(
                 "HORSE_REQUEST_SUBMITTED",
-                "New horse registration request",
-                saved.ownerName() + " asked to register " + saved.horseName() + ".",
+                returnOf == null ? "New horse registration request" : "Request to bring a horse back",
+                saved.ownerName() + (returnOf == null ? " asked to register " : " asked to bring back ")
+                        + saved.horseName() + ".",
                 Notice.HORSE_REQUEST, id));
         return saved;
     }
 
     /** What a club horse must carry for the manager to have a basis to approve it. */
-    private void checkClubHorseFields(SubmitRequest raw) {
+    private void checkClubHorseFields(SubmitRequest raw, int ownerId) {
         Map<String, String> errors = new LinkedHashMap<>();
         if (raw.weight() == null) errors.put("weight", "Weight is required for a club horse");
         if (raw.heightCm() == null) errors.put("heightCm", "Height is required for a club horse");
+        // V54: contract clause 8 relies on these four.
+        if (blankToNull(raw.insurerName()) == null) errors.put("insurerName", "Name the horse's insurer");
+        if (blankToNull(raw.insurerPhone()) == null) errors.put("insurerPhone", "Give the insurer's emergency number");
+        if (blankToNull(raw.emergencyName()) == null) errors.put("emergencyName", "Name a second person to call");
+        if (blankToNull(raw.emergencyPhone()) == null) errors.put("emergencyPhone", "Give that person's phone number");
+        // V63: both are picked from lists, so the numbers are the ones on record.
+        if (!errors.containsKey("insurerName") && !errors.containsKey("insurerPhone")
+                && !contactBook.isListedInsurer(raw.insurerName().trim(), raw.insurerPhone().trim())) {
+            errors.put("insurerName", "Choose the insurer from the list");
+        }
+        if (!errors.containsKey("emergencyName") && !errors.containsKey("emergencyPhone")
+                && !contactBook.isOwnersPerson(ownerId, raw.emergencyName().trim(), raw.emergencyPhone().trim())) {
+            errors.put("emergencyName", "Choose a person from your contacts");
+        }
         // V50: arrival day, training window (>= 3 weeks, inside the stay) and length of stay.
         errors.putAll(HorsePolicy.stayProblems(raw.preferredStart(), raw.trainingStart(), raw.trainingEnd(),
                 raw.contractMonths(), LocalDate.now()));
@@ -188,6 +250,13 @@ public class HorseRequestService {
         if (!errors.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This request cannot be approved yet", errors);
         }
+        if (req.isReturn()) {
+            // V64: the horse must still be away, and still young enough for the club.
+            HorseResponse horse = horseService.getOrThrow(req.returnOfHorseId());
+            if (!horse.isWithdrawn()) {
+                throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is already back at the club");
+            }
+        }
         String note = review.note() == null ? null : blankToNull(review.note());
         int changed = requests.markReviewed(req.requestId(), "APPROVED", me.userId(), null, note);
         if (changed == 0) {
@@ -201,8 +270,9 @@ public class HorseRequestService {
                         + (req.growth() == null ? "" : ". Growth for age: " + req.growth()));
         notifications.notifyUser(req.ownerId(), new Notice(
                 "HORSE_REQUEST_APPROVED",
-                "Registration approved - sign the contract",
-                req.horseName() + " was approved. Read, sign and pay the contract to bring the horse in.",
+                req.isReturn() ? "Return approved - sign the contract" : "Registration approved - sign the contract",
+                req.horseName() + (req.isReturn() ? " can come back. " : " was approved. ")
+                        + "Read, sign and pay the contract to bring the horse in.",
                 Notice.HORSE_REQUEST, req.requestId()));
         return getOrThrow(req.requestId());
     }

@@ -36,7 +36,7 @@ public class ExpenseRepository {
     private static final String COLUMNS = """
              e.expense_id, e.horse_id, h.horse_name, h.registration_code, e.category, e.amount,
                    e.expense_date, e.recorded_by, u.full_name AS recorded_by_name, e.note,
-                   e.status, e.dispute_reason
+                   e.status, e.dispute_reason, e.paid_at
             """;
 
     private static Expense map(ResultSet rs, int rowNum) throws SQLException {
@@ -47,7 +47,8 @@ public class ExpenseRepository {
                 rs.getObject("expense_date", LocalDate.class),
                 rs.getObject("recorded_by", Integer.class), rs.getString("recorded_by_name"),
                 rs.getString("note"),
-                rs.getString("status"), rs.getString("dispute_reason"));
+                rs.getString("status"), rs.getString("dispute_reason"),
+                rs.getObject("paid_at", java.time.LocalDateTime.class));
     }
 
     /** Điều kiện WHERE và tham số cho bốn bộ lọc tuỳ chọn. Dùng chung cho danh sách, tổng và đếm. */
@@ -151,7 +152,7 @@ public class ExpenseRepository {
         return jdbc.sql("""
                 UPDATE EXPENSE_LOG
                 SET status = 'DISPUTED', dispute_reason = :reason, disputed_at = SYSUTCDATETIME()
-                WHERE expense_id = :id AND cancelled_at IS NULL AND status = 'BILLED'
+                WHERE expense_id = :id AND cancelled_at IS NULL AND status = 'BILLED' AND paid_at IS NULL
                 """).param("id", expenseId).param("reason", reason).update();
     }
 

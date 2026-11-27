@@ -66,7 +66,9 @@ public record SubmitRequest(
         @Pattern(regexp = "SPRINT|MEDIUM|LONG", message = "Distance must be SPRINT, MEDIUM or LONG")
         String distancePref,
 
-        @Pattern(regexp = "FRONT|MIDDLE|BACK", message = "Running style must be FRONT, MIDDLE or BACK")
+        // MIDDLE / BACK are the V48 names, still accepted and stored as STALKER / CLOSER (V54).
+        @Pattern(regexp = "FRONT|STALKER|CLOSER|MIDDLE|BACK",
+                 message = "Running style must be FRONT, STALKER or CLOSER")
         String runningStyle,
 
         LocalDate preferredStart,
@@ -76,12 +78,26 @@ public record SubmitRequest(
 
         // ---- V50: the training window the owner asks for ----
         LocalDate trainingStart,
-        LocalDate trainingEnd
+        LocalDate trainingEnd,
+
+        // ---- V54: contract clause 8, insurance and the second person to call ----
+        @Size(max = 100, message = "Insurer must be at most 100 characters")
+        String insurerName,
+
+        @Pattern(regexp = "^$|^[0-9+()\\s.-]{8,20}$", message = "Enter a valid phone number")
+        String insurerPhone,
+
+        @Size(max = 100, message = "Name must be at most 100 characters")
+        String emergencyName,
+
+        @Pattern(regexp = "^$|^[0-9+()\\s.-]{8,20}$", message = "Enter a valid phone number")
+        String emergencyPhone
 ) {
     /** The nine fields a pedigree-only record uses (and that older callers pass). */
     public SubmitRequest(String horseName, String breed, String horseGender, LocalDate dateOfBirth,
                          String color, String note, String recordType, Integer sireId, Integer damId) {
         this(horseName, breed, horseGender, dateOfBirth, color, note, recordType, sireId, damId,
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null);
     }
 }

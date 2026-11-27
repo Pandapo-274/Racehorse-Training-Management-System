@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
  * Các điều khoản lấy từ những mục mà mẫu hợp đồng huấn luyện / gửi nuôi ngựa
  * thường có: rủi ro chấn thương, quyền xử lý thú y khẩn cấp, an tử, bảo hiểm,
  * người liên hệ khẩn cấp, chấm dứt trước hạn, gia hạn, tranh chấp.
+ * Điều 11-12 (góp ý hội đồng): cam kết về việc huấn luyện, và xử lý khi không đạt.
  * Chữ trên UI là tiếng Anh, như mọi chữ khác của hệ thống.
  */
 @Component
@@ -38,10 +39,10 @@ public class ContractTerms {
     private final long vetEmergencyCap;
     private final String clubName;
 
-    public ContractTerms(@Value("${app.contract.monthly-fee:15000000}") long monthlyFee,
+    public ContractTerms(@Value("${app.contract.monthly-fee:1000}") long monthlyFee,
                          @Value("${app.contract.discounts:3:5,6:8,12:12}") String discounts,
                          @Value("${app.contract.offer-days:7}") int offerDays,
-                         @Value("${app.contract.vet-emergency-cap:5000000}") long vetEmergencyCap,
+                         @Value("${app.contract.vet-emergency-cap:5000}") long vetEmergencyCap,
                          @Value("${app.contract.club-name:Tracen Club}") String clubName) {
         this.monthlyFee = monthlyFee;
         this.discounts = parseDiscounts(discounts);
@@ -94,7 +95,14 @@ public class ContractTerms {
                           LocalDate dateOfBirth, String color, String sireName, String damName,
                           Integer trainingWeeks, LocalDate plannedStart, String managerName,
                           boolean renewal, LocalDate renewalStart,
-                          LocalDate trainingStart, LocalDate trainingEnd) {}
+                          LocalDate trainingStart, LocalDate trainingEnd,
+                          String insurerName, String insurerPhone,
+                          String emergencyName, String emergencyPhone,
+                          // a horse already at the club (renewal): its code and stall
+                          String registrationCode, String stallNo) {}
+
+    /** Heading of clause 11: a contract without it was signed before the commitment existed. */
+    public static final String COMMITMENT_HEADING = "11. Training commitment";
 
     /** The contract text, frozen at sending. Plain text, one clause per paragraph. */
     public String text(Parties p, Price price, LocalDate respondBy) {
@@ -113,7 +121,18 @@ public class ContractTerms {
         if (!about.isEmpty()) t.append(" (").append(about).append(")");
         t.append(". Sire: ").append(p.sireName() == null ? "unknown" : p.sireName())
          .append(". Dam: ").append(p.damName() == null ? "unknown" : p.damName()).append(".\n");
-        t.append("The club assigns the registration code, the stall and the Head Trainer when the horse arrives.\n\n");
+        if (p.renewal()) {
+            t.append("Already at the club");
+            if (p.registrationCode() != null) t.append(" as ").append(p.registrationCode());
+            if (p.stallNo() != null) t.append(", stall ").append(p.stallNo());
+            t.append(".\n\n");
+        } else if (p.registrationCode() != null) {
+            // V64: a horse that left and is coming back keeps its code.
+            t.append("Returning to the club as ").append(p.registrationCode())
+             .append(". The club assigns the stall and the Head Trainer when the horse arrives.\n\n");
+        } else {
+            t.append("The club assigns the registration code, the stall and the Head Trainer when the horse arrives.\n\n");
+        }
 
         t.append("3. Term\n");
         t.append(price.months()).append(price.months() == 1 ? " month" : " months");
@@ -145,10 +164,66 @@ public class ContractTerms {
         t.append(" = ").append(vnd(price.total())).append(".\n");
         t.append("Sign and pay online through payOS by ").append(d.format(respondBy))
          .append(". After that date this offer lapses and nothing is owed.\n");
+        appendOtherCharges(t);
+        appendCommonClauses(t, p);
+        return t.toString();
+    }
+
+    /**
+     * V61: the buyer's contract when a horse is sold during its stay. Same clauses 5-13;
+     * the term is the rest of the stay the previous owner paid for, and nothing is due.
+     */
+    public String takeoverText(Parties p, String previousOwner, LocalDate from, LocalDate until,
+                               String registrationCode, String stallNo, LocalDate signBy) {
+        DateTimeFormatter d = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
+        StringBuilder t = new StringBuilder();
+        t.append("BOARDING AND TRAINING CONTRACT - CHANGE OF OWNER").append("\n\n");
+
+        t.append("1. Parties\n");
+        t.append("The club: ").append(clubName).append(", represented by ").append(p.managerName()).append(".\n");
+        t.append("The owner: ").append(p.ownerName()).append(", who has bought or been given the horse from ")
+         .append(previousOwner).append(".\n\n");
+
+        t.append("2. The horse\n");
+        t.append(p.horseName());
+        String about = join(p.breed(), gender(p.horseGender()), p.color(),
+                p.dateOfBirth() == null ? null : "born " + d.format(p.dateOfBirth()));
+        if (!about.isEmpty()) t.append(" (").append(about).append(")");
+        t.append(". Sire: ").append(p.sireName() == null ? "unknown" : p.sireName())
+         .append(". Dam: ").append(p.damName() == null ? "unknown" : p.damName()).append(".\n");
+        t.append("Already at the club");
+        if (registrationCode != null) t.append(" as ").append(registrationCode);
+        if (stallNo != null) t.append(", stall ").append(stallNo);
+        t.append(".\n\n");
+
+        t.append("3. Term\n");
+        t.append("From ").append(d.format(from)).append(", the day the horse passed to the owner, until ")
+         .append(d.format(until)).append(": the rest of the stay agreed and paid for by ")
+         .append(previousOwner).append(".");
+        if (p.trainingStart() != null && p.trainingEnd() != null && p.trainingEnd().isAfter(from)) {
+            t.append(" Training requested: from ").append(d.format(p.trainingStart()))
+             .append(" to ").append(d.format(p.trainingEnd())).append(".");
+        }
+        t.append("\n\n");
+
+        t.append("4. Price and payment\n");
+        t.append("Nothing is due for this term: the previous owner paid for it. Any settlement for it is ")
+         .append("between the previous owner and the owner; the club refunds neither of them for it.\n");
+        t.append("Sign online by ").append(d.format(signBy)).append(". Until the owner signs, the horse takes ")
+         .append("no new training plan and no new race entry.\n");
+        appendOtherCharges(t);
+        appendCommonClauses(t, p);
+        return t.toString();
+    }
+
+    private static void appendOtherCharges(StringBuilder t) {
         t.append("The fee covers the stall, feed, daily care and training under the agreed plan. ")
          .append("Veterinary treatment beyond routine checks, medicines, race entry fees and transport ")
-         .append("are charged separately.\n\n");
+         .append("are charged separately and paid online from the owner's Payments page.\n\n");
+    }
 
+    /** Clauses 5-13 and the signing line: the same in every kind of contract. */
+    private void appendCommonClauses(StringBuilder t, Parties p) {
         t.append("5. Risk of injury, illness or death\n");
         t.append("Training a racehorse carries risk the club cannot remove. The club is not liable for injury, ")
          .append("illness or death of the horse except where caused by the club's gross negligence.\n\n");
@@ -165,7 +240,9 @@ public class ContractTerms {
         t.append("8. Insurance and emergency contact\n");
         t.append("The owner insures the horse (mortality and medical) and gives the club the insurer's ")
          .append("emergency number, and names a second person who may decide for the horse when the ")
-         .append("owner cannot be reached.\n\n");
+         .append("owner cannot be reached.\n");
+        t.append("Insurer: ").append(contact(p.insurerName(), p.insurerPhone())).append(".\n");
+        t.append("Second contact: ").append(contact(p.emergencyName(), p.emergencyPhone())).append(".\n\n");
 
         t.append("9. Ending early\n");
         t.append("The owner may end the stay with 15 days' notice through a withdrawal request. ")
@@ -176,12 +253,23 @@ public class ContractTerms {
          .append("following on from this one; nothing renews or is charged automatically. If the term ends ")
          .append("without renewal, the horse takes no new training plan until it is renewed or withdrawn.\n\n");
 
-        t.append("11. Disputes\n");
+        t.append(COMMITMENT_HEADING).append("\n");
+        t.append("The club delivers the training plan during the training period and completes at least ")
+         .append(HorsePolicy.COMMITMENT_PCT).append("% of the sessions due. Sessions missed while the horse is under a ")
+         .append("veterinary training lock are not counted. The owner can follow every session in the system. ")
+         .append("The club does not promise a race result, a prize or a particular speed.\n\n");
+
+        t.append("12. If the commitment is not met\n");
+        t.append("If fewer than ").append(HorsePolicy.COMMITMENT_PCT).append("% of the sessions due were delivered when ")
+         .append("the training period ends, the club gives the missing sessions free of charge within 30 days. If it ")
+         .append("cannot, it refunds a share of the fee in proportion to the sessions missed. Nothing is owed for ")
+         .append("sessions missed because of injury, illness, a veterinary lock or the owner's own decision.\n\n");
+
+        t.append("13. Disputes\n");
         t.append("The parties first try to settle a dispute between themselves; failing that, under the laws of Viet Nam.\n\n");
 
         t.append("Signed online by typing the owner's full name. The club records the name typed, the time, ")
          .append("the IP address and the SHA-256 fingerprint of this text.\n");
-        return t.toString();
     }
 
     public static String sha256(String text) {
@@ -200,6 +288,11 @@ public class ContractTerms {
     private static String gender(String g) {
         if (g == null) return null;
         return g.charAt(0) + g.substring(1).toLowerCase(Locale.ROOT);
+    }
+
+    private static String contact(String name, String phone) {
+        if (name == null || name.isBlank()) return "to be given to the club before the horse arrives";
+        return phone == null || phone.isBlank() ? name : name + ", " + phone;
     }
 
     private static String join(String... parts) {

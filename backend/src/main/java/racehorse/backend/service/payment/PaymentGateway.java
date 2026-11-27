@@ -38,4 +38,10 @@ public interface PaymentGateway {
 
     /** Hỏi payOS trạng thái hiện tại của một đơn (dùng khi chủ ngựa quay về từ trang thanh toán). */
     Payment fetch(long orderCode);
+
+    /**
+     * Huỷ một link còn mở, để link cũ không thể trả được nữa trước khi tạo link mới (V57).
+     * Ném ApiException khi payOS không huỷ được: khi đó không tạo link mới.
+     */
+    void cancel(long orderCode, String reason);
 }

@@ -6,11 +6,14 @@
 //   GET  /api/races/candidates?raceId=  horses the Head Trainer may enter, with every reason if not
 //   GET  /api/races/summary?year=    club performance and prize total (Manager, Head Trainer)
 //   GET  /api/races/events?upcoming= races (V22): distance, venue, deadline, fee, field size
-//   POST /api/races/events           create a race (Head Trainer, Club Manager)
+//   POST /api/races/events           create a race and say who runs it (Club Manager)
+//   PUT  /api/races/{id}/submitted   the club sent a confirmed entry to the organizer (Club Manager)
 //   PUT  /api/races/events/{id}/cancel  cancel a race; its entries are scratched (Club Manager)
-//   POST /api/races                  enter a horse in a race (Head Trainer)
+//   POST /api/races                  recommend a race to the owner (Head Trainer)
+//   POST /api/races/owner-entry      register the owner's horse in a race (Horse Owner)
+//   PUT  /api/races/{id}/withdraw-advice  Head Trainer recommends withdrawing (V55)
 //   PUT  /api/races/{id}/result      record the result (Head Trainer, Club Manager)
-//   PUT  /api/races/{id}/scratch     withdraw from a race before it runs (Head Trainer)
+//   PUT  /api/races/{id}/scratch     withdraw from a race before it runs (Head Trainer, Horse Owner)
 // Ngoài ra (V28): PUT /api/races/{id}/approve và /reject - chủ ngựa duyệt / từ chối suất HLV đề xuất.
 //
 // Prize money is paid to the horse's owner. It is not club revenue; the system
@@ -42,6 +45,24 @@ export function createRaceEvent(body) {
   return authFetch("/api/races/events", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** V59: organizers the club usually enters horses with; any other name can be typed. */
+export const ORGANIZERS = ["Japan Racing Association (JRA)", "Tracen Club"];
+
+// V59: the Club Manager marks a confirmed entry as sent to the race's organizer.
+export function markSubmitted(id, organizerRef) {
+  return authFetch(`/api/races/${id}/submitted`, {
+    method: "PUT",
+    body: JSON.stringify({ organizerRef: organizerRef?.trim() || null }),
+  });
+}
+
+/** "Submitted to JRA · ref JRA-123" or "Not submitted to JRA yet", for a confirmed entry. */
+export function submissionText(entry) {
+  const to = entry.organizer || "the organizer";
+  if (entry.submittedAt) return `Submitted to ${to}${entry.organizerRef ? ` · ref ${entry.organizerRef}` : ""}`;
+  return `Not submitted to ${to} yet`;
+}
+
 export function cancelRaceEvent(id, reason) {
   return authFetch(`/api/races/events/${id}/cancel`, { method: "PUT", body: JSON.stringify({ reason }) });
 }
@@ -52,9 +73,17 @@ export function getSummary(year, signal) {
 
 // POST /api/races: HLV đề xuất -> suất ở PENDING_OWNER chờ chủ ngựa duyệt. RaceService.check kiểm toàn bộ
 // điều kiện (tuổi 2..10, ELIGIBLE, không khoá, có và chưa quá hạn tiêm phòng, có chạy thử trong 30 ngày, nghỉ 14 ngày
-// giữa hai giải, giải chưa đầy...). HLV chỉ đề xuất / rút ngựa mình phụ trách (hoặc ngựa chưa giao cho ai).
+// giữa hai giải, giải chưa đầy...). HLV chỉ đề xuất / rút ngựa mình phụ trách.
 export function registerRace({ horseId, raceId, note }) {
   return authFetch("/api/races", {
+    method: "POST",
+    body: JSON.stringify({ horseId, raceId, note }),
+  });
+}
+
+// Góp ý hội đồng: chủ ngựa là người đăng ký. Suất được xác nhận ngay, lệ phí ghi vào chi phí của ngựa.
+export function ownerRegisterRace({ horseId, raceId, note }) {
+  return authFetch("/api/races/owner-entry", {
     method: "POST",
     body: JSON.stringify({ horseId, raceId, note }),
   });
@@ -108,6 +137,17 @@ export function rejectEntry(id, reason) {
 }
 
 // Rút trước hoặc đúng hạn đăng ký -> hoàn lệ phí (huỷ dòng chi phí); rút sau hạn -> giữ phí.
+/**
+ * V55 (committee point 14): the owner registers and withdraws; the Head Trainer advises.
+ * The trainer recommends withdrawing a confirmed entry; the owner is notified and decides.
+ */
+export function adviseWithdrawal(id, reason) {
+  return authFetch(`/api/races/${id}/withdraw-advice`, {
+    method: "PUT",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function scratchEntry(id, reason) {
   return authFetch(`/api/races/${id}/scratch`, {
     method: "PUT",
@@ -166,9 +206,9 @@ export function isResultLocked(entry, today = todayIso()) {
   return today > isoOf(new Date(y, m - 1, d + RESULT_EDIT_WINDOW_DAYS));
 }
 
-/** A Head Trainer may enter or scratch only their own horses, or horses not assigned to anyone. */
+/** A Head Trainer advises only on the horses they train; an unassigned horse waits for the manager. */
 export function isTrainersHorse(entry, userId) {
-  return entry.trainerId == null || entry.trainerId === userId;
+  return entry.trainerId != null && entry.trainerId === userId;
 }
 
 /**

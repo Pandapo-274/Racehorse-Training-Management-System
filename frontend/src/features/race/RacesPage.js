@@ -2,7 +2,7 @@
 // Flow 5 - race entries, results and performance, for the Head Trainer and
 // the Club Manager.
 //   Head Trainer: create races, enter horses (only those that pass the checks),
-//                 scratch an entry before the race, record results.
+//                 take back a recommendation, advise the owner to withdraw (V55), record results.
 //   Club Manager: create and cancel races, record or correct results (also after
 //                 the edit window, with a reason), see performance and owners' prize money.
 // Prize money is paid to the owners. It is not club revenue.
@@ -13,15 +13,16 @@ import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
 import {
   RESULTS, RESULT_EDIT_WINDOW_DAYS, RESULT_TEXT, cancelRaceEvent, createRaceEvent, errorText, formatPrize,
   formatRaceDate, formatRaceTime, getSummary, isResultLocked, isTrainersHorse, listCandidates, listRaceEvents,
-  listRaces, listYears, ordinal, parseRaceTime, recordResult, registerRace, scratchEntry, toEntryChip, todayIso,
+  listRaces, listYears, ordinal, parseRaceTime, recordResult, registerRace, scratchEntry, adviseWithdrawal, toEntryChip, todayIso,
+  markSubmitted, submissionText, ORGANIZERS,
   tomorrowIso,
 } from "./raceApi";
 import "./race.css";
 
-/** Create a race (Head Trainer, Club Manager). Name and date cannot be changed afterwards. */
+/** Create a race (Club Manager) and say who runs it (V59). Name and date cannot be changed afterwards. */
 function RaceForm({ races = [], onCreated, onCancel }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ raceName: "", raceDate: "", distanceM: "", venue: "", entryDeadline: "", entryFee: "", maxEntries: "" });
+  const [form, setForm] = useState({ raceName: "", organizer: ORGANIZERS[0], raceDate: "", distanceM: "", venue: "", entryDeadline: "", entryFee: "", maxEntries: "" });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -57,6 +58,12 @@ function RaceForm({ races = [], onCreated, onCancel }) {
       local.venue = "Venue is required";
     }
 
+    if (!form.organizer.trim()) {
+      local.organizer = "Say who runs the race";
+    } else if (form.organizer.trim().length > 100) {
+      local.organizer = "100 characters at most";
+    }
+
     if (!form.entryDeadline) {
       local.entryDeadline = "Entry deadline is required";
     } else if (form.raceDate && form.entryDeadline > form.raceDate) {
@@ -89,6 +96,7 @@ function RaceForm({ races = [], onCreated, onCancel }) {
         entryDeadline: form.entryDeadline,
         entryFee: num(form.entryFee),
         maxEntries: num(form.maxEntries),
+        organizer: form.organizer.trim(),
       });
       onCreated(race);
     } catch (err) {
@@ -113,6 +121,11 @@ function RaceForm({ races = [], onCreated, onCancel }) {
       <form onSubmit={submit} onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} noValidate>
         <div className="hz-form-grid">
           {field("rc-name", "Race name", <input id="rc-name" value={form.raceName} maxLength={150} placeholder="e.g. Tracen Cup 2026" onChange={set("raceName")} aria-invalid={!!errors.raceName} />, "raceName")}
+          {field("rc-organizer", "Organizer (who runs the race)", <>
+            <input id="rc-organizer" list="rc-organizers" value={form.organizer} maxLength={100}
+                   onChange={set("organizer")} aria-invalid={!!errors.organizer} />
+            <datalist id="rc-organizers">{ORGANIZERS.map((o) => <option key={o} value={o} />)}</datalist>
+          </>, "organizer")}
           {field("rc-date", "Race day", <input id="rc-date" type="date" min={tomorrowIso()} value={form.raceDate} onChange={set("raceDate")} aria-invalid={!!errors.raceDate} />, "raceDate")}
           {field("rc-dist", "Distance (m)", <input id="rc-dist" type="number" min="100" max="10000" step="100" value={form.distanceM} onChange={set("distanceM")} aria-invalid={!!errors.distanceM} />, "distanceM")}
           {field("rc-venue", "Venue", <input id="rc-venue" value={form.venue} maxLength={150} onChange={set("venue")} aria-invalid={!!errors.venue} />, "venue")}
@@ -203,7 +216,7 @@ function EntryForm({ races, onRegistered }) {
   };
 
   return (
-    <Card title="Enter a horse" hint="Your horses (or horses not yet assigned to a Head Trainer): club horses aged 2–10, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
+    <Card title="Recommend a race to the owner" hint="The owner decides and registers the horse. Only the horses you train: club horses aged 24–131 months, staying at the club through race day, cleared as healthy, no training lock, no open incident report, vaccination on record and not overdue, a completed trial run in the last 30 days, and races at least two weeks apart.">
       <form onSubmit={submit} noValidate>
         <div className="hz-form-grid">
           <div className="hz-field">
@@ -232,7 +245,7 @@ function EntryForm({ races, onRegistered }) {
               </option>
               {eligible.map((c) => (
                 <option key={c.horseId} value={c.horseId}>
-                  {c.horseName} · {c.stallNo || "no stall"} · {c.age} yrs
+                  {c.horseName} · {c.stallNo || "no stall"} · {c.ageMonths} months
                 </option>
               ))}
             </select>
@@ -262,8 +275,8 @@ function EntryForm({ races, onRegistered }) {
         )}
 
         <div className="hz-field" style={{ marginTop: "12px" }}>
-          <label htmlFor="re-note">Note</label>
-          <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. papers submitted" onChange={set("note")} />
+          <label htmlFor="re-note">Your advice to the owner</label>
+          <input id="re-note" value={form.note} maxLength={255} placeholder="Optional, e.g. strong trial, suits this distance" onChange={set("note")} />
         </div>
 
         {error && <p className="hz-form-error" role="alert">{error}</p>}
@@ -271,7 +284,7 @@ function EntryForm({ races, onRegistered }) {
 
         <div className="hz-form-footer" style={{ marginTop: "14px" }}>
           <button type="submit" className="hz-btn" disabled={saving || full || !form.raceId || !form.horseId}>
-            {saving ? "Entering…" : "Enter horse"}
+            {saving ? "Sending…" : "Send recommendation"}
           </button>
         </div>
       </form>
@@ -279,18 +292,23 @@ function EntryForm({ races, onRegistered }) {
   );
 }
 
-/** Action buttons in row: open result editor or scratch editor. */
-// raceDone: đã qua ngày đua và suất đã được chủ duyệt -> được nhập / sửa kết quả. canScratch: chỉ HLV phụ trách
-// con ngựa đó (isTrainersHorse) được rút, khi suất còn UPCOMING / PENDING_APPROVAL.
-function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelEdit }) {
-  const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED") && entry.approvalStatus === "APPROVED";
-  // A proposal still waiting for the owner can be withdrawn too (backend allows it),
-  // but only by the horse's own Head Trainer.
-  const canScratch = isTrainer && isTrainersHorse(entry, userId)
-    && (entry.state === "UPCOMING" || entry.state === "PENDING_APPROVAL");
+/** Action buttons in row: open result editor, take back a recommendation, or advise a withdrawal. */
+// raceDone: đã qua ngày đua và suất đã được chủ duyệt -> được nhập / sửa kết quả.
+// Góp ý hội đồng mục 14 (V55): chủ ngựa đăng ký và rút; Head Trainer tư vấn. Nên HLV phụ trách chỉ:
+//  - rút lại đề xuất chủ chưa quyết (PENDING_APPROVAL) - đó vẫn là lời khuyên của chính HLV;
+//  - với suất chủ đã xác nhận (UPCOMING): gửi lời khuyên rút ngựa, chủ tự quyết.
+function RowActions({ entry, isTrainer, isManager, userId, isEditing, onOpenEdit, onCancelEdit }) {
+  // V59: only an entry the club sent to the organizer ran, so only it gets a result.
+  const raceDone = (entry.state === "AWAITING_RESULT" || entry.state === "FINISHED")
+    && entry.approvalStatus === "APPROVED" && !!entry.submittedAt;
+  const canSubmit = isManager && entry.approvalStatus === "APPROVED" && !entry.result && !entry.submittedAt
+    && (entry.state === "UPCOMING" || entry.state === "AWAITING_RESULT") && entry.raceStatus === "OPEN";
+  const ownTrainer = isTrainer && isTrainersHorse(entry, userId);
+  const canScratch = ownTrainer && entry.state === "PENDING_APPROVAL";
+  const canAdvise = ownTrainer && entry.state === "UPCOMING";
   // After the edit window only the Club Manager may change a result.
   const locked = isTrainer && isResultLocked(entry);
-  if (!raceDone && !canScratch) return null;
+  if (!raceDone && !canScratch && !canAdvise && !canSubmit) return null;
 
   if (isEditing) {
     return (
@@ -302,6 +320,11 @@ function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelE
 
   return (
     <div className="race-actions">
+      {canSubmit && (
+        <button type="button" className="race-link" onClick={() => onOpenEdit("submit")}>
+          Mark submitted
+        </button>
+      )}
       {raceDone && locked && (
         <span className="hz-muted" title={`Results lock ${RESULT_EDIT_WINDOW_DAYS} days after the race. Ask the Club Manager to change it.`}>
           Locked
@@ -314,7 +337,12 @@ function RowActions({ entry, isTrainer, userId, isEditing, onOpenEdit, onCancelE
       )}
       {canScratch && (
         <button type="button" className="race-link race-link--danger" onClick={() => onOpenEdit("scratch")}>
-          {entry.state === "PENDING_APPROVAL" ? "Withdraw" : "Scratch"}
+          Take back recommendation
+        </button>
+      )}
+      {canAdvise && (
+        <button type="button" className="race-link race-link--danger" onClick={() => onOpenEdit("advise")}>
+          {entry.withdrawAdvice ? "Update withdrawal advice" : "Advise withdrawal"}
         </button>
       )}
     </div>
@@ -398,13 +426,51 @@ function EditRowForm({ entry, mode, isManager, onSaved, onCancel }) {
   if (mode === "scratch") {
     return (
       <div className="race-edit-box">
-        <span className="race-edit-title">Scratch {entry.horseName} from {entry.raceName}:</span>
-        <input type="text" maxLength={500} placeholder="Reason, e.g. sore hoof" aria-label="Reason"
+        <span className="race-edit-title">Take back your recommendation of {entry.horseName} for {entry.raceName}:</span>
+        <input type="text" maxLength={500} placeholder="Reason, e.g. trial was slow" aria-label="Reason"
           className="race-owner-note" style={{ maxWidth: "340px" }}
           value={reason} onChange={(e) => setReason(e.target.value)} />
         <button type="button" className="hz-btn" disabled={busy || !reason.trim()}
           onClick={() => run(() => scratchEntry(entry.registrationId, reason.trim()))}>
-          Confirm Scratch
+          Take back
+        </button>
+        <button type="button" className="race-link" onClick={onCancel}>Cancel</button>
+        {error && <span className="race-error">{error}</span>}
+      </div>
+    );
+  }
+
+  // V59: the club sent the entry to the organizer outside the system; record that it did.
+  if (mode === "submit") {
+    return (
+      <div className="race-edit-box">
+        <span className="race-edit-title">
+          Entry of {entry.horseName} sent to {entry.organizer || "the organizer"} for {entry.raceName}:
+        </span>
+        <input type="text" maxLength={50} placeholder="Their reference (optional)" aria-label="Organizer reference"
+          className="race-owner-note" style={{ maxWidth: "260px" }}
+          value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="button" className="hz-btn" disabled={busy}
+          onClick={() => run(() => markSubmitted(entry.registrationId, reason))}>
+          Mark submitted
+        </button>
+        <button type="button" className="race-link" onClick={onCancel}>Cancel</button>
+        {error && <span className="race-error">{error}</span>}
+      </div>
+    );
+  }
+
+  // V55: the owner confirmed this entry, so only the owner withdraws it. The trainer advises.
+  if (mode === "advise") {
+    return (
+      <div className="race-edit-box">
+        <span className="race-edit-title">Advise the owner to withdraw {entry.horseName} from {entry.raceName}:</span>
+        <input type="text" maxLength={500} placeholder="Reason, e.g. sore hoof" aria-label="Reason"
+          className="race-owner-note" style={{ maxWidth: "340px" }}
+          value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="button" className="hz-btn" disabled={busy || !reason.trim()}
+          onClick={() => run(() => adviseWithdrawal(entry.registrationId, reason.trim()))}>
+          Send advice
         </button>
         <button type="button" className="race-link" onClick={onCancel}>Cancel</button>
         {error && <span className="race-error">{error}</span>}
@@ -440,7 +506,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
       {creating && <RaceForm races={races} onCancel={() => setCreating(false)} onCreated={(r) => { setCreating(false); onCreated(r); }} />}
       <Card
         title="Race calendar"
-        hint="Each race has its own distance, venue, entry deadline, fee and field size."
+        hint="Races run by an organizer such as JRA, or by the club itself. The Club Manager adds them and sends each confirmed entry to the organizer."
         actions={canCreate && !creating && (
           <button type="button" className="hz-btn" onClick={() => setCreating(true)}>Create race</button>
         )}
@@ -452,6 +518,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
               <tr>
                 <th>Race day</th>
                 <th>Race</th>
+                <th>Organizer</th>
                 <th>Distance</th>
                 <th>Venue</th>
                 <th>Entries close</th>
@@ -466,6 +533,7 @@ function RaceCalendar({ races, isManager, canCreate, onCreated, onCancelled }) {
                 <tr key={r.raceId}>
                   <td className="hz-muted">{formatRaceDate(r.raceDate)}</td>
                   <td className="hz-name">{r.raceName}</td>
+                  <td>{r.organizer || "—"}</td>
                   <td>{r.distanceM ? `${r.distanceM} m` : "—"}</td>
                   <td>{r.venue || "—"}</td>
                   <td className="hz-muted">{r.entryDeadline ? formatRaceDate(r.entryDeadline) : "—"}</td>
@@ -632,7 +700,7 @@ export default function RacesPage() {
             <RaceCalendar
               races={raceEvents}
               isManager={isManager}
-              canCreate={isTrainer || isManager}
+              canCreate={isManager}
               onCreated={(r) => {
                 setInfo(`${r.raceName} on ${formatRaceDate(r.raceDate)} created.`);
                 loadRaceEvents().catch(() => {});
@@ -681,7 +749,7 @@ export default function RacesPage() {
                             <td className="hz-muted">{formatRaceDate(e.raceDate)}</td>
                             <td className="hz-name">
                               {e.raceName}
-                              {(e.distanceM || e.venue) && <p className="hz-note hz-muted">{[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}</p>}
+                              {(e.organizer || e.distanceM || e.venue) && <p className="hz-note hz-muted">{[e.organizer, e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}</p>}
                             </td>
                             <td>
                               {e.horseName}
@@ -697,13 +765,20 @@ export default function RacesPage() {
                             </td>
                             <td className="race-prize">{formatPrize(e.prizeMoney)}</td>
                             <td className="hz-muted">
+                              {e.approvalStatus === "APPROVED" && !e.scratchReason && (e.state === "UPCOMING" || e.state === "AWAITING_RESULT") && (
+                                <p className="hz-note">{submissionText(e)}</p>
+                              )}
                               {e.scratchReason && <p className="hz-note">Scratched: {e.scratchReason}</p>}
+                              {e.withdrawAdvice && !e.scratchReason && (
+                                <p className="hz-note">Withdrawal advised to the owner: {e.withdrawAdvice}</p>
+                              )}
                               {e.note || (e.scratchReason ? null : "—")}
                             </td>
                             <td className="hz-row-action hz-sticky-end">
                               <RowActions
                                 entry={e}
                                 isTrainer={isTrainer}
+                                isManager={isManager}
                                 userId={userId}
                                 isEditing={isEditing}
                                 onOpenEdit={(m) => setActiveEdit({ id: e.registrationId, mode: m })}

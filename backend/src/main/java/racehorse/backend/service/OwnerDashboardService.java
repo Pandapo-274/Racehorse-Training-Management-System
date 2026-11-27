@@ -132,6 +132,7 @@ public class OwnerDashboardService {
                     SELECT TOP 1 r.race_name, r.race_date
                     FROM RACE_REGISTRATION r
                     WHERE r.horse_id = h.horse_id
+                      AND r.approval_status = 'APPROVED'   -- not a trainer's advice, nor one the owner declined
                       AND r.result IS NULL
                       AND r.race_date >= CAST(GETDATE() AS DATE)
                     ORDER BY r.race_date
@@ -308,7 +309,7 @@ public class OwnerDashboardService {
                 SELECT r.horse_id, 'PRIZE_MONEY', SUM(r.prize_money)
                 FROM RACE_REGISTRATION r
                 JOIN HORSE h ON h.horse_id = r.horse_id
-                WHERE h.owner_id = ? AND h.record_type = 'ACADEMY'
+                WHERE r.owner_id = ? AND h.record_type = 'ACADEMY'   -- V65: prize of the owner who raced
                   AND r.prize_money IS NOT NULL
                   AND r.race_date BETWEEN ? AND ?
                 GROUP BY r.horse_id

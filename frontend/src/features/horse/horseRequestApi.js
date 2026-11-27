@@ -12,9 +12,14 @@ export function listRequests(signal) {
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 
 // Chuỗi rỗng đổi thành null để backend lưu NULL (không lưu chuỗi trống).
-export function submitRequest(form) {
+/** V64: bring a horse that left back; same body, identity is taken from the horse's record. */
+export function submitReturn(horseId, form) {
+  return submitRequest({ ...form, recordType: "ACADEMY" }, `${API}/return/${horseId}`);
+}
+
+export function submitRequest(form, url = API) {
   const club = (form.recordType || "ACADEMY") === "ACADEMY";
-  return authFetch(API, {
+  return authFetch(url, {
     method: "POST",
     body: JSON.stringify({
       horseName: form.horseName.trim(),
@@ -38,6 +43,11 @@ export function submitRequest(form) {
       trainingEnd: club ? form.trainingEnd || null : null,
       contractMonths: club ? num(form.contractMonths) : null,
       preferredTrainerId: club && form.preferredTrainerId ? Number(form.preferredTrainerId) : null,
+      // V54: contract clause 8.
+      insurerName: club ? form.insurerName.trim() || null : null,
+      insurerPhone: club ? form.insurerPhone.trim() || null : null,
+      emergencyName: club ? form.emergencyName.trim() || null : null,
+      emergencyPhone: club ? form.emergencyPhone.trim() || null : null,
     }),
   });
 }
@@ -96,13 +106,17 @@ export const CONTRACT_MONTH_OPTIONS = [1, 3, 6, 12];
 
 // Default aptitudes per breed: a starting point the owner can change, not a rule.
 export const BREED_PRESETS = {
-  Thoroughbred: { surface: "TURF", distancePref: "MEDIUM", runningStyle: "MIDDLE" },
-  Arabian: { surface: "DIRT", distancePref: "LONG", runningStyle: "MIDDLE" },
+  Thoroughbred: { surface: "TURF", distancePref: "MEDIUM", runningStyle: "STALKER" },
+  Arabian: { surface: "DIRT", distancePref: "LONG", runningStyle: "STALKER" },
   "Quarter Horse": { surface: "DIRT", distancePref: "SPRINT", runningStyle: "FRONT" },
 };
 export const SURFACES = { TURF: "Turf", DIRT: "Dirt" };
 export const DISTANCES = { SPRINT: "Sprint", MEDIUM: "Medium", LONG: "Long" };
-export const RUNNING_STYLES = { FRONT: "Front-runner", MIDDLE: "Mid-pack", BACK: "Closer" };
+// Same names as the training templates (V50, V54).
+export const RUNNING_STYLES = { FRONT: "Front-runner", STALKER: "Mid-pack", CLOSER: "Closer" };
+
+/** Same rule as SubmitRequest on the backend. */
+export const PHONE_PATTERN = /^[0-9+()\s.-]{8,20}$/;
 
 export const GROWTH = {
   BELOW: { label: "Below range for age", tone: "warning" },

@@ -42,8 +42,17 @@ import racehorse.backend.security.AuthenticatedUser;
  *  - the race is OPEN, has not run, its entry deadline has not passed and it
  *    is not full; the horse has no other race that day.
  *
- * Head Trainer chỉ đăng ký và rút ngựa mình phụ trách (HORSE.trainer_id) hoặc
- * ngựa chưa giao cho ai. Nhập kết quả thì Head Trainer nào cũng được.
+ * Góp ý hội đồng: CHỦ NGỰA là người đăng ký giải (ownerRegister), Head Trainer là người
+ * tư vấn: đề xuất một giải kèm ghi chú (register), chủ bấm đăng ký mới thành suất đua.
+ * Rút ngựa cũng vậy (V55): chỉ chủ rút suất đã xác nhận; Head Trainer chỉ rút lại đề xuất
+ * chủ chưa quyết, còn lại thì gửi lời khuyên rút ngựa (recommendWithdrawal).
+ * Head Trainer chỉ đề xuất và tư vấn cho ngựa mình phụ trách (HORSE.trainer_id). Ngựa chưa
+ * giao cho ai thì không ai tư vấn, như Flow 3 không cho lập lịch: lời tư vấn là của người
+ * huấn luyện con ngựa. Chủ vẫn tự đăng ký được. Nhập kết quả thì Head Trainer nào cũng được.
+ *
+ * V59 (phương án A): giải do một đơn vị tổ chức (JRA...) hoặc chính CLB tổ chức. Chỉ Club Manager
+ * tạo giải. Chủ xác nhận suất thì CLB thay chủ nộp đơn cho đơn vị tổ chức (ngoài hệ thống) và Club
+ * Manager đánh dấu "đã nộp" (markSubmitted). Chỉ suất đã nộp mới nhập được kết quả.
  *
  * Đề xuất chủ chưa duyệt khi hết hạn đăng ký thành EXPIRED (RaceModels.proposalExpired).
  *
@@ -154,6 +163,14 @@ public class RaceService {
         }
         users.writeAudit(user.userId(), "RACE_OWNER_APPROVE", "RACE_REGISTRATION", id, "SUCCESS", ip);
         String fee = chargeEntryFee(e, race, user, ip);
+        // V59: the club sends the entry to the organizer on the owner's behalf.
+        notifications.notifyRole("CLUB_MANAGER", user, new Notice(
+                "RACE_TO_SUBMIT", "Submit a race entry",
+                clip(e.horseName() + " (" + e.ownerName() + ") is confirmed for " + e.raceName() + " on "
+                        + race.raceDate().format(DAY) + ". Submit the entry to " + organizerOf(race)
+                        + (race.entryDeadline() == null ? "" : " by " + race.entryDeadline().format(DAY))
+                        + ", then mark it submitted.", 500),
+                Notice.HORSE, e.horseId()));
         notifyTrainers(e, h.trainerId(), user, new Notice(
                 "RACE_APPROVED", "Race entry approved",
                 "Owner " + e.ownerName() + " approved " + e.horseName() + " for " + e.raceName()
@@ -169,7 +186,10 @@ public class RaceService {
      */
     private void notifyTrainers(RaceModels.Entry e, Integer assignedTrainerId, AuthenticatedUser owner,
                                 Notice notice) {
-        notifications.notifyUser(e.registeredBy(), notice);
+        // Chủ tự đăng ký thì registered_by là chính chủ: không tự báo cho mình.
+        if (e.registeredBy() != owner.userId()) {
+            notifications.notifyUser(e.registeredBy(), notice);
+        }
         if (assignedTrainerId != null && assignedTrainerId.intValue() != e.registeredBy()) {
             notifications.notifyHorseTrainer(e.horseId(), owner, notice);
         }
@@ -219,11 +239,15 @@ public class RaceService {
             return " The entry fee is not refunded: entries closed on " + lastFreeDay.format(DAY) + ".";
         }
         String why = raceCancelled ? "Race cancelled by the club" : "Withdrawn before entries closed";
+        // V57: a fee already paid online cannot be taken back here; the club refunds it.
+        boolean paidOnline = expenses.findById(expenseId).map(x -> x.paidAt() != null).orElse(false);
         if (expenses.cancel(expenseId, user.userId(), why) == 1) {
             users.writeAudit(user.userId(), "EXPENSE_VOID", "EXPENSE_LOG", expenseId, "SUCCESS", ip,
                     e.horseName() + ", race entry fee for " + e.raceName() + ". Reason: " + why);
         }
-        return " The entry fee has been refunded.";
+        return paidOnline
+                ? " The entry fee was already paid online: the club refunds it to you."
+                : " The entry fee has been refunded.";
     }
 
     private static String clip(String s, int max) {
@@ -258,17 +282,20 @@ public class RaceService {
     }
 
     /**
-     * Head Trainer chỉ đăng ký / rút ngựa mình phụ trách (HORSE.trainer_id), như ở
-     * TrainingPlanService; ngựa chưa giao cho ai thì Head Trainer nào cũng làm được.
-     * Vai trò khác không bị giới hạn ở đây (@RequireRole đã lọc).
+     * Head Trainer chỉ tư vấn cho ngựa mình phụ trách (HORSE.trainer_id), như ở
+     * TrainingPlanService. Ngựa chưa giao cho ai (Head Trainer cũ bị khoá, chờ manager giao
+     * người mới) thì không Head Trainer nào tư vấn. Vai trò khác không bị giới hạn ở đây
+     * (@RequireRole đã lọc).
      */
     private static boolean managedBy(Integer trainerId, AuthenticatedUser user) {
-        return !"HEAD_TRAINER".equals(user.role()) || trainerId == null || trainerId.intValue() == user.userId();
+        return !"HEAD_TRAINER".equals(user.role()) || (trainerId != null && trainerId.intValue() == user.userId());
     }
 
-    private static ApiException notYourHorse(String horseName) {
-        return new ApiException(HttpStatus.FORBIDDEN, horseName + " is assigned to another Head Trainer",
-                Map.of("horseId", "Only the horse's own Head Trainer can enter or scratch it"));
+    private static ApiException notYourHorse(String horseName, Integer trainerId) {
+        return new ApiException(HttpStatus.FORBIDDEN, trainerId == null
+                ? horseName + " has not been assigned to you by the Club Manager yet"
+                : horseName + " is assigned to another Head Trainer",
+                Map.of("horseId", "Only the horse's own Head Trainer advises on its races"));
     }
 
     public List<Integer> years() {
@@ -288,10 +315,12 @@ public class RaceService {
         for (HorseResponse h : horses.findActive()) {
             if (!HorsePolicy.ACADEMY.equals(HorsePolicy.normalizeType(h.recordType()))) continue;
             if (!managedBy(h.trainerId(), user)) continue;
+            if ("HORSE_OWNER".equals(user.role()) && h.ownerId() != user.userId()) continue;
             Integer age = h.dateOfBirth() == null ? null : HorsePolicy.ageOf(h.dateOfBirth());
             Check c = check(h, race);
             out.add(new RaceModels.Candidate(h.horseId(), h.horseName(), h.stallNo(), h.ownerName(),
-                    age, h.status(), c.problems.isEmpty() ? null : c.problems.get(0), c.problems, c.warnings));
+                    age, h.status(), c.problems.isEmpty() ? null : c.problems.get(0), c.problems, c.warnings,
+                    HorsePolicy.ageInMonths(h.dateOfBirth(), LocalDate.now())));
         }
         return out;
     }
@@ -372,14 +401,50 @@ public class RaceService {
 
     /* ---------------- Entries ---------------- */
 
+    /** Head Trainer tư vấn: tạo một đề xuất. Chỉ khi chủ ngựa đăng ký thì ngựa mới có suất đua. */
     @Transactional
     public RaceModels.Entry register(RaceModels.RegisterRequest r, AuthenticatedUser user, String ip) {
         HorseResponse h = horses.findById(r.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + r.horseId() + " not found"));
         if (!managedBy(h.trainerId(), user)) {
-            throw notYourHorse(h.horseName());
+            throw notYourHorse(h.horseName(), h.trainerId());
         }
         RaceModels.RaceEvent race = requireRace(r.raceId());
+        int id = createEntry(h, race, r.note(), user, ip);
+        notifications.notifyUser(h.ownerId(), new Notice(
+                "RACE_REGISTERED", "Trainer recommends a race",
+                "Your Head Trainer recommends " + h.horseName() + " for " + race.raceName() + " on "
+                        + race.raceDate().format(DAY)
+                        + (race.entryFee() == null || race.entryFee().signum() == 0 ? ""
+                                : " (entry fee " + race.entryFee().stripTrailingZeros().toPlainString() + ")")
+                        + ". Register the horse if you agree.",
+                Notice.HORSE, h.horseId()));
+        return require(id);
+    }
+
+    /**
+     * Chủ ngựa đăng ký ngựa của mình. Nếu Head Trainer đã đề xuất đúng giải này thì xác nhận đề
+     * xuất đó, không thì tạo suất mới. Cả hai đều đi qua approveEntry, nên điều kiện của ngựa,
+     * lệ phí và thông báo cho Head Trainer là một đường duy nhất.
+     */
+    @Transactional
+    public RaceModels.Entry ownerRegister(RaceModels.RegisterRequest r, AuthenticatedUser owner, String ip) {
+        HorseResponse h = horses.findById(r.horseId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse #" + r.horseId() + " not found"));
+        if (h.ownerId() != owner.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This is not your horse");
+        }
+        RaceModels.RaceEvent race = requireRace(r.raceId());
+        var existing = races.findEntry(h.horseId(), race.raceId());
+        boolean proposed = existing.isPresent() && existing.get().result() == null
+                && "PENDING_OWNER".equals(existing.get().approvalStatus());
+        int id = proposed ? existing.get().id() : createEntry(h, race, r.note(), owner, ip);
+        return approveEntry(id, owner, ip);
+    }
+
+    /** Kiểm mọi điều kiện rồi ghi một suất PENDING_OWNER; trả về id. Không gửi thông báo. */
+    private int createEntry(HorseResponse h, RaceModels.RaceEvent race, String note,
+                            AuthenticatedUser user, String ip) {
         LocalDate today = LocalDate.now();
         if (!"OPEN".equals(race.status())) {
             throw new ApiException(HttpStatus.CONFLICT, race.raceName() + " has been cancelled");
@@ -427,14 +492,14 @@ public class RaceService {
             /* The horse was scratched from (or declined for) this very race earlier.
                Re-entering it reuses that row - see RaceRepository.reinstate for why. */
             id = existing.get().id();
-            if (races.reinstate(id, user.userId(), blankToNull(r.note())) == 0) {
+            if (races.reinstate(id, h.ownerId(), user.userId(), blankToNull(note)) == 0) {
                 throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
             }
             users.writeAudit(user.userId(), "RACE_REINSTATE", "RACE_REGISTRATION", id, "SUCCESS", ip,
                     h.horseName() + " back in " + race.raceName() + " on " + race.raceDate());
         } else {
             try {
-                id = races.insert(h.horseId(), race, user.userId(), blankToNull(r.note()));
+                id = races.insert(h.horseId(), h.ownerId(), race, user.userId(), blankToNull(note));
             } catch (DuplicateKeyException e) {
                 throw new ApiException(HttpStatus.CONFLICT, h.horseName() + " has just been registered for "
                         + race.raceName() + " by someone else");
@@ -443,14 +508,7 @@ public class RaceService {
                     h.horseName() + " in " + race.raceName() + " on " + race.raceDate()
                             + (c.warnings.isEmpty() ? "" : ". Warnings: " + String.join("; ", c.warnings)));
         }
-        notifications.notifyUser(h.ownerId(), new Notice(
-                "RACE_REGISTERED", "Race entry proposal",
-                h.horseName() + " has been proposed to enter " + race.raceName() + " on " + race.raceDate().format(DAY)
-                        + (race.entryFee() == null || race.entryFee().signum() == 0 ? ""
-                                : " (entry fee " + race.entryFee().stripTrailingZeros().toPlainString() + ")")
-                        + ". Please review and approve.",
-                Notice.HORSE, h.horseId()));
-        return require(id);
+        return id;
     }
 
     /**
@@ -475,6 +533,12 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, "PENDING_OWNER".equals(e.approvalStatus())
                     ? "The owner never approved this entry, so the horse did not run"
                     : "The owner declined this entry, so the horse did not run");
+        }
+        // V59: an entry never sent to the organizer did not run.
+        if (e.submittedAt() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry was never submitted to "
+                    + (e.organizer() == null ? "the organizer" : e.organizer())
+                    + ". If it was, the Club Manager marks it submitted first");
         }
         if (e.raceDate().isAfter(LocalDate.now())) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -532,11 +596,23 @@ public class RaceService {
     }
 
     /** Rút khỏi giải trước ngày đua (ngựa ốm, bị khoá tập...). */
+    /**
+     * Rút ngựa khỏi giải. Góp ý hội đồng (mục 14): chủ ngựa đăng ký, Head Trainer tư vấn, nên
+     * CHỈ CHỦ NGỰA rút một suất đã xác nhận. Head Trainer chỉ được rút lại lời đề xuất của mình
+     * khi chủ chưa quyết (PENDING_OWNER); với suất đã xác nhận thì dùng recommendWithdrawal.
+     * 409 chứ không 403: frontend chuyển mọi 403 sang /access-denied, còn đây là "không phải
+     * việc của bạn ở bước này", màn hình phải ở lại và nói cách làm đúng.
+     */
     @Transactional
     public RaceModels.Entry scratch(int id, String reason, AuthenticatedUser user, String ip) {
         RaceModels.Entry e = require(id);
+        checkCanManageEntry(e, user);
         if (!managedBy(e.trainerId(), user)) {
-            throw notYourHorse(e.horseName());
+            throw notYourHorse(e.horseName(), e.trainerId());
+        }
+        if ("HEAD_TRAINER".equals(user.role()) && !"PENDING_OWNER".equals(e.approvalStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only the owner can withdraw a confirmed entry. Send the owner a withdrawal recommendation instead");
         }
         if (e.result() != null) {
             throw new ApiException(HttpStatus.CONFLICT, "Only an entry without a result can be scratched");
@@ -548,6 +624,94 @@ public class RaceService {
             throw new ApiException(HttpStatus.CONFLICT, "The race has already run. Record its result instead");
         }
         doScratch(e, reason.trim(), false, user, ip);
+        if (e.submittedAt() != null) {
+            // V59: the organizer already has this entry; the club withdraws it there too.
+            notifications.notifyRole("CLUB_MANAGER", user, new Notice("RACE_SCRATCHED", "Withdraw a submitted entry",
+                    clip(e.horseName() + " was withdrawn from " + e.raceName() + ". The entry was already submitted to "
+                            + (e.organizer() == null ? "the organizer" : e.organizer())
+                            + (e.organizerRef() == null ? "" : " (ref " + e.organizerRef() + ")")
+                            + ": withdraw it there as well.", 500),
+                    Notice.HORSE, e.horseId()));
+        }
+        if ("HORSE_OWNER".equals(user.role())) {
+            notifyTrainers(e, e.trainerId(), user, new Notice("RACE_SCRATCHED", "Owner withdrew a race entry",
+                    clip("Owner " + e.ownerName() + " withdrew " + e.horseName() + " from " + e.raceName()
+                            + ": " + reason.trim(), 500),
+                    Notice.HORSE, e.horseId()));
+        }
+        return require(id);
+    }
+
+    /**
+     * V59: Club Manager đánh dấu đã nộp một suất chủ đã xác nhận cho đơn vị tổ chức giải, kèm mã
+     * xác nhận của họ nếu có. Chủ ngựa và Head Trainer được báo.
+     */
+    @Transactional
+    public RaceModels.Entry markSubmitted(int id, String organizerRef, AuthenticatedUser user, String ip) {
+        RaceModels.Entry e = require(id);
+        if (!"APPROVED".equals(e.approvalStatus()) || e.result() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only an entry the owner confirmed, not scratched and "
+                    + "without a result, can be submitted");
+        }
+        if (e.submittedAt() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry was already submitted to "
+                    + (e.organizer() == null ? "the organizer" : e.organizer()));
+        }
+        if (!"OPEN".equals(e.raceStatus())) {
+            throw new ApiException(HttpStatus.CONFLICT, e.raceName() + " has been cancelled");
+        }
+        String ref = blankToNull(organizerRef);
+        if (races.markSubmitted(id, user.userId(), ref) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
+        }
+        String to = e.organizer() == null ? "the organizer" : e.organizer();
+        users.writeAudit(user.userId(), "RACE_SUBMITTED", "RACE_REGISTRATION", id, "SUCCESS", ip,
+                e.horseName() + " in " + e.raceName() + " on " + e.raceDate() + " submitted to " + to
+                        + (ref == null ? "" : ", ref " + ref));
+        Notice notice = new Notice("RACE_SUBMITTED", "Race entry submitted",
+                clip(e.horseName() + "'s entry for " + e.raceName() + " on " + e.raceDate().format(DAY)
+                        + " was submitted to " + to + (ref == null ? "" : " (ref " + ref + ")") + ".", 500),
+                Notice.HORSE, e.horseId());
+        notifications.notifyUser(e.ownerId(), notice);
+        if (e.trainerId() != null) {
+            notifications.notifyHorseTrainer(e.horseId(), user, notice);
+        }
+        return require(id);
+    }
+
+    private static String organizerOf(RaceModels.RaceEvent race) {
+        return race.organizer() == null ? "the organizer" : race.organizer();
+    }
+
+    /**
+     * V55: Head Trainer tư vấn rút ngựa khỏi một suất chủ đã xác nhận. Lý do lưu vào suất đua,
+     * chủ ngựa nhận thông báo và tự quyết (bấm Withdraw hoặc giữ nguyên).
+     */
+    @Transactional
+    public RaceModels.Entry recommendWithdrawal(int id, String reason, AuthenticatedUser user, String ip) {
+        RaceModels.Entry e = require(id);
+        if (!managedBy(e.trainerId(), user)) {
+            throw notYourHorse(e.horseName(), e.trainerId());
+        }
+        if (!"APPROVED".equals(e.approvalStatus()) || e.result() != null) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a confirmed entry without a result can get a withdrawal recommendation");
+        }
+        if (e.raceDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.CONFLICT, "The race has already run. Record its result instead");
+        }
+        String why = clip(reason.trim(), 500);
+        if (races.setWithdrawAdvice(id, why, user.userId()) == 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
+        }
+        users.writeAudit(user.userId(), "RACE_WITHDRAW_ADVICE", "RACE_REGISTRATION", id, "SUCCESS", ip,
+                "Advised withdrawing " + e.horseName() + " from " + e.raceName() + ": " + why);
+        notifications.notifyUser(e.ownerId(), new Notice("RACE_WITHDRAW_ADVICE",
+                "Trainer recommends withdrawing",
+                clip("Your Head Trainer recommends withdrawing " + e.horseName() + " from " + e.raceName()
+                        + " on " + e.raceDate().format(DAY) + ": " + why
+                        + ". You decide: withdraw it from My races, or keep the entry.", 500),
+                Notice.HORSE, e.horseId()));
         return require(id);
     }
 
@@ -585,6 +749,7 @@ public class RaceService {
 
     private static String describe(RaceModels.RaceEvent r) {
         return r.raceName() + " on " + r.raceDate()
+                + (r.organizer() == null ? "" : ", run by " + r.organizer())
                 + (r.distanceM() == null ? "" : ", " + r.distanceM() + " m")
                 + (r.venue() == null ? "" : ", " + r.venue())
                 + (r.entryDeadline() == null ? "" : ", entries close " + r.entryDeadline())
@@ -676,13 +841,34 @@ public class RaceService {
             problems.add(h.horseName() + " has been withdrawn from the club");
             return new Check(problems, warnings);
         }
+        // Hết hạn hợp đồng mà chưa gia hạn: không nhận giáo án mới, cũng không đăng ký giải mới.
+        // Còn hạn nhưng hết trước ngày đua, hoặc chủ đã xin rút ngựa trước ngày đua: xem bên dưới.
+        if (horses.hasExpiredContract(h.horseId())) {
+            problems.add(h.horseName() + "'s stay at the club has ended. Renew it before entering a race");
+        }
+        if (horses.isWaitingForTakeover(h.horseId())) {
+            problems.add(h.horseName() + " has a new owner who must sign the stay contract before entering a race");
+        }
+        /* The horse must still be at the club on race day: its stay runs past it, and it is
+           not leaving before it. Checked again when the owner confirms (approveEntry). */
+        if (race != null) {
+            horses.stayEnd(h.horseId())
+                    .filter(end -> end.isBefore(race.raceDate()))
+                    .ifPresent(end -> problems.add(h.horseName() + "'s stay at the club ends on " + end.format(DAY)
+                            + ", before the race. Renew the stay first"));
+            horses.pendingLeaveOn(h.horseId())
+                    .filter(leave -> !leave.isAfter(race.raceDate()))
+                    .ifPresent(leave -> problems.add(h.horseName() + " leaves the club on " + leave.format(DAY)
+                            + " (withdrawal requested)"));
+        }
         if (h.dateOfBirth() == null) {
             problems.add(h.horseName() + " has no date of birth on record");
         } else {
             int age = HorsePolicy.ageOf(h.dateOfBirth());
             if (age < HorsePolicy.FOAL_BELOW || age > HorsePolicy.RACING_MAX_AGE) {
-                problems.add(h.horseName() + " is " + age + " years old; racing age is "
-                        + HorsePolicy.FOAL_BELOW + " to " + HorsePolicy.RACING_MAX_AGE);
+                problems.add(h.horseName() + " is " + HorsePolicy.ageInMonths(h.dateOfBirth(), LocalDate.now())
+                        + " months old; racing age is " + (HorsePolicy.FOAL_BELOW * 12) + " to "
+                        + ((HorsePolicy.RACING_MAX_AGE + 1) * 12 - 1) + " months");
             }
         }
         if (!"ELIGIBLE".equals(h.status())) {

@@ -69,29 +69,24 @@ public class HorseController {
     public HorseResponse transferOwner(@PathVariable int id, @Valid @RequestBody TransferRequest request,
                                        @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                        HttpServletRequest http) {
-        return adminService.transferOwner(id, request.ownerId(), request.reason(), user, http.getRemoteAddr());
+        return adminService.transferOwner(id, request.ownerId(), request.reason(),
+                racehorse.backend.service.ContractService.Contacts.of(request.insurerName(), request.insurerPhone(),
+                        request.emergencyName(), request.emergencyPhone()),
+                user, http.getRemoteAddr());
     }
 
-    /** Club Manager nhận lại ngựa đã rút, xếp chuồng mới. */
-    @PutMapping("/{id}/readmit")
-    @RequireRole({"CLUB_MANAGER"})
-    public HorseResponse readmit(@PathVariable int id, @Valid @RequestBody ReadmitRequest request,
-                                 @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
-                                 HttpServletRequest http) {
-        return adminService.readmit(id, request.stallNo(), user, http.getRemoteAddr());
-    }
 
     // Body của PUT /{id}/owner. Annotation viết đầy đủ tên package vì file không import chúng.
     public record TransferRequest(
             @jakarta.validation.constraints.NotNull(message = "New owner is required") Integer ownerId,
             @jakarta.validation.constraints.NotBlank(message = "Reason is required")
             @jakarta.validation.constraints.Size(max = 255, message = "Reason must be at most 255 characters")
-            String reason) {}
-
-    public record ReadmitRequest(
-            @jakarta.validation.constraints.NotBlank(message = "Stall is required")
-            @jakarta.validation.constraints.Size(max = 20, message = "Stall must be at most 20 characters")
-            String stallNo) {}
+            String reason,
+            // V61: the new owner's clause 8 contacts; required by the service when the horse has a stay.
+            @jakarta.validation.constraints.Size(max = 100, message = "At most 100 characters") String insurerName,
+            @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String insurerPhone,
+            @jakarta.validation.constraints.Size(max = 100, message = "At most 100 characters") String emergencyName,
+            @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String emergencyPhone) {}
 
     /*
      * KHÔNG còn POST /api/horses.
@@ -128,6 +123,21 @@ public class HorseController {
     public HorseService.CodeCheck checkRegistrationCode(@RequestParam String code,
                                                         @RequestParam(required = false) Integer horseId) {
         return horseService.checkRegistrationCode(code, horseId);
+    }
+
+    /** V60: empty stalls on the stable plan, in plan order; the first one is the suggestion. */
+    @GetMapping("/stalls/free")
+    @RequireRole({"CLUB_MANAGER"})
+    public java.util.List<String> freeStalls() {
+        return horseService.freeStalls();
+    }
+
+    /** Checked while the manager types: taken by which horse, not on the plan, or free. */
+    @GetMapping("/stalls/check")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseService.StallCheck checkStall(@RequestParam String stall,
+                                              @RequestParam(required = false) Integer horseId) {
+        return horseService.checkStall(stall, horseId);
     }
 
     /** Chỉ chủ ngựa, và chỉ ngựa của chính mình (service kiểm quyền sở hữu). */

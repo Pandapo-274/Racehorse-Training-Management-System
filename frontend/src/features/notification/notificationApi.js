@@ -50,6 +50,8 @@ export function markAllRead() {
  * trang nào. Tên loại là tham số đầu của new Notice(...) ở backend.
  */
 const PAGE_BY_TYPE = {
+  // V57: khoản tính riêng đã được trả online.
+  COST_PAYMENT_PAID: { HORSE_OWNER: "/horse-owner/payments", CLUB_MANAGER: "/manager/expenses" },
   // Flow 4: giao việc chăm sóc (giao hàng loạt không gắn ngựa) và việc bỏ lỡ.
   DAILY_TASK_ASSIGNED: { GROOM: "/groom/stable" },
   DAILY_TASK_REASSIGNED: { GROOM: "/groom/stable" },
@@ -109,9 +111,13 @@ export function notificationTarget(n, user) {
   /* Thông báo nhắc lịch phòng ngừa là tin tóm tắt cho cả đàn nên không trỏ tới
      một entity nào (targetEntity null); nhận ra nó bằng loại thông báo. */
   // (Ghi chú ngay trên thực ra nói về PREVENTIVE_CARE_DUE ở dưới; khối if này xử lý thông báo giải đua.)
-  if (n?.type === "RACE_REGISTERED" || n?.type === "RACE_APPROVED" || n?.type === "RACE_REJECTED") {
+  // Mọi thông báo giải đua mở trang giải, nơi có việc để làm: lời khuyên của Head Trainer (đăng ký, rút ngựa),
+  // suất bị rút, kết quả và tiền thưởng, suất có rủi ro. Trước đây RACE_WITHDRAW_ADVICE, RACE_SCRATCHED,
+  // RACE_RESULT và RACE_AT_RISK mở hồ sơ ngựa, nơi không có lời khuyên nào để chủ bấm Withdraw.
+  if (n?.type?.startsWith("RACE_")) {
     if (role === "HORSE_OWNER") return "/horse-owner/races";
     if (role === "HEAD_TRAINER") return "/trainer/races";
+    if (role === "CLUB_MANAGER") return "/manager/races";
   }
   if (n?.type === "PREVENTIVE_CARE_DUE") {
     return role === "VETERINARIAN" ? "/veterinarian/preventive-care" : null;
@@ -140,7 +146,8 @@ export function notificationTarget(n, user) {
   // loại khác) thì thử bảng PAGE_BY_TYPE theo loại thông báo.
   switch (n?.targetEntity) {
     case "HORSE":
-      if (role === "HEAD_TRAINER") return "/trainer/schedule";
+      // Thông báo về lịch (khoá tập, sức khoẻ, buổi tập) đã được đưa tới Schedule ở nhánh theo loại phía trên.
+      // Còn lại, kể cả "New horse assigned to your management", mở hồ sơ con ngựa: HLV cần biết ngựa trước khi lập kế hoạch.
       return `${getHorseBasePath(user)}/${n.targetId}`;
     case "TRAINING_LOCK":
       if (role === "HEAD_TRAINER") return "/trainer/schedule";

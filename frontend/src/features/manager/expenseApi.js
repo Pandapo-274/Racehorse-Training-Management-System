@@ -12,6 +12,8 @@ const API = "/api/expenses";
 
 /** Bốn hạng mục, khớp CK_EXP_cat ở backend. */
 export const EXPENSE_CATEGORIES = ["FEEDING", "MEDICAL", "TRAINING", "OTHER"];
+// V57: feed and training are part of the monthly boarding fee; only these are billed separately.
+export const BILLABLE_CATEGORIES = ["MEDICAL", "OTHER"];
 
 /** Mọi tham số đều tuỳ chọn. from / to dạng yyyy-mm-dd, tính cả hai đầu. */
 // GET /api/expenses?horseId=&category=&from=&to= (CLUB_MANAGER). Chỉ trả các dòng chưa huỷ

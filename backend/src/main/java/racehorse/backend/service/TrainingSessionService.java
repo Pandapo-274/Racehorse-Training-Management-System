@@ -116,11 +116,9 @@ public class TrainingSessionService {
 
     /** V37: Head Trainer chỉ thấy các Groom được Club Manager phân quyền cho mình (hoặc phụ trách giáo án). */
     public List<TrainingSessionRepository.GroomOption> listActiveGrooms(AuthenticatedUser user) {
+        // Góp ý hội đồng: HLV chưa có đội thì danh sách rỗng, không hiện Groom của người khác.
         if (user != null && "HEAD_TRAINER".equals(user.role())) {
-            List<TrainingSessionRepository.GroomOption> assigned = repository.findActiveGroomsByTrainer(user.userId());
-            if (!assigned.isEmpty()) {
-                return assigned;
-            }
+            return repository.findActiveGroomsByTrainer(user.userId());
         }
         return repository.findActiveGrooms();
     }
@@ -159,6 +157,11 @@ public class TrainingSessionService {
         if (velocityCeiling != null && (velocityCeiling.compareTo(BigDecimal.ONE) < 0
                 || velocityCeiling.compareTo(new BigDecimal("100.0")) > 0)) {
             errors.put("velocityCeiling", "Max allowed speed must be between 1 and 100 km/h");
+        } else if (r.velocityCeiling() != null) {
+            String over = HorseStandards.speedProblem(horse.breed(), horse.dateOfBirth(), r.velocityCeiling(), LocalDate.now());
+            if (over != null) {
+                errors.put("velocityCeiling", over);
+            }
         }
 
         validateGroomAssignee(r.assignedTo(), user, errors);

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorsePhoto from "../horse/HorsePhoto";
-import { toGender, toAge, toStatus } from "../horse/horseApi";
+import { toGender, formatAge, toStatus } from "../horse/horseApi";
 import VetShell, { VetCard, VetState, VetError } from "./VetShell";
 import {
   getHorse,
@@ -253,7 +253,7 @@ export default function VetHorsePrescriptionHistoryPage() {
     };
   }, [treatments, today]);
 
-  const age = horse?.dateOfBirth ? toAge(horse.dateOfBirth) : null;
+  const age = horse?.dateOfBirth ? formatAge(horse.dateOfBirth) : null;
   const statusInfo = horse?.status ? toStatus(horse.status) : null;
 
   return (
@@ -308,7 +308,7 @@ export default function VetHorsePrescriptionHistoryPage() {
                   {age != null && (
                     <>
                       <span>·</span>
-                      <span>{age} yrs</span>
+                      <span>{age}</span>
                     </>
                   )}
                   <span>·</span>

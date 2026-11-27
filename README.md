@@ -45,6 +45,13 @@ npm start
 ```
 
 ## Changelogs
+> ### `Nov 26, 2026`
+- `[22:15]` `tqt195` - Races have an organizer; Club Manager submits confirmed entries
+- `[21:33]` `tqt195` - Online payment of medical costs and race fees, test-size prices, Groom sees own team only, UI fixes
+
+> ### `Nov 24, 2026`
+- `[10:58]` `tqt195` - Fix committee review points, add `docs/SUA_SAU_HOI_DONG.docx`
+
 > ### `Nov 18, 2026`
 - `[09:31]` `tqt195` - Only Confirm recovery sets a horse back to Eligible
 - `[09:18]` `tqt195` - Add code comments, set light-work limit to 800 m

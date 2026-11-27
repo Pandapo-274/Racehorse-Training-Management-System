@@ -48,6 +48,18 @@ export function checkRegistrationCode(code, horseId, signal) {
   return authFetch(`${API}/registration-code/check?${q}`, { signal });
 }
 
+/** V60: chuồng trống theo sơ đồ chuồng, đúng thứ tự dãy / số; chuồng đầu tiên là gợi ý. */
+export function listFreeStalls(signal) {
+  return authFetch(`${API}/stalls/free`, { signal });
+}
+
+/** Kiểm chuồng khi đang gõ: { stall, available, message }. */
+export function checkStall(stall, horseId, signal) {
+  const q = new URLSearchParams({ stall });
+  if (horseId) q.set("horseId", horseId);
+  return authFetch(`${API}/stalls/check?${q}`, { signal });
+}
+
 /** V48: chiều cao, BCS và năng khiếu ghi lúc nhận ngựa. */
 export function getIntake(id, signal) {
   return authFetch(`${API}/${id}/intake`, { signal });
@@ -111,20 +123,22 @@ export function parentLabel(h) {
 }
 
 /** Chỉ CLUB_MANAGER: chuyển ngựa sang chủ khác. */
-export function transferHorseOwner(id, ownerId, reason) {
+/**
+ * V61: contacts = { insurerName, insurerPhone, emergencyName, emergencyPhone } of the NEW owner.
+ * Needed when the horse has a stay: the new owner signs a contract for the rest of it.
+ */
+export function transferHorseOwner(id, ownerId, reason, contacts = {}) {
+  const v = (s) => (s && s.trim() ? s.trim() : null);
   return authFetch(`${API}/${id}/owner`, {
     method: "PUT",
-    body: JSON.stringify({ ownerId, reason: reason.trim() }),
+    body: JSON.stringify({
+      ownerId, reason: reason.trim(),
+      insurerName: v(contacts.insurerName), insurerPhone: v(contacts.insurerPhone),
+      emergencyName: v(contacts.emergencyName), emergencyPhone: v(contacts.emergencyPhone),
+    }),
   });
 }
 
-/** Chỉ CLUB_MANAGER: nhận lại ngựa đã rút vào một chuồng. */
-export function readmitHorse(id, stallNo) {
-  return authFetch(`${API}/${id}/readmit`, {
-    method: "PUT",
-    body: JSON.stringify({ stallNo: stallNo.trim() }),
-  });
-}
 
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -275,7 +289,7 @@ export function ageProblem(recordType, dateOfBirth) {
   if (!dateOfBirth) return "Date of birth is required for a club horse";
   const age = toAge(dateOfBirth);
   if (age != null && age > AGE_RULES.clubMax) {
-    return `This horse is ${age} years old, above the club limit of ${AGE_RULES.clubMax}. Register it as a pedigree record instead.`;
+    return `This horse is ${toAgeInMonths(dateOfBirth)} months old, above the club limit of ${AGE_RULES.clubMax} years. Register it as a pedigree record instead.`;
   }
   return null;
 }
@@ -387,24 +401,17 @@ export function toAgeInMonths(dateOfBirth, today = new Date()) {
   return months < 0 ? null : months;
 }
 
-/** "7 months", "2 years 3 months (27 months)" - years for reading, months for the rules. */
+/** Góp ý hội đồng: tuổi hiện bằng tháng, không hiện năm. "1 month", "27 months". */
 export function formatAge(dateOfBirth, today = new Date()) {
   const total = toAgeInMonths(dateOfBirth, today);
   if (total == null) return "";
-  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  if (total < 12) return plural(total, "month");
-  const y = Math.floor(total / 12);
-  const m = total % 12;
-  return `${plural(y, "year")}${m ? ` ${plural(m, "month")}` : ""} (${total} months)`;
+  return `${total} month${total === 1 ? "" : "s"}`;
 }
 
-/** Short form for tables and subtitles: "2y 3m", "7m". */
+/** Short form for tables and subtitles: "27 mo". */
 export function formatAgeShort(dateOfBirth, today = new Date()) {
   const total = toAgeInMonths(dateOfBirth, today);
-  if (total == null) return "";
-  const y = Math.floor(total / 12);
-  const m = total % 12;
-  return y ? `${y}y ${m}m` : `${m}m`;
+  return total == null ? "" : `${total} mo`;
 }
 
 export function formatWeight(w) {

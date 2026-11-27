@@ -34,6 +34,7 @@ import VetCallsPage from "./features/vet/VetCallsPage";
 import GroomDashboard from "./features/groom/GroomDashboard";
 import HorseOwnerDashboard from "./features/horse-owner/HorseOwnerDashboard";
 import OwnerTrainingPage from "./features/horse-owner/OwnerTrainingPage";
+import OwnerPaymentsPage from "./features/horse-owner/OwnerPaymentsPage";
 import LandingPage from "./features/landingpage/LandingPage";
 import RegisterPage from "./features/auth/RegisterPage";
 import { getUser } from "./features/auth/authService";
@@ -198,6 +199,7 @@ export default function App() {
         <Route path="/horse-owner/training" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerTrainingPage /></RoleRoute>} />
         {/* Flow 5: lịch đua và kết quả của ngựa mình. */}
         <Route path="/horse-owner/races" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerRacesPage /></RoleRoute>} />
+        <Route path="/horse-owner/payments" element={<RoleRoute roles={["HORSE_OWNER"]}><OwnerPaymentsPage /></RoleRoute>} />
         <Route path="/horse-owner/horses" element={<RoleRoute roles={["HORSE_OWNER"]}><HorseListPage /></RoleRoute>} />
         {/* Chủ ngựa xin học viện đăng ký ngựa. Không phải /horse-owner/horses/new:
             đó sẽ là biểu mẫu tạo ngựa, mà POST /api/horses từ chối chủ ngựa. */}

@@ -106,7 +106,8 @@ public record TrainingPlanResponse(
 
     public record TemplateRecommendation(Integer horseId, String horseName, String breed,
                                          String runningStyle, String distanceType, String lockedSurface,
-                                         TemplateDto recommendedTemplate, List<TemplateDto> allTemplates) {}
+                                         TemplateDto recommendedTemplate, List<TemplateDto> allTemplates,
+                                         racehorse.backend.service.HorseStandards.Reference standard) {}
 
     public record AutoScheduleResult(int planId, int createdTrainingSessions, int createdRestSlots,
                                      int conflictCount, List<TrainingSessionResponse> sessions) {}

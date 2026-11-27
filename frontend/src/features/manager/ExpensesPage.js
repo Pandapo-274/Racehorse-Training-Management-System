@@ -10,7 +10,7 @@ import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock } from "../horse/HorseShell";
 import { formatDate, isPedigreeOnly, isWithdrawn, listHorses } from "../horse/horseApi";
 import {
-  EXPENSE_CATEGORIES, EXPENSE_PERIODS, createExpense, deleteExpense, formatMoney,
+  BILLABLE_CATEGORIES, EXPENSE_CATEGORIES, EXPENSE_PERIODS, createExpense, deleteExpense, formatMoney,
   isoDate, listExpenses, periodRange, toCostLabel,
 } from "./expenseApi";
 import "./expenses.css";
@@ -20,7 +20,7 @@ import "./expenses.css";
 const AMOUNT_MAX = 9999999999.99;
 
 const emptyForm = () => ({
-  horseId: "", category: "FEEDING", amount: "", expenseDate: isoDate(new Date()), note: "",
+  horseId: "", category: "MEDICAL", amount: "", expenseDate: isoDate(new Date()), note: "",
 });
 
 function validate(form) {
@@ -212,7 +212,7 @@ export default function ExpensesPage() {
 
             <Field id="exp-category" label="Category" error={errors.category}>
               <select id="exp-category" name="category" value={form.category} onChange={change}>
-                {EXPENSE_CATEGORIES.map((c) => (
+                {BILLABLE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{toCostLabel(c)}</option>
                 ))}
               </select>
@@ -287,12 +287,17 @@ export default function ExpensesPage() {
                         <td>{formatDate(row.expenseDate)}</td>
                         <td className="hz-name">{row.horseName}</td>
                         <td>{toCostLabel(row.category)}</td>
-                        <td className="exp-num">{formatMoney(row.amount)}</td>
+                        <td className="exp-num">
+                          {formatMoney(row.amount)}
+                          {row.paidAt && <span className="hz-muted" style={{ display: "block", fontSize: 12 }}>Paid online</span>}
+                        </td>
                         <td>{row.note || "—"}</td>
                         <td>{row.recordedByName || "—"}</td>
                         <td className="hz-row-action">
                           <button type="button" className="hz-btn hz-btn--ghost"
-                                  disabled={deletingId === row.expenseId} onClick={() => remove(row)}>
+                                  disabled={deletingId === row.expenseId || !!row.paidAt}
+                                  title={row.paidAt ? "Paid online: refund the owner outside the system" : undefined}
+                                  onClick={() => remove(row)}>
                             {deletingId === row.expenseId ? "Voiding…" : "Void"}
                           </button>
                         </td>

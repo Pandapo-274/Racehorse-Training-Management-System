@@ -12,7 +12,9 @@ import { useNavigate } from "react-router-dom";
 import { Card, StatusChip } from "./HorseShell";
 import { formatDate, BCS_GROUPS } from "./horseApi";
 import { toGrowth } from "./horseRequestApi";
-import { contractsForHorse, toContractStatus, stayLine, REMINDER_DAYS } from "./contractApi";
+import {
+  contractsForHorse, getCommitment, toContractStatus, stayLine, REMINDER_DAYS, COMMITMENT_STATUS,
+} from "./contractApi";
 
 function Line({ label, children }) {
   return (
@@ -34,10 +36,22 @@ export default function HorseStayPanel({ horse, user, intake }) {
     return () => ctrl.abort();
   }, [horse.horseId]);
 
+  // Điều 11 của hợp đồng đang chạy. Hợp đồng ký trước khi có điều này thì không hiện.
+  const [commitment, setCommitment] = useState(null);
+  const runningId = contracts?.find((c) => c.status === "ACTIVE" || c.status === "EXPIRED")?.contractId;
+  useEffect(() => {
+    if (!runningId) { setCommitment(null); return undefined; }
+    const ctrl = new AbortController();
+    getCommitment(runningId, ctrl.signal).then(setCommitment).catch(() => setCommitment(null));
+    return () => ctrl.abort();
+  }, [runningId]);
+
   if (contracts === null) return null;
 
   const running = contracts.find((c) => c.status === "ACTIVE" || c.status === "EXPIRED");
   const renewal = contracts.find((c) => c.renewsContractId && ["SENT", "SIGNED", "PAID"].includes(c.status));
+  // V61: sold during the stay, the new owner has not signed yet.
+  const takeover = contracts.find((c) => c.takesOverContractId && c.status === "SENT");
   const isOwner = user?.role === "HORSE_OWNER";
   const contractPath = (c) => (isOwner ? `/horse-owner/contracts/${c.contractId}` : `/manager/contracts?open=${c.contractId}`);
   const growth = intake ? toGrowth(intake.growth) : null;
@@ -59,7 +73,45 @@ export default function HorseStayPanel({ horse, user, intake }) {
               {running.trainingWeeks ? ` (${running.trainingWeeks} weeks)` : ""}
             </Line>
           ) : running.trainingWeeks ? <Line label="Training asked">{running.trainingWeeks} weeks</Line> : null}
+          {commitment?.applies && commitment.delivery && (() => {
+            const d = commitment.delivery;
+            const st = COMMITMENT_STATUS[d.status] || COMMITMENT_STATUS.NOT_STARTED;
+            const counted = d.due - d.excused;
+            const plural = d.sessionsShort === 1 ? "" : "s";
+            return (
+              <>
+                <Line label="Training commitment"><StatusChip tone={st.tone} label={st.label} /></Line>
+                <Line label="Sessions delivered">
+                  {d.delivered} of {counted}{d.deliveredPct != null ? ` (${d.deliveredPct}%)` : ""} · target {d.targetPct}%
+                  {d.excused > 0 ? ` · ${d.excused} excused by a vet lock` : ""}
+                </Line>
+                {d.status === "AT_RISK" && (
+                  <p className="hz-muted hz-note">{d.sessionsShort} more session{plural} needed to reach {d.targetPct}%.</p>
+                )}
+                {d.status === "NOT_MET" && (
+                  <p className="hz-field__error">
+                    The club owes {d.sessionsShort} free make-up session{plural} within 30 days, or a proportional refund (contract clause 12).
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </>
+      ) : takeover ? (
+        <>
+          <Line label="Contract">
+            <StatusChip tone="warning" label={`Waiting for ${takeover.ownerName} to sign`} />
+          </Line>
+          <Line label="Stay">Until {formatDate(takeover.endDate)}, paid by {takeover.previousOwnerName || "the previous owner"}</Line>
+          <p className="hz-muted hz-note">
+            Changed owner. No new training plan or race entry until the new owner signs.
+          </p>
+        </>
+      ) : contracts.length > 0 ? (
+        // Re-admitted after leaving, or a stay that was closed: say so, not "registered before stays".
+        <p className="hz-muted hz-note">
+          No stay contract running. The last one closed{contracts[0].closedNote ? `: ${contracts[0].closedNote}` : ""}.
+        </p>
       ) : (
         <p className="hz-muted hz-note">
           No contract on record: this horse was registered before stays had a term.
@@ -87,6 +139,12 @@ export default function HorseStayPanel({ horse, user, intake }) {
         {running && !renewal && isOwner && (
           <button type="button" className="hz-btn" onClick={() => navigate(contractPath(running))}>
             Renew the stay
+          </button>
+        )}
+        {takeover && (
+          <button type="button" className={isOwner ? "hz-btn" : "hz-btn hz-btn--ghost"}
+                  onClick={() => navigate(contractPath(takeover))}>
+            {isOwner ? "Read and sign" : "Open contract"}
           </button>
         )}
         {running && user?.role === "CLUB_MANAGER" && (

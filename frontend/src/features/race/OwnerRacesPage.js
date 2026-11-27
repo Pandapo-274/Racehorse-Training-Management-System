@@ -5,17 +5,145 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "../horse/HorseShell";
-import { approveEntry, errorText, formatPrize, formatRaceDate, listRaces, rejectEntry, toEntryChip } from "./raceApi";
+import { useAppDialog } from "../common/AppDialog";
+import {
+  approveEntry, errorText, formatPrize, formatRaceDate, listCandidates, listRaceEvents, listRaces,
+  ownerRegisterRace, rejectEntry, scratchEntry, submissionText, toEntryChip, todayIso,
+} from "./raceApi";
 import "./race.css";
 
 /*
  * Trang /horse-owner/races. Danh sách suất đua của ngựa mình (GET /api/races, backend lọc theo chủ), lọc theo ngựa.
- * Suất HLV đề xuất (PENDING_OWNER) có hai nút: Approve (PUT /api/races/{id}/approve - backend kiểm lại điều kiện
- * và ghi lệ phí giải vào chi phí; quá hạn đăng ký thì không duyệt được) và Reject (lý do tuỳ chọn, rejectNotes giữ
+ * Góp ý hội đồng: chủ ngựa là người đăng ký giải (RegisterCard), Head Trainer chỉ tư vấn.
+ * Lời khuyên của HLV (PENDING_OWNER) có hai nút: Register (PUT /api/races/{id}/approve - backend kiểm lại điều kiện
+ * và ghi lệ phí giải vào chi phí; quá hạn đăng ký thì không đăng ký được) và Not now (lý do tuỳ chọn, rejectNotes giữ
  * lý do theo từng suất).
  */
+
+// Chọn giải rồi chọn ngựa của mình. Backend trả mọi ngựa của chủ kèm lý do nếu chưa đủ điều kiện.
+function RegisterCard({ onRegistered, navigate }) {
+  const [races, setRaces] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [form, setForm] = useState({ raceId: "", horseId: "", note: "" });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listRaceEvents({ upcoming: true }, ctrl.signal)
+      .then((rows) => setRaces((rows || []).filter((r) => r.status === "OPEN" && r.raceDate > todayIso()
+        && (!r.entryDeadline || r.entryDeadline >= todayIso()))))
+      .catch((err) => {
+        if (err.name !== "AbortError" && !handleAuthError(err, navigate)) setError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [navigate, reload]);
+
+  useEffect(() => {
+    if (!form.raceId) { setCandidates([]); return undefined; }
+    const ctrl = new AbortController();
+    listCandidates(form.raceId, ctrl.signal)
+      .then(setCandidates)
+      .catch((err) => {
+        if (err.name !== "AbortError" && !handleAuthError(err, navigate)) setError(err.message);
+      });
+    return () => ctrl.abort();
+  }, [form.raceId, navigate, reload]);
+
+  const race = races.find((r) => String(r.raceId) === form.raceId);
+  const full = race && race.maxEntries && race.entries >= race.maxEntries;
+  const eligible = candidates.filter((c) => !c.problem);
+  const blocked = candidates.filter((c) => c.problem);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      const entry = await ownerRegisterRace({
+        horseId: Number(form.horseId),
+        raceId: Number(form.raceId),
+        note: form.note.trim() || null,
+      });
+      setForm({ raceId: "", horseId: "", note: "" });
+      setReload((k) => k + 1);
+      onRegistered(entry);
+    } catch (err) {
+      if (handleAuthError(err, navigate)) return;
+      setError(errorText(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="Register a horse for a race"
+      hint="You make the entry. The entry fee is added to the horse's costs, and it is refunded if you withdraw by the entry deadline or the club cancels the race.">
+      <form onSubmit={submit} noValidate>
+        <div className="hz-form-grid">
+          <div className="hz-field">
+            <label htmlFor="own-race">Race</label>
+            <select id="own-race" value={form.raceId}
+                    onChange={(e) => setForm((f) => ({ ...f, raceId: e.target.value, horseId: "" }))}>
+              <option value="">{races.length ? "Choose a race…" : "No race is open for entries"}</option>
+              {races.map((r) => (
+                <option key={r.raceId} value={r.raceId}>
+                  {[r.raceName, r.organizer, formatRaceDate(r.raceDate), r.distanceM ? `${r.distanceM} m` : null].filter(Boolean).join(" · ")}
+                </option>
+              ))}
+            </select>
+            {race && (
+              <p className="hz-field__hint">
+                {[race.venue,
+                  race.entryDeadline ? `entries close ${formatRaceDate(race.entryDeadline)}` : null,
+                  race.entryFee ? `fee ${formatPrize(race.entryFee)}` : null,
+                  race.maxEntries ? `${race.entries}/${race.maxEntries} horses` : null].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+          <div className="hz-field">
+            <label htmlFor="own-horse">Horse</label>
+            <select id="own-horse" value={form.horseId} disabled={!form.raceId || full}
+                    onChange={(e) => setForm((f) => ({ ...f, horseId: e.target.value }))}>
+              <option value="">
+                {!form.raceId ? "Choose a race first" : full ? "Race is full" : `Choose a horse… (${eligible.length} can race)`}
+              </option>
+              {eligible.map((c) => <option key={c.horseId} value={c.horseId}>{c.horseName} · {c.ageMonths} months</option>)}
+            </select>
+            {form.raceId && blocked.length > 0 && (
+              <details className="race-blocked">
+                <summary>{blocked.length} of your horses cannot race in this race</summary>
+                <ul>
+                  {blocked.map((c) => (
+                    <li key={c.horseId}>
+                      <strong>{c.horseName}</strong>: {(c.problems?.length ? c.problems : [c.problem]).join("; ")}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        </div>
+        <div className="hz-field" style={{ marginTop: "12px" }}>
+          <label htmlFor="own-note">Note</label>
+          <input id="own-note" value={form.note} maxLength={255} placeholder="Optional"
+                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+        </div>
+        {error && <p className="hz-form-error" role="alert">{error}</p>}
+        <div className="hz-form-footer" style={{ marginTop: "14px" }}>
+          <button type="submit" className="hz-btn" disabled={saving || full || !form.raceId || !form.horseId}>
+            {saving ? "Registering…" : "Register horse"}
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 export default function OwnerRacesPage() {
   const navigate = useNavigate();
+  const dialog = useAppDialog();
   const [entries, setEntries] = useState(null);
   const [horseId, setHorseId] = useState("");
   const [error, setError] = useState("");
@@ -62,7 +190,7 @@ export default function OwnerRacesPage() {
       setProcessingId(e.registrationId);
       setActionError("");
       await approveEntry(e.registrationId);
-      setSuccessMsg(`Approved ${e.horseName} to race in ${e.raceName}. Any entry fee now appears in the horse's costs.`);
+      setSuccessMsg(`Registered ${e.horseName} for ${e.raceName}. Any entry fee now appears in the horse's costs.`);
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
@@ -90,10 +218,29 @@ export default function OwnerRacesPage() {
     }
   };
 
+  // Chủ ngựa tự rút suất của mình (bắt buộc ghi lý do). Backend quyết định có hoàn lệ phí không.
+  const handleWithdraw = async (e) => {
+    const reason = await dialog.prompt({
+      title: `Withdraw ${e.horseName}?`,
+      message: `From ${e.raceName} on ${formatRaceDate(e.raceDate)}. The entry fee is refunded only up to the entry deadline.`,
+      label: "Reason",
+      // V55: start from the trainer's advice when there is one; the owner can rewrite it.
+      defaultValue: e.withdrawAdvice || "",
+      confirmLabel: "Withdraw",
+      danger: true,
+      validate: (v) => (v ? null : "Say why the horse is withdrawn"),
+      onSubmit: (v) => scratchEntry(e.registrationId, v),
+    });
+    if (reason === null) return;
+    setActionError("");
+    setSuccessMsg(`Withdrew ${e.horseName} from ${e.raceName}.`);
+    setReloadKey((k) => k + 1);
+  };
+
   return (
     <HorseShell
       title="Results & races"
-      subtitle="Race entries, pending proposals, and results for your horses"
+      subtitle="Register your horses, read your trainer's advice, and follow results"
       actions={horses.length > 1 && (
         <select className="race-year" value={horseId} aria-label="Horse" onChange={(e) => setHorseId(e.target.value)}>
           <option value="">All my horses</option>
@@ -108,6 +255,7 @@ export default function OwnerRacesPage() {
       )}
       {!error && !entries && <StateBlock title="Loading races…" />}
 
+      {dialog.element}
       {entries && (
         <>
           {successMsg && (
@@ -124,7 +272,7 @@ export default function OwnerRacesPage() {
           <div className="race-summary">
             {pending.length > 0 && (
               <div className="hz-stat" style={{ borderColor: "var(--color-warning-border, #f59e0b)" }}>
-                <span>Proposals pending</span>
+                <span>Trainer advice</span>
                 <strong style={{ color: "var(--color-warning, #d97706)" }}>{pending.length}</strong>
               </div>
             )}
@@ -135,9 +283,18 @@ export default function OwnerRacesPage() {
             <div className="hz-stat race-stat--prize"><span>Prize money</span><strong>{formatPrize(prize)}</strong><small>all time</small></div>
           </div>
 
+          <RegisterCard
+            navigate={navigate}
+            onRegistered={(entry) => {
+              setActionError("");
+              setSuccessMsg(`Registered ${entry.horseName} for ${entry.raceName}. Any entry fee now appears in the horse's costs.`);
+              setReloadKey((k) => k + 1);
+            }}
+          />
+
           {pending.length > 0 && (
-            <Card title="Race entry proposals"
-              hint="Approving charges the race's entry fee to the horse's costs (see Costs & prizes). It is refunded if the horse is withdrawn by the entry deadline or the club cancels the race, but not after the deadline.">
+            <Card title="Advice from your Head Trainer"
+              hint="Your trainer recommends these races. Nothing is entered until you press Register, which adds the entry fee to the horse's costs (see Costs & prizes). It is refunded if the horse is withdrawn by the entry deadline or the club cancels the race, but not after the deadline.">
               <div className="hz-table-wrap">
                 <table className="hz-table race-table">
                   <thead>
@@ -145,8 +302,8 @@ export default function OwnerRacesPage() {
                       <th style={{ width: "105px" }}>Race day</th>
                       <th style={{ width: "22%" }}>Race</th>
                       <th style={{ width: "16%" }}>Horse</th>
-                      <th style={{ width: "20%" }}>Trainer note</th>
-                      <th>Reason if you decline</th>
+                      <th style={{ width: "20%" }}>Trainer's advice</th>
+                      <th>Reason if not now</th>
                       <th className="hz-sticky-end" style={{ width: "160px", textAlign: "right" }} aria-label="Actions" />
                     </tr>
                   </thead>
@@ -186,7 +343,7 @@ export default function OwnerRacesPage() {
                               onClick={() => handleApprove(e)}
                               disabled={processingId === e.registrationId}
                             >
-                              {processingId === e.registrationId ? "Saving…" : "Approve"}
+                              {processingId === e.registrationId ? "Saving…" : "Register"}
                             </button>
                             <button
                               type="button"
@@ -194,7 +351,7 @@ export default function OwnerRacesPage() {
                               onClick={() => handleReject(e)}
                               disabled={processingId === e.registrationId}
                             >
-                              Decline
+                              Not now
                             </button>
                           </div>
                         </td>
@@ -206,7 +363,7 @@ export default function OwnerRacesPage() {
             </Card>
           )}
 
-          <Card title="Upcoming races" hint="Confirmed entries approved to race">
+          <Card title="Upcoming races" hint="Entries you have registered">
             {upcoming.length === 0 ? (
               <p className="hz-empty">No upcoming races.</p>
             ) : (
@@ -216,8 +373,23 @@ export default function OwnerRacesPage() {
                     <div>
                       <strong>{e.raceName}</strong>
                       <p>{e.horseName} · {formatRaceDate(e.raceDate)}{(e.distanceM || e.venue) ? ` · ${[e.distanceM ? `${e.distanceM} m` : null, e.venue].filter(Boolean).join(" · ")}` : ""}{e.note ? ` · ${e.note}` : ""}</p>
+                      {/* V59: the club sends the entry to the organizer for the owner. */}
+                      <p className="hz-muted">{e.submittedAt ? submissionText(e) : `The club will submit this entry to ${e.organizer || "the organizer"}`}</p>
+                      {/* V55: the Head Trainer advises; the owner decides whether to withdraw. */}
+                      {e.withdrawAdvice && (
+                        <p className="hz-field__error">
+                          {e.withdrawAdviceByName || "Your Head Trainer"} recommends withdrawing: {e.withdrawAdvice}
+                        </p>
+                      )}
                     </div>
-                    <StatusChip tone="good" label="Upcoming" />
+                    <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                      <StatusChip tone={e.withdrawAdvice ? "warning" : "good"}
+                                  label={e.withdrawAdvice ? "Withdrawal advised" : "Upcoming"} />
+                      <button type="button" className="hz-btn hz-btn--outline hz-btn--danger hz-btn--sm"
+                              onClick={() => handleWithdraw(e)}>
+                        Withdraw
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -250,7 +422,7 @@ export default function OwnerRacesPage() {
                         <td className="hz-muted">
                           {e.rejectReason ? `Declined: ${e.rejectReason}`
                             : e.scratchReason ? `Scratched: ${e.scratchReason}`
-                              : e.state === "EXPIRED" ? "Not approved before entries closed"
+                              : e.state === "EXPIRED" ? "Not registered before entries closed"
                                 : e.note || "—"}
                         </td>
                       </tr>

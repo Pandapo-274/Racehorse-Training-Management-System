@@ -21,5 +21,8 @@ public record WithdrawalRow(
         String status, LocalDateTime createdAt,
         Integer reviewedBy, String reviewerName, LocalDateTime reviewedAt, String reviewNote,
         String releasedStall, Integer cancelledSessions, Integer endedPlans,
-        int scheduledSessions, int openPlans
+        int scheduledSessions, int openPlans,
+        // V62: collection day, notice and refund (contract clause 9), and who started it
+        java.time.LocalDate leaveOn, java.time.LocalDate noticeUntil,
+        Integer refundMonths, Long refundAmount, Integer contractId, boolean byClub
 ) {}

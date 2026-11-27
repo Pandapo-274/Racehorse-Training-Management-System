@@ -44,7 +44,11 @@ public final class RaceModels {
             Integer finishPosition, Integer finishTimeMs,
             /* V23 */ String scratchReason,
             /* V27 */ String approvalStatus, String rejectReason,
-            /* V37 */ Integer trainerId) {
+            /* V37 */ Integer trainerId,
+            /* V55: the Head Trainer's latest advice to withdraw (only the owner withdraws) */
+            String withdrawAdvice, java.time.LocalDateTime withdrawAdviceAt, String withdrawAdviceByName,
+            /* V59: who runs the race, and whether the club sent this entry to them */
+            String organizer, java.time.LocalDateTime submittedAt, String organizerRef) {
     }
 
     /**
@@ -70,7 +74,8 @@ public final class RaceModels {
      */
     public record RaceEvent(int raceId, String raceName, LocalDate raceDate, Integer distanceM, String venue,
                             LocalDate entryDeadline, BigDecimal entryFee, Integer maxEntries,
-                            String status, String cancelReason, int entries) {
+                            String status, String cancelReason, int entries,
+                            /* V59 */ String organizer) {
     }
 
     public record RaceEventRequest(
@@ -87,7 +92,15 @@ public final class RaceModels {
             @DecimalMin(value = "0", message = "Entry fee cannot be negative") BigDecimal entryFee,
             @NotNull(message = "Max horses is required")
             @Min(value = 1, message = "At least 1 horse")
-            @Max(value = 30, message = "At most 30 horses") Integer maxEntries) {
+            @Max(value = 30, message = "At most 30 horses") Integer maxEntries,
+            /* V59: the race is run by an organizer (JRA...) or by the club itself */
+            @NotBlank(message = "Organizer is required")
+            @Size(max = 100, message = "Organizer must be at most 100 characters") String organizer) {
+    }
+
+    /** V59: the Club Manager sent a confirmed entry to the organizer; ref is its confirmation number. */
+    public record SubmittedRequest(
+            @Size(max = 50, message = "Reference must be at most 50 characters") String organizerRef) {
     }
 
     public record CancelRaceRequest(
@@ -134,7 +147,7 @@ public final class RaceModels {
     // thương, bị khoá tập, có sự cố mở, chưa đủ ngày nghỉ sau giải trước...).
     public record Candidate(int horseId, String horseName, String stallNo, String ownerName,
                             Integer age, String healthStatus, String problem,
-                            List<String> problems, List<String> warnings) {
+                            List<String> problems, List<String> warnings, Integer ageMonths) {
     }
 
     public record HorseSummary(int horseId, String horseName, String ownerName,

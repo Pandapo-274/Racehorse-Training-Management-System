@@ -16,8 +16,12 @@ import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import { formatDate, formatDateTime, listAvailableTrainers, toBcsGroup, BCS_GROUPS } from "./horseApi";
 import { formatVnd } from "./horseRequestApi";
-import { listContracts, receiveHorse, cancelContract, toContractStatus, stayLine } from "./contractApi";
+import {
+  listContracts, receiveHorse, cancelContract, toContractStatus, stayLine, contractKind, isTakeover,
+} from "./contractApi";
+import { withdrawByClub } from "./withdrawalApi";
 import RegistrationCodeField from "./RegistrationCodeField";
+import StallField from "./StallField";
 
 const BCS_TEXT = {
   1: "Poor", 2: "Very thin", 3: "Thin", 4: "Moderately thin", 5: "Moderate",
@@ -41,7 +45,7 @@ function ReceiveForm({ c, trainers, onDone }) {
 
   const submit = async () => {
     const e = {};
-    if (!form.registrationCode.trim()) e.registrationCode = "Enter the code the club assigns";
+    if (!c.returnOfHorseId && !form.registrationCode.trim()) e.registrationCode = "Enter the code the club assigns";
     if (!form.stallNo.trim()) e.stallNo = "Assign a stall";
     if (!form.bcs) e.bcs = "Score the body condition (1-9)";
     if (overridesWish && !form.note.trim()) e.note = `The owner asked for ${c.preferredTrainerName}. Say why`;
@@ -64,15 +68,22 @@ function ReceiveForm({ c, trainers, onDone }) {
   return (
     <div className="hz-review__form">
       <div className="hz-form-grid">
-        <RegistrationCodeField id={`code-${c.contractId}`} value={form.registrationCode}
-                               onChange={(v) => setForm((f) => ({ ...f, registrationCode: v }))}
-                               error={errors.registrationCode} autoSuggest />
-        <div className="hz-field">
-          <label htmlFor={`stall-${c.contractId}`}>Stall</label>
-          <input id={`stall-${c.contractId}`} className="hz-mono" value={form.stallNo} maxLength={20}
-                 onChange={set("stallNo")} />
-          {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-        </div>
+        {c.returnOfHorseId ? (
+          // V64: the same horse comes back with the code it always had.
+          <div className="hz-field">
+            <label htmlFor={`code-${c.contractId}`}>Registration code</label>
+            <div id={`code-${c.contractId}`} className="hz-readonly hz-mono">{c.returnCode}</div>
+            <p className="hz-field__hint">Coming back: keeps its code</p>
+          </div>
+        ) : (
+          <RegistrationCodeField id={`code-${c.contractId}`} value={form.registrationCode}
+                                 onChange={(v) => setForm((f) => ({ ...f, registrationCode: v }))}
+                                 error={errors.registrationCode} autoSuggest />
+        )}
+        {/* V60: free stalls from the stable plan; the first one is filled in. */}
+        <StallField id={`stall-${c.contractId}`} value={form.stallNo}
+                    onChange={(v) => setForm((f) => ({ ...f, stallNo: v }))}
+                    error={errors.stallNo} autoSuggest />
         <div className="hz-field">
           <label htmlFor={`trainer-${c.contractId}`}>Head Trainer</label>
           {/* Review feedback 5: only trainers who can take another horse are listed. */}
@@ -132,7 +143,7 @@ function ReceiveForm({ c, trainers, onDone }) {
   );
 }
 
-function ContractItem({ c, trainers, openId, onDone, onCancel }) {
+function ContractItem({ c, trainers, openId, onDone, onCancel, onWithdraw }) {
   const [showText, setShowText] = useState(openId === c.contractId);
   const st = toContractStatus(c.status);
   const receivable = c.status === "PAID" && !c.renewsContractId;
@@ -142,8 +153,9 @@ function ContractItem({ c, trainers, openId, onDone, onCancel }) {
         <div className="hz-review__head">
           <HorsePhoto horse={c} className="hz-photo--sm" />
           <div>
-            <strong>{c.horseName}{c.renewsContractId ? " · renewal" : ""}</strong>
-            <p>{c.ownerName} · contract #{c.contractId}</p>
+            <strong>{c.horseName}{contractKind(c)}</strong>
+            <p>{c.ownerName} · contract #{c.contractId}
+              {isTakeover(c) && c.previousOwnerName ? ` · takes over from ${c.previousOwnerName}` : ""}</p>
             <p>{c.months} month{c.months === 1 ? "" : "s"} · {formatVnd(c.totalAmount)}
               {c.trainingStart && c.trainingEnd
                 ? ` · training ${formatDate(c.trainingStart)} - ${formatDate(c.trainingEnd)}`
@@ -161,7 +173,15 @@ function ContractItem({ c, trainers, openId, onDone, onCancel }) {
         {showText && <pre className="hz-contract-text">{c.termsSnapshot}</pre>}
       </div>
       {receivable && <ReceiveForm c={c} trainers={trainers} onDone={onDone} />}
-      {(c.status === "SENT" || c.status === "SIGNED") && (
+      {/* V62: a stay that ended without renewal; the owner did not ask, so the club withdraws the horse. */}
+      {c.status === "EXPIRED" && c.horseId && (
+        <div className="hz-review__form">
+          <button type="button" className="hz-btn hz-btn--ghost" onClick={() => onWithdraw(c)}>
+            Withdraw the horse
+          </button>
+        </div>
+      )}
+      {(c.status === "SENT" || c.status === "SIGNED") && !isTakeover(c) && (
         <div className="hz-review__form">
           <button type="button" className="hz-btn hz-btn--ghost" onClick={() => onCancel(c)}>
             Withdraw the offer
@@ -209,6 +229,18 @@ export default function ManagerContractsPage() {
     if (reason !== null) load();
   };
 
+  const withdrawHorse = async (c) => {
+    const reason = await dialog.prompt({
+      title: `Withdraw ${c.horseName} from the club?`,
+      label: `Reason for ${c.ownerName}`,
+      defaultValue: `The stay ended on ${formatDate(c.endDate)} and was not renewed.`,
+      confirmLabel: "Withdraw the horse",
+      validate: (v) => (v && v.trim() ? null : "Say why"),
+      onSubmit: async (v) => { await withdrawByClub(c.horseId, v); },
+    });
+    if (reason !== null) load();
+  };
+
   const group = (statuses, extra = () => true) => (rows || []).filter((c) => statuses.includes(c.status) && extra(c));
   const sections = [
     { title: "Paid - receive the horse", hint: "Assign code, stall, Head Trainer and BCS", items: group(["PAID"], (c) => !c.renewsContractId) },
@@ -230,7 +262,7 @@ export default function ManagerContractsPage() {
             <ul className="hz-list">
               {s.items.map((c) => (
                 <ContractItem key={c.contractId} c={c} trainers={trainers} openId={openId}
-                              onDone={load} onCancel={withdraw} />
+                              onDone={load} onCancel={withdraw} onWithdraw={withdrawHorse} />
               ))}
             </ul>
           )}

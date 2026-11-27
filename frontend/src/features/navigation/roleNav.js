@@ -23,7 +23,7 @@ export const ROLE_NAV = {
     { key: "contracts", label: "Contracts", path: "/horse-owner/contracts" },
     { key: "training", label: "Training", path: "/horse-owner/training" },
     { key: "results", label: "Results & races", path: "/horse-owner/races" },
-    { key: "costs", label: "Costs & prizes", path: "/horse-owner", hash: "costs-prizes" },
+    { key: "payments", label: "Payments", path: "/horse-owner/payments" },
   ],
 
   CLUB_MANAGER: [

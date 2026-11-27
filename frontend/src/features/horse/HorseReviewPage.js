@@ -104,6 +104,9 @@ function PendingRow({ row, pricing, onDone }) {
           {!pedigreeOnly && <HorsePhoto horse={row} />}
           <div>
             <strong>{row.horseName}</strong>
+            {row.returnOfHorseId && (
+              <p><StatusChip tone="neutral" label={`Coming back · ${row.returnCode}`} /> Left the club earlier; same horse, same code</p>
+            )}
             <p>
               {[toGender(row.horseGender) === "—" ? null : toGender(row.horseGender), row.breed, row.color,
                 row.dateOfBirth ? `${formatDate(row.dateOfBirth)}${age ? ` (${age})` : ""}` : null]
@@ -124,7 +127,7 @@ function PendingRow({ row, pricing, onDone }) {
             </Basis>
             <Basis label="Growth for age">
               <StatusChip tone={growth.tone} label={growth.label}
-                          title="Thoroughbred weight and height against age, 0-18 months. Body condition is scored on arrival." />
+                          title="Weight and height against the breed standard for this age, up to 60 months. Body condition is scored on arrival." />
             </Basis>
             <Basis label="Surface">{SURFACES[row.surface] || "Not given"}</Basis>
             <Basis label="Distance">{DISTANCES[row.distancePref] || "Not given"}</Basis>
@@ -146,6 +149,12 @@ function PendingRow({ row, pricing, onDone }) {
                 : "No preference"}
             </Basis>
             <Basis label="Owner's horses at the club">{row.ownerActiveHorses}</Basis>
+            <Basis label="Insurer">
+              {row.insurerName ? `${row.insurerName}${row.insurerPhone ? ` · ${row.insurerPhone}` : ""}` : "Not given"}
+            </Basis>
+            <Basis label="Second contact">
+              {row.emergencyName ? `${row.emergencyName}${row.emergencyPhone ? ` · ${row.emergencyPhone}` : ""}` : "Not given"}
+            </Basis>
             <Basis label="Parents">
               {row.sireName || row.damName
                 ? `Sire ${row.sireName || "unknown"} · Dam ${row.damName || "unknown"}`

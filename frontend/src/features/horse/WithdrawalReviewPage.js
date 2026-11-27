@@ -9,10 +9,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getUser, handleAuthError } from "../auth/authService";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
-import { formatDateTime, getHorseBasePath } from "./horseApi";
+import { formatDate, formatDateTime, getHorseBasePath } from "./horseApi";
 import {
-  listWithdrawals, approveWithdrawal, rejectWithdrawal, toWithdrawalStatus, plural,
+  listWithdrawals, approveWithdrawal, rejectWithdrawal, toWithdrawalStatus, plural, getWithdrawalBasis,
 } from "./withdrawalApi";
+import { formatVnd, todayIsoLocal } from "./horseRequestApi";
+import WithdrawalBasis from "./WithdrawalBasis";
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
 
@@ -25,6 +27,14 @@ function PendingRow({ row, horseBase, onDone }) {
   const [noteError, setNoteError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  // V62: the basis to decide on (contract, refund, unpaid costs, vet lock, races).
+  const [basis, setBasis] = useState(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getWithdrawalBasis(row.withdrawalId, ctrl.signal).then(setBasis).catch(() => setBasis(null));
+    return () => ctrl.abort();
+  }, [row.withdrawalId]);
+  const tooEarly = row.leaveOn && todayIsoLocal() < row.leaveOn;
 
   /* On success the row leaves this list, so the page shows the result where it was. */
   const run = async (fn, okText, failText) => {
@@ -50,7 +60,8 @@ function PendingRow({ row, horseBase, onDone }) {
       title: `Approve withdrawal of ${row.horseName}?`,
       message: `This cannot be undone. It cancels ${plural(row.scheduledSessions, "scheduled session")}, ends `
         + `${plural(row.openPlans, "training plan")}, removes upcoming stable tasks, scratches upcoming race entries`
-        + `${row.stallNo ? ` and releases stall ${row.stallNo}` : ""}.`,
+        + `${row.stallNo ? ` and releases stall ${row.stallNo}` : ""}.`
+        + (basis?.refundAmount > 0 ? ` The club then owes ${row.requesterName} ${formatVnd(basis.refundAmount)}.` : ""),
       confirmLabel: "Approve withdrawal",
       danger: true,
     });
@@ -85,11 +96,8 @@ function PendingRow({ row, horseBase, onDone }) {
         </p>
         <p>From {row.requesterName} · sent {formatDateTime(row.createdAt)}</p>
         <p className="hz-review__note">“{row.reason}”</p>
-        <p>
-          Approving will cancel {plural(row.scheduledSessions, "scheduled session")}, end{" "}
-          {plural(row.openPlans, "training plan")}, remove upcoming stable tasks, scratch upcoming
-          race entries and release the stall.
-        </p>
+        {row.leaveOn && <p>Collects the horse on <strong>{formatDate(row.leaveOn)}</strong></p>}
+        <WithdrawalBasis basis={basis} />
       </div>
 
       <div className="hz-review__form">
@@ -101,13 +109,17 @@ function PendingRow({ row, horseBase, onDone }) {
         </div>
 
         <div className="hz-form-footer">
-          <button type="button" className="hz-btn" disabled={busy} onClick={approve}>
+          <button type="button" className="hz-btn" disabled={busy || tooEarly} onClick={approve}
+                  title={tooEarly ? `The horse keeps training until ${formatDate(row.leaveOn)}` : undefined}>
             {busy ? "Saving…" : "Approve"}
           </button>
           <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={reject}>
             Reject
           </button>
         </div>
+        {tooEarly && (
+          <p className="hz-field__hint">Approve on or after {formatDate(row.leaveOn)}: the horse keeps training until then.</p>
+        )}
         <ResultLine result={result} />
       </div>
     </li>
@@ -181,7 +193,7 @@ export default function WithdrawalReviewPage() {
                           <Link to={`${horseBase}/${r.horseId}`}>{r.horseName}</Link>
                         </strong>
                         <p>
-                          {r.requesterName}
+                          {r.byClub ? "Withdrawn by the club (stay ended)" : r.requesterName}
                           {r.reviewerName ? ` · by ${r.reviewerName}` : ""} · {formatDateTime(r.reviewedAt)}
                         </p>
                         {r.status === "APPROVED" && (
@@ -190,6 +202,9 @@ export default function WithdrawalReviewPage() {
                             {plural(r.endedPlans, "plan")} ended
                             {r.releasedStall ? ` · stall ${r.releasedStall} released` : ""}
                           </p>
+                        )}
+                        {r.status === "APPROVED" && r.refundAmount > 0 && (
+                          <p>Refund owed: {formatVnd(r.refundAmount)} for {plural(r.refundMonths, "month")} not started</p>
                         )}
                         {r.status === "REJECTED" && r.reviewNote && (
                           <p className="hz-reject-note">{r.reviewNote}</p>

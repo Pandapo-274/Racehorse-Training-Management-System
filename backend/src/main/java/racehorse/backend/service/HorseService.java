@@ -97,9 +97,14 @@ public class HorseService {
         Integer trainerId = raw.trainerId();
 
         Map<String, String> errors = new HashMap<>();
+        // The code is permanent once assigned: papers, race entries, invoices and the audit log
+        // all carry it. Only a record that never had one may be given one here.
+        boolean hasCode = current.registrationCode() != null && !current.registrationCode().isBlank();
         // Format only for a NEW code: older records keep whatever shape they were given.
         String format = code.equals(current.registrationCode()) ? null : HorsePolicy.codeProblem(code);
-        if (format != null) {
+        if (hasCode && !code.equalsIgnoreCase(current.registrationCode().trim())) {
+            errors.put("registrationCode", "The registration code cannot be changed once assigned");
+        } else if (format != null) {
             errors.put("registrationCode", format);
         } else if (horseRepository.existsByRegistrationCode(code, horseId)) {
             errors.put("registrationCode", "This registration code is already in use");
@@ -110,6 +115,10 @@ public class HorseService {
             errors.put("stallNo", pedigree ? "A pedigree record has no stall" : "A withdrawn horse has no stall");
         } else if (stall == null && !pedigree && !current.isWithdrawn()) {
             errors.put("stallNo", "A club horse needs a stall");
+        } else if (stall != null && !stall.equalsIgnoreCase(current.stallNo())
+                && horseRepository.isStallOffPlan(stall)) {
+            // A horse keeps an old stall it already has; a NEW stall must be one the club has.
+            errors.put("stallNo", HorsePolicy.stallOffPlan(stall));
         } else if (stall != null && horseRepository.existsByStallNo(stall, horseId)) {
             errors.put("stallNo", "Another horse is already in this stall");
         }
@@ -249,6 +258,30 @@ public class HorseService {
         }
         String holder = horseRepository.findNameByRegistrationCode(code).orElse("another horse");
         return new CodeCheck(code, false, "Already used by " + holder);
+    }
+
+    /** V60: the empty stalls on the stable plan, in plan order (the first one is the suggestion). */
+    public List<String> freeStalls() {
+        return horseRepository.findFreeStalls();
+    }
+
+    public record StallCheck(String stall, boolean available, String message) {}
+
+    /** Checked while the manager types: on the plan, then whether another horse is in it. */
+    public StallCheck checkStall(String raw, Integer exceptHorseId) {
+        String stall = raw == null ? "" : raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if (stall.isEmpty()) {
+            return new StallCheck(stall, false, "Assign a stall");
+        }
+        int except = exceptHorseId == null ? 0 : exceptHorseId;
+        if (horseRepository.existsByStallNo(stall, except)) {
+            String holder = horseRepository.findNameByStallNo(stall).orElse("another horse");
+            return new StallCheck(stall, false, "Taken by " + holder);
+        }
+        if (horseRepository.isStallOffPlan(stall)) {
+            return new StallCheck(stall, false, HorsePolicy.stallOffPlan(stall));
+        }
+        return new StallCheck(stall, true, "Free");
     }
 
     private ApiException takenJustNow(String code, String stall, int excludeId) {
@@ -443,8 +476,9 @@ public class HorseService {
         if ("HORSE_OWNER".equals(user.role())) {
             return horseRepository.findByOwner(user.userId());
         }
+        // Góp ý hội đồng: Groom đi theo Head Trainer, nên chỉ thấy ngựa của đội mình.
         if ("GROOM".equals(user.role())) {
-            return horseRepository.findActive();
+            return horseRepository.findForGroom(user.userId());
         }
         // V37: Head Trainer chỉ thấy những ngựa Club Manager đã giao cho mình quản lý.
         if ("HEAD_TRAINER".equals(user.role())) {
@@ -524,7 +558,7 @@ public class HorseService {
     }
 
     // Không có "private" = package-private: HorsePhotoService (cùng package) gọi được.
-    HorseResponse getOrThrow(int horseId) {
+    public HorseResponse getOrThrow(int horseId) {
         return horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse not found: #" + horseId));
     }
@@ -532,6 +566,9 @@ public class HorseService {
     void checkCanView(HorseResponse horse, AuthenticatedUser user) {
         if ("HORSE_OWNER".equals(user.role()) && horse.ownerId() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only view your own horses");
+        }
+        if ("GROOM".equals(user.role()) && !horseRepository.isInGroomTeam(horse.horseId(), user.userId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, horse.horseName() + " is not in your Head Trainer's team");
         }
     }
 
@@ -568,7 +605,9 @@ public class HorseService {
         } else if (horseRepository.existsByRegistrationCode(r.registrationCode(), excludeId)) {
             errors.put("registrationCode", "This registration code is already in use");
         }
-        if (r.stallNo() != null && horseRepository.existsByStallNo(r.stallNo(), excludeId)) {
+        if (r.stallNo() != null && horseRepository.isStallOffPlan(r.stallNo())) {
+            errors.put("stallNo", HorsePolicy.stallOffPlan(r.stallNo()));
+        } else if (r.stallNo() != null && horseRepository.existsByStallNo(r.stallNo(), excludeId)) {
             errors.put("stallNo", "Another horse is already in this stall");
         }
         if (!horseRepository.isHorseOwner(r.ownerId())) {

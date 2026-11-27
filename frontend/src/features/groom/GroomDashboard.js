@@ -24,6 +24,9 @@ import {
   startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
   COMMON_SYMPTOMS, URGENCY_OPTIONS, EARLY_STOP_REASON_OPTIONS,
 } from "./groomApi";
+import {
+  MEALS, MEAL_TEXT, TASK_TEXT, byHorse, completeTask, formatClock, formatQty, listFeeding, listTasks, undoTask,
+} from "../care/careApi";
 
 function HorseshoeIcon() {
   return (
@@ -92,6 +95,92 @@ function StatCard({ value, label, type, active, onClick }) {
       <span className="groom-stat-value">{value}</span>
       <span className="groom-stat-label">{label}</span>
     </button>
+  );
+}
+
+/* =====================================================
+   TO-DO ĐẦU NGÀY (góp ý hội đồng)
+   Một danh sách cho cả ngày: buổi tập theo giờ, rồi việc chăm sóc của từng ngựa.
+===================================================== */
+
+// Khẩu phần một dòng, để việc Feeding cho biết luôn cho ăn gì.
+function rationText(items) {
+  if (!items?.length) return "";
+  return MEALS.map((meal) => {
+    const rows = items.filter((i) => i.mealTime === meal);
+    if (!rows.length) return null;
+    return `${MEAL_TEXT[meal]}: ${rows.map((r) => `${r.feedType} ${formatQty(r.quantity)} ${r.unit}`).join(", ")}`;
+  }).filter(Boolean).join(" · ");
+}
+
+function DailyTodoCard({ sessions, tasks, rations, busyId, error, onToggle, onOpenSession }) {
+  const training = sessions.filter((s) => s.status !== "CANCELLED");
+  const care = [...tasks].sort((a, b) => String(a.stallNo || "").localeCompare(String(b.stallNo || ""), "en", { numeric: true }));
+  const done = training.filter((s) => isFinished(s.status)).length + care.filter((t) => t.completed).length;
+  const total = training.length + care.length;
+
+  return (
+    <div className="groom-card groom-todo">
+      <div className="groom-card-title">
+        <span className="groom-diamond" aria-hidden="true" />
+        <div>
+          <h2>Today's to-do list</h2>
+          <p>{total === 0 ? "Nothing assigned to you today" : `${done} of ${total} done`}</p>
+        </div>
+      </div>
+      {total > 0 && (
+        <div className="groom-todo-progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+          <i style={{ width: `${(done / total) * 100}%` }} />
+        </div>
+      )}
+      {error && <p className="groom-todo-error" role="alert">{error}</p>}
+      {total > 0 && (
+        <div className="groom-todo-columns">
+          <section aria-label="Training">
+            <h3>Training</h3>
+            {training.length === 0 ? <p className="groom-todo-empty">No session today.</p> : (
+              <ul>
+                {training.map((s) => {
+                  const st = toSessionStatus(s.status);
+                  return (
+                    <li key={s.sessionId} className={isFinished(s.status) ? "done" : ""}>
+                      <button type="button" className="groom-todo-session" onClick={() => onOpenSession(s.sessionId)}>
+                        <b>{sessionTime(s.sessionDate)}</b>
+                        <span>{s.horseName} · {s.phaseName}</span>
+                      </button>
+                      <span className={`task-status ${st.slug}`}>{st.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+          <section aria-label="Stable care">
+            <h3>Stable care</h3>
+            {care.length === 0 ? <p className="groom-todo-empty">No care task today.</p> : (
+              <ul>
+                {care.map((t) => {
+                  const ration = t.taskType === "FEEDING" ? rationText(rations.get(t.horseId)) : "";
+                  return (
+                    <li key={t.taskId} className={t.completed ? "done" : ""}>
+                      <label>
+                        <input type="checkbox" checked={t.completed} disabled={busyId === t.taskId} onChange={() => onToggle(t)} />
+                        <span>
+                          <strong>{TASK_TEXT[t.taskType] || t.taskType}</strong> · {t.horseName}{t.stallNo ? ` (${t.stallNo})` : ""}
+                          {ration && <small>{ration}</small>}
+                          {t.note && <small>{t.note}</small>}
+                        </span>
+                      </label>
+                      {t.completed && <small className="groom-todo-time">{formatClock(t.completedAt)}</small>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -939,6 +1028,11 @@ export default function GroomDashboard() {
   const [selectedId, setSelectedId] = useState(null);
   const noticeRef = useRef(null);
   const upcomingRef = useRef(null);
+  const sessionsRef = useRef(null);
+  const [careTasks, setCareTasks] = useState([]);
+  const [feeding, setFeeding] = useState([]);
+  const [taskBusyId, setTaskBusyId] = useState(null);
+  const [todoError, setTodoError] = useState("");
 
   const load = useCallback(
     async (signal) => {
@@ -962,6 +1056,44 @@ export default function GroomDashboard() {
   }, [load]);
 
   const today = todayIso();
+
+  // Việc chăm sóc và khẩu phần hôm nay. Lỗi ở đây không được làm mất lịch tập.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    Promise.all([listTasks({ date: today }, ctrl.signal), listFeeding(null, ctrl.signal)])
+      .then(([t, f]) => {
+        setCareTasks(t || []);
+        setFeeding(f || []);
+        setTodoError("");
+      })
+      .catch((err) => {
+        if (err.name === "AbortError" || handleAuthError(err, navigate)) return;
+        setTodoError(err.message || "Could not load today's care tasks.");
+      });
+    return () => ctrl.abort();
+  }, [today, navigate]);
+
+  const rations = useMemo(() => byHorse(feeding), [feeding]);
+
+  const toggleCareTask = async (task) => {
+    setTaskBusyId(task.taskId);
+    setTodoError("");
+    try {
+      const updated = task.completed ? await undoTask(task.taskId) : await completeTask(task.taskId);
+      setCareTasks((rows) => rows.map((t) => (t.taskId === updated.taskId ? updated : t)));
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) setTodoError(err.message);
+    } finally {
+      setTaskBusyId(null);
+    }
+  };
+
+  const openSession = (id) => {
+    setStatusFilter("all");
+    setQuery("");
+    setSelectedId(id);
+    sessionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const todays = useMemo(
     () =>
@@ -1118,10 +1250,22 @@ export default function GroomDashboard() {
             </div>
           )}
 
+          {sessions !== null && (
+            <DailyTodoCard
+              sessions={todays}
+              tasks={careTasks}
+              rations={rations}
+              busyId={taskBusyId}
+              error={todoError}
+              onToggle={toggleCareTask}
+              onOpenSession={openSession}
+            />
+          )}
+
           {sessions === null && !loadError ? (
             <div className="groom-inline-state">Loading your sessions…</div>
           ) : (
-            <div className="groom-grid">
+            <div className="groom-grid" ref={sessionsRef}>
               <SessionsCard
                 items={visible}
                 total={todays.length}

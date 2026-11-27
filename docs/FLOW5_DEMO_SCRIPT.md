@@ -47,7 +47,7 @@ Thời lượng gợi ý: **khoảng 5 phút** (Bước 1 khoảng 2,5 phút, B�
 | # | Luật | Ai / thao tác | Kết quả mong đợi |
 |---|---|---|---|
 | 2.1 | **Chỉ ngựa đủ điều kiện mới đăng ký được**: ngựa CLB, 2–10 tuổi, ELIGIBLE, không khoá tập, không có sự cố chờ khám, có tiêm phòng và chưa quá hạn, có trial run trong 30 ngày | A: chọn một giải → mở "N horses cannot race" | Demo Star *"has an active training lock; … incident report waiting for a veterinarian"*, Biwa Hayahide *"health status INJURED"*, ngựa già *"racing age is 2 to 10"*, ngựa chưa chạy thử *"no completed trial run in the last 30 days"* |
-| 2.2 | **HLV chỉ đăng ký / rút ngựa mình phụ trách** (hoặc ngựa chưa giao cho ai) | A: mở dropdown Horse | Không có Deep Impact (của `kien.hm`). Gọi API thẳng thì bị 403 |
+| 2.2 | **HLV chỉ đề xuất / rút ngựa mình phụ trách** (ngựa chưa giao cho ai thì không HLV nào đề xuất) | A: mở dropdown Horse | Không có Deep Impact (của `kien.hm`). Gọi API thẳng thì bị 403 |
 | 2.3 | **Hai giải của một ngựa cách nhau ít nhất 14 ngày** | A: chọn **Hopeful Stakes 2026** (26/12) | Symboli Rudolf bị chặn: *"runs in Tracen Winter Cup 2026 on 20 Dec 2026; races must be at least 14 days apart"* |
 | 2.4 | **Thứ hạng phải khớp kết quả** (WON = 1, PLACED = 2–3, UNPLACED ≥ 4) | A: lúc nhập kết quả ở 1.6, gõ hạng 2 rồi đổi kết quả thành WON → Save | *"Position 2 is PLACED, not WON"* |
 | 2.5 | **Kết quả khoá sau 7 ngày; chỉ Manager sửa, phải ghi lý do** | A: các dòng Tracen Cup hiện **Locked**. D: **Edit result** Deep Impact → hạng 2, thưởng `120000000`, để trống lý do → Save; rồi nhập lý do "Photo-finish review" → Save | Không có lý do thì báo *"A reason is required to change a locked result"*; có lý do thì lưu. **Audit log**: `RACE_RESULT` ghi *"PLACED, 3rd, 60000000 -> PLACED, 2nd, 120000000 (after lock). Reason: …"* |
@@ -67,5 +67,4 @@ Các luật sau không dựng được trong 5 phút (cần chờ qua ngày), n�
 | # | Mức | Lỗi | Tránh khi demo |
 |---|---|---|---|
 | 1 | Trung bình | Rút ngựa khỏi CLB (Withdrawal) tự rút các suất đua nhưng **không hoàn lệ phí** và không ghi audit `RACE_SCRATCH` | Không demo rút ngựa đang có suất đua đã duyệt |
-| 2 | Thấp | Owner Dashboard, mục "next race", có thể hiện cả đề xuất chưa duyệt hoặc đã bị từ chối | - |
-| 3 | Thấp | Giải chưa có điều kiện tuổi/giới tính (vd. Hanshin Juvenile Fillies), và chưa chặn hai ngựa cùng về nhất trong một giải | Không chọn giải dành cho ngựa non khi demo |
+| 2 | Thấp | Giải chưa có điều kiện tuổi/giới tính (vd. Hanshin Juvenile Fillies), và chưa chặn hai ngựa cùng về nhất trong một giải | Không chọn giải dành cho ngựa non khi demo |
