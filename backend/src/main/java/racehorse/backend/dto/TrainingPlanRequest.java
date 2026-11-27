@@ -97,22 +97,37 @@ public record TrainingPlanRequest(
             @Min(value = 1, message = "Phase ratio must be between 1% and 98%")
             @Max(value = 98, message = "Phase ratio must be between 1% and 98%") Integer phaseRatio,
             @Min(value = 5, message = "Recovery duration must be between 5 and 120 minutes")
-            @Max(value = 120, message = "Recovery duration must be between 5 and 120 minutes") Integer recoveryDurationMinutes
+            @Max(value = 120, message = "Recovery duration must be between 5 and 120 minutes") Integer recoveryDurationMinutes,
+            @Pattern(regexp = "MORNING|AFTERNOON",
+                     message = "Training shift must be MORNING or AFTERNOON") String trainingShift
     ) {
+        public PhaseRequest(Integer phaseId, String phaseName, Integer distance, String workload, String surface,
+                            Integer sessionsPerWeek, Integer heartRateCeiling, Integer minGapMinutes,
+                            BigDecimal targetVelocity, LocalDate startDate, LocalDate endDate,
+                            String phaseCode, Integer phaseRatio, Integer recoveryDurationMinutes) {
+            this(phaseId, phaseName, distance, workload, surface, sessionsPerWeek, heartRateCeiling,
+                    minGapMinutes, targetVelocity, startDate, endDate, phaseCode, phaseRatio,
+                    recoveryDurationMinutes, "MORNING");
+        }
+
         public PhaseRequest(Integer phaseId, String phaseName, Integer distance, String workload, String surface,
                             Integer sessionsPerWeek, Integer heartRateCeiling, Integer minGapMinutes,
                             BigDecimal targetVelocity, LocalDate startDate, LocalDate endDate) {
             this(phaseId, phaseName, distance, workload, surface, sessionsPerWeek, heartRateCeiling,
-                    minGapMinutes, targetVelocity, startDate, endDate, null, null, null);
+                    minGapMinutes, targetVelocity, startDate, endDate, null, null, null, "MORNING");
         }
 
         public PhaseRequest(String phaseName, Integer distance, String workload, String surface,
                             Integer sessionsPerWeek, Integer heartRateCeiling, Integer minGapMinutes,
                             BigDecimal targetVelocity, LocalDate startDate, LocalDate endDate) {
             this(null, phaseName, distance, workload, surface, sessionsPerWeek, heartRateCeiling,
-                 minGapMinutes, targetVelocity, startDate, endDate, null, null, null);
+                 minGapMinutes, targetVelocity, startDate, endDate, null, null, null, "MORNING");
         }
     }
+
+    public record AutoScheduleOptions(
+            java.util.Map<Integer, String> phaseShifts
+    ) {}
 
     /**
      * Cập nhật giáo án: Chỉ cho phép cập nhật groom phụ trách và nội dung các phase.

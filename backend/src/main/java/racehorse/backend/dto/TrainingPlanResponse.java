@@ -73,14 +73,25 @@ public record TrainingPlanResponse(
                         String workload, String surface, Integer sessionsPerWeek,
                         Integer heartRateCeiling, LocalDate startDate, LocalDate endDate,
                         Integer minGapMinutes, BigDecimal targetVelocity,
-                        String phaseCode, Integer phaseRatio, Integer recoveryDurationMinutes) {
+                        String phaseCode, Integer phaseRatio, Integer recoveryDurationMinutes,
+                        String trainingShift) {
+        public Phase(int phaseId, int phaseNo, String phaseName, Integer distance,
+                     String workload, String surface, Integer sessionsPerWeek,
+                     Integer heartRateCeiling, LocalDate startDate, LocalDate endDate,
+                     Integer minGapMinutes, BigDecimal targetVelocity,
+                     String phaseCode, Integer phaseRatio, Integer recoveryDurationMinutes) {
+            this(phaseId, phaseNo, phaseName, distance, workload, surface, sessionsPerWeek,
+                    heartRateCeiling, startDate, endDate, minGapMinutes, targetVelocity,
+                    phaseCode, phaseRatio, recoveryDurationMinutes, "MORNING");
+        }
+
         public Phase(int phaseId, int phaseNo, String phaseName, Integer distance,
                      String workload, String surface, Integer sessionsPerWeek,
                      Integer heartRateCeiling, LocalDate startDate, LocalDate endDate,
                      Integer minGapMinutes, BigDecimal targetVelocity) {
             this(phaseId, phaseNo, phaseName, distance, workload, surface, sessionsPerWeek,
                     heartRateCeiling, startDate, endDate, minGapMinutes, targetVelocity,
-                    null, null, 15);
+                    null, null, 15, "MORNING");
         }
     }
 

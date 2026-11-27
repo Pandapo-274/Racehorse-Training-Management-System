@@ -70,6 +70,13 @@ export function stopSession(sessionId, { symptoms, description, urgency }) {
   });
 }
 
+export function saveSessionVideo(sessionId, videoUrl) {
+  return authFetch(`/api/training-sessions/${sessionId}/video`, {
+    method: "PUT",
+    body: JSON.stringify({ videoUrl: videoUrl || null }),
+  });
+}
+
 /** Danh sách lý do kết thúc sớm buổi tập cho Groom chọn. */
 // value phải nằm trong EARLY_STOP_REASONS của TrainingSessionService (backend từ chối mã lạ).
 export const EARLY_STOP_REASON_OPTIONS = [

@@ -91,7 +91,10 @@ export function getPlanTemplates(horseId, signal) {
   return authFetch(`${API}/templates${q}`, { signal });
 }
 
-// V50: Kích hoạt Auto-Scheduling Engine sinh buổi tập + ngày nghỉ từ start_date đến end_date.
-export function autoScheduleTrainingPlan(planId) {
-  return authFetch(`${API}/${planId}/auto-schedule`, { method: "POST" });
+// V50: Kích hoạt Auto-Scheduling Engine sinh buổi tập + ngày nghỉ từ start_date đến end_date (kèm ca sáng/chiều theo phase).
+export function autoScheduleTrainingPlan(planId, phaseShifts) {
+  return authFetch(`${API}/${planId}/auto-schedule`, {
+    method: "POST",
+    body: JSON.stringify(phaseShifts ? { phaseShifts } : {}),
+  });
 }

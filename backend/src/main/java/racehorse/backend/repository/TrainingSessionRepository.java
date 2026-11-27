@@ -210,6 +210,17 @@ public class TrainingSessionRepository {
                 .update();
     }
 
+    public int updateVideoUrl(int sessionId, String videoUrl) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET video_url = :url
+                WHERE session_id = :id
+                """)
+                .param("url", videoUrl)
+                .param("id", sessionId)
+                .update();
+    }
+
     // "AND status = 'SCHEDULED'" trong UPDATE: hai người bấm Start cùng lúc thì chỉ một người thành
     // công (người kia nhận 0 dòng -> 409). Các hàm mark... bên dưới dùng cùng kỹ thuật.
     public int markRunning(int sessionId) {

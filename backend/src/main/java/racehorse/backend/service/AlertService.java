@@ -99,19 +99,86 @@ public class AlertService {
                     : raise(me, ctx.horseId(), sessionId, hr, ceiling, HEART_RATE, BigDecimal.valueOf(ceiling), BigDecimal.valueOf(hr),
                             "High heart-rate alert", hr + " bpm, ceiling is " + ceiling + " bpm");
         }
-        BigDecimal speedLimit = ctx.velocityCeiling() != null ? ctx.velocityCeiling() : velocityMax;
-        if (req.velocity() != null && req.velocity().compareTo(speedLimit) > 0) {
-            // Nhịp tim dùng cho VitalsResult khi chỉ gửi vận tốc: lấy nhịp tim đo được, hoặc ngưỡng,
-            // hoặc 120 làm giá trị hiển thị mặc định.
-            int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
-            VitalsResult speed = raise(me, ctx.horseId(), sessionId, effectiveHr, ceiling, VELOCITY, speedLimit, req.velocity(),
-                    "High speed alert", req.velocity().toPlainString() + " km/h, limit is "
-                            + speedLimit.toPlainString() + " km/h");
-            if (heart == null || !heart.alertRaised()) {
-                return speed;
+        BigDecimal speedTarget = ctx.targetVelocity() != null
+                ? ctx.targetVelocity()
+                : (ctx.velocityCeiling() != null ? ctx.velocityCeiling() : velocityMax);
+        if (req.velocity() != null && speedTarget != null && speedTarget.doubleValue() > 0) {
+            String speedSeverity = speedSeverityFor(req.velocity().doubleValue(), speedTarget.doubleValue());
+            if (speedSeverity != null) {
+                int effectiveHr = hr != null ? hr : (ctx.heartRateCeiling() != null ? ctx.heartRateCeiling() : 120);
+                VitalsResult speed = raiseSpeed(me, ctx.horseId(), sessionId, effectiveHr, ceiling,
+                        speedTarget, req.velocity(), speedSeverity);
+                if (speed.sessionStoppedEarly() || heart == null || !heart.alertRaised()) {
+                    return speed;
+                }
             }
         }
         return heart != null ? heart : new VitalsResult(null, ceiling, false, null, null);
+    }
+
+    private VitalsResult raiseSpeed(AuthenticatedUser me, int horseId, int sessionId, int hr, Integer ceiling,
+                                    BigDecimal targetSpeed, BigDecimal actualSpeed, String severity) {
+        String msg = actualSpeed.toPlainString() + " km/h exceeds target speed "
+                + targetSpeed.toPlainString() + " km/h (" + severity + ")";
+        if (!"HIGH".equals(severity)) {
+            Optional<String> open = alerts.latestOpenSeverity(sessionId, VELOCITY, DEDUPE_SECONDS);
+            if (open.isPresent() && rank(open.get()) >= rank(severity)) {
+                return new VitalsResult(hr, ceiling, false, severity, null, VELOCITY, msg, false);
+            }
+        }
+        int alertId = alerts.insertAlert(sessionId, VELOCITY, targetSpeed, actualSpeed, severity);
+
+        if ("HIGH".equals(severity)) {
+            int highCount = alerts.countHighAlertsByMetric(sessionId, VELOCITY);
+            if (highCount >= 6) {
+                String reason = "Auto-stopped: horse exceeded allowed speed limit (>=30% over target speed) 6 times";
+                boolean stopped = alerts.autoStopSessionOnSpeedLimit(sessionId, reason) > 0;
+                Notice stopNotice = new Notice(
+                        "SESSION_AUTO_STOPPED_SPEED",
+                        "Session auto-stopped: speed limit exceeded",
+                        "Session #" + sessionId + ": horse exceeded target speed ("
+                                + targetSpeed.toPlainString() + " km/h) by >=30% 6 times (latest: "
+                                + actualSpeed.toPlainString() + " km/h). Session was automatically stopped early"
+                                + " — please open Session Review to evaluate.",
+                        Notice.TRAINING_SESSION, sessionId);
+                if (horseId > 0) {
+                    notifications.notifyHorseTrainer(horseId, me, stopNotice);
+                } else {
+                    notifications.notifyRole("HEAD_TRAINER", me, stopNotice);
+                }
+                notifications.notifyRole("VETERINARIAN", me, stopNotice);
+                return new VitalsResult(hr, ceiling, true, severity, alertId, VELOCITY,
+                        "Session auto-stopped early after 6th high speed alert (" + actualSpeed.toPlainString()
+                                + " km/h vs target " + targetSpeed.toPlainString() + " km/h).",
+                        stopped);
+            }
+            Notice notice = new Notice("THRESHOLD_ALERT_HIGH",
+                    "High speed alert (" + highCount + "/5)",
+                    "Session #" + sessionId + ": " + actualSpeed.toPlainString() + " km/h (target "
+                            + targetSpeed.toPlainString() + " km/h, >=30% over).",
+                    Notice.THRESHOLD_ALERT, alertId);
+            if (horseId > 0) {
+                notifications.notifyHorseTrainer(horseId, me, notice);
+            } else {
+                notifications.notifyRole("HEAD_TRAINER", me, notice);
+            }
+            notifications.notifyRole("VETERINARIAN", me, notice);
+            return new VitalsResult(hr, ceiling, true, severity, alertId, VELOCITY,
+                    msg + " (High alert " + highCount + "/5)", false);
+        }
+
+        String noticeType = "MEDIUM".equals(severity) ? "THRESHOLD_ALERT_MEDIUM" : "THRESHOLD_ALERT_LOW";
+        String title = "MEDIUM".equals(severity) ? "Medium speed alert (>=20% over target)" : "Low speed alert (>=10% over target)";
+        Notice notice = new Notice(noticeType, title,
+                "Session #" + sessionId + ": " + actualSpeed.toPlainString() + " km/h (target "
+                        + targetSpeed.toPlainString() + " km/h).",
+                Notice.THRESHOLD_ALERT, alertId);
+        if (horseId > 0) {
+            notifications.notifyHorseTrainer(horseId, me, notice);
+        } else {
+            notifications.notifyRole("HEAD_TRAINER", me, notice);
+        }
+        return new VitalsResult(hr, ceiling, true, severity, alertId, VELOCITY, msg, false);
     }
 
     /**
@@ -198,12 +265,22 @@ public class AlertService {
         return alerts.findById(alertId).orElseThrow();
     }
 
-    /** Vượt >=10% ngưỡng: HIGH; >=5%: MEDIUM; còn lại: LOW. */
+    /** Nhịp tim: vượt >=10% ngưỡng: HIGH; >=5%: MEDIUM; còn lại: LOW. */
     private static String severityFor(double value, double ceiling) {
         double over = (double) (value - ceiling) / ceiling;
         if (over >= 0.10) return "HIGH";
         if (over >= 0.05) return "MEDIUM";
         return "LOW";
+    }
+
+    /** Vận tốc so với target speed: >=30% HIGH, >=20% MEDIUM, >=10% LOW, dưới 10% an toàn (null). */
+    private static String speedSeverityFor(double value, double target) {
+        if (target <= 0) return null;
+        double over = (value - target) / target;
+        if (over >= 0.30) return "HIGH";
+        if (over >= 0.20) return "MEDIUM";
+        if (over >= 0.10) return "LOW";
+        return null;
     }
 
     private static String metricLabel(String metric) {

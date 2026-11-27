@@ -150,6 +150,18 @@ public class TrainingSessionController {
                 http.getRemoteAddr());
     }
 
+    @PutMapping("/{id}/video")
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
+    public TrainingSessionResponse saveVideo(
+            @PathVariable int id,
+            @RequestBody VideoRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.saveVideo(id, request != null ? request.videoUrl() : null, user, http.getRemoteAddr());
+    }
+
+    public record VideoRequest(String videoUrl) {}
+
     @PutMapping("/{id}/cancel")
     @RequireRole({ "HEAD_TRAINER", "CLUB_MANAGER" })
     public TrainingSessionResponse cancel(

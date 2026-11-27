@@ -1639,7 +1639,7 @@ class BusinessRulesTest {
         when(alerts.insertAlert(eq(1), eq("VELOCITY"), any(), any(), any())).thenReturn(11);
 
         VitalsResult r = alertService(alerts, mock(NotificationService.class))
-                .recordVitals(GROOM, 1, new VitalsRequest(150, new BigDecimal("19.5")));
+                .recordVitals(GROOM, 1, new VitalsRequest(150, new BigDecimal("19.8")));
 
         assertTrue(r.alertRaised());
         assertEquals(11, r.alertId());
@@ -2519,25 +2519,77 @@ class BusinessRulesTest {
     }
 
     @Test
-    void sessionVelocityCeilingTriggersAlertAndNotifiesHorseTrainer() {
+    void sessionTargetSpeedTiersAndSixthHighAlertAutoStopsSession() {
         AlertRepository alerts = mock(AlertRepository.class);
         NotificationService notifications = mock(NotificationService.class);
+        // Target speed = 50.0 km/h:
+        //   +10% (55.0) -> LOW
+        //   +20% (60.0) -> MEDIUM
+        //   +30% (65.0) -> HIGH (1..5 warn, 6th auto-stops early)
         when(alerts.findSessionContext(1)).thenReturn(Optional.of(
-                new SessionContext(1, 5, "RUNNING", 180, 100, new BigDecimal("14.0"))));
-        when(alerts.latestOpenSeverity(1, "VELOCITY", 60)).thenReturn(Optional.empty());
-        when(alerts.insertAlert(eq(1), eq("VELOCITY"), eq(new BigDecimal("14.0")), eq(new BigDecimal("16.0")), eq("HIGH")))
+                new SessionContext(1, 5, "RUNNING", 180, 100, null, new BigDecimal("50.0"))));
+        when(alerts.latestOpenSeverity(eq(1), eq("VELOCITY"), eq(60))).thenReturn(Optional.empty());
+        when(alerts.insertAlert(eq(1), eq("VELOCITY"), eq(new BigDecimal("50.0")), any(), any()))
                 .thenReturn(42);
 
         AlertService service = new AlertService(alerts, mock(UserRepository.class), notifications,
-                mock(IncidentService.class), new BigDecimal("18.0"));
-        VitalsResult res = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("16.0")));
+                mock(IncidentService.class), new BigDecimal("65.0"));
 
-        assertTrue(res.alertRaised());
-        assertEquals("VELOCITY", res.metricType());
-        assertEquals("HIGH", res.severity());
+        // 1) +10% -> LOW
+        VitalsResult lowRes = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("55.0")));
+        assertTrue(lowRes.alertRaised());
+        assertEquals("LOW", lowRes.severity());
+        assertFalse(lowRes.sessionStoppedEarly());
+
+        // 2) +20% -> MEDIUM
+        VitalsResult medRes = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("60.0")));
+        assertTrue(medRes.alertRaised());
+        assertEquals("MEDIUM", medRes.severity());
+
+        // 3) +30% -> 5th HIGH (still running)
+        when(alerts.countHighAlertsByMetric(1, "VELOCITY")).thenReturn(5);
+        VitalsResult high5 = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("65.0")));
+        assertTrue(high5.alertRaised());
+        assertEquals("HIGH", high5.severity());
+        assertFalse(high5.sessionStoppedEarly());
+
+        // 4) +30% -> 6th HIGH -> auto-stops early & notifies Trainer
+        when(alerts.countHighAlertsByMetric(1, "VELOCITY")).thenReturn(6);
+        when(alerts.autoStopSessionOnSpeedLimit(eq(1), any())).thenReturn(1);
+        VitalsResult high6 = service.recordVitals(GROOM, 1, new VitalsRequest(null, new BigDecimal("66.0")));
+        assertTrue(high6.alertRaised());
+        assertEquals("HIGH", high6.severity());
+        assertTrue(high6.sessionStoppedEarly());
+        verify(alerts).autoStopSessionOnSpeedLimit(eq(1), any());
         verify(notifications).notifyHorseTrainer(eq(100), eq(GROOM),
-                argThat(n -> "THRESHOLD_ALERT_HIGH".equals(n.type()) && n.message().contains("14.0 km/h")));
-        verify(notifications, never()).notifyRole(eq("HEAD_TRAINER"), any(), any());
+                argThat(n -> "SESSION_AUTO_STOPPED_SPEED".equals(n.type())));
+    }
+
+    @Test
+    void sessionAutoRatingMatchesPlanAchievementThresholds() {
+        SessionResponse base = new SessionResponse(
+                10, 1, "Foundation", 180, 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusHours(2), 1600, 1600, 240, 150, 175, 110,
+                new BigDecimal("50.0"), null, null, null, "COMPLETED", false, null,
+                240, LocalDateTime.now(), null, "PENDING", null,
+                new BigDecimal("50.0"), 115, 110);
+
+        // 100% on all 5 criteria -> EXCELLENT
+        assertEquals("EXCELLENT", SessionService.computeAutoEvaluation(base,
+                new EvaluateSessionRequest(1600, 240, 150, 175, 110, new BigDecimal("50.0"), "POOR", null, "COMPLETED")));
+
+        // ~90% (distance 1280/1600 = 80%, duration 240/240 = 100%, HR 100%, Speed 100%, HRR 100% -> avg 96% -> GOOD;
+        // 1040/1600 = 65% + 100*4 = 93% -> GOOD)
+        assertEquals("GOOD", SessionService.computeAutoEvaluation(base,
+                new EvaluateSessionRequest(1040, 240, 150, 175, 110, new BigDecimal("50.0"), "POOR", null, "COMPLETED")));
+
+        // ~82% -> FAIR (distance 800/1600=50%, duration 144/240=60%, HR/Speed/HRR=100% -> (50+60+300)/5 = 82%)
+        assertEquals("FAIR", SessionService.computeAutoEvaluation(base,
+                new EvaluateSessionRequest(800, 144, 150, 175, 110, new BigDecimal("50.0"), "POOR", null, "COMPLETED")));
+
+        // <80% -> POOR
+        assertEquals("POOR", SessionService.computeAutoEvaluation(base,
+                new EvaluateSessionRequest(400, 60, 150, 230, 180, new BigDecimal("20.0"), "EXCELLENT", null, "COMPLETED")));
     }
 
     @Test

@@ -205,6 +205,7 @@ const initialPhases = [
     distance: "1200",
     workload: "Light / Aerobic",
     surface: "TURF",
+    trainingShift: "MORNING",
     sessionsPerWeek: "2",
     heartRateCeiling: "185",
     minGapMinutes: "90",
@@ -221,6 +222,7 @@ const initialPhases = [
     distance: "1600",
     workload: "Moderate / Interval",
     surface: "TURF",
+    trainingShift: "MORNING",
     sessionsPerWeek: "3",
     heartRateCeiling: "195",
     minGapMinutes: "90",
@@ -237,6 +239,7 @@ const initialPhases = [
     distance: "1800",
     workload: "High / Race Pace",
     surface: "TURF",
+    trainingShift: "MORNING",
     sessionsPerWeek: "2",
     heartRateCeiling: "205",
     minGapMinutes: "90",
@@ -459,6 +462,14 @@ export default function TrainingPlanPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, plan: null });
+  const [autoScheduleModal, setAutoScheduleModal] = useState({
+    open: false,
+    loading: false,
+    saving: false,
+    plan: null,
+    shifts: {},
+    error: "",
+  });
 
   const applyTemplateToForm = useCallback((tpl, sDate, eDate, lockedSurface) => {
     if (!tpl) return;
@@ -477,6 +488,7 @@ export default function TrainingPlanPage() {
       distance: String(ph.distance ?? ""),
       workload: ph.workload || "",
       surface: normalizeUiSurface(lockedSurface || ph.surface || "TURF"),
+      trainingShift: ph.trainingShift || "MORNING",
       sessionsPerWeek: String(ph.sessionsPerWeek ?? 2),
       heartRateCeiling: String(ph.heartRateCeiling ?? ""),
       minGapMinutes: "90",
@@ -663,6 +675,7 @@ export default function TrainingPlanPage() {
       endDate: p.endDate,
       distance: p.distance,
       surface: normalizeUiSurface(p.surface),
+      trainingShift: p.trainingShift || "MORNING",
       sessionsPerWeek: p.sessionsPerWeek,
       heartRateCeiling: p.heartRateCeiling,
       workload: p.workload || "",
@@ -712,6 +725,7 @@ export default function TrainingPlanPage() {
           endDate: p.endDate,
           distance: Number(p.distance),
           surface: normalizeUiSurface(p.surface),
+          trainingShift: p.trainingShift || "MORNING",
           sessionsPerWeek: Number(p.sessionsPerWeek),
           heartRateCeiling: Number(p.heartRateCeiling),
           workload: p.workload ? p.workload.trim() : null,
@@ -828,6 +842,7 @@ export default function TrainingPlanPage() {
         distance: p.distance === "" ? null : Number(p.distance),
         workload: p.workload.trim() || null,
         surface: templateRec?.lockedSurface || p.surface,
+        trainingShift: p.trainingShift || "MORNING",
         sessionsPerWeek:
           p.sessionsPerWeek === "" ? null : Number(p.sessionsPerWeek),
         heartRateCeiling:
@@ -868,15 +883,66 @@ export default function TrainingPlanPage() {
   const handleAutoSchedulePlan = async (plan) => {
     setError("");
     setNotice("");
+    setAutoScheduleModal({
+      open: true,
+      loading: true,
+      saving: false,
+      plan,
+      shifts: {},
+      error: "",
+    });
     try {
-      const res = await autoScheduleTrainingPlan(plan.planId);
+      const full = await getTrainingPlan(plan.planId);
+      const initialShifts = {};
+      (full.phases || []).forEach((ph) => {
+        initialShifts[ph.phaseId] = ph.trainingShift || "MORNING";
+      });
+      setAutoScheduleModal({
+        open: true,
+        loading: false,
+        saving: false,
+        plan: full,
+        shifts: initialShifts,
+        error: "",
+      });
+    } catch (err) {
+      if (!handleAuthError(err, navigate)) {
+        setAutoScheduleModal((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.message || "Failed to load plan details for auto-scheduling.",
+        }));
+      }
+    }
+  };
+
+  const handleConfirmAutoSchedule = async () => {
+    const targetPlan = autoScheduleModal.plan;
+    if (!targetPlan) return;
+    setAutoScheduleModal((prev) => ({ ...prev, saving: true, error: "" }));
+    setError("");
+    setNotice("");
+    try {
+      const res = await autoScheduleTrainingPlan(targetPlan.planId, autoScheduleModal.shifts);
       setNotice(
-        `Auto-scheduled “${plan.planName}”: ${res.createdTrainingSessions} training session(s), ${res.createdRestSlots} rest day(s)${res.conflictCount ? `, ${res.conflictCount} UNASSIGNED conflict alert(s)` : ""}.`,
+        `Auto-scheduled “${targetPlan.planName}”: ${res.createdTrainingSessions} training session(s), ${res.createdRestSlots} rest day(s)${res.conflictCount ? `, ${res.conflictCount} UNASSIGNED conflict alert(s)` : ""}.`,
       );
+      setAutoScheduleModal({
+        open: false,
+        loading: false,
+        saving: false,
+        plan: null,
+        shifts: {},
+        error: "",
+      });
       await load();
     } catch (err) {
       if (!handleAuthError(err, navigate)) {
-        setError(err.message || "Failed to auto-schedule training plan.");
+        setAutoScheduleModal((prev) => ({
+          ...prev,
+          saving: false,
+          error: err.message || "Failed to auto-schedule training plan.",
+        }));
       }
     }
   };
@@ -1740,6 +1806,18 @@ export default function TrainingPlanPage() {
                             </select>
                           </label>
                           <label className="training-field">
+                            Training Shift
+                            <select
+                              value={phase.trainingShift || "MORNING"}
+                              onChange={(e) =>
+                                updatePhase(index, "trainingShift", e.target.value)
+                              }
+                            >
+                              <option value="MORNING">Morning (8:00 AM – 12:00 PM)</option>
+                              <option value="AFTERNOON">Afternoon (1:00 PM – 5:00 PM)</option>
+                            </select>
+                          </label>
+                          <label className="training-field">
                             Sessions / week (Auto · {phase.phaseRatio ?? 0}%)
                             <input
                               type="number"
@@ -2250,6 +2328,20 @@ export default function TrainingPlanPage() {
                             </label>
 
                             <label>
+                              Training Shift
+                              <select
+                                value={ph.trainingShift || "MORNING"}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditPhases(editPhases.map((p, i) => i === idx ? { ...p, trainingShift: val } : p));
+                                }}
+                              >
+                                <option value="MORNING">Morning (8:00 AM – 12:00 PM)</option>
+                                <option value="AFTERNOON">Afternoon (1:00 PM – 5:00 PM)</option>
+                              </select>
+                            </label>
+
+                            <label>
                               Sessions / Week (Auto)
                               <input
                                 type="number"
@@ -2350,6 +2442,180 @@ export default function TrainingPlanPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {autoScheduleModal.open && (
+            <div
+              className="plan-modal-backdrop"
+              onClick={() =>
+                !autoScheduleModal.saving &&
+                setAutoScheduleModal({ open: false, loading: false, saving: false, plan: null, shifts: {}, error: "" })
+              }
+            >
+              <div className="plan-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                <div className="plan-modal-header">
+                  <div>
+                    <h2>⚡ Auto-Schedule Plan</h2>
+                    <p style={{ color: "#64748b", fontSize: "13px", marginTop: 4 }}>
+                      Review plan details and choose the training shift for each phase before generating the schedule.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="plan-modal-close"
+                    disabled={autoScheduleModal.saving}
+                    onClick={() =>
+                      setAutoScheduleModal({ open: false, loading: false, saving: false, plan: null, shifts: {}, error: "" })
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {autoScheduleModal.loading ? (
+                  <p className="training-empty">Loading plan details…</p>
+                ) : autoScheduleModal.plan ? (
+                  <>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "10px 16px",
+                        padding: "14px 16px",
+                        borderRadius: "12px",
+                        background: "#fff8fb",
+                        border: "1px solid #f2dee8",
+                        marginBottom: "16px",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>PLAN NAME</span>
+                        <strong>{autoScheduleModal.plan.planName}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>HORSE</span>
+                        <strong>♞ {autoScheduleModal.plan.horseName}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>PERIOD</span>
+                        <strong>{dateLabel(autoScheduleModal.plan.startDate)} – {dateLabel(autoScheduleModal.plan.endDate)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>GROOMS</span>
+                        <strong>
+                          {autoScheduleModal.plan.primaryGroomName || autoScheduleModal.plan.groomName || "Unassigned"}
+                          {autoScheduleModal.plan.backupGroomName ? ` · Backup: ${autoScheduleModal.plan.backupGroomName}` : ""}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>SURFACE / INTENSITY</span>
+                        <strong>
+                          {normalizeUiSurface(autoScheduleModal.plan.preferredSurface) === "DIRT" ? "Dirt" : "Turf"}
+                          {autoScheduleModal.plan.intensity ? ` · ${autoScheduleModal.plan.intensity}` : ""}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#8e96ad", fontSize: "11px", fontWeight: 700, display: "block" }}>LIMITS & REST</span>
+                        <strong>
+                          {autoScheduleModal.plan.maxHeartRate ? `${autoScheduleModal.plan.maxHeartRate} bpm` : "—"}
+                          {" · "}
+                          {autoScheduleModal.plan.maxSpeed ? `${autoScheduleModal.plan.maxSpeed} km/h` : "—"}
+                          {" · "}
+                          {autoScheduleModal.plan.restDaysPerWeek ?? 1} rest/wk
+                        </strong>
+                      </div>
+                    </div>
+
+                    <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#202a49", marginBottom: "10px" }}>
+                      Select Training Shift per Phase
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                      {(autoScheduleModal.plan.phases || []).map((ph, idx) => (
+                        <div
+                          key={ph.phaseId || idx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            flexWrap: "wrap",
+                            padding: "12px 14px",
+                            borderRadius: "10px",
+                            border: "1px solid #f0dce6",
+                            background: "#fff",
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+                            <strong style={{ fontSize: "13.5px", color: "#202a49" }}>
+                              Phase {idx + 1}: {ph.phaseName}
+                              {ph.phaseRatio != null ? ` (${ph.phaseRatio}%)` : ""}
+                            </strong>
+                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: 2 }}>
+                              {dateLabel(ph.startDate)} – {dateLabel(ph.endDate)}
+                              {ph.distance ? ` · ${Number(ph.distance).toLocaleString()} m` : ""}
+                              {ph.targetVelocity ? ` · ${ph.targetVelocity} km/h` : ""}
+                            </div>
+                          </div>
+                          <label style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "11.5px", fontWeight: 700, color: "#626a83", minWidth: 230 }}>
+                            Training Shift
+                            <select
+                              value={autoScheduleModal.shifts[ph.phaseId] || "MORNING"}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setAutoScheduleModal((prev) => ({
+                                  ...prev,
+                                  shifts: { ...prev.shifts, [ph.phaseId]: val },
+                                }));
+                              }}
+                              style={{
+                                height: "38px",
+                                padding: "0 10px",
+                                borderRadius: "10px",
+                                border: "1px solid #f0dce6",
+                                background: "#fdf4f9",
+                                color: "#202a49",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <option value="MORNING">Morning (8:00 AM – 12:00 PM)</option>
+                              <option value="AFTERNOON">Afternoon (1:00 PM – 5:00 PM)</option>
+                            </select>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {autoScheduleModal.error && (
+                  <div className="training-alert training-alert--error" style={{ marginBottom: 12 }}>
+                    ⚠️ {autoScheduleModal.error}
+                  </div>
+                )}
+
+                <div className="plan-modal-actions">
+                  <button
+                    type="button"
+                    className="training-btn training-btn--ghost"
+                    disabled={autoScheduleModal.saving}
+                    onClick={() =>
+                      setAutoScheduleModal({ open: false, loading: false, saving: false, plan: null, shifts: {}, error: "" })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="training-btn training-btn--primary"
+                    disabled={autoScheduleModal.loading || autoScheduleModal.saving || !autoScheduleModal.plan}
+                    onClick={handleConfirmAutoSchedule}
+                  >
+                    {autoScheduleModal.saving ? "Scheduling…" : "⚡ Confirm & Auto-Schedule"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

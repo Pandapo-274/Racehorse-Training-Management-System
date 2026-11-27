@@ -80,14 +80,15 @@ public class TrainingPlanController {
         return service.getTemplates(horseId, user);
     }
 
-    /** V50: Chạy Auto-Scheduling Engine cho giáo án. */
+    /** V50: Chạy Auto-Scheduling Engine cho giáo án (kèm ca sáng/chiều theo phase nếu có). */
     @PostMapping("/{id}/auto-schedule")
     @RequireRole({"HEAD_TRAINER"})
     public TrainingPlanResponse.AutoScheduleResult autoSchedule(
             @PathVariable int id,
+            @RequestBody(required = false) TrainingPlanRequest.AutoScheduleOptions options,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return service.autoSchedule(id, user, http.getRemoteAddr());
+        return service.autoSchedule(id, options, user, http.getRemoteAddr());
     }
 
     @GetMapping

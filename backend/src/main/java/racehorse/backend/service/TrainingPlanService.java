@@ -967,6 +967,13 @@ public class TrainingPlanService {
 
     @Transactional
     public TrainingPlanResponse.AutoScheduleResult autoSchedule(int planId, AuthenticatedUser user, String ip) {
+        return autoSchedule(planId, null, user, ip);
+    }
+
+    @Transactional
+    public TrainingPlanResponse.AutoScheduleResult autoSchedule(int planId,
+                                                                TrainingPlanRequest.AutoScheduleOptions options,
+                                                                AuthenticatedUser user, String ip) {
         if (user != null && !"HEAD_TRAINER".equals(user.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only Head Trainer can auto-schedule training sessions");
         }
@@ -974,10 +981,16 @@ public class TrainingPlanService {
         HorseResponse horse = horseRepository.findById(plan.horseId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse of this plan not found"));
         checkTrainerManagesHorse(horse, user, null);
-        return autoScheduleInternal(plan, user, ip);
+        return autoScheduleInternal(plan, options, user, ip);
     }
 
     private TrainingPlanResponse.AutoScheduleResult autoScheduleInternal(TrainingPlanResponse plan,
+                                                                        AuthenticatedUser user, String ip) {
+        return autoScheduleInternal(plan, null, user, ip);
+    }
+
+    private TrainingPlanResponse.AutoScheduleResult autoScheduleInternal(TrainingPlanResponse plan,
+                                                                        TrainingPlanRequest.AutoScheduleOptions options,
                                                                         AuthenticatedUser user, String ip) {
         if (sessionRepository == null) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Session repository is not available");
@@ -1052,14 +1065,26 @@ public class TrainingPlanService {
                         break;
                     }
                 }
-                LocalDateTime slotTime = day.atTime(8, 0);
+                String rawShift = null;
+                if (options != null && options.phaseShifts() != null) {
+                    rawShift = options.phaseShifts().get(activePhase.phaseId());
+                    if (rawShift == null) {
+                        rawShift = options.phaseShifts().get(activePhase.phaseNo());
+                    }
+                }
+                if (rawShift == null) {
+                    rawShift = activePhase.trainingShift();
+                }
+                boolean isAfternoon = "AFTERNOON".equalsIgnoreCase(rawShift);
+                LocalDateTime slotTime = isAfternoon ? day.atTime(13, 0) : day.atTime(8, 0);
+                int slotDuration = (options != null && options.phaseShifts() != null) ? 240 : 60;
                 int recMins = activePhase.recoveryDurationMinutes() != null ? activePhase.recoveryDurationMinutes() : 15;
                 BigDecimal ceiling = activePhase.targetVelocity() != null ? activePhase.targetVelocity() : plan.maxSpeed();
 
                 if (isRest[d]) {
                     sessionRepository.insertAutoSlot(
                             activePhase.phaseId(), plan.horseId(), null, slotTime,
-                            0, 60, ceiling, "REST", "REST", false, recMins,
+                            0, slotDuration, ceiling, "REST", "REST", false, recMins,
                             "Scheduled Rest Day");
                     createdRest++;
                     continue;
@@ -1073,7 +1098,7 @@ public class TrainingPlanService {
                     primaryLocalBusy.add(day);
                     sessionRepository.insertAutoSlot(
                             activePhase.phaseId(), plan.horseId(), primaryGroomId, slotTime,
-                            activePhase.distance(), 60, ceiling, "SCHEDULED", "TRAINING", false, recMins, null);
+                            activePhase.distance(), slotDuration, ceiling, "SCHEDULED", "TRAINING", false, recMins, null);
                     createdTraining++;
                     continue;
                 }
@@ -1085,7 +1110,7 @@ public class TrainingPlanService {
                     backupLocalBusy.add(day);
                     sessionRepository.insertAutoSlot(
                             activePhase.phaseId(), plan.horseId(), backupGroomId, slotTime,
-                            activePhase.distance(), 60, ceiling, "SCHEDULED", "TRAINING", false, recMins,
+                            activePhase.distance(), slotDuration, ceiling, "SCHEDULED", "TRAINING", false, recMins,
                             "Assigned to backup groom");
                     createdTraining++;
                     continue;
@@ -1104,14 +1129,14 @@ public class TrainingPlanService {
                     isRest[swapIdx] = false;
                     sessionRepository.insertAutoSlot(
                             activePhase.phaseId(), plan.horseId(), null, slotTime,
-                            0, 60, ceiling, "REST", "REST", false, recMins,
+                            0, slotDuration, ceiling, "REST", "REST", false, recMins,
                             "Auto-swapped to Rest Day due to groom schedule conflict");
                     createdRest++;
                 } else {
                     // Đã hết quỹ ngày nghỉ trong block -> tạo session UNASSIGNED + conflict_alert = true
                     sessionRepository.insertAutoSlot(
                             activePhase.phaseId(), plan.horseId(), null, slotTime,
-                            activePhase.distance(), 60, ceiling, "UNASSIGNED", "TRAINING", true, recMins,
+                            activePhase.distance(), slotDuration, ceiling, "UNASSIGNED", "TRAINING", true, recMins,
                             "Both primary and backup grooms busy; manual assignment needed");
                     conflicts++;
                 }
@@ -1209,7 +1234,8 @@ public class TrainingPlanService {
                     p.phaseId(), p.phaseName(), p.distance(), p.workload(), surface,
                     spw, p.heartRateCeiling(), p.minGapMinutes(),
                     p.targetVelocity(), sDate, eDate, code, p.phaseRatio(),
-                    p.recoveryDurationMinutes() != null ? p.recoveryDurationMinutes() : (i == 0 ? 15 : (i == 1 ? 20 : 30))));
+                    p.recoveryDurationMinutes() != null ? p.recoveryDurationMinutes() : (i == 0 ? 15 : (i == 1 ? 20 : 30)),
+                    "AFTERNOON".equalsIgnoreCase(p.trainingShift()) ? "AFTERNOON" : "MORNING"));
         }
         return out;
     }

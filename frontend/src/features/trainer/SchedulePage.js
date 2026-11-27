@@ -29,8 +29,10 @@ const EMPTY_FORM = {
   phaseId: "",
   assignedTo: "",
   sessionDate: "",
+  sessionDateOnly: "",
   plannedDistance: "",
-  plannedDuration: "60",
+  plannedDuration: "240",
+  shift: "MORNING",
   velocityCeiling: "",
   groomNotes: "",
 };
@@ -614,7 +616,7 @@ function SessionModal({
             </h2>
             <p>
               {editingSession
-                ? "Change the assigned Groom, session time, and planned duration."
+                ? "Change the assigned Groom and training shift."
                 : isRecovery
                   ? "Schedule a rehabilitation workout according to the veterinarian's light work protocol."
                   : "Choose an active plan, a training phase, a Groom managed by you, and session duration."}
@@ -904,56 +906,68 @@ function SessionModal({
             )}
           </label>
 
-          <label>
-            Session date and time
-            <input
-              type="datetime-local"
-              required
-              value={form.sessionDate}
-              onChange={(event) =>
-                setForm((old) => ({
-                  ...old,
-                  sessionDate: event.target.value,
-                }))
-              }
-            />
-            <small className="schedule-field-hint">
-              Must be today or in the future. 1 horse can only have 1 session per day.
-            </small>
-          </label>
-
-          <label>
-            Planned duration (minutes, integer divisible by 5)
-            <input
-              type="number"
-              required
-              min="15"
-              max="720"
-              step="5"
-              value={form.plannedDuration}
-              onChange={(event) =>
-                setForm((old) => ({
-                  ...old,
-                  plannedDuration: event.target.value,
-                }))
-              }
-            />
-            <small className="schedule-field-hint">
-              Must be an integer divisible by 5 (between 15 and 720 minutes = 12 hours).
-            </small>
-            {endInfo && (
-              <small
-                className="schedule-field-hint"
-                style={{ color: endInfo.sameDay && endInfo.dur <= 720 ? undefined : "#b91c1c", fontWeight: endInfo.sameDay ? 400 : 600 }}
+          {editingSession ? (
+            <label>
+              Training shift
+              <select
+                required
+                value={form.shift || "MORNING"}
+                onChange={(event) =>
+                  setForm((old) => ({
+                    ...old,
+                    shift: event.target.value,
+                  }))
+                }
               >
-                {endInfo.dur > 720
-                  ? "⚠️ Duration cannot exceed 720 minutes (12 hours)."
-                  : endInfo.sameDay
-                    ? `Scheduled to end at ${endInfo.endTimeText} on the same day. Auto-completes if overdue.`
-                    : `⚠️ Invalid: Session would end at ${endInfo.endTimeText} on the next day. Sessions cannot cross midnight.`}
+                <option value="MORNING">Morning (8:00 AM – 12:00 PM)</option>
+                <option value="AFTERNOON">Afternoon (1:00 PM – 5:00 PM)</option>
+              </select>
+              <small className="schedule-field-hint">
+                Date remains {String(editingSession.sessionDate || "").slice(0, 10)}. Morning runs 08:00–12:00 (240 mins); Afternoon runs 13:00–17:00 (240 mins).
               </small>
-            )}
-          </label>
+            </label>
+          ) : (
+            <>
+              <label>
+                Session date
+                <input
+                  type="date"
+                  required
+                  min={dateKey(new Date())}
+                  value={form.sessionDateOnly || ""}
+                  onChange={(event) =>
+                    setForm((old) => ({
+                      ...old,
+                      sessionDateOnly: event.target.value,
+                    }))
+                  }
+                />
+                <small className="schedule-field-hint">
+                  Must be today or in the future. 1 horse can only have 1 session per day.
+                </small>
+              </label>
+
+              <label>
+                Training shift
+                <select
+                  required
+                  value={form.shift || "MORNING"}
+                  onChange={(event) =>
+                    setForm((old) => ({
+                      ...old,
+                      shift: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="MORNING">Morning (8:00 AM – 12:00 PM)</option>
+                  <option value="AFTERNOON">Afternoon (1:00 PM – 5:00 PM)</option>
+                </select>
+                <small className="schedule-field-hint">
+                  Morning runs 08:00–12:00 (240 mins); Afternoon runs 13:00–17:00 (240 mins).
+                </small>
+              </label>
+            </>
+          )}
 
           {isRecovery && (
             <label>
@@ -976,29 +990,6 @@ function SessionModal({
               />
               <small className="schedule-field-hint">
                 Specific instructions or cautions for the Groom during this recovery session.
-              </small>
-            </label>
-          )}
-
-          {!editingSession && !isRecovery && (
-            <label>
-              Max allowed speed (km/h)
-              <input
-                type="number"
-                min="1"
-                max="100"
-                step="0.1"
-                value={form.velocityCeiling}
-                onChange={(event) =>
-                  setForm((old) => ({
-                    ...old,
-                    velocityCeiling: event.target.value,
-                  }))
-                }
-                placeholder={selectedPhase?.targetVelocity ? `Default: ${selectedPhase.targetVelocity} km/h` : "e.g. 60.0"}
-              />
-              <small className="schedule-field-hint">
-                Speed readings exceeding this limit trigger a danger alert (same as heart rate ceiling).
               </small>
             </label>
           )}
@@ -1223,14 +1214,18 @@ export default function SchedulePage() {
             planId: String(defaultPlan.planId),
             phaseId: defaultPhaseId,
             assignedTo: defaultPlan.groomId ? String(defaultPlan.groomId) : "",
+            sessionDateOnly: today,
+            shift: "MORNING",
             plannedDistance: "",
-            plannedDuration: "60",
+            plannedDuration: "240",
             groomNotes: "",
           }
         : {
             ...EMPTY_FORM,
+            sessionDateOnly: today,
+            shift: "MORNING",
             plannedDistance: recovery ? "800" : "",
-            plannedDuration: recovery ? "30" : "60",
+            plannedDuration: "240",
             groomNotes: "",
           },
     );
@@ -1243,13 +1238,16 @@ export default function SchedulePage() {
     setIsRecoverySession(Boolean(session.remarks && session.remarks.includes("[Recovery Session]")));
     setEditingSession(session);
     setPhases([]);
+    const parsedDate = session.sessionDate ? new Date(session.sessionDate) : null;
+    const currentShift = parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.getHours() >= 12 ? "AFTERNOON" : "MORNING";
     setForm({
       planId: "",
       phaseId: String(session.phaseId),
       assignedTo: session.assignedTo ? String(session.assignedTo) : "",
       sessionDate: toLocalDateTimeInput(session.sessionDate),
       plannedDistance: session.plannedDistance ?? "",
-      plannedDuration: String(session.plannedDuration ?? 60),
+      plannedDuration: String(session.plannedDuration ?? 240),
+      shift: currentShift,
     });
     setError("");
     setNotice("");
@@ -1287,22 +1285,9 @@ export default function SchedulePage() {
       }
     }
 
-    const durRaw = form.plannedDuration;
-    const durNum = Number(durRaw);
-    if (
-      durRaw === "" ||
-      !Number.isInteger(durNum) ||
-      durNum < 15 ||
-      durNum > 720 ||
-      durNum % 5 !== 0
-    ) {
-      setError("Planned duration must be an integer divisible by 5 (e.g. 15, 20, 25... up to 720 minutes = 12 hours).");
-      return;
-    }
-    const plannedDuration = durNum;
-    const endInfo = computeEndInfo(form.sessionDate, form.plannedDuration);
-    if (endInfo && !endInfo.sameDay) {
-      setError("Session duration cannot cross into the next calendar day.");
+    const plannedDuration = 240;
+    if (!editingSession && !form.sessionDateOnly) {
+      setError("Please select a session date.");
       return;
     }
 
@@ -1311,7 +1296,10 @@ export default function SchedulePage() {
     setNotice("");
 
     try {
-      const sessionDate = toApiDateTime(form.sessionDate);
+      const dateStr = editingSession
+        ? String(editingSession.sessionDate).slice(0, 10)
+        : form.sessionDateOnly;
+      const sessionDate = `${dateStr}T${form.shift === "AFTERNOON" ? "13:00:00" : "08:00:00"}`;
 
       if (editingSession) {
         await authFetch(`${SESSION_API}/${editingSession.sessionId}/schedule`, {
@@ -1345,9 +1333,7 @@ export default function SchedulePage() {
               ? Number(form.plannedDistance || selectedPhase?.distance)
               : null),
           plannedDuration,
-          velocityCeiling: isRecoverySession
-            ? null
-            : (form.velocityCeiling !== "" ? Number(form.velocityCeiling) : (selectedPhase?.targetVelocity != null ? Number(selectedPhase.targetVelocity) : null)),
+          velocityCeiling: null,
           remarks,
         };
 
