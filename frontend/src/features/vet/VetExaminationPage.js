@@ -137,16 +137,17 @@ function buildHorse3DMesh() {
 
   // Tai (Ears)
   const earGeo = new THREE.ConeGeometry(2.5, 8, 6);
-  addSegment(earGeo, [45, 58, 4.5], [0.2, 0, -0.3], [1, 1, 1], "Left Ear", "Left");
-  addSegment(earGeo, [45, 58, -4.5], [-0.2, 0, -0.3], [1, 1, 1], "Right Ear", "Right");
+  addSegment(earGeo, [45, 58, 4.5], [0.2, 0, -0.3], [1, 1, 1], "Right Ear", "Right");
+  addSegment(earGeo, [45, 58, -4.5], [-0.2, 0, -0.3], [1, 1, 1], "Left Ear", "Left");
 
   // 4. Đuôi (Tail) gắn tại khớp đuôi (Dock)
   const tailGeo = new THREE.CylinderGeometry(2.8, 1.0, 32, 8);
   addSegment(tailGeo, [-31, -2, 0], [0, 0, 0.18], [1, 1, 0.8], "Tail / Dock", "Both");
 
-  // 5. Hai chân trước (Forelimbs: Trái +Z, Phải -Z)
+  // 5. Hai chân trước (Forelimbs: Phải +Z, Trái -Z). Ngựa quay đầu về +X, lưng về +Y,
+  //    nên bên phải của ngựa là +Z (X × Y = Z).
   [-1, 1].forEach((sign) => {
-    const side = sign > 0 ? "Left" : "Right";
+    const side = sign > 0 ? "Right" : "Left";
     const z = sign * 12.5;
 
     // Vai (Shoulder)
@@ -174,9 +175,9 @@ function buildHorse3DMesh() {
     addSegment(hoofGeo, [18, -48, z], [0, 0, 0], [1, 1, 1], `${side} forelimb, hoof & pastern`, side);
   });
 
-  // 6. Hai chân sau (Hindlimbs: Trái +Z, Phải -Z) - Kết nối mượt mà với khung chậu & đùi
+  // 6. Hai chân sau (Hindlimbs: Phải +Z, Trái -Z) - Kết nối mượt mà với khung chậu & đùi
   [-1, 1].forEach((sign) => {
-    const side = sign > 0 ? "Left" : "Right";
+    const side = sign > 0 ? "Right" : "Left";
     const z = sign * 12.5;
 
     // Cơ đùi mông 2 bên (Gluteal Quarter & Hip flank)
@@ -443,7 +444,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
 
       // Lấy tên giải phẫu và vị trí bên trái/phải
       const bodyPart = hit.object.userData?.bodyPart || "Trunk / Barrel";
-      const detectedSide = hit.object.userData?.side || (localPt.z > 0 ? "Left" : "Right");
+      const detectedSide = hit.object.userData?.side || (localPt.z > 0 ? "Right" : "Left");
 
       // Toạ độ phần trăm 2D lưu database
       const pctX = round2(clamp(((e.clientX - rect.left) / rect.width) * 100));
@@ -457,7 +458,8 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
     }
   };
 
-  // Nút xoay camera cố định chuẩn y khoa
+  // Nút xoay camera cố định chuẩn y khoa. Camera đứng ở +Z: xoay 0 thấy hông phải của ngựa,
+  // PI thấy hông trái, -PI/2 quay đầu ngựa về phía camera (nhìn trước), PI/2 quay mông về (nhìn sau).
   const setCameraPreset = (name, targetYaw, targetPitch) => {
     if (!horseGroupRef.current) return;
     horseGroupRef.current.rotation.y = targetYaw;
@@ -485,7 +487,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Left") ? "vx-3d-btn--active" : ""}`}
-            onClick={() => setCameraPreset("Left Lateral", 0, 0)}
+            onClick={() => setCameraPreset("Left Lateral", Math.PI, 0)}
             title="Left Lateral"
           >
             Left (0°)
@@ -493,7 +495,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Right") ? "vx-3d-btn--active" : ""}`}
-            onClick={() => setCameraPreset("Right Lateral", Math.PI, 0)}
+            onClick={() => setCameraPreset("Right Lateral", 0, 0)}
             title="Right Lateral"
           >
             Right (180°)
@@ -501,7 +503,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Front") ? "vx-3d-btn--active" : ""}`}
-            onClick={() => setCameraPreset("Front View", Math.PI / 2, 0)}
+            onClick={() => setCameraPreset("Front View", -Math.PI / 2, 0)}
             title="Front View (Chest & Forelimbs)"
           >
             Front (90°)
@@ -509,7 +511,7 @@ function HorseModel({ marker, marker3D, existingMarkers = [], onMark, onLandmark
           <button
             type="button"
             className={`vx-3d-btn ${cameraLabel.includes("Hind") ? "vx-3d-btn--active" : ""}`}
-            onClick={() => setCameraPreset("Hind View", -Math.PI / 2, 0)}
+            onClick={() => setCameraPreset("Hind View", Math.PI / 2, 0)}
             title="Hind View (Hindquarters & Hindlimbs)"
           >
             Hind (270°)
