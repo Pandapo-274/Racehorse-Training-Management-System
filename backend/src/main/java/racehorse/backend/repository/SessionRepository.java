@@ -24,9 +24,11 @@ public class SessionRepository {
                    s.avg_heart_rate, s.peak_heart_rate, s.recovery_heart_rate, s.peak_velocity,
                    s.evaluation, s.remarks, s.evaluated_by, s.status,
                    s.is_trial_run, s.video_url,
-                   s.planned_duration, s.ended_at, s.early_stop_reason, s.review_status, s.auto_reviewed_at
+                   s.planned_duration, s.ended_at, s.early_stop_reason, s.review_status, s.auto_reviewed_at,
+                   p.target_velocity, tp.target_hrr, s.actual_hrr
             FROM TRAINING_SESSION s
             JOIN PLAN_PHASE p ON p.phase_id = s.phase_id
+            JOIN TRAINING_PLAN tp ON tp.plan_id = p.plan_id
             JOIN HORSE h ON h.horse_id = s.horse_id
             LEFT JOIN APP_USER g ON g.user_id = s.assigned_to
             """;
@@ -61,7 +63,10 @@ public class SessionRepository {
                 rs.getObject("ended_at", LocalDateTime.class),
                 rs.getString("early_stop_reason"),
                 rs.getString("review_status"),
-                rs.getObject("auto_reviewed_at", LocalDateTime.class));
+                rs.getObject("auto_reviewed_at", LocalDateTime.class),
+                rs.getBigDecimal("target_velocity"),
+                rs.getObject("target_hrr", Integer.class),
+                rs.getObject("actual_hrr", Integer.class));
     }
 
     // OFFSET 0 ROWS FETCH NEXT n ROWS ONLY = cú pháp SQL Server để lấy n dòng đầu (như LIMIT).
@@ -117,7 +122,6 @@ public class SessionRepository {
                     peak_heart_rate = :peak, recovery_heart_rate = :rec, peak_velocity = :vel,
                     evaluation = :ev, remarks = :rm, evaluated_by = :by, status = :st,
                     is_trial_run = CASE WHEN :trialRun IS NOT NULL THEN :trialRun ELSE is_trial_run END,
-                    video_url = CASE WHEN :trialRun = 1 THEN :videoUrl WHEN :trialRun = 0 THEN NULL ELSE video_url END,
                     review_status = 'REVIEWED',
                     ended_at = ISNULL(ended_at, SYSUTCDATETIME())
                 WHERE session_id = :id AND status = :expected
@@ -131,7 +135,6 @@ public class SessionRepository {
                 .param("ev", r.evaluation())
                 .param("rm", r.remarks() == null || r.remarks().isBlank() ? null : r.remarks().trim())
                 .param("trialRun", r.trialRun())
-                .param("videoUrl", r.videoUrl() == null || r.videoUrl().isBlank() ? null : r.videoUrl().trim())
                 .param("by", evaluatorId)
                 .param("st", finalStatus)
                 .param("expected", expectedStatus)

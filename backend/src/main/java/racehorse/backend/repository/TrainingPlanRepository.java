@@ -127,7 +127,8 @@ public class TrainingPlanRepository {
                 SELECT phase_id, phase_no, phase_name, distance, workload, surface,
                        sessions_per_week, heart_rate_ceiling, start_date, end_date,
                        min_gap_minutes, target_velocity,
-                       phase_code, phase_ratio, recovery_duration_minutes
+                       phase_code, phase_ratio, recovery_duration_minutes,
+                       COALESCE(training_shift, 'MORNING') AS training_shift
                 FROM PLAN_PHASE WHERE plan_id = :id ORDER BY phase_no
                 """)
                 .param("id", planId)
@@ -143,7 +144,8 @@ public class TrainingPlanRepository {
                         rs.getBigDecimal("target_velocity"),
                         rs.getString("phase_code"),
                         rs.getObject("phase_ratio", Integer.class),
-                        rs.getObject("recovery_duration_minutes", Integer.class)))
+                        rs.getObject("recovery_duration_minutes", Integer.class),
+                        rs.getString("training_shift")))
                 .list();
     }
 
@@ -258,10 +260,10 @@ public class TrainingPlanRepository {
                 INSERT INTO PLAN_PHASE (plan_id, phase_no, phase_name, distance, workload, surface,
                                         sessions_per_week, heart_rate_ceiling, start_date, end_date,
                                         min_gap_minutes, target_velocity, phase_code, phase_ratio,
-                                        recovery_duration_minutes)
+                                        recovery_duration_minutes, training_shift)
                 VALUES (:planId, :phaseNo, :phaseName, :distance, :workload, :surface,
                         :spw, :ceiling, :startDate, :endDate, :gap, :targetVelocity,
-                        :phaseCode, :phaseRatio, :recoveryMins)
+                        :phaseCode, :phaseRatio, :recoveryMins, :trainingShift)
                 """)
                 .param("planId", planId)
                 .param("phaseNo", phaseNo)
@@ -278,6 +280,7 @@ public class TrainingPlanRepository {
                 .param("phaseCode", p.phaseCode())
                 .param("phaseRatio", p.phaseRatio())
                 .param("recoveryMins", p.recoveryDurationMinutes() != null ? p.recoveryDurationMinutes() : 15)
+                .param("trainingShift", "AFTERNOON".equalsIgnoreCase(p.trainingShift()) ? "AFTERNOON" : "MORNING")
                 .update();
     }
 
@@ -342,7 +345,8 @@ public class TrainingPlanRepository {
                     target_velocity = :targetVelocity,
                     phase_code = ISNULL(:phaseCode, phase_code),
                     phase_ratio = ISNULL(:phaseRatio, phase_ratio),
-                    recovery_duration_minutes = ISNULL(:recoveryMins, recovery_duration_minutes)
+                    recovery_duration_minutes = ISNULL(:recoveryMins, recovery_duration_minutes),
+                    training_shift = ISNULL(:trainingShift, training_shift)
                 WHERE phase_id = :phaseId AND plan_id = :planId
                 """)
                 .param("phaseId", phaseId)
@@ -361,6 +365,9 @@ public class TrainingPlanRepository {
                 .param("phaseCode", p.phaseCode())
                 .param("phaseRatio", p.phaseRatio())
                 .param("recoveryMins", p.recoveryDurationMinutes())
+                .param("trainingShift", p.trainingShift() != null
+                        ? ("AFTERNOON".equalsIgnoreCase(p.trainingShift()) ? "AFTERNOON" : "MORNING")
+                        : null)
                 .update();
     }
 

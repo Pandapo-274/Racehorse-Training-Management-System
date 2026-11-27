@@ -446,6 +446,35 @@ public class TrainingSessionService {
         return count;
     }
 
+    @Transactional
+    public TrainingSessionResponse saveVideo(int sessionId, String videoUrl, AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only assigned Groom or Head Trainer can attach session video");
+        }
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if ("CANCELLED".equals(s.status()) || "SCHEDULED".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Session video can only be recorded during or after a session");
+        }
+        String trimmed = videoUrl == null ? "" : videoUrl.trim();
+        if (trimmed.isEmpty()) {
+            repository.updateVideoUrl(sessionId, null);
+        } else {
+            if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data",
+                        Map.of("videoUrl", "Video URL must start with http:// or https://"));
+            }
+            if (trimmed.length() > 500) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid data",
+                        Map.of("videoUrl", "Video URL must be at most 500 characters"));
+            }
+            repository.updateVideoUrl(sessionId, trimmed);
+        }
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_VIDEO",
+                "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+        return getOrThrow(sessionId);
+    }
+
     public TrainingSessionResponse get(int sessionId, AuthenticatedUser user) {
         TrainingSessionResponse s = getOrThrow(sessionId);
         checkCanAct(s, user);

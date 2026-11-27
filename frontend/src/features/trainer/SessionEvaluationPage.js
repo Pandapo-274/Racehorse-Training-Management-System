@@ -131,20 +131,97 @@ function computeReviewDeadlineBadge(session) {
   };
 }
 
+const RATING_LABEL = {
+  POOR: "Poor",
+  FAIR: "Fair",
+  GOOD: "Good",
+  EXCELLENT: "Excellent",
+};
+
+function computeAutoRating(session, formValues) {
+  if (!session) return { rating: "GOOD", scorePct: null };
+  let sum = 0;
+  let count = 0;
+
+  const actualDist = formValues?.actualDistance !== "" && formValues?.actualDistance != null
+    ? Number(formValues.actualDistance)
+    : session.actualDistance;
+  if (session.plannedDistance > 0 && actualDist != null && Number.isFinite(actualDist)) {
+    sum += Math.min(100, (actualDist * 100) / session.plannedDistance);
+    count++;
+  }
+
+  const actualDur = formValues?.durationMinutes !== "" && formValues?.durationMinutes != null
+    ? Number(formValues.durationMinutes)
+    : session.durationMinutes;
+  if (session.plannedDuration > 0 && actualDur != null && Number.isFinite(actualDur)) {
+    sum += Math.min(100, (actualDur * 100) / session.plannedDuration);
+    count++;
+  }
+
+  const peakHr = formValues?.peakHeartRate !== "" && formValues?.peakHeartRate != null
+    ? Number(formValues.peakHeartRate)
+    : session.peakHeartRate;
+  if (session.heartRateCeiling > 0 && peakHr != null && Number.isFinite(peakHr)) {
+    const hrScore = peakHr <= session.heartRateCeiling
+      ? 100
+      : Math.max(0, 100 - ((peakHr - session.heartRateCeiling) * 100) / session.heartRateCeiling);
+    sum += hrScore;
+    count++;
+  }
+
+  const peakVel = formValues?.peakVelocity !== "" && formValues?.peakVelocity != null
+    ? Number(formValues.peakVelocity)
+    : session.peakVelocity;
+  if (session.targetVelocity > 0 && peakVel != null && Number.isFinite(Number(peakVel))) {
+    const target = Number(session.targetVelocity);
+    const actual = Number(peakVel);
+    let speedScore = 100;
+    if (actual > target * 1.10) {
+      speedScore = Math.max(0, 100 - ((actual - target) * 100) / target);
+    } else if (actual < target * 0.85) {
+      speedScore = Math.max(0, (actual * 100) / target);
+    }
+    sum += speedScore;
+    count++;
+  }
+
+  const recHrr = formValues?.recoveryHeartRate !== "" && formValues?.recoveryHeartRate != null
+    ? Number(formValues.recoveryHeartRate)
+    : (session.recoveryHeartRate ?? session.actualHrr);
+  if (session.targetHrr > 0 && recHrr != null && Number.isFinite(Number(recHrr))) {
+    const hrrScore = Number(recHrr) <= session.targetHrr
+      ? 100
+      : Math.max(0, 100 - ((Number(recHrr) - session.targetHrr) * 100) / session.targetHrr);
+    sum += hrrScore;
+    count++;
+  }
+
+  if (count === 0) {
+    return { rating: session.evaluation || "GOOD", scorePct: null };
+  }
+  const pct = Math.round(sum / count);
+  let rating = "POOR";
+  if (pct >= 100) rating = "EXCELLENT";
+  else if (pct >= 90) rating = "GOOD";
+  else if (pct >= 80) rating = "FAIR";
+  return { rating, scorePct: pct };
+}
+
 // Giá trị ban đầu của form: lấy số đã có của buổi; chưa có thì dùng số dự kiến (planned...) làm gợi ý.
 function emptyForm(session) {
+  const auto = computeAutoRating(session, null);
   return {
     actualDistance: session?.actualDistance ?? session?.plannedDistance ?? "",
     durationMinutes: session?.durationMinutes ?? session?.plannedDuration ?? "",
     avgHeartRate: session?.avgHeartRate ?? session?.peakHeartRate ?? "",
     peakHeartRate: session?.peakHeartRate ?? "",
-    recoveryHeartRate: session?.recoveryHeartRate ?? "",
+    recoveryHeartRate: session?.recoveryHeartRate ?? session?.actualHrr ?? "",
     peakVelocity: session?.peakVelocity ?? "",
-    evaluation: session?.evaluation || "GOOD",
+    evaluation: auto.rating,
     remarks: session?.remarks || "",
     status: session?.status === "STOPPED_EARLY" ? "STOPPED_EARLY" : "COMPLETED",
     trialRun: !!session?.trialRun,
-    videoUrl: session?.videoUrl || "",
   };
 }
 
@@ -242,7 +319,12 @@ export default function SessionEvaluationPage() {
     setNotice("");
   };
 
-  // Ô trống được thay bằng số đã có / số dự kiến; videoUrl chỉ gửi khi là lượt chạy thử.
+  const autoEval = useMemo(
+    () => computeAutoRating(selectedSession, form),
+    [selectedSession, form],
+  );
+  const lockedFinalStatus = selectedSession?.status === "STOPPED_EARLY" ? "STOPPED_EARLY" : "COMPLETED";
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!selectedSession) return;
@@ -256,11 +338,11 @@ export default function SessionEvaluationPage() {
       peakHeartRate: form.peakHeartRate !== "" ? Number(form.peakHeartRate) : null,
       recoveryHeartRate: form.recoveryHeartRate === "" ? null : Number(form.recoveryHeartRate),
       peakVelocity: form.peakVelocity === "" ? null : Number(form.peakVelocity),
-      evaluation: form.evaluation,
+      evaluation: autoEval.rating,
       remarks: form.remarks.trim() || null,
-      status: form.status,
+      status: lockedFinalStatus,
       trialRun: form.trialRun,
-      videoUrl: form.trialRun ? (form.videoUrl.trim() || null) : null,
+      videoUrl: null,
     };
     try {
       const updated = await evaluateSession(selectedSession.sessionId, payload);
@@ -594,22 +676,26 @@ export default function SessionEvaluationPage() {
                     <h3>Performance evaluation</h3>
                     <div className="session-review-fields">
                       <label>
-                        Overall rating
-                        <select name="evaluation" value={form.evaluation} onChange={updateField} required>
-                          <option value="POOR">Poor</option>
-                          <option value="FAIR">Fair</option>
-                          <option value="GOOD">Good</option>
-                          <option value="EXCELLENT">Excellent</option>
-                        </select>
+                        Overall rating (Auto-evaluated)
+                        <input
+                          type="text"
+                          name="evaluation"
+                          readOnly
+                          value={`${RATING_LABEL[autoEval.rating] || autoEval.rating}${autoEval.scorePct != null ? ` (${autoEval.scorePct}% of plan criteria)` : ""}`}
+                          title="Auto-calculated: <80% Poor, >=80% Fair, >=90% Good, 100% Excellent"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#1e1b4b", fontWeight: 700 }}
+                        />
                       </label>
                       <label>
-                        Final session status
-                        <select name="status" value={form.status} onChange={updateField} required>
-                          <option value="COMPLETED" disabled={selectedSession.status === "STOPPED_EARLY"}>
-                            Completed
-                          </option>
-                          <option value="STOPPED_EARLY">Stopped early</option>
-                        </select>
+                        Final session status (Auto-selected)
+                        <input
+                          type="text"
+                          name="status"
+                          readOnly
+                          value={lockedFinalStatus === "STOPPED_EARLY" ? "Stopped early" : "Completed"}
+                          title="Automatically matches the session's completion status"
+                          style={{ backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#1e1b4b", fontWeight: 700 }}
+                        />
                       </label>
                     </div>
 
@@ -624,26 +710,29 @@ export default function SessionEvaluationPage() {
                         />
                         This session was a trial run
                       </label>
-                      {form.trialRun && (
-                        <div style={{ marginTop: 10 }}>
-                          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
-                            Video link (YouTube, Google Drive…)
-                            <input
-                              type="url"
-                              name="videoUrl"
-                              value={form.videoUrl}
-                              maxLength={500}
-                              onChange={(e) => setForm((old) => ({ ...old, videoUrl: e.target.value }))}
-                              placeholder="https://"
-                              style={{ width: "100%", marginTop: 4, padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}
-                            />
-                          </label>
-                        </div>
-                      )}
-                      {form.videoUrl && (
-                        <a className="trial-run-link" href={form.videoUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 6, fontSize: 12, color: "#d93b87" }}>
-                          Open current video link ↗
+                      <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b" }}>
+                        When checked, the Horse Owner is notified that this session was a trial run.
+                      </p>
+                    </div>
+
+                    <div style={{ margin: "16px 0", padding: "14px 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px" }}>
+                      <strong style={{ fontSize: 13, display: "block", marginBottom: 6, color: "#1e1b4b" }}>
+                        Training Video (Recorded by Groom)
+                      </strong>
+                      {selectedSession.videoUrl ? (
+                        <a
+                          className="trial-run-link"
+                          href={selectedSession.videoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-block", fontSize: 13, fontWeight: 600, color: "#d93b87" }}
+                        >
+                          Watch Groom's Session Video ↗
                         </a>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12.5, color: "#64748b" }}>
+                          No video recorded by the Groom for this session yet.
+                        </p>
                       )}
                     </div>
 

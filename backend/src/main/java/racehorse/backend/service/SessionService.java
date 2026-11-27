@@ -163,14 +163,18 @@ public class SessionService {
         if ("STOPPED_EARLY".equals(current.status()) && "COMPLETED".equals(req.status())) {
             throw fieldError("status", "This session was stopped early; it cannot be marked as completed");
         }
-        String finalStatus = req.status() != null ? req.status()
-                : ("STOPPED_EARLY".equals(current.status()) ? "STOPPED_EARLY" : "COMPLETED");
+        String finalStatus = "STOPPED_EARLY".equals(current.status()) ? "STOPPED_EARLY" : "COMPLETED";
+        String autoEval = computeAutoEvaluation(current, req);
+        EvaluateSessionRequest effectiveReq = new EvaluateSessionRequest(
+                req.actualDistance(), req.durationMinutes(), req.avgHeartRate(),
+                req.peakHeartRate(), req.recoveryHeartRate(), req.peakVelocity(),
+                autoEval, req.remarks(), finalStatus, req.trialRun(), null);
 
         boolean wasArchivedAuto = "ARCHIVED_AUTO".equals(current.reviewStatus());
 
         // saveEvaluation có điều kiện "AND status = <trạng thái vừa đọc>": nếu buổi tập vừa đổi trạng
         // thái (vd. đang bị dừng) trong lúc HLV điền form thì trả 0 -> 409.
-        if (sessions.saveEvaluation(sessionId, req, current.status(), finalStatus, me == null ? 0 : me.userId()) == 0) {
+        if (sessions.saveEvaluation(sessionId, effectiveReq, current.status(), finalStatus, me == null ? 0 : me.userId()) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session changed while you were evaluating it. Reload and try again");
         }
@@ -181,10 +185,14 @@ public class SessionService {
         SessionResponse updated = getOrThrow(sessionId);
         if (notifications != null) {
             sessions.findOwnerOfSession(sessionId).ifPresent(ownerId -> {
-                String title = wasArchivedAuto
+                String trialPrefix = Boolean.TRUE.equals(req.trialRun()) ? "[Trial Run] " : "";
+                String title = trialPrefix + (wasArchivedAuto
                         ? "Official Head Trainer review (updated from archive)"
-                        : "Official Head Trainer session review";
-                String body = "Head Trainer completed the official review for " + updated.horseName()
+                        : "Official Head Trainer session review");
+                String body = (Boolean.TRUE.equals(req.trialRun())
+                        ? "This session was marked as a Trial Run. "
+                        : "")
+                        + "Head Trainer completed the official review for " + updated.horseName()
                         + "'s training session (Rating: " + updated.evaluation()
                         + ", Peak HR: " + updated.peakHeartRate() + " bpm).";
                 notifications.notifyUser(ownerId, new Notice(
@@ -195,6 +203,62 @@ public class SessionService {
             });
         }
         return updated;
+    }
+
+    /**
+     * Tự động chấm điểm Overall rating dựa trên % đạt được so với tiêu chí của Plan:
+     * <80% -> POOR, >=80% -> FAIR, >=90% -> GOOD, ==100% -> EXCELLENT.
+     */
+    public static String computeAutoEvaluation(SessionResponse current, EvaluateSessionRequest req) {
+        double sum = 0.0;
+        int count = 0;
+
+        if (current.plannedDistance() != null && current.plannedDistance() > 0 && req.actualDistance() != null) {
+            sum += Math.min(100.0, (req.actualDistance() * 100.0) / current.plannedDistance());
+            count++;
+        }
+        if (current.plannedDuration() != null && current.plannedDuration() > 0 && req.durationMinutes() != null) {
+            sum += Math.min(100.0, (req.durationMinutes() * 100.0) / current.plannedDuration());
+            count++;
+        }
+        if (current.heartRateCeiling() != null && current.heartRateCeiling() > 0 && req.peakHeartRate() != null) {
+            double hrScore = req.peakHeartRate() <= current.heartRateCeiling()
+                    ? 100.0
+                    : Math.max(0.0, 100.0 - ((req.peakHeartRate() - current.heartRateCeiling()) * 100.0 / current.heartRateCeiling()));
+            sum += hrScore;
+            count++;
+        }
+        if (current.targetVelocity() != null && current.targetVelocity().doubleValue() > 0 && req.peakVelocity() != null) {
+            double target = current.targetVelocity().doubleValue();
+            double actual = req.peakVelocity().doubleValue();
+            double speedScore;
+            if (actual > target * 1.10) {
+                speedScore = Math.max(0.0, 100.0 - ((actual - target) * 100.0 / target));
+            } else if (actual < target * 0.85) {
+                speedScore = Math.max(0.0, (actual * 100.0) / target);
+            } else {
+                speedScore = 100.0;
+            }
+            sum += speedScore;
+            count++;
+        }
+        Integer recHrr = req.recoveryHeartRate() != null ? req.recoveryHeartRate() : current.actualHrr();
+        if (current.targetHrr() != null && current.targetHrr() > 0 && recHrr != null) {
+            double hrrScore = recHrr <= current.targetHrr()
+                    ? 100.0
+                    : Math.max(0.0, 100.0 - ((recHrr - current.targetHrr()) * 100.0 / current.targetHrr()));
+            sum += hrrScore;
+            count++;
+        }
+
+        if (count == 0) {
+            return req.evaluation();
+        }
+        long pct = Math.round(sum / count);
+        if (pct >= 100) return "EXCELLENT";
+        if (pct >= 90) return "GOOD";
+        if (pct >= 80) return "FAIR";
+        return "POOR";
     }
 
     /**
