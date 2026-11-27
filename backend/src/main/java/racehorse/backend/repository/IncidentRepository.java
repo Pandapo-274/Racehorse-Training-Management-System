@@ -229,6 +229,17 @@ public class IncidentRepository {
                 .list();
     }
 
+    /** Hủy toàn bộ các buổi SCHEDULED phía sau của ngựa khi ngựa bị thương / có báo cáo sự cố. */
+    public int cancelUpcomingScheduledSessions(int horseId) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'CANCELLED'
+                WHERE horse_id = :h AND status = 'SCHEDULED'
+                """)
+                .param("h", horseId)
+                .update();
+    }
+
     // Điều kiện "status = 'PENDING' AND session_id IS NOT NULL": chỉ huỷ được báo cáo sinh từ buổi tập dừng
     // và khi bác sĩ chưa nhận ca. Các hàm mark... bên dưới đều có điều kiện trạng thái để chống hai người cùng làm.
     public int markDismissed(int reportId, int trainerId, String reason) {

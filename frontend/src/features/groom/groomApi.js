@@ -2,7 +2,7 @@
 // Phần việc của Groom trong Flow 2: nhận buổi tập Head Trainer giao, bắt đầu
 // buổi tập, và gửi số đo trong lúc ngựa chạy để hệ thống sinh cảnh báo (UC11).
 
-import { authFetch } from "../auth/authService";
+import { authFetch, getToken } from "../auth/authService";
 
 /** Backend tự lọc: Groom chỉ nhận buổi tập giao cho chính mình. */
 export function listMySessions(signal) {
@@ -42,8 +42,12 @@ export function finishSession(sessionId, body = null) {
 }
 
 /** V50: RUNNING -> RECOVERY: bắt đầu đếm ngược thời gian hồi phục của Phase. */
-export function enterRecoverySession(sessionId) {
-  return authFetch(`/api/training-sessions/${sessionId}/enter-recovery`, { method: "PUT" });
+export function enterRecoverySession(sessionId, body) {
+  const options = { method: "PUT" };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  return authFetch(`/api/training-sessions/${sessionId}/enter-recovery`, options);
 }
 
 /** V50: RECOVERY -> COMPLETED: Groom nhập actualHrr (bpm) và hoàn tất buổi tập. */
@@ -70,11 +74,28 @@ export function stopSession(sessionId, { symptoms, description, urgency }) {
   });
 }
 
-export function saveSessionVideo(sessionId, videoUrl) {
-  return authFetch(`/api/training-sessions/${sessionId}/video`, {
-    method: "PUT",
-    body: JSON.stringify({ videoUrl: videoUrl || null }),
+export async function uploadSessionVideo(sessionId, file) {
+  const body = new FormData();
+  body.append("file", file);
+  const token = getToken();
+  const res = await fetch(`/api/training-sessions/${sessionId}/video`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
   });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const err = new Error(data?.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+export function listSessionAlerts(sessionId, signal) {
+  return authFetch(`/api/sessions/${sessionId}/alerts`, { signal });
 }
 
 /** Danh sách lý do kết thúc sớm buổi tập cho Groom chọn. */
@@ -85,7 +106,6 @@ export const EARLY_STOP_REASON_OPTIONS = [
   { value: "WEATHER_CONDITION", label: "Weather / track condition" },
   { value: "EQUIPMENT_ISSUE", label: "Equipment issue" },
   { value: "INJURY", label: "Horse injury / abnormality — Call Vet" },
-  { value: "NO_HEAD_TRAINER", label: "No Head Trainer to supervise (asked by the club)" },
 ];
 
 /** Triệu chứng hay gặp, để Groom chọn nhanh; vẫn sửa tay được. */

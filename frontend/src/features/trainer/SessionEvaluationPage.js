@@ -483,6 +483,25 @@ export default function SessionEvaluationPage() {
                           🩺 Recovery
                         </span>
                       )}
+                      {((session.remarks && session.remarks.includes("Recovery heart rate was not recorded")) ||
+                        (session.status === "COMPLETED" && session.overloadWarning && session.actualHrr == null && session.recoveryHeartRate == null)) && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: "4px",
+                            marginLeft: "6px",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            backgroundColor: "#fef2f2",
+                            color: "#b91c1c",
+                            border: "1px solid #fca5a5",
+                          }}
+                        >
+                          ⚠️ Missing Recovery HR
+                        </span>
+                      )}
                       <span className="session-review-item-bottom">
                         <span>
                           {session.reviewStatus === "ARCHIVED_AUTO"
@@ -524,6 +543,26 @@ export default function SessionEvaluationPage() {
                     {statusLabel(selectedSession.status)}
                   </span>
                 </div>
+
+                {((selectedSession.remarks && selectedSession.remarks.includes("Recovery heart rate was not recorded")) ||
+                  (selectedSession.status === "COMPLETED" && selectedSession.overloadWarning && selectedSession.actualHrr == null && selectedSession.recoveryHeartRate == null)) && (
+                  <div
+                    role="alert"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      border: "1px solid #fca5a5",
+                      color: "#991b1b",
+                      padding: "12px 16px",
+                      borderRadius: "10px",
+                      marginBottom: "16px",
+                      fontSize: "13px",
+                      lineHeight: 1.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    ⚠️ Warning: Recovery heart rate was not recorded by the Groom within 5 minutes after the cooldown ended. The session was auto-submitted without recovery HR data.
+                  </div>
+                )}
 
                 {selectedSession.reviewStatus === "ARCHIVED_AUTO" && (
                   <div
@@ -720,15 +759,28 @@ export default function SessionEvaluationPage() {
                         Training Video (Recorded by Groom)
                       </strong>
                       {selectedSession.videoUrl ? (
-                        <a
-                          className="trial-run-link"
-                          href={selectedSession.videoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ display: "inline-block", fontSize: 13, fontWeight: 600, color: "#d93b87" }}
-                        >
-                          Watch Groom's Session Video ↗
-                        </a>
+                        <div>
+                          <video
+                            controls
+                            src={selectedSession.videoUrl}
+                            style={{
+                              width: "100%",
+                              maxHeight: 320,
+                              borderRadius: 10,
+                              background: "#000",
+                              marginBottom: 8,
+                            }}
+                          />
+                          <a
+                            className="trial-run-link"
+                            href={selectedSession.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: "inline-block", fontSize: 13, fontWeight: 600, color: "#d93b87" }}
+                          >
+                            Open video in new tab ↗
+                          </a>
+                        </div>
                       ) : (
                         <p style={{ margin: 0, fontSize: 12.5, color: "#64748b" }}>
                           No video recorded by the Groom for this session yet.

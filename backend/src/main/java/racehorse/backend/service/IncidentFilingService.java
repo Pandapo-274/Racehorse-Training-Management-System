@@ -95,6 +95,11 @@ public class IncidentFilingService {
             throw e;
         }
         users.writeAudit(user.userId(), "INCIDENT_REPORT_CREATE", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
+        int cancelledCount = incidents.cancelUpcomingScheduledSessions(horseId);
+        if (cancelledCount > 0) {
+            users.writeAudit(user.userId(), "TRAINING_SESSIONS_CANCELLED_ON_INJURY",
+                    "HORSE", horseId, "SUCCESS", ip, "Cancelled " + cancelledCount + " scheduled session(s)");
+        }
 
         notifications.notifyRole("VETERINARIAN", user, new Notice(
                 "INCIDENT_REPORTED", "Horse needs examination",

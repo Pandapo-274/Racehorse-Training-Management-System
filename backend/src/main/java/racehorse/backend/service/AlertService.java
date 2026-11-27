@@ -225,6 +225,16 @@ public class AlertService {
         return alerts.search(afterId, openOnly, Math.max(1, Math.min(limit, 200)), trainerId);
     }
 
+    /** Alerts & trainer actions for a specific session (used by Groom during RUNNING session). */
+    public List<AlertResponse> listForSession(AuthenticatedUser me, int sessionId) {
+        SessionContext ctx = alerts.findSessionContext(sessionId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Training session not found"));
+        if (me != null && "GROOM".equals(me.role()) && ctx.assignedTo() != me.userId()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You are not assigned to this session");
+        }
+        return alerts.findBySessionId(sessionId);
+    }
+
     /** Head Trainer ghi lại đã xử lý thế nào. STOP_SESSION thì ca tập bị dừng luôn. */
     @Transactional
     public AlertResponse resolve(AuthenticatedUser me, int alertId, ResolveAlertRequest req, String ip) {

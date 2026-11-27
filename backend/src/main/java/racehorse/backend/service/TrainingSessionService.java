@@ -1,6 +1,12 @@
 package racehorse.backend.service;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -12,10 +18,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import racehorse.backend.dto.CompleteRecoveryRequest;
 import racehorse.backend.dto.FinishSessionRequest;
@@ -83,6 +92,9 @@ public class TrainingSessionService {
     /** Buổi còn chiếm chỗ trên lịch. */
     private static final Set<String> OPEN = Set.of("SCHEDULED", "RUNNING");
 
+    private static final long MAX_VIDEO_BYTES = 50L * 1024 * 1024;
+    private static final Set<String> ALLOWED_VIDEO_EXTENSIONS = Set.of("mp4", "webm", "mov", "m4v", "avi", "mkv");
+
     private final TrainingSessionRepository repository;
     private final TrainingPlanRepository planRepository;
     private final HorseRepository horseRepository;
@@ -91,13 +103,24 @@ public class TrainingSessionService {
     private final NotificationService notifications;
     private final IncidentGuard incidentGuard;
     private final int lightWorkMaxDistance;
+    private final Path videoDir;
 
+    public TrainingSessionService(TrainingSessionRepository repository, TrainingPlanRepository planRepository,
+            HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
+            UserRepository userRepository, NotificationService notifications, IncidentGuard incidentGuard,
+            int lightWorkMaxDistance) {
+        this(repository, planRepository, horseRepository, vitalsRepository, userRepository, notifications,
+                incidentGuard, lightWorkMaxDistance, "uploads");
+    }
+
+    @Autowired
     public TrainingSessionService(TrainingSessionRepository repository, TrainingPlanRepository planRepository,
             HorseRepository horseRepository, HorseVitalsRepository vitalsRepository,
             UserRepository userRepository, NotificationService notifications, IncidentGuard incidentGuard,
             // @Value("${...:800}"): đọc app.lock.light-work-max-distance (application.properties đặt 800),
             // thiếu dòng cấu hình thì cũng dùng 800. Nhãn trên giao diện (vetApi.js, VetExaminationPage.js) ghi 800 m.
-            @Value("${app.lock.light-work-max-distance:800}") int lightWorkMaxDistance) {
+            @Value("${app.lock.light-work-max-distance:800}") int lightWorkMaxDistance,
+            @Value("${app.upload.dir:uploads}") String uploadDir) {
         this.repository = repository;
         this.planRepository = planRepository;
         this.horseRepository = horseRepository;
@@ -106,6 +129,7 @@ public class TrainingSessionService {
         this.notifications = notifications;
         this.incidentGuard = incidentGuard;
         this.lightWorkMaxDistance = lightWorkMaxDistance;
+        this.videoDir = Paths.get(uploadDir, "session-videos").toAbsolutePath().normalize();
     }
 
     /** Danh sách Groom đang hoạt động để Head Trainer phân công. */
@@ -314,6 +338,10 @@ public class TrainingSessionService {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Please select a reason for ending the session early",
                         Map.of("earlyStopReason", "Select a reason for early termination"));
             }
+            if (!noTrainer && (s.videoUrl() == null || s.videoUrl().isBlank())) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Please record and save the training session video before ending the session");
+            }
             // Lý do lạ (không có trong bảng) vẫn được lưu nguyên văn.
             String reasonLabel = EARLY_STOP_REASONS.getOrDefault(rawReason.toUpperCase(Locale.ROOT), rawReason);
             if (reasonLabel.length() > 255) {
@@ -334,6 +362,10 @@ public class TrainingSessionService {
             return getOrThrow(sessionId);
         }
 
+        if (s.videoUrl() == null || s.videoUrl().isBlank()) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Please record and save the training session video before finishing the session");
+        }
         if (repository.markFinished(sessionId) == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session has just been stopped or finished by someone else");
@@ -350,10 +382,16 @@ public class TrainingSessionService {
     }
 
     /**
-     * V50: Groom hoàn tất bài chạy: RUNNING -> RECOVERY và bắt đầu đếm ngược recovery theo Phase.
+     * V50: Groom hoàn tất bài chạy (đủ giờ hoặc early stop không do chấn thương): RUNNING -> RECOVERY.
      */
     @Transactional
     public TrainingSessionResponse enterRecovery(int sessionId, AuthenticatedUser user, String ip) {
+        return enterRecovery(sessionId, null, user, ip);
+    }
+
+    @Transactional
+    public TrainingSessionResponse enterRecovery(int sessionId, FinishSessionRequest req,
+                                                 AuthenticatedUser user, String ip) {
         if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only Groom or Head Trainer can start recovery phase");
         }
@@ -363,16 +401,55 @@ public class TrainingSessionService {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Only a RUNNING session can enter recovery (currently " + s.status() + ")");
         }
+
+        String rawReason = (req != null && req.earlyStopReason() != null) ? req.earlyStopReason().trim() : "";
+        if ("INJURY".equalsIgnoreCase(rawReason)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Injury stops skip the recovery phase; please use Stop & Call Vet instead");
+        }
+        boolean noTrainer = "NO_HEAD_TRAINER".equalsIgnoreCase(rawReason);
+        if (!noTrainer && (s.peakHeartRate() == null || s.peakVelocity() == null)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "You must report both heart rate and speed at least once before entering recovery");
+        }
+        if (!noTrainer && (s.videoUrl() == null || s.videoUrl().isBlank())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Please record and save the training session video before entering recovery");
+        }
+
+        int plannedDuration = s.plannedDuration() != null ? s.plannedDuration() : DEFAULT_DURATION_MINUTES;
+        boolean isEndReached = !LocalDateTime.now().isBefore(s.sessionDate().plusMinutes(plannedDuration));
+        boolean earlyStopRequested = req != null
+                && (Boolean.TRUE.equals(req.earlyStop()) || !rawReason.isEmpty());
+        if (!isEndReached && !earlyStopRequested) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "You can only enter recovery after the scheduled duration completes or by selecting an early-stop reason");
+        }
+        if (!isEndReached && rawReason.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Please select an early-stop reason before entering recovery",
+                    Map.of("earlyStopReason", "Select a reason for early termination"));
+        }
+
+        String earlyReasonLabel = rawReason.isEmpty()
+                ? null
+                : EARLY_STOP_REASONS.getOrDefault(rawReason.toUpperCase(Locale.ROOT), rawReason);
+        if (earlyReasonLabel != null && earlyReasonLabel.length() > 255) {
+            earlyReasonLabel = earlyReasonLabel.substring(0, 255);
+        }
+
         int recMinutes = repository.findPhaseRecoveryMinutes(s.phaseId())
                 .orElse(s.recoveryDurationMinutes() != null ? s.recoveryDurationMinutes() : 15);
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime endsAt = now.plusMinutes(recMinutes);
-        if (repository.markRecoveryStarted(sessionId, recMinutes, now, endsAt) == 0) {
+        int updatedRows = earlyReasonLabel != null
+                ? repository.markRecoveryStarted(sessionId, recMinutes, now, endsAt, earlyReasonLabel)
+                : repository.markRecoveryStarted(sessionId, recMinutes, now, endsAt);
+        if (updatedRows == 0) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This session has just changed status");
         }
         userRepository.writeAudit(user == null ? null : user.userId(),
-                "TRAINING_SESSION_RECOVERY_START", "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+                "TRAINING_SESSION_RECOVERY_START", "TRAINING_SESSION", sessionId, "SUCCESS", ip, earlyReasonLabel);
         return getOrThrow(sessionId);
     }
 
@@ -433,19 +510,58 @@ public class TrainingSessionService {
         int count = 0;
         List<TrainingSessionResponse> overdueRunning = repository.findOverdueRunningSessions(now);
         for (TrainingSessionResponse s : overdueRunning) {
-            if (repository.autoFinishOverdueRunning(s.sessionId()) == 1) {
-                userRepository.writeAudit(null, "TRAINING_SESSION_AUTO_FINISH", "TRAINING_SESSION",
+            boolean hasAnyMetric = s.peakHeartRate() != null || s.peakVelocity() != null;
+            if (!hasAnyMetric) {
+                String failNote = "[Auto-failed: No heart rate or speed metrics were recorded within 5 minutes after the session ended]";
+                if (repository.autoFailOverdueRunning(s.sessionId(), "Failed: no metrics recorded", failNote) == 1) {
+                    userRepository.writeAudit(null, "TRAINING_SESSION_AUTO_FAILED", "TRAINING_SESSION",
+                            s.sessionId(), "SUCCESS", null);
+                    notifications.notifyHorseTrainer(s.horseId(), null, new Notice(
+                            "TRAINING_SESSION_AUTO_FAILED",
+                            "Session failed (no metrics recorded): " + s.horseName(),
+                            s.horseName() + "'s session on " + s.sessionDate().format(WHEN)
+                                    + " ended + 5 minutes with no heart rate or speed readings recorded."
+                                    + " Automatically failed and closed without recovery.",
+                            Notice.TRAINING_SESSION, s.sessionId()));
+                    count++;
+                }
+            } else {
+                int recMinutes = repository.findPhaseRecoveryMinutes(s.phaseId())
+                        .orElse(s.recoveryDurationMinutes() != null ? s.recoveryDurationMinutes() : 15);
+                LocalDateTime recNow = LocalDateTime.now();
+                LocalDateTime endsAt = recNow.plusMinutes(recMinutes);
+                if (repository.markAutoRecoveryStarted(s.sessionId(), recMinutes, recNow, endsAt) == 1) {
+                    userRepository.writeAudit(null, "TRAINING_SESSION_AUTO_RECOVERY", "TRAINING_SESSION",
+                            s.sessionId(), "SUCCESS", null);
+                    notifications.notifyHorseTrainer(s.horseId(), null, new Notice(
+                            "TRAINING_SESSION_AUTO_RECOVERY",
+                            "Session auto-entered recovery: " + s.horseName(),
+                            s.horseName() + "'s session on " + s.sessionDate().format(WHEN)
+                                    + " exceeded its planned duration by 5 minutes and was automatically moved to Recovery ("
+                                    + recMinutes + " mins).",
+                            Notice.TRAINING_SESSION, s.sessionId()));
+                    count++;
+                }
+            }
+        }
+        count += repository.autoCancelOverdueScheduled(now);
+
+        List<TrainingSessionResponse> overdueRecovery = repository.findOverdueRecoverySessions(now);
+        for (TrainingSessionResponse s : overdueRecovery) {
+            String warning = "[Warning: Recovery heart rate was not recorded within 5 minutes after cooldown ended]";
+            if (repository.autoCompleteOverdueRecovery(s.sessionId(), warning) == 1) {
+                userRepository.writeAudit(null, "TRAINING_SESSION_RECOVERY_AUTO_SUBMIT", "TRAINING_SESSION",
                         s.sessionId(), "SUCCESS", null);
                 notifications.notifyHorseTrainer(s.horseId(), null, new Notice(
-                        "TRAINING_SESSION_AUTO_FINISHED",
-                        "Training session auto-completed on time limit",
-                        s.horseName() + "'s session on " + s.sessionDate().format(WHEN)
-                                + " reached its planned duration and was automatically finished. Please review within 48 hours.",
+                        "SESSION_RECOVERY_MISSING",
+                        "Recovery HR not recorded: " + s.horseName(),
+                        s.horseName() + "'s session #" + s.sessionId()
+                                + " ended recovery cooldown + 5 minutes without recovery heart rate recorded."
+                                + " Auto-submitted to Session Review with a missing recovery HR warning.",
                         Notice.TRAINING_SESSION, s.sessionId()));
                 count++;
             }
         }
-        count += repository.autoCancelOverdueScheduled(now);
         return count;
     }
 
@@ -475,6 +591,77 @@ public class TrainingSessionService {
         }
         userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_VIDEO",
                 "TRAINING_SESSION", sessionId, "SUCCESS", ip);
+        return getOrThrow(sessionId);
+    }
+
+    @Transactional
+    public TrainingSessionResponse uploadVideo(int sessionId, MultipartFile file, AuthenticatedUser user, String ip) {
+        if (user != null && !"GROOM".equals(user.role()) && !"HEAD_TRAINER".equals(user.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only assigned Groom or Head Trainer can upload session video");
+        }
+        TrainingSessionResponse s = getOrThrow(sessionId);
+        checkCanAct(s, user);
+        if (!"RUNNING".equals(s.status())) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Session video can only be uploaded while the session is RUNNING");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid video file",
+                    Map.of("file", "Please select a video file to upload"));
+        }
+        if (file.getSize() > MAX_VIDEO_BYTES) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid video file",
+                    Map.of("file", "Video file must be 50 MB or smaller"));
+        }
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().trim();
+        String ext = "";
+        int dot = original.lastIndexOf('.');
+        if (dot >= 0 && dot < original.length() - 1) {
+            ext = original.substring(dot + 1).toLowerCase(Locale.ROOT);
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        boolean validMime = contentType.startsWith("video/");
+        boolean validExt = ALLOWED_VIDEO_EXTENSIONS.contains(ext);
+        if (!validMime && !validExt) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid video file",
+                    Map.of("file", "Only video files (MP4, WebM, MOV, M4V, AVI, MKV) are allowed"));
+        }
+        if (ext.isEmpty()) {
+            ext = switch (contentType) {
+                case "video/webm" -> "webm";
+                case "video/quicktime" -> "mov";
+                case "video/x-msvideo" -> "avi";
+                case "video/x-matroska" -> "mkv";
+                default -> "mp4";
+            };
+        }
+        String filename = sessionId + "-" + UUID.randomUUID() + "." + ext;
+        try {
+            Files.createDirectories(videoDir);
+            Path dest = videoDir.resolve(filename).normalize();
+            if (!dest.startsWith(videoDir)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid file path");
+            }
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException ex) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store training video");
+        }
+        if (s.videoUrl() != null && s.videoUrl().startsWith("/uploads/session-videos/")) {
+            String prevName = s.videoUrl().substring("/uploads/session-videos/".length());
+            if (!prevName.isBlank() && !prevName.contains("/") && !prevName.contains("\\")) {
+                try {
+                    Files.deleteIfExists(videoDir.resolve(prevName).normalize());
+                } catch (IOException ignored) {
+                    // Best-effort cleanup
+                }
+            }
+        }
+        String url = "/uploads/session-videos/" + filename;
+        repository.updateVideoUrl(sessionId, url);
+        userRepository.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSION_VIDEO_UPLOAD",
+                "TRAINING_SESSION", sessionId, "SUCCESS", ip, filename);
         return getOrThrow(sessionId);
     }
 

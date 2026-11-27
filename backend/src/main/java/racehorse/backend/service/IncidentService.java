@@ -117,6 +117,11 @@ public class IncidentService {
         // trong hàng chờ "Vet calls", báo bác sĩ, chủ ngựa, HLV, Groom và cảnh báo rủi ro đăng ký giải.
         int sessionId = s.sessionId();
         int reportId = incidents.insertReport(s.horseId(), user.userId(), sessionId, symptoms, description, urgency);
+        int cancelledCount = incidents.cancelUpcomingScheduledSessions(s.horseId());
+        if (cancelledCount > 0) {
+            users.writeAudit(user == null ? null : user.userId(), "TRAINING_SESSIONS_CANCELLED_ON_INJURY",
+                    "HORSE", s.horseId(), "SUCCESS", ip, "Cancelled " + cancelledCount + " scheduled session(s)");
+        }
         users.writeAudit(user == null ? null : user.userId(), "SESSION_STOP_INCIDENT", "INCIDENT_REPORT", reportId, "SUCCESS", ip);
 
         String shortWhat = s.horseName() + ": " + symptoms + " (" + urgency + ").";

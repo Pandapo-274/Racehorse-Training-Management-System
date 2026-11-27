@@ -81,6 +81,11 @@ public class VetCallService {
         if (stopped) {
             users.writeAudit(me.userId(), "SESSION_STOPPED_FOR_VET", "TRAINING_SESSION", alert.sessionId(),
                     "SUCCESS", ip);
+            int cancelledCount = incidents.cancelUpcomingScheduledSessions(alert.horseId());
+            if (cancelledCount > 0) {
+                users.writeAudit(me.userId(), "TRAINING_SESSIONS_CANCELLED_ON_INJURY",
+                        "HORSE", alert.horseId(), "SUCCESS", ip, "Cancelled " + cancelledCount + " scheduled session(s)");
+            }
             notifications.notifyUser(session.assignedTo(), new Notice("TRAINING_SESSION_STOPPED",
                     "Training session stopped",
                     clip(alert.horseName() + ": the head trainer stopped the session and called a veterinarian. "
@@ -149,12 +154,17 @@ public class VetCallService {
         return get(callId);
     }
 
-    /** Dừng mọi buổi đang chạy của ngựa (thường chỉ có buổi của cảnh báo). */
+    /** Dừng mọi buổi đang chạy của ngựa (thường chỉ có buổi của cảnh báo) và hủy các buổi SCHEDULED phía sau. */
     private void stopHorse(AuthenticatedUser vet, VetCallResponse call, String decision, String ip) {
         for (IncidentRepository.RunningSession s : incidents.findRunningSessions(call.horseId())) {
             if (incidents.markStopped(s.sessionId()) == 0) continue; // vừa kết thúc, không cần dừng
             users.writeAudit(vet.userId(), "SESSION_STOPPED_BY_VET", "TRAINING_SESSION", s.sessionId(),
                     "SUCCESS", ip, "Vet call #" + call.callId() + ": " + decision);
+        }
+        int cancelledCount = incidents.cancelUpcomingScheduledSessions(call.horseId());
+        if (cancelledCount > 0) {
+            users.writeAudit(vet.userId(), "TRAINING_SESSIONS_CANCELLED_ON_INJURY",
+                    "HORSE", call.horseId(), "SUCCESS", ip, "Cancelled " + cancelledCount + " scheduled session(s)");
         }
     }
 
