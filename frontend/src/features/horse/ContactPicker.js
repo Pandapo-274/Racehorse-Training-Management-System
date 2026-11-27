@@ -14,7 +14,9 @@ import { addOwnerContact, listInsurers, listOwnerContacts } from "./contactsApi"
 const ADD = "__add";
 
 export default function ContactPicker({ value, onChange, errors = {}, ownerId, disabled = false, idPrefix = "c" }) {
-  const [insurers, setInsurers] = useState([]);
+  const [insurers, setInsurers] = useState(null);       // null = loading
+  const [loadError, setLoadError] = useState("");       // the list could not be read: say so, do not show an empty box
+  const [reload, setReload] = useState(0);
   const [people, setPeople] = useState(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ fullName: "", phone: "", relationship: "" });
@@ -23,23 +25,34 @@ export default function ContactPicker({ value, onChange, errors = {}, ownerId, d
 
   useEffect(() => {
     const ctrl = new AbortController();
-    listInsurers(ctrl.signal).then((r) => setInsurers(r || [])).catch(() => setInsurers([]));
+    setLoadError("");
+    listInsurers(ctrl.signal)
+      .then((r) => setInsurers(r || []))
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        setInsurers([]);
+        setLoadError(err.status === 404
+          ? "The insurer list is not on the server yet. Restart the backend so it picks up the new version (V63)."
+          : `Could not load the insurer list: ${err.message}`);
+      });
     return () => ctrl.abort();
-  }, []);
+  }, [reload]);
 
   useEffect(() => {
     if (disabled) { setPeople([]); return undefined; }
     const ctrl = new AbortController();
-    listOwnerContacts(ownerId, ctrl.signal).then((r) => setPeople(r || [])).catch(() => setPeople([]));
+    listOwnerContacts(ownerId, ctrl.signal).then((r) => setPeople(r || [])).catch((err) => {
+      if (err.name !== "AbortError") setPeople([]);
+    });
     return () => ctrl.abort();
   }, [ownerId, disabled]);
 
-  const insurer = insurers.find((i) => i.name === value.insurerName && i.emergencyPhone === value.insurerPhone);
+  const insurer = (insurers || []).find((i) => i.name === value.insurerName && i.emergencyPhone === value.insurerPhone);
   const person = (people || []).find((p) => p.fullName === value.emergencyName && p.phone === value.emergencyPhone);
   const set = (patch) => onChange({ ...value, ...patch });
 
   const pickInsurer = (e) => {
-    const i = insurers.find((x) => String(x.insurerId) === e.target.value);
+    const i = (insurers || []).find((x) => String(x.insurerId) === e.target.value);
     set({ insurerName: i ? i.name : "", insurerPhone: i ? i.emergencyPhone : "" });
   };
   const pickPerson = (e) => {
@@ -79,11 +92,23 @@ export default function ContactPicker({ value, onChange, errors = {}, ownerId, d
       <div className="hz-field">
         <label htmlFor={`${idPrefix}-insurer`}>Insurer</label>
         <select id={`${idPrefix}-insurer`} value={insurer ? insurer.insurerId : ""} onChange={pickInsurer}
-                disabled={disabled} aria-invalid={!!insurerError}>
-          <option value="">Choose the insurer…</option>
-          {insurers.map((i) => <option key={i.insurerId} value={i.insurerId}>{i.name}</option>)}
+                disabled={disabled || insurers === null} aria-invalid={!!insurerError || !!loadError}>
+          <option value="">
+            {insurers === null ? "Loading insurers…"
+              : insurers.length === 0 && !loadError ? "No insurer on the club's list yet" : "Choose the insurer…"}
+          </option>
+          {(insurers || []).map((i) => <option key={i.insurerId} value={i.insurerId}>{i.name}</option>)}
         </select>
-        {insurerError ? <p className="hz-field__error">{insurerError}</p>
+        {loadError ? (
+          <p className="hz-field__error">
+            {loadError}{" "}
+            <button type="button" className="hz-btn hz-btn--ghost hz-btn--sm" onClick={() => setReload((k) => k + 1)}>
+              Try again
+            </button>
+          </p>
+        ) : insurers && insurers.length === 0 ? (
+          <p className="hz-field__error">The club has no insurer on its list. Ask the Club Manager.</p>
+        ) : insurerError ? <p className="hz-field__error">{insurerError}</p>
           : insurer ? <p className="hz-field__hint">Emergency line: <span className="hz-mono">{insurer.emergencyPhone}</span></p>
           : unlisted(value.insurerName, insurer)}
       </div>
