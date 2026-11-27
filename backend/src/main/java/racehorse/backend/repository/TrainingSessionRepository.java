@@ -276,12 +276,11 @@ public class TrainingSessionRepository {
                 .update();
     }
 
-    /** V37: Tìm các buổi RUNNING đã quá thời lượng dự kiến (session_date + planned_duration <= hiện tại). */
-    // DATEADD(MINUTE, planned_duration, session_date) = giờ kết thúc dự kiến của buổi.
+    /** V37/V66: Tìm các buổi RUNNING đã quá thời lượng dự kiến + 5 phút ân hạn (session_date + planned_duration + 5 <= hiện tại). */
     public List<TrainingSessionResponse> findOverdueRunningSessions(LocalDateTime now) {
         return jdbc.sql(SELECT_SESSION + """
                  WHERE s.status = 'RUNNING'
-                   AND DATEADD(MINUTE, ISNULL(s.planned_duration, 60), s.session_date) <= :now
+                   AND DATEADD(MINUTE, ISNULL(s.planned_duration, 60) + 5, s.session_date) <= :now
                 """)
                 .param("now", now)
                 .query(TrainingSessionRepository::mapSession)
@@ -298,6 +297,46 @@ public class TrainingSessionRepository {
                     review_status = 'PENDING'
                 WHERE session_id = :id AND status = 'RUNNING'
                 """)
+                .param("id", sessionId)
+                .update();
+    }
+
+    /** Tự động chuyển buổi RUNNING quá hạn + 5 phút (đã có thông số) sang giai đoạn RECOVERY. */
+    public int markAutoRecoveryStarted(int sessionId, int recoveryMinutes, LocalDateTime now, LocalDateTime endsAt) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'RECOVERY',
+                    duration_minutes = ISNULL(duration_minutes, planned_duration),
+                    recovery_duration_minutes = :recMin,
+                    recovery_started_at = :now,
+                    recovery_ends_at = :endsAt
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("recMin", recoveryMinutes)
+                .param("now", now)
+                .param("endsAt", endsAt)
+                .param("id", sessionId)
+                .update();
+    }
+
+    /** Kết thúc thẳng với trạng thái FAIL (STOPPED_EARLY + POOR) khi hết giờ + 5 phút mà không có thông số nào. */
+    public int autoFailOverdueRunning(int sessionId, String reason, String note) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'STOPPED_EARLY',
+                    ended_at = SYSUTCDATETIME(),
+                    duration_minutes = ISNULL(duration_minutes, planned_duration),
+                    early_stop_reason = :reason,
+                    evaluation = 'POOR',
+                    review_status = 'PENDING',
+                    remarks = CASE
+                        WHEN remarks IS NULL OR LEN(LTRIM(RTRIM(remarks))) = 0 THEN :note
+                        ELSE remarks + CHAR(10) + :note
+                    END
+                WHERE session_id = :id AND status = 'RUNNING'
+                """)
+                .param("reason", reason)
+                .param("note", note)
                 .param("id", sessionId)
                 .update();
     }
@@ -533,17 +572,54 @@ public class TrainingSessionRepository {
 
     public int markRecoveryStarted(int sessionId, int recoveryDurationMinutes,
                                    LocalDateTime startedAt, LocalDateTime endsAt) {
+        return markRecoveryStarted(sessionId, recoveryDurationMinutes, startedAt, endsAt, null);
+    }
+
+    public int markRecoveryStarted(int sessionId, int recoveryDurationMinutes,
+                                   LocalDateTime startedAt, LocalDateTime endsAt, String earlyStopReason) {
         return jdbc.sql("""
                 UPDATE TRAINING_SESSION
                 SET status = 'RECOVERY',
                     recovery_duration_minutes = :mins,
                     recovery_started_at = :startedAt,
-                    recovery_ends_at = :endsAt
+                    recovery_ends_at = :endsAt,
+                    early_stop_reason = ISNULL(:earlyReason, early_stop_reason)
                 WHERE session_id = :id AND status = 'RUNNING'
                 """)
                 .param("mins", recoveryDurationMinutes)
                 .param("startedAt", startedAt)
                 .param("endsAt", endsAt)
+                .param("earlyReason", earlyStopReason)
+                .param("id", sessionId)
+                .update();
+    }
+
+    public List<TrainingSessionResponse> findOverdueRecoverySessions(LocalDateTime now) {
+        return jdbc.sql(SELECT_SESSION + """
+                 WHERE s.status = 'RECOVERY'
+                   AND s.recovery_ends_at IS NOT NULL
+                   AND DATEADD(MINUTE, 5, s.recovery_ends_at) <= :now
+                """)
+                .param("now", now)
+                .query(TrainingSessionRepository::mapSession)
+                .list();
+    }
+
+    public int autoCompleteOverdueRecovery(int sessionId, String warningNote) {
+        return jdbc.sql("""
+                UPDATE TRAINING_SESSION
+                SET status = 'COMPLETED',
+                    overload_warning = 1,
+                    ended_at = ISNULL(ended_at, SYSUTCDATETIME()),
+                    review_status = 'PENDING',
+                    remarks = CASE
+                        WHEN remarks IS NOT NULL AND LTRIM(RTRIM(remarks)) <> ''
+                        THEN remarks + ' | ' + :warningNote
+                        ELSE :warningNote
+                    END
+                WHERE session_id = :id AND status = 'RECOVERY'
+                """)
+                .param("warningNote", warningNote)
                 .param("id", sessionId)
                 .update();
     }

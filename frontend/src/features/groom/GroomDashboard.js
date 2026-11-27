@@ -18,10 +18,11 @@ import ConfirmModal from "../common/ConfirmModal";
 import { handleAuthError } from "../auth/authService";
 import { ProfileCard, ProfileCircle } from "../profile/ProfileLink";
 import NotificationBell from "../notification/NotificationBell";
+import { listNotifications } from "../notification/notificationApi";
 import {
   completeRecoverySession, enterRecoverySession,
-  finishSession, formatSessionDay, isFinished, listMySessions, saveSessionVideo, sendVitals, sessionDay, sessionTime,
-  startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso,
+  finishSession, formatSessionDay, isFinished, listMySessions, listSessionAlerts, sendVitals, sessionDay, sessionTime,
+  startSession, stopSession, toSessionStatus, toSeverityLabel, todayIso, uploadSessionVideo,
   COMMON_SYMPTOMS, URGENCY_OPTIONS, EARLY_STOP_REASON_OPTIONS,
 } from "./groomApi";
 import {
@@ -279,8 +280,12 @@ function SessionPanel({ session, onChanged, navigate }) {
   const [stopResult, setStopResult] = useState(null);
   const [recoveryHrr, setRecoveryHrr] = useState("");
   const [recoveryRemarks, setRecoveryRemarks] = useState("");
-  const [videoUrl, setVideoUrl] = useState(session?.videoUrl || "");
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
+  const [videoPreviewError, setVideoPreviewError] = useState(false);
   const [videoNotice, setVideoNotice] = useState("");
+  const [sessionAlerts, setSessionAlerts] = useState([]);
+  const [sessionNotices, setSessionNotices] = useState([]);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [confirmConfig, setConfirmConfig] = useState({
     isOpen: false,
@@ -333,8 +338,13 @@ function SessionPanel({ session, onChanged, navigate }) {
   const isDue = scheduledTimeMs <= currentTime;
   const isEndReached = plannedEndMs > 0 && currentTime >= plannedEndMs;
   const hasReportedBoth = session?.peakHeartRate != null && session?.peakVelocity != null;
-  // Flow 1: asked to stop because the horse lost its Head Trainer - no readings needed first.
-  const canEndEarly = hasReportedBoth || earlyReason === "NO_HEAD_TRAINER";
+  const hasVideo = Boolean(session?.videoUrl && session.videoUrl.trim());
+  const canEnterRecoveryFromEnd = isEndReached && hasReportedBoth && hasVideo;
+  // Flow 1: NO_HEAD_TRAINER needs no readings/video; INJURY needs readings (skips video & recovery -> Call Vet);
+  // other early-stop reasons require both readings + saved training video before entering Recovery.
+  const canEndEarly =
+    earlyReason === "NO_HEAD_TRAINER" ||
+    (earlyReason === "INJURY" ? hasReportedBoth : hasReportedBoth && hasVideo);
 
   // Đổi sang buổi khác thì xoá sạch các ô nhập và kết quả của buổi trước.
   useEffect(() => {
@@ -348,9 +358,77 @@ function SessionPanel({ session, onChanged, navigate }) {
     setStopResult(null);
     setRecoveryHrr("");
     setRecoveryRemarks("");
-    setVideoUrl(session?.videoUrl || "");
+    setVideoFile(null);
+    setVideoPreviewError(false);
     setVideoNotice("");
+    setSessionAlerts([]);
+    setSessionNotices([]);
   }, [session?.sessionId]);
+
+  useEffect(() => {
+    if (!videoFile) {
+      setVideoPreviewUrl("");
+      setVideoPreviewError(false);
+      return undefined;
+    }
+    if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      setVideoPreviewUrl("");
+      setVideoPreviewError(true);
+      return undefined;
+    }
+    const url = URL.createObjectURL(videoFile);
+    setVideoPreviewUrl(url);
+    setVideoPreviewError(false);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [videoFile]);
+
+  useEffect(() => {
+    if (!session?.sessionId || !["RUNNING", "RECOVERY", "STOPPED_EARLY"].includes(session.status)) {
+      setSessionAlerts([]);
+      setSessionNotices([]);
+      return undefined;
+    }
+    let active = true;
+    const fetchAlerts = () => {
+      Promise.allSettled([listSessionAlerts(session.sessionId), listNotifications(20)]).then(
+        ([alertsRes, noticesRes]) => {
+          if (!active) return;
+          if (alertsRes.status === "fulfilled" && Array.isArray(alertsRes.value)) {
+            setSessionAlerts(alertsRes.value);
+          }
+          if (noticesRes.status === "fulfilled" && Array.isArray(noticesRes.value)) {
+            const sid = Number(session.sessionId);
+            const matched = noticesRes.value.filter(
+              (n) =>
+                n.targetEntity === "TRAINING_SESSION" &&
+                Number(n.targetId) === sid &&
+                (n.type === "TRAINING_INTENSITY_REDUCED" ||
+                  n.type === "TRAINING_SESSION_STOPPED" ||
+                  n.type === "TRAINING_STOPPED_BY_TRAINER" ||
+                  n.type === "VET_CALL" ||
+                  /reduce intensity|stop|vet/i.test(`${n.title || ""} ${n.message || ""}`))
+            );
+            setSessionNotices(matched);
+          }
+        }
+      );
+    };
+    fetchAlerts();
+    const timer = setInterval(fetchAlerts, 1500);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAlerts();
+    };
+    window.addEventListener("focus", fetchAlerts);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", fetchAlerts);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session?.sessionId, session?.status]);
 
   if (!session) {
     return (
@@ -419,14 +497,18 @@ function SessionPanel({ session, onChanged, navigate }) {
   const handleSaveVideo = async (event) => {
     event.preventDefault();
     setVideoNotice("");
-    const trimmed = videoUrl.trim();
-    if (trimmed && !trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-      setError("Video URL must start with http:// or https://");
+    if (!videoFile) {
+      setError("Please select a video file to upload.");
       return;
     }
-    const updated = await run(() => saveSessionVideo(session.sessionId, trimmed));
+    if (videoFile.size > 50 * 1024 * 1024) {
+      setError("Video file must be 50 MB or smaller.");
+      return;
+    }
+    const updated = await run(() => uploadSessionVideo(session.sessionId, videoFile));
     if (updated) {
-      setVideoNotice(trimmed ? "Session video saved." : "Session video cleared.");
+      setVideoFile(null);
+      setVideoNotice("Session video uploaded.");
       onChanged(updated);
     }
   };
@@ -485,7 +567,11 @@ function SessionPanel({ session, onChanged, navigate }) {
   const submitEarlyFinish = async (event) => {
     event.preventDefault();
     if (!canEndEarly) {
-      setError("You must report both Heart Rate and Speed at least once during the session before ending early.");
+      setError(
+        earlyReason === "INJURY"
+          ? "You must report both Heart Rate and Speed at least once before stopping."
+          : "You must report Heart Rate, Speed, and save the Training Session Video before ending early to enter Recovery.",
+      );
       return;
     }
     if (earlyReason === "INJURY") {
@@ -522,15 +608,15 @@ function SessionPanel({ session, onChanged, navigate }) {
     const reasonLabel = EARLY_STOP_REASON_OPTIONS.find((o) => o.value === earlyReason)?.label || earlyReason;
     setConfirmConfig({
       isOpen: true,
-      title: "End Session Early",
-      message: `Are you sure you want to end the session with ${session.horseName} early?\nReason: ${reasonLabel}`,
-      confirmText: "End Session Early",
-      confirmTone: "danger",
+      title: "End Session Early & Start Recovery",
+      message: `Confirm early stop for ${session.horseName} (${reasonLabel})? The session will enter the Recovery phase.`,
+      confirmText: "Confirm & Start Recovery",
+      confirmTone: "primary",
       icon: "⏱️",
       onConfirm: async () => {
         setConfirmConfig((c) => ({ ...c, isOpen: false }));
         const updated = await run(() =>
-          finishSession(session.sessionId, {
+          enterRecoverySession(session.sessionId, {
             earlyStop: true,
             earlyStopReason: earlyReason,
           })
@@ -547,13 +633,15 @@ function SessionPanel({ session, onChanged, navigate }) {
     <div className="groom-card session-card">
       <div className="groom-card-title">
         <span className="groom-diamond" aria-hidden="true" />
-        <div>
-          <h2>{session.horseName}</h2>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <h2 style={{ margin: 0 }}>{session.horseName}</h2>
+            <span className={`task-status ${st.slug}`} style={{ marginLeft: 0, flexShrink: 0 }}>{st.label}</span>
+          </div>
           <p>
             {formatSessionDay(session.sessionDate)} · {sessionTime(session.sessionDate)} ({session.plannedDuration || 60} mins) · {session.phaseName}
           </p>
         </div>
-        <span className={`task-status ${st.slug}`}>{st.label}</span>
       </div>
 
       <dl className="session-facts">
@@ -656,6 +744,86 @@ function SessionPanel({ session, onChanged, navigate }) {
         </form>
       )}
 
+      {(sessionAlerts.filter((a) => a.actionTaken).length > 0 || sessionNotices.length > 0) && (
+        <div
+          role="status"
+          style={{
+            marginTop: 10,
+            marginBottom: 10,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          {sessionAlerts.filter((a) => a.actionTaken).length > 0
+            ? sessionAlerts
+                .filter((a) => a.actionTaken)
+                .slice(0, 3)
+                .map((a) => {
+                  const isSpeed = a.metricType === "VELOCITY";
+                  const metricTag = isSpeed ? "⚡ Speed Alert Directive" : "❤️ Heart Rate Alert Directive";
+                  const readingText = isSpeed
+                    ? `${a.actualValue ?? "?"} km/h (target ${a.thresholdValue ?? "?"} km/h)`
+                    : `${a.actualValue ?? "?"} bpm (ceiling ${a.thresholdValue ?? "?"} bpm)`;
+                  const actionText =
+                    a.actionTaken === "REDUCE_INTENSITY"
+                      ? isSpeed
+                        ? "Trainer asks you to slow down / reduce speed"
+                        : "Trainer asks you to reduce intensity (high heart rate)"
+                      : a.actionTaken === "STOP_SESSION"
+                        ? "Trainer requested to stop this session"
+                        : a.actionTaken === "VET_CALLED"
+                          ? "Trainer called the Veterinarian"
+                          : "Trainer reviewed and cleared to continue";
+                  const isUrgent = a.actionTaken === "REDUCE_INTENSITY" || a.actionTaken === "STOP_SESSION" || a.actionTaken === "VET_CALLED";
+                  return (
+                    <div
+                      key={a.alertId}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        fontSize: "12.5px",
+                        lineHeight: 1.45,
+                        background: isUrgent ? "#fef2f2" : "#eff6ff",
+                        border: `1px solid ${isUrgent ? "#fca5a5" : "#bfdbfe"}`,
+                        color: isUrgent ? "#991b1b" : "#1e40af",
+                      }}
+                    >
+                      <strong style={{ display: "block" }}>
+                        {metricTag} · {a.resolvedByName || "Head Trainer"}
+                      </strong>
+                      <span>
+                        {actionText} — {readingText}.
+                      </span>
+                    </div>
+                  );
+                })
+            : sessionNotices.slice(0, 3).map((n) => {
+                const isSpeed = /speed|velocity|km\/h/i.test(`${n.title || ""} ${n.message || ""}`);
+                const metricTag = isSpeed ? "⚡ Speed Alert Directive" : "❤️ Heart Rate Alert Directive";
+                return (
+                  <div
+                    key={`notice-${n.notificationId}`}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      fontSize: "12.5px",
+                      lineHeight: 1.45,
+                      background: "#fef2f2",
+                      border: "1px solid #fca5a5",
+                      color: "#991b1b",
+                    }}
+                  >
+                    <strong style={{ display: "block" }}>
+                      {metricTag} · {n.title || "Head Trainer"}
+                    </strong>
+                    <span>{n.message}</span>
+                  </div>
+                );
+              })}
+        </div>
+      )}
+
       {session.status === "RUNNING" && (
         <div
           style={{
@@ -664,14 +832,14 @@ function SessionPanel({ session, onChanged, navigate }) {
             padding: "8px 12px",
             borderRadius: "8px",
             fontSize: "12px",
-            background: hasReportedBoth ? "#ecfdf5" : "#fffbeb",
-            color: hasReportedBoth ? "#065f46" : "#92400e",
-            border: `1px solid ${hasReportedBoth ? "#a7f3d0" : "#fde68a"}`,
+            background: hasReportedBoth && hasVideo ? "#ecfdf5" : "#fffbeb",
+            color: hasReportedBoth && hasVideo ? "#065f46" : "#92400e",
+            border: `1px solid ${hasReportedBoth && hasVideo ? "#a7f3d0" : "#fde68a"}`,
           }}
         >
-          {hasReportedBoth
-            ? "✓ Both Heart Rate and Speed have been reported at least once. Early session finish is unlocked."
-            : "ℹ️ To end this session early, you must report both Heart Rate and Speed at least once during the session."}
+          {hasReportedBoth && hasVideo
+            ? "✓ Heart Rate, Speed, and Training Video recorded. Ready to enter Recovery (after duration completes or non-injury early stop)."
+            : `ℹ️ Before finishing or entering Recovery: record Heart Rate & Speed (${hasReportedBoth ? "Done" : "Pending"}) and save Training Video (${hasVideo ? "Done" : "Pending"}). Injury stops skip video & recovery to call Vet immediately.`}
         </div>
       )}
 
@@ -681,13 +849,14 @@ function SessionPanel({ session, onChanged, navigate }) {
             type="button"
             className="start-session"
             onClick={startRecovery}
-            disabled={busy}
+            disabled={busy || !canEnterRecoveryFromEnd}
+            title={!canEnterRecoveryFromEnd ? "Requires completed duration, Heart Rate & Speed readings, and saved Training Video" : "Complete run & start recovery"}
             style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", marginBottom: "8px" }}
           >
             {busy ? "Starting recovery…" : `⏱️ Complete Run & Start Recovery (${session.recoveryDurationMinutes || 15} min)`}
           </button>
           {isEndReached && (
-            <button type="button" className="start-session" onClick={finishNormally} disabled={busy}>
+            <button type="button" className="start-session" onClick={finishNormally} disabled={busy || !hasReportedBoth || !hasVideo}>
               {busy ? "Saving…" : "Finish session (Scheduled duration completed)"}
             </button>
           )}
@@ -740,7 +909,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
           <form onSubmit={submitRecovery} style={{ display: "grid", gap: "10px" }}>
             <label style={{ display: "grid", gap: "4px", fontSize: "13px", fontWeight: 600 }}>
-              Actual Recovery Heart Rate (actual_hrr, bpm) *
+              Actual Recovery Heart Rate (bpm) *
               <input
                 type="number"
                 inputMode="numeric"
@@ -752,6 +921,22 @@ function SessionPanel({ session, onChanged, navigate }) {
                 placeholder={session.targetHrr ? `e.g. ${session.targetHrr}` : "e.g. 112"}
               />
             </label>
+
+            {recoveryRemainingSeconds === 0 && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  color: "#92400e",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                }}
+              >
+                ⏳ Cooldown finished. Submit recovery heart rate within 5 minutes, or the session will auto-submit with a missing-HRR warning.
+              </div>
+            )}
 
             {session.targetHrr != null && recoveryHrr !== "" && Number(recoveryHrr) > session.targetHrr && (
               <div
@@ -781,7 +966,11 @@ function SessionPanel({ session, onChanged, navigate }) {
               />
             </label>
 
-            <button type="submit" className="start-session" disabled={busy || !recoveryHrr}>
+            <button
+              type="submit"
+              className="start-session"
+              disabled={busy || !recoveryHrr || !Number.isInteger(Number(recoveryHrr)) || Number(recoveryHrr) < 20 || Number(recoveryHrr) > 300}
+            >
               {busy ? "Submitting…" : "✓ Submit Recovery HR & Complete Session"}
             </button>
           </form>
@@ -796,7 +985,7 @@ function SessionPanel({ session, onChanged, navigate }) {
 
           {!canEndEarly && (
             <p className="session-error" role="alert" style={{ marginBottom: "10px" }}>
-              ⚠️ Cannot end session early yet: You must report both Heart Rate (current: {session.peakHeartRate ?? "none"}) and Speed (current: {session.peakVelocity ?? "none"}) at least once first.
+              ⚠️ Cannot proceed yet: Heart Rate ({session.peakHeartRate ?? "none"}), Speed ({session.peakVelocity ?? "none"}), and {earlyReason === "INJURY" ? "Injury symptoms" : `Training Video (${hasVideo ? "saved" : "missing"})`} are required.
             </p>
           )}
 
@@ -894,49 +1083,142 @@ function SessionPanel({ session, onChanged, navigate }) {
         </p>
       )}
 
-      {(session.status === "RUNNING" || session.status === "RECOVERY" || session.status === "COMPLETED" || session.status === "STOPPED_EARLY") && (
+      {session.status === "RUNNING" && (
         <form
           onSubmit={handleSaveVideo}
           style={{
             marginTop: 14,
-            padding: "12px 14px",
-            borderRadius: "10px",
+            padding: "14px 16px",
+            borderRadius: "12px",
             border: "1px solid #f0dce6",
             background: "#fff8fb",
+            boxSizing: "border-box",
+            maxWidth: "100%",
           }}
         >
-          <strong style={{ display: "block", fontSize: 13, color: "#1e1b4b", marginBottom: 6 }}>
-            Training Session Video
+          <strong style={{ display: "block", fontSize: 13, color: "#1e1b4b", marginBottom: 8 }}>
+            Training Session Video (Max 50 MB)
           </strong>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <input
-              type="url"
-              value={videoUrl}
-              maxLength={500}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="Paste recorded video link (https://...)"
+          <input
+            id={`session-video-input-${session.sessionId}`}
+            key={session.videoUrl || "empty"}
+            type="file"
+            accept="video/*"
+            onChange={(e) => {
+              setVideoFile(e.target.files?.[0] || null);
+              setVideoNotice("");
+            }}
+            style={{ display: "none" }}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <label
+              htmlFor={`session-video-input-${session.sessionId}`}
               style={{
-                flex: "1 1 220px",
-                height: 36,
-                padding: "0 10px",
-                borderRadius: 8,
-                border: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "7px 10px",
+                borderRadius: 12,
+                border: "1px dashed #e5b8d0",
                 background: "#fff",
+                cursor: "pointer",
+                overflow: "hidden",
               }}
-            />
+            >
+              <span
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  background: "#fdf2f8",
+                  border: "1px solid #f5c2db",
+                  color: "#be185d",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                }}
+              >
+                Choose Video
+              </span>
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontSize: 12.5,
+                  color: videoFile ? "#1e1b4b" : "#64748b",
+                  fontWeight: videoFile ? 600 : 400,
+                }}
+                title={videoFile ? videoFile.name : "No video selected"}
+              >
+                {videoFile ? videoFile.name : "No video selected"}
+              </span>
+            </label>
+
+            {videoFile && (
+              videoPreviewUrl && !videoPreviewError ? (
+                <div
+                  style={{
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: "1px solid #f0dce6",
+                    background: "#0f172a",
+                  }}
+                >
+                  <video
+                    src={videoPreviewUrl}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onError={() => setVideoPreviewError(true)}
+                    style={{
+                      width: "100%",
+                      maxHeight: 150,
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  <div
+                    style={{
+                      padding: "6px 10px",
+                      background: "#fff",
+                      fontSize: 11.5,
+                      color: "#475569",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {videoFile.name}
+                    </span>
+                    <span style={{ flexShrink: 0 }}>
+                      {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: 12, color: "#475569", wordBreak: "break-word" }}>
+                  Selected: <strong>{videoFile.name}</strong> ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </p>
+              )
+            )}
+
             <button
               type="submit"
-              disabled={busy}
-              className="groom-primary-btn"
-              style={{ height: 36, padding: "0 14px" }}
+              disabled={busy || !videoFile}
+              className="start-session"
+              style={{ width: "100%", height: 38, padding: "0 18px", fontSize: 13 }}
             >
-              {busy ? "Saving…" : "Save Video"}
+              {busy ? "Uploading…" : "Upload Video"}
             </button>
           </div>
           {session.videoUrl && (
-            <div style={{ marginTop: 6, fontSize: 12 }}>
+            <div style={{ marginTop: 8, fontSize: 12 }}>
               <a href={session.videoUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#d93b87", fontWeight: 600 }}>
-                Open current recorded video ↗
+                Open uploaded training video ↗
               </a>
             </div>
           )}

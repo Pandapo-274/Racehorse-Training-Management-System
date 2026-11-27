@@ -181,6 +181,13 @@ public class AlertRepository {
                 .optional();
     }
 
+    public List<AlertResponse> findBySessionId(int sessionId) {
+        return jdbc.sql(SELECT_ALERT + " WHERE a.session_id = :sid ORDER BY a.alert_id DESC")
+                .param("sid", sessionId)
+                .query(AlertRepository::map)
+                .list();
+    }
+
     /** Chỉ thành công nếu cảnh báo CHƯA ai xử lý: 2 trainer bấm cùng lúc thì chỉ 1 người thắng. */
     public boolean resolve(int alertId, String actionTaken, int userId) {
         return jdbc.sql("""

@@ -33,6 +33,16 @@ IF COL_LENGTH('HORSE_CONTRACT', 'emergency_phone') IS NULL
     ALTER TABLE HORSE_CONTRACT ADD emergency_phone VARCHAR(20) NULL;
 GO
 
+IF COL_LENGTH('HORSE_REQUEST', 'insurer_name') IS NULL
+    ALTER TABLE HORSE_REQUEST ADD insurer_name NVARCHAR(100) NULL;
+IF COL_LENGTH('HORSE_REQUEST', 'insurer_phone') IS NULL
+    ALTER TABLE HORSE_REQUEST ADD insurer_phone VARCHAR(20) NULL;
+IF COL_LENGTH('HORSE_REQUEST', 'emergency_name') IS NULL
+    ALTER TABLE HORSE_REQUEST ADD emergency_name NVARCHAR(100) NULL;
+IF COL_LENGTH('HORSE_REQUEST', 'emergency_phone') IS NULL
+    ALTER TABLE HORSE_REQUEST ADD emergency_phone VARCHAR(20) NULL;
+GO
+
 -- Contracts made so far carry the contacts of the request they came from.
 UPDATE c
 SET insurer_name = q.insurer_name, insurer_phone = q.insurer_phone,

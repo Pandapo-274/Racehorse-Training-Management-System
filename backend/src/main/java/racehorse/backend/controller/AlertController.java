@@ -63,6 +63,13 @@ public class AlertController {
         return service.list(me, afterId, openOnly, limit);
     }
 
+    @GetMapping("/sessions/{sessionId}/alerts")
+    @RequireRole({"HEAD_TRAINER", "GROOM", "CLUB_MANAGER"})
+    public List<AlertResponse> listForSession(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me,
+                                              @PathVariable("sessionId") int sessionId) {
+        return service.listForSession(me, sessionId);
+    }
+
     @PutMapping("/alerts/{alertId}/resolve")
     @RequireRole({"HEAD_TRAINER"})
     public AlertResponse resolve(@RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser me,

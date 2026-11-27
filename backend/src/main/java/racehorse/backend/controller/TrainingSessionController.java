@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import racehorse.backend.dto.CompleteRecoveryRequest;
 import racehorse.backend.dto.FinishSessionRequest;
@@ -112,14 +114,15 @@ public class TrainingSessionController {
 
     /**
      * PUT /api/training-sessions/{id}/enter-recovery
-     * Groom hoàn tất phần chạy: RUNNING -> RECOVERY và bật đếm ngược recovery theo Phase.
+     * Groom hoàn tất phần chạy (hoặc early stop không do chấn thương): RUNNING -> RECOVERY.
      */
     @PutMapping("/{id}/enter-recovery")
     @RequireRole({ "GROOM", "HEAD_TRAINER" })
     public TrainingSessionResponse enterRecovery(@PathVariable int id,
+            @RequestBody(required = false) FinishSessionRequest request,
             @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
             HttpServletRequest http) {
-        return service.enterRecovery(id, user, http.getRemoteAddr());
+        return service.enterRecovery(id, request, user, http.getRemoteAddr());
     }
 
     /**
@@ -148,6 +151,16 @@ public class TrainingSessionController {
                 request,
                 user,
                 http.getRemoteAddr());
+    }
+
+    @PostMapping(value = "/{id}/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireRole({ "GROOM", "HEAD_TRAINER" })
+    public TrainingSessionResponse uploadVideo(
+            @PathVariable int id,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return service.uploadVideo(id, file, user, http.getRemoteAddr());
     }
 
     @PutMapping("/{id}/video")

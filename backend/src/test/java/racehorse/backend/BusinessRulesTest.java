@@ -1,6 +1,8 @@
 package racehorse.backend;
 
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -9,6 +11,8 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -487,7 +491,11 @@ class BusinessRulesTest {
     void groomFinishesTheirOwnRunningSession() {
         TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
         // Buổi tập đã hoàn thành đủ thời lượng đặt lịch (bắt đầu 70 phút trước, duration 60 phút)
-        when(repo.findById(1)).thenReturn(Optional.of(session(1, 100, 5, LocalDateTime.now().minusMinutes(70), "RUNNING", 1600)));
+        TrainingSessionResponse completedDurationWithVideo = new TrainingSessionResponse(
+                1, 10, 1, "Base", 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(70), 1600, null, null, null, 165, null, new BigDecimal("15.2"), null, null,
+                "RUNNING", 180, 0, false, "https://example.com/v.mp4");
+        when(repo.findById(1)).thenReturn(Optional.of(completedDurationWithVideo));
         when(repo.markFinished(1)).thenReturn(1);
         TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
                 mock(HorseRepository.class), mock(HorseVitalsRepository.class));
@@ -601,7 +609,7 @@ class BusinessRulesTest {
         TrainingSessionResponse runningWithBoth = new TrainingSessionResponse(
                 1, 10, 1, "Base", 100, "Horse 100", 5, "Groom 5",
                 LocalDateTime.now(), 1600, null, null, null, 165, null, new BigDecimal("15.2"), null, null,
-                "RUNNING", 180, 0, false, null);
+                "RUNNING", 180, 0, false, "https://example.com/v.mp4");
         when(repo.findById(1)).thenReturn(Optional.of(runningWithBoth));
         when(repo.markStoppedEarly(eq(1), any())).thenReturn(1);
         TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
@@ -990,28 +998,39 @@ class BusinessRulesTest {
     }
 
     @Test
-    void overdueRunningSessionIsAutomaticallyFinished() {
+    void overdueRunningSessionAutoEntersRecoveryAndNoMetricSessionAutoFails() {
         TrainingSessionRepository repo = mock(TrainingSessionRepository.class);
         UserRepository users = mock(UserRepository.class);
         NotificationService notifications = mock(NotificationService.class);
-        TrainingSessionResponse runningOverdue = new TrainingSessionResponse(
+        TrainingSessionResponse runningWithMetrics = new TrainingSessionResponse(
                 12, 10, 1, "Base", 100, "Horse 100", 5, "Groom 5",
                 LocalDateTime.now().minusMinutes(90), 1600, null, null, null, 168, null, new BigDecimal("15.5"),
                 null, null, "RUNNING", 60, 0, false, null);
-        when(repo.findOverdueRunningSessions(any())).thenReturn(List.of(runningOverdue));
-        when(repo.autoFinishOverdueRunning(12)).thenReturn(1);
+        TrainingSessionResponse runningNoMetrics = new TrainingSessionResponse(
+                13, 10, 1, "Base", 101, "Horse 101", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(90), 1600, null, null, null, null, null, null,
+                null, null, "RUNNING", 60, 0, false, null);
+        when(repo.findOverdueRunningSessions(any())).thenReturn(List.of(runningWithMetrics, runningNoMetrics));
+        when(repo.findPhaseRecoveryMinutes(10)).thenReturn(Optional.of(20));
+        when(repo.markAutoRecoveryStarted(eq(12), eq(20), any(), any())).thenReturn(1);
+        when(repo.autoFailOverdueRunning(eq(13), any(), any())).thenReturn(1);
         when(repo.autoCancelOverdueScheduled(any())).thenReturn(0);
 
         TrainingSessionService service = new TrainingSessionService(repo, mock(TrainingPlanRepository.class),
                 mock(HorseRepository.class), mock(HorseVitalsRepository.class), users, notifications,
                 mock(IncidentGuard.class), 1200);
 
-        int finished = service.processOverdueSessions();
-        assertEquals(1, finished);
-        verify(repo).autoFinishOverdueRunning(12);
-        verify(users).writeAudit(null, "TRAINING_SESSION_AUTO_FINISH", "TRAINING_SESSION", 12, "SUCCESS", null);
+        int count = service.processOverdueSessions();
+        assertEquals(2, count);
+        verify(repo).markAutoRecoveryStarted(eq(12), eq(20), any(), any());
+        verify(users).writeAudit(null, "TRAINING_SESSION_AUTO_RECOVERY", "TRAINING_SESSION", 12, "SUCCESS", null);
         verify(notifications).notifyHorseTrainer(eq(100), eq(null),
-                argThat(n -> "TRAINING_SESSION_AUTO_FINISHED".equals(n.type()) && n.message().contains("review within 48 hours")));
+                argThat(n -> "TRAINING_SESSION_AUTO_RECOVERY".equals(n.type())));
+
+        verify(repo).autoFailOverdueRunning(eq(13), eq("Failed: no metrics recorded"), any());
+        verify(users).writeAudit(null, "TRAINING_SESSION_AUTO_FAILED", "TRAINING_SESSION", 13, "SUCCESS", null);
+        verify(notifications).notifyHorseTrainer(eq(101), eq(null),
+                argThat(n -> "TRAINING_SESSION_AUTO_FAILED".equals(n.type())));
     }
 
     @Test
@@ -1020,7 +1039,7 @@ class BusinessRulesTest {
         TrainingSessionResponse runningWithBoth = new TrainingSessionResponse(
                 1, 10, 1, "Base", 100, "Horse 100", 5, "Groom 5",
                 LocalDateTime.now(), 1600, null, null, null, 165, null, new BigDecimal("15.2"), null, null,
-                "RUNNING", 180, 0, false, null);
+                "RUNNING", 180, 0, false, "https://example.com/v.mp4");
         when(repo.findById(1)).thenReturn(Optional.of(runningWithBoth));
         TrainingSessionService service = sessionService(repo, mock(TrainingPlanRepository.class),
                 mock(HorseRepository.class), mock(HorseVitalsRepository.class));
@@ -1489,6 +1508,7 @@ class BusinessRulesTest {
         var res = service.stopSession(GROOM, 1, req, "ip");
         assertEquals("STOPPED_EARLY", res.sessionStatus());
         verify(incidents).markStopped(eq(1), argThat(r -> r.contains("Horse injury / Vet called")));
+        verify(incidents).cancelUpcomingScheduledSessions(100);
         verify(notifications).notifyRole(eq("VETERINARIAN"), any(), argThat(n -> "INCIDENT_REPORTED".equals(n.type())));
     }
 
@@ -3059,15 +3079,15 @@ class BusinessRulesTest {
 
         TrainingSessionResponse running = new TrainingSessionResponse(
                 99, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
-                LocalDateTime.now().minusMinutes(30), 1200, null, null, 150, 170, null,
-                new BigDecimal("54.0"), null, null, "RUNNING", 185, 0, false, null,
-                60, LocalDateTime.now().minusMinutes(30), null, null, "NONE", new BigDecimal("60.0"),
+                LocalDateTime.now().minusMinutes(65), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RUNNING", 185, 0, false, "https://example.com/v.mp4",
+                60, LocalDateTime.now().minusMinutes(65), null, null, "NONE", new BigDecimal("60.0"),
                 "TRAINING", false, 20, null, null, null, false, 115);
 
         TrainingSessionResponse inRecovery = new TrainingSessionResponse(
                 99, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
                 running.sessionDate(), 1200, null, null, 150, 170, null,
-                new BigDecimal("54.0"), null, null, "RECOVERY", 185, 0, false, null,
+                new BigDecimal("54.0"), null, null, "RECOVERY", 185, 0, false, "https://example.com/v.mp4",
                 60, running.startedAt(), null, null, "NONE", new BigDecimal("60.0"),
                 "TRAINING", false, 20, LocalDateTime.now(), LocalDateTime.now().plusMinutes(20), null, false, 115);
 
@@ -3092,5 +3112,82 @@ class BusinessRulesTest {
         verify(sessions).markRecoveryCompleted(99, 130, true, "Heavy breathing");
         verify(notifications).notifyHorseTrainer(eq(100), eq(GROOM),
                 argThat(n -> "SESSION_OVERLOAD_WARNING".equals(n.type()) && n.message().contains("130 bpm")));
+    }
+
+    @Test
+    void enterRecoveryRequiresVideoAndRejectsInjuryAndOverdueRecoveryAutoSubmitsAfterFiveMinutes() {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        NotificationService notifications = mock(NotificationService.class);
+        UserRepository users = mock(UserRepository.class);
+
+        TrainingSessionResponse missingVideo = new TrainingSessionResponse(
+                98, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(70), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RUNNING", 185, 0, false, null,
+                60, LocalDateTime.now().minusMinutes(70), null, null, "NONE", new BigDecimal("60.0"),
+                "TRAINING", false, 20, null, null, null, false, 115);
+        when(sessions.findById(98)).thenReturn(Optional.of(missingVideo));
+
+        TrainingSessionService service = new TrainingSessionService(
+                sessions, mock(TrainingPlanRepository.class), mock(HorseRepository.class),
+                mock(HorseVitalsRepository.class), users, notifications, mock(IncidentGuard.class), 800);
+
+        ApiException noVideoEx = expect(ApiException.class, 409, () -> service.enterRecovery(98, GROOM, "ip"));
+        assertTrue(noVideoEx.getMessage().contains("video"), noVideoEx.getMessage());
+
+        ApiException injuryEx = expect(ApiException.class, 409,
+                () -> service.enterRecovery(98, new racehorse.backend.dto.FinishSessionRequest(true, "INJURY"), GROOM, "ip"));
+        assertTrue(injuryEx.getMessage().contains("Call Vet"), injuryEx.getMessage());
+
+        // Overdue RECOVERY (ended > 5 mins ago) auto-submits with missing HRR warning
+        TrainingSessionResponse overdueRec = new TrainingSessionResponse(
+                77, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(90), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RECOVERY", 185, 0, false, "https://example.com/v.mp4",
+                60, LocalDateTime.now().minusMinutes(90), null, null, "NONE", new BigDecimal("60.0"),
+                "TRAINING", false, 20, LocalDateTime.now().minusMinutes(26), LocalDateTime.now().minusMinutes(6), null, false, 115);
+        when(sessions.findOverdueRunningSessions(any())).thenReturn(List.of());
+        when(sessions.findOverdueRecoverySessions(any())).thenReturn(List.of(overdueRec));
+        when(sessions.autoCompleteOverdueRecovery(eq(77), any())).thenReturn(1);
+
+        int count = service.processOverdueSessions();
+        assertEquals(1, count);
+        verify(sessions).autoCompleteOverdueRecovery(eq(77), argThat(msg -> msg.contains("Recovery heart rate was not recorded")));
+        verify(notifications).notifyHorseTrainer(eq(100), org.mockito.ArgumentMatchers.isNull(),
+                argThat(n -> "SESSION_RECOVERY_MISSING".equals(n.type())));
+    }
+
+    @Test
+    void uploadSessionVideoStoresFileAndRejectsInvalidFiles(@TempDir Path tempDir) throws Exception {
+        TrainingSessionRepository sessions = mock(TrainingSessionRepository.class);
+        UserRepository users = mock(UserRepository.class);
+        TrainingSessionResponse running = new TrainingSessionResponse(
+                99, 11, 1, "Foundation", 100, "Horse 100", 5, "Groom 5",
+                LocalDateTime.now().minusMinutes(10), 1200, null, null, 150, 170, null,
+                new BigDecimal("54.0"), null, null, "RUNNING", 185, 0, false, null,
+                60, LocalDateTime.now().minusMinutes(10), null, null, "NONE", new BigDecimal("60.0"),
+                "TRAINING", false, 20, null, null, null, false, 115);
+        when(sessions.findById(99)).thenReturn(Optional.of(running));
+
+        TrainingSessionService service = new TrainingSessionService(
+                sessions, mock(TrainingPlanRepository.class), mock(HorseRepository.class),
+                mock(HorseVitalsRepository.class), users, mock(NotificationService.class),
+                mock(IncidentGuard.class), 800, tempDir.toString());
+
+        MockMultipartFile empty = new MockMultipartFile("file", "clip.mp4", "video/mp4", new byte[0]);
+        expect(ApiException.class, 400, () -> service.uploadVideo(99, empty, GROOM, "ip"));
+
+        MockMultipartFile textFile = new MockMultipartFile("file", "notes.txt", "text/plain", "hello".getBytes());
+        expect(ApiException.class, 400, () -> service.uploadVideo(99, textFile, GROOM, "ip"));
+
+        MockMultipartFile validVideo = new MockMultipartFile("file", "run.mp4", "video/mp4", new byte[] { 1, 2, 3, 4 });
+        service.uploadVideo(99, validVideo, GROOM, "ip");
+
+        verify(sessions).updateVideoUrl(eq(99), argThat(url -> url.startsWith("/uploads/session-videos/99-") && url.endsWith(".mp4")));
+        Path videoDir = tempDir.resolve("session-videos");
+        assertTrue(Files.exists(videoDir));
+        try (var files = Files.list(videoDir)) {
+            assertEquals(1, files.count());
+        }
     }
 }
