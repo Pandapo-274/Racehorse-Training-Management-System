@@ -208,6 +208,15 @@ export default function HorseWithdrawalPanel({ horse, user }) {
           The horse is kept on record with its history, but no longer appears on training
           plans, the health board or the groom schedule.
         </p>
+        {/* V64: coming back goes through a request, a review and a contract, like a new registration. */}
+        {isOwner && !isPedigreeOnly(horse) && (
+          <div className="hz-form-footer">
+            <button type="button" className="hz-btn"
+                    onClick={() => navigate(`/horse-owner/request?return=${horse.horseId}`)}>
+              Bring back to the club
+            </button>
+          </div>
+        )}
       </>
     );
   } else if (loadError) {

@@ -96,6 +96,8 @@ const ACTION_TEXT = {
   HORSE_IDENTITY_UPDATE: "Edited a horse's club records",
   HORSE_OWNER_TRANSFER: "Transferred a horse to another owner",
   HORSE_READMIT: "Re-admitted a withdrawn horse",
+  HORSE_RETURN_REQUEST: "Asked to bring a horse back",
+  HORSE_RETURN_RECEIVE: "Received a horse back at the club",
   HORSE_PARENTS_CORRECT: "Corrected a horse's parents",
   HORSE_PHOTO_UPLOAD: "Uploaded a horse photo",
   HORSE_PHOTO_REMOVE: "Removed a horse photo",

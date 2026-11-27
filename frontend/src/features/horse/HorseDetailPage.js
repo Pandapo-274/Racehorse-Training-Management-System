@@ -17,7 +17,7 @@ import {
   getHorse, getPedigree, getVitals, canEditHorse, getHorseBasePath, toStage, isPedigreeOnly, healthApplies,
   canViewPedigree, canViewVitals, isWithdrawn, toActivity, updateHorseIdentity, listActiveTrainers,
   toStatus, toGender, toAge, formatAge, formatAgeShort, formatDate, formatDateTime, formatWeight, getIntake,
-  readmitHorse, transferHorseOwner,
+  transferHorseOwner,
   listParentCandidates, correctHorseParents, parentLabel, SIRE_GENDERS, DAM_GENDERS,
 } from "./horseApi";
 import { SURFACES, DISTANCES, RUNNING_STYLES } from "./horseRequestApi";
@@ -174,7 +174,6 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
   const [owners, setOwners] = useState([]);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
-  const [stall, setStall] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   // V61: the new owner's insurer and second contact (clause 8 of the contract they sign).
@@ -232,29 +231,16 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
   // Ngựa đã rút: thẻ này đổi thành form "nhận lại" (readmit) - cấp chuồng mới, activity_status về ACTIVE.
   if (withdrawn) {
     if (pedigree) return null;
-    const readmit = async (e) => {
-      e.preventDefault();
-      const s = stall.trim();
-      const done = await run(
-        () => readmitHorse(horse.horseId, s),
-        (h) => `${h.horseName} is back at the club in stall ${h.stallNo}. ${h.ownerName} has been notified. Assign a Head Trainer in Club records.`,
-        `Could not re-admit ${horse.horseName} to stall ${s}`,
-      );
-      if (done) setStall("");
-    };
+    // V64: no direct re-admit. The owner asks to bring the horse back; the club reviews it like a
+    // registration, sends a contract, and receives the same horse (same code) once it is paid.
     return (
-      <Card title="Re-admit to the club" hint="The horse comes back with a new stall. Its health status stays as the vet left it.">
-        {dialog.element}
-        <form onSubmit={readmit} noValidate>
-          <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-            <StallField id="readmit-stall" value={stall} onChange={setStall}
-                        error={errors.stallNo} horseId={horse.horseId} autoSuggest />
-          </div>
-          <div className="hz-form-footer">
-            <button type="submit" className="hz-btn" disabled={busy || !stall.trim()}>{busy ? "Saving…" : "Re-admit"}</button>
-          </div>
-          <ResultLine result={result} />
-        </form>
+      <Card title="Coming back to the club" hint="Through the owner, like a new registration">
+        <p className="hz-muted hz-note">
+          {horse.ownerName} asks to bring {horse.horseName} back from its page. The request then appears in
+          {" "}<Link to="/manager/horse-requests">Horse registrations</Link> with a new photo, measures and stay;
+          after the contract is signed and paid, receive it from <Link to="/manager/contracts">Contracts</Link>.
+          It keeps its registration code and history.
+        </p>
       </Card>
     );
   }

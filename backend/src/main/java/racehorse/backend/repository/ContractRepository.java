@@ -44,7 +44,8 @@ public class ContractRepository {
                    c.terms_snapshot, c.terms_sha256, c.closed_note,
                    c.training_start, c.training_end,
                    c.takes_over_contract_id, po.full_name AS previous_owner_name,
-                   c.insurer_name, c.insurer_phone, c.emergency_name, c.emergency_phone
+                   c.insurer_name, c.insurer_phone, c.emergency_name, c.emergency_phone,
+                   q.return_of_horse_id, rh.registration_code AS return_code
             FROM HORSE_CONTRACT c
             JOIN HORSE_REQUEST q ON q.request_id = c.request_id
             JOIN APP_USER o ON o.user_id = c.owner_id
@@ -54,6 +55,7 @@ public class ContractRepository {
             LEFT JOIN HORSE h ON h.horse_id = c.horse_id
             LEFT JOIN HORSE_CONTRACT tc ON tc.contract_id = c.takes_over_contract_id
             LEFT JOIN APP_USER po ON po.user_id = tc.owner_id
+            LEFT JOIN HORSE rh ON rh.horse_id = q.return_of_horse_id
             """;
 
     /** Số buổi tới hạn trong khoảng huấn luyện của ngựa, cho cam kết ở điều 11 của hợp đồng. */
@@ -137,7 +139,8 @@ public class ContractRepository {
                 rs.getObject("training_start", LocalDate.class), rs.getObject("training_end", LocalDate.class),
                 rs.getObject("takes_over_contract_id", Integer.class), rs.getString("previous_owner_name"),
                 rs.getString("insurer_name"), rs.getString("insurer_phone"),
-                rs.getString("emergency_name"), rs.getString("emergency_phone"));
+                rs.getString("emergency_name"), rs.getString("emergency_phone"),
+                rs.getObject("return_of_horse_id", Integer.class), rs.getString("return_code"));
     }
 
     /* ---------------- reads ---------------- */

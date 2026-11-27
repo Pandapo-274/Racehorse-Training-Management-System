@@ -41,5 +41,11 @@ public record HorseRequestRow(
         // V50: training window asked for
         LocalDate trainingStart, LocalDate trainingEnd,
         // V54: contract clause 8
-        String insurerName, String insurerPhone, String emergencyName, String emergencyPhone
-) {}
+        String insurerName, String insurerPhone, String emergencyName, String emergencyPhone,
+        // V64: a horse that left and is coming back (its registration code stays)
+        Integer returnOfHorseId, String returnCode
+) {
+    public boolean isReturn() {
+        return returnOfHorseId != null;
+    }
+}

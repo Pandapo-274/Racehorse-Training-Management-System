@@ -381,7 +381,7 @@ class Flow1RulesTest {
         assertTrue(result.notice().contains("Handed 1 incident case to User 7"), result.notice());
     }
 
-    // ------------------------------------------------------------ transfer / readmit
+    // ------------------------------------------------------------ transfer
 
     @Test
     void transferIsRefusedWhileTheOldOwnerStillHasADecision() {
@@ -420,27 +420,6 @@ class Flow1RulesTest {
         verify(horses).updateOwner(10, 8);
         verify(notifications).notifyUser(eq(7), any());
         verify(notifications).notifyUser(eq(8), any());
-    }
-
-    @Test
-    void readmitNeedsAFreeStall() {
-        HorseRepository horses = mock(HorseRepository.class);
-        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "WITHDRAWN", null, null)));
-        when(horses.isActiveHorseOwner(7)).thenReturn(true);
-        when(horses.existsByStallNo("A-01", 10)).thenReturn(true);
-
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
-        expect(400, () -> service.readmit(10, "A-01", MANAGER, "ip"));
-        verify(horses, never()).readmit(anyInt(), any());
-    }
-
-    @Test
-    void readmitIsOnlyForAWithdrawnHorse() {
-        HorseRepository horses = mock(HorseRepository.class);
-        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, null)));
-
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
-        expect(409, () -> service.readmit(10, "A-01", MANAGER, "ip"));
     }
 
     // ------------------------------------------------------------ pedigree reach

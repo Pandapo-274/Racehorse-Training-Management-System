@@ -126,6 +126,10 @@ public class ContractTerms {
             if (p.registrationCode() != null) t.append(" as ").append(p.registrationCode());
             if (p.stallNo() != null) t.append(", stall ").append(p.stallNo());
             t.append(".\n\n");
+        } else if (p.registrationCode() != null) {
+            // V64: a horse that left and is coming back keeps its code.
+            t.append("Returning to the club as ").append(p.registrationCode())
+             .append(". The club assigns the stall and the Head Trainer when the horse arrives.\n\n");
         } else {
             t.append("The club assigns the registration code, the stall and the Head Trainer when the horse arrives.\n\n");
         }

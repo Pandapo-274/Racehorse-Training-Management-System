@@ -59,7 +59,8 @@ IF COL_LENGTH('HORSE_REQUEST', 'photo_url') IS NULL OR OBJECT_ID('HORSE_CONTRACT
    OR COL_LENGTH('HORSE_CONTRACT', 'takes_over_contract_id') IS NULL
    OR COL_LENGTH('HORSE_WITHDRAWAL', 'leave_on') IS NULL
    OR OBJECT_ID('OWNER_CONTACT', 'U') IS NULL
-    THROW 50911, N'Migrations V48..V63 are missing: start the backend on main once, then run this script.', 1;
+   OR COL_LENGTH('HORSE_REQUEST', 'return_of_horse_id') IS NULL
+    THROW 50911, N'Migrations V48..V64 are missing: start the backend on main once, then run this script.', 1;
 
 -- Stalls the demo uses (Z-02..Z-04, Z-06 now; Z-07, Z-08, Z-09 typed live).
 -- If another horse already stands in one of them, stop and say which, instead of

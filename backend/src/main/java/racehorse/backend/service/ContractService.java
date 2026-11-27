@@ -101,7 +101,7 @@ public class ContractService {
                         req.color(), req.sireName(), req.damName(), req.trainingWeeks(), req.preferredStart(),
                         managerName, false, null, req.trainingStart(), req.trainingEnd(),
                         req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone(),
-                        null, null),
+                        req.returnCode(), null),
                 price, respondBy);
         return contracts.insert(new ContractRepository.NewContract(
                 req.requestId(), null, req.ownerId(), null, price.months(), req.trainingWeeks(),
@@ -400,10 +400,29 @@ public class ContractService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Request of this contract not found"));
 
         Map<String, String> errors = new HashMap<>();
-        String code = r.registrationCode() == null ? null : r.registrationCode().trim().toUpperCase(Locale.ROOT);
-        String codeProblem = HorsePolicy.codeProblem(code);
+        // V64: a returning horse keeps its registration code; a new one gets the code typed here.
+        HorseResponse returning = req.isReturn() ? horseService.getOrThrow(req.returnOfHorseId()) : null;
+        String code = returning != null ? returning.registrationCode()
+                : r.registrationCode() == null ? null : r.registrationCode().trim().toUpperCase(Locale.ROOT);
+        String codeProblem = returning != null ? null : HorsePolicy.codeProblem(code);
         if (codeProblem != null) errors.put("registrationCode", codeProblem);
-        if (r.stallNo() == null || r.stallNo().isBlank()) errors.put("stallNo", "Assign a stall");
+        if (r.stallNo() == null || r.stallNo().isBlank()) {
+            errors.put("stallNo", "Assign a stall");
+        } else if (returning != null) {
+            // new horses get these checks in HorseService.create; a returning one does not go through it
+            String stall = r.stallNo().trim();
+            if (horses.isStallOffPlan(stall)) errors.put("stallNo", HorsePolicy.stallOffPlan(stall));
+            else if (horses.existsByStallNo(stall, returning.horseId())) {
+                errors.put("stallNo", "Another horse is already in this stall");
+            }
+        }
+        if (returning != null) {
+            if (!returning.isWithdrawn()) {
+                throw new ApiException(HttpStatus.CONFLICT, returning.horseName() + " is already at the club");
+            }
+            String age = HorsePolicy.ageProblem(HorsePolicy.ACADEMY, returning.dateOfBirth());
+            if (age != null) throw new ApiException(HttpStatus.CONFLICT, age);
+        }
         if (r.bcs() == null || r.bcs() < 1 || r.bcs() > 9) errors.put("bcs", "Score the body condition (1-9)");
         boolean overridesWish = req.preferredTrainerId() != null
                 && !Objects.equals(req.preferredTrainerId(), r.trainerId());
@@ -416,12 +435,28 @@ public class ContractService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "The horse was not received", errors);
         }
 
-        HorseResponse created = horseService.create(new HorseRequest(
-                req.ownerId(), req.sireId(), req.damId(), req.horseName(), code,
-                req.breed(), req.horseGender(), req.dateOfBirth(), req.color(),
-                r.weight() != null ? r.weight() : req.weight(),
-                r.stallNo().trim(), HorsePolicy.ACADEMY), manager, ip);
-        int horseId = created.horseId();
+        int horseId;
+        if (returning != null) {
+            // V64: the same horse comes back - code, history and parents kept.
+            horseId = returning.horseId();
+            try {
+                if (horses.readmit(horseId, r.stallNo().trim()) == 0) {
+                    throw alreadyHandled();
+                }
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                throw new ApiException(HttpStatus.CONFLICT, "The stall has just been taken",
+                        Map.of("stallNo", "Another horse is already in this stall"));
+            }
+            java.math.BigDecimal weight = r.weight() != null ? r.weight() : req.weight();
+            if (weight != null) horses.updateWeight(horseId, weight);
+        } else {
+            HorseResponse created = horseService.create(new HorseRequest(
+                    req.ownerId(), req.sireId(), req.damId(), req.horseName(), code,
+                    req.breed(), req.horseGender(), req.dateOfBirth(), req.color(),
+                    r.weight() != null ? r.weight() : req.weight(),
+                    r.stallNo().trim(), HorsePolicy.ACADEMY), manager, ip);
+            horseId = created.horseId();
+        }
         horses.updateIntake(horseId, r.heightCm() != null ? r.heightCm() : req.heightCm(), r.bcs(),
                 req.surface(), req.distancePref(), req.runningStyle());
         photos.copyRequestPhotoToHorse(req.photoUrl(), horseId);
@@ -437,12 +472,15 @@ public class ContractService {
         requests.setHorse(c.requestId(), horseId);
 
         String group = HorsePolicy.bcsGroup(r.bcs());
-        users.writeAudit(manager.userId(), "HORSE_RECEIVE", "HORSE_CONTRACT", contractId, "SUCCESS", ip,
+        users.writeAudit(manager.userId(), returning != null ? "HORSE_RETURN_RECEIVE" : "HORSE_RECEIVE",
+                "HORSE_CONTRACT", contractId, "SUCCESS", ip,
                 "Horse #" + horseId + " " + code + ", stall " + r.stallNo().trim() + ", BCS " + r.bcs()
                         + " (" + group + "), stay " + start + " to " + end
                         + (note == null ? "" : ". Note: " + note));
-        notifications.notifyUser(c.ownerId(), new Notice("HORSE_RECEIVED", "Horse received",
-                c.horseName() + " is at the club: code " + code + ", stall " + r.stallNo().trim()
+        notifications.notifyUser(c.ownerId(), new Notice("HORSE_RECEIVED",
+                returning != null ? "Horse back at the club" : "Horse received",
+                c.horseName() + (returning != null ? " is back at the club: code " : " is at the club: code ")
+                        + code + ", stall " + r.stallNo().trim()
                         + ". The stay runs until " + end + "."
                         + (overridesWish ? " Your preferred trainer was not available: " + note : ""),
                 Notice.HORSE, horseId));

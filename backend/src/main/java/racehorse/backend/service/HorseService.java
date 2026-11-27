@@ -558,7 +558,7 @@ public class HorseService {
     }
 
     // Không có "private" = package-private: HorsePhotoService (cùng package) gọi được.
-    HorseResponse getOrThrow(int horseId) {
+    public HorseResponse getOrThrow(int horseId) {
         return horseRepository.findById(horseId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Horse not found: #" + horseId));
     }

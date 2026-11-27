@@ -12,9 +12,14 @@ export function listRequests(signal) {
 const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
 
 // Chuỗi rỗng đổi thành null để backend lưu NULL (không lưu chuỗi trống).
-export function submitRequest(form) {
+/** V64: bring a horse that left back; same body, identity is taken from the horse's record. */
+export function submitReturn(horseId, form) {
+  return submitRequest({ ...form, recordType: "ACADEMY" }, `${API}/return/${horseId}`);
+}
+
+export function submitRequest(form, url = API) {
   const club = (form.recordType || "ACADEMY") === "ACADEMY";
-  return authFetch(API, {
+  return authFetch(url, {
     method: "POST",
     body: JSON.stringify({
       horseName: form.horseName.trim(),

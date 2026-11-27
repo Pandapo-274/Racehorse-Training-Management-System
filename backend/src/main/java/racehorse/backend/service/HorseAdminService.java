@@ -22,7 +22,8 @@ import racehorse.backend.security.AuthenticatedUser;
  * own data.
  *
  *  - transferOwner: the horse is sold or handed to another owner.
- *  - readmit: a withdrawn horse comes back to the club.
+ *  (V64: a withdrawn horse no longer comes back by a manager's "re-admit"; the owner sends a
+ *   return request, reviewed, contracted and received like a new registration.)
  */
 @Service
 public class HorseAdminService {
@@ -66,7 +67,7 @@ public class HorseAdminService {
                                        ContractService.Contacts newContacts, AuthenticatedUser actor, String ip) {
         HorseResponse horse = get(horseId);
         if (horse.isWithdrawn()) {
-            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " has left the club. Re-admit it first");
+            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " has left the club. It comes back first, through the owner's request");
         }
         if (horse.ownerId() == newOwnerId) {
             throw new ApiException(HttpStatus.BAD_REQUEST, horse.horseName() + " already belongs to this owner",
@@ -128,55 +129,6 @@ public class HorseAdminService {
         return after;
     }
 
-    /**
-     * A withdrawn club horse comes back: ACTIVE again with a stall. The health
-     * status is kept as the vet last left it; plans and sessions start fresh
-     * (withdrawal ended them). The old HORSE_WITHDRAWAL row stays as history.
-     */
-    @Transactional
-    public HorseResponse readmit(int horseId, String rawStall, AuthenticatedUser actor, String ip) {
-        // Thứ tự kiểm: đang rút? -> không phải PEDIGREE -> chủ còn ACTIVE -> có chuồng trống -> tuổi
-        // còn dưới CLUB_MAX_AGE. Câu UPDATE còn kèm "WHERE activity_status = 'WITHDRAWN'" để hai người
-        // bấm cùng lúc thì chỉ một người thành công (readmit trả 0 cho người còn lại).
-        HorseResponse horse = get(horseId);
-        if (!horse.isWithdrawn()) {
-            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is still at the club");
-        }
-        if (HorsePolicy.PEDIGREE.equals(HorsePolicy.normalizeType(horse.recordType()))) {
-            throw new ApiException(HttpStatus.CONFLICT, "A pedigree record is not kept at the club");
-        }
-        if (!horses.isActiveHorseOwner(horse.ownerId())) {
-            throw new ApiException(HttpStatus.CONFLICT, "The owner's account is not active. Transfer the horse "
-                    + "or re-activate the owner first");
-        }
-        String stall = rawStall == null || rawStall.isBlank() ? null : rawStall.trim();
-        if (stall == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "A club horse needs a stall", Map.of("stallNo", "Assign a stall"));
-        }
-        if (horses.isStallOffPlan(stall)) {
-            String offPlan = HorsePolicy.stallOffPlan(stall);
-            throw new ApiException(HttpStatus.BAD_REQUEST, offPlan, Map.of("stallNo", offPlan));
-        }
-        if (horses.existsByStallNo(stall, horseId)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Another horse is already in this stall",
-                    Map.of("stallNo", "Another horse is already in this stall"));
-        }
-        String age = HorsePolicy.ageProblem(horse.recordType(), horse.dateOfBirth());
-        if (age != null) {
-            throw new ApiException(HttpStatus.CONFLICT, age);
-        }
-        try {
-            if (horses.readmit(horseId, stall) == 0) {
-                throw new ApiException(HttpStatus.CONFLICT, "This horse has just been changed by someone else");
-            }
-        } catch (DataIntegrityViolationException e) {
-            throw new ApiException(HttpStatus.CONFLICT, "The stall has just been taken by someone else");
-        }
-        users.writeAudit(actor.userId(), "HORSE_READMIT", "HORSE", horseId, "SUCCESS", ip, "Back at the club in stall " + stall);
-        notifications.notifyUser(horse.ownerId(), new Notice("HORSE_READMITTED", "Horse back at the club",
-                horse.horseName() + " is back at the club, stall " + stall + ".", Notice.HORSE, horseId));
-        return get(horseId);
-    }
 
     private HorseResponse get(int horseId) {
         return horses.findById(horseId)

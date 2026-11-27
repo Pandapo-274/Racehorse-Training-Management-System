@@ -9,16 +9,16 @@
 // Cũng chỉ mỗi tên là bắt buộc. Người đang muốn gửi ngựa thường chưa cầm đủ
 // giấy tờ, mà bắt khai đủ thì chặn đúng việc màn hình này sinh ra để mở.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { handleAuthError } from "../auth/authService";
 import { useAppDialog } from "../common/AppDialog";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import {
   GENDER_OPTIONS, toGender, formatDate, formatDateTime, ageProblem, toStage, RECORD_TYPES,
-  listParentCandidates, parentLabel, SIRE_GENDERS, DAM_GENDERS,
+  listParentCandidates, parentLabel, SIRE_GENDERS, DAM_GENDERS, getHorse, getIntake,
 } from "./horseApi";
 import {
-  listRequests, submitRequest, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
+  listRequests, submitRequest, submitReturn, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
   getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
   CONTRACT_MONTH_OPTIONS, STAY_RULES, isoAddDays, isoAddMonths, trainingWeeksOf,
 } from "./horseRequestApi";
@@ -104,6 +104,34 @@ export default function HorseRequestPage() {
   const dialog = useAppDialog();
 
   const [form, setForm] = useState(EMPTY);
+  // V64: ?return=<horseId> - bring a horse that left back. Its identity comes from its record (locked).
+  const [search, setSearch] = useSearchParams();
+  const returnId = Number(search.get("return")) || null;
+  const [returning, setReturning] = useState(null);
+  const locked = !!returnId;
+  useEffect(() => {
+    if (!returnId) { setReturning(null); return undefined; }
+    const ctrl = new AbortController();
+    Promise.all([getHorse(returnId, ctrl.signal), getIntake(returnId, ctrl.signal).catch(() => null)])
+      .then(([h, intake]) => {
+        setReturning(h);
+        setForm({
+          ...EMPTY,
+          horseName: h.horseName || "", breed: h.breed || "", horseGender: h.horseGender || "",
+          dateOfBirth: h.dateOfBirth || "", color: h.color || "", recordType: "ACADEMY",
+          sireId: h.sireId ? String(h.sireId) : "", damId: h.damId ? String(h.damId) : "",
+          breedChoice: !h.breed ? "" : BREED_PRESETS[h.breed] ? h.breed : "OTHER",
+          // last known figures, to be updated: the horse may have changed while away
+          weight: h.weight ?? "", heightCm: intake?.heightCm ?? "",
+          surface: intake?.surface || "", distancePref: intake?.distancePref || "",
+          runningStyle: intake?.runningStyle || "",
+        });
+        setErrors({});
+      })
+      .catch((err) => { if (err.name !== "AbortError") setSubmitError(err.message); });
+    return () => ctrl.abort();
+  }, [returnId]);
+  const stopReturn = () => { setSearch({}); setForm(EMPTY); setPhoto(null); };
   const [photo, setPhoto] = useState(null); // File chọn cho yêu cầu đang soạn
   const [photoPreview, setPhotoPreview] = useState("");
   const [trainers, setTrainers] = useState([]);
@@ -245,7 +273,7 @@ export default function HorseRequestPage() {
     setSubmitError("");
 
     try {
-      const saved = await submitRequest(form);
+      const saved = returnId ? await submitReturn(returnId, form) : await submitRequest(form);
       if (form.recordType === "ACADEMY" && photo) {
         try {
           await uploadRequestPhoto(saved.requestId, photo);
@@ -256,6 +284,7 @@ export default function HorseRequestPage() {
       }
       setForm(EMPTY);
       setPhoto(null);
+      if (returnId) setSearch({});
       load(); // nạp lại để yêu cầu vừa gửi hiện ngay trong danh sách bên dưới
     } catch (err) {
       if (handleAuthError(err, navigate)) return;
@@ -296,6 +325,12 @@ export default function HorseRequestPage() {
   // but the owner should not have to type everything again: copy it into the
   // form, fix what the club's note asked for, and send it as a new request.
   const resubmit = (r) => {
+    if (r.returnOfHorseId) {
+      // a return request starts again from the horse's record
+      setSearch({ return: String(r.returnOfHorseId) });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setForm({
       horseName: r.horseName || "",
       breed: r.breed || "",
@@ -330,8 +365,8 @@ export default function HorseRequestPage() {
 
   return (
     <HorseShell
-      title="Register a horse"
-      subtitle="Ask the club to add a horse to your name"
+      title={locked ? "Bring a horse back" : "Register a horse"}
+      subtitle={locked ? "Ask the club to take a horse that left back in" : "Ask the club to add a horse to your name"}
       actions={
         <button type="button" className="hz-btn hz-btn--ghost"
                 onClick={() => navigate("/horse-owner/horses")}>
@@ -339,6 +374,14 @@ export default function HorseRequestPage() {
         </button>
       }
     >
+      {locked && (
+        <StateBlock title={returning ? `Bringing ${returning.horseName} (${returning.registrationCode}) back to the club` : "Loading the horse…"}>
+          Its name, breed, sex, date of birth, colour and parents come from its record. Add a new photo,
+          today's weight and height, the stay you want and the contacts. The club reviews it like a new
+          registration, then sends a contract to sign and pay.{" "}
+          <button type="button" className="hz-link" onClick={stopReturn}>Register a different horse instead</button>
+        </StateBlock>
+      )}
       <form onSubmit={submit} noValidate>
         <Card
           title="About the horse"
@@ -346,7 +389,7 @@ export default function HorseRequestPage() {
         >
           <div className="hz-form-grid">
             <Field id="horseName" label="Name" error={errors.horseName}>
-              <input id="horseName" name="horseName" value={form.horseName}
+              <input id="horseName" name="horseName" value={form.horseName} disabled={locked}
                      onChange={change} maxLength={100} autoComplete="off"
                      aria-invalid={!!errors.horseName} />
             </Field>
@@ -360,7 +403,7 @@ export default function HorseRequestPage() {
                   : "A horse that will live and train at the club."
               }
             >
-              <select id="recordType" name="recordType" value={form.recordType} onChange={change}>
+              <select id="recordType" name="recordType" value={form.recordType} onChange={change} disabled={locked}>
                 {Object.entries(RECORD_TYPES).map(([k, label]) => (
                   <option key={k} value={k}>{label}</option>
                 ))}
@@ -368,7 +411,7 @@ export default function HorseRequestPage() {
             </Field>
 
             <Field id="horseGender" label="Sex" error={errors.horseGender}>
-              <select id="horseGender" name="horseGender" value={form.horseGender}
+              <select id="horseGender" name="horseGender" value={form.horseGender} disabled={locked}
                       onChange={change}>
                 <option value="">Not sure</option>
                 {GENDER_OPTIONS.map((g) => (
@@ -384,7 +427,7 @@ export default function HorseRequestPage() {
               hint="Club horses must be 25 or younger. Older horses can be sent as pedigree records."
             >
               <input id="dateOfBirth" name="dateOfBirth" type="date"
-                     value={form.dateOfBirth} onChange={change}
+                     value={form.dateOfBirth} onChange={change} disabled={locked}
                      aria-invalid={!!errors.dateOfBirth} />
             </Field>
 
@@ -392,19 +435,19 @@ export default function HorseRequestPage() {
                    hint={form.breedChoice && form.breedChoice !== "OTHER"
                      ? "Surface, distance and running style below were filled in for this breed. Change them if your horse differs."
                      : undefined}>
-              <select id="breedChoice" name="breedChoice" value={form.breedChoice} onChange={chooseBreed}>
+              <select id="breedChoice" name="breedChoice" value={form.breedChoice} onChange={chooseBreed} disabled={locked}>
                 <option value="">Not sure</option>
                 {Object.keys(BREED_PRESETS).map((b) => <option key={b} value={b}>{b}</option>)}
                 <option value="OTHER">Other (type it)</option>
               </select>
               {form.breedChoice === "OTHER" && (
-                <input id="breed" name="breed" value={form.breed} onChange={change} maxLength={50}
+                <input id="breed" name="breed" value={form.breed} onChange={change} maxLength={50} disabled={locked}
                        placeholder="Breed name" aria-label="Breed name" style={{ marginTop: 8 }} />
               )}
             </Field>
 
             <Field id="color" label="Colour" error={errors.color}>
-              <input id="color" name="color" value={form.color} onChange={change}
+              <input id="color" name="color" value={form.color} onChange={change} disabled={locked}
                      maxLength={50} />
             </Field>
           </div>
@@ -412,14 +455,18 @@ export default function HorseRequestPage() {
           <div className="hz-form-grid">
             <Field id="sireId" label="Sire (father), from the papers" error={errors.sireId}
                    hint="A club pedigree record or one of your own horses. Leave Unknown if it is not listed.">
-              <select id="sireId" name="sireId" value={form.sireId} onChange={change}>
+              <select id="sireId" name="sireId" value={form.sireId} onChange={change} disabled={locked}>
                 <option value="">Unknown</option>
+                {locked && form.sireId && !sires.some((h) => String(h.horseId) === form.sireId)
+                  && <option value={form.sireId}>On record</option>}
                 {sires.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
               </select>
             </Field>
             <Field id="damId" label="Dam (mother), from the papers" error={errors.damId}>
-              <select id="damId" name="damId" value={form.damId} onChange={change}>
+              <select id="damId" name="damId" value={form.damId} onChange={change} disabled={locked}>
                 <option value="">Unknown</option>
+                {locked && form.damId && !dams.some((h) => String(h.horseId) === form.damId)
+                  && <option value={form.damId}>On record</option>}
                 {dams.map((h) => <option key={h.horseId} value={h.horseId}>{parentLabel(h)}</option>)}
               </select>
             </Field>
@@ -586,7 +633,7 @@ export default function HorseRequestPage() {
                 <li key={r.requestId}>
                   {r.recordType !== "PEDIGREE" && <HorsePhoto horse={r} className="hz-photo--sm" />}
                   <div>
-                    <strong>{r.horseName}</strong>
+                    <strong>{r.horseName}{r.returnOfHorseId ? ` · coming back (${r.returnCode})` : ""}</strong>
                     <p>{toStage({ recordType: r.recordType, dateOfBirth: r.dateOfBirth }).label}</p>
                     <p>
                       {[toGender(r.horseGender) === "—" ? null : toGender(r.horseGender),

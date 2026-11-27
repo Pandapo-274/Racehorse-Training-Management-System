@@ -70,7 +70,7 @@ public final class PermissionCatalog {
             new Entry(HORSES, "Choose a sire or dam", "GET /api/horses/parent-candidates", OWNER),
             new Entry(HORSES, "Correct a horse's parents", "PUT /api/horses/{id}/parents", NONE),
             new Entry(HORSES, "Transfer a horse to another owner", "PUT /api/horses/{id}/owner", NONE),
-            new Entry(HORSES, "Re-admit a withdrawn horse", "PUT /api/horses/{id}/readmit", NONE),
+            new Entry(HORSES, "Ask to bring a horse back", "POST /api/horse-requests/return/{horseId}", NONE),
             new Entry(HORSES, "Upload a horse photo", "POST /api/horses/{id}/photo", OWNER),
             new Entry(HORSES, "Request a horse registration", "POST /api/horse-requests", NONE),
             new Entry(HORSES, "View registration requests", "GET /api/horse-requests", OWNER),

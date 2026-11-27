@@ -139,13 +139,6 @@ export function transferHorseOwner(id, ownerId, reason, contacts = {}) {
   });
 }
 
-/** Chỉ CLUB_MANAGER: nhận lại ngựa đã rút vào một chuồng. */
-export function readmitHorse(id, stallNo) {
-  return authFetch(`${API}/${id}/readmit`, {
-    method: "PUT",
-    body: JSON.stringify({ stallNo: stallNo.trim() }),
-  });
-}
 
 export function updateHorse(id, body) {
   return authFetch(`${API}/${id}`, { method: "PUT", body: JSON.stringify(body) });

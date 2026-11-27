@@ -45,7 +45,7 @@ function ReceiveForm({ c, trainers, onDone }) {
 
   const submit = async () => {
     const e = {};
-    if (!form.registrationCode.trim()) e.registrationCode = "Enter the code the club assigns";
+    if (!c.returnOfHorseId && !form.registrationCode.trim()) e.registrationCode = "Enter the code the club assigns";
     if (!form.stallNo.trim()) e.stallNo = "Assign a stall";
     if (!form.bcs) e.bcs = "Score the body condition (1-9)";
     if (overridesWish && !form.note.trim()) e.note = `The owner asked for ${c.preferredTrainerName}. Say why`;
@@ -68,9 +68,18 @@ function ReceiveForm({ c, trainers, onDone }) {
   return (
     <div className="hz-review__form">
       <div className="hz-form-grid">
-        <RegistrationCodeField id={`code-${c.contractId}`} value={form.registrationCode}
-                               onChange={(v) => setForm((f) => ({ ...f, registrationCode: v }))}
-                               error={errors.registrationCode} autoSuggest />
+        {c.returnOfHorseId ? (
+          // V64: the same horse comes back with the code it always had.
+          <div className="hz-field">
+            <label htmlFor={`code-${c.contractId}`}>Registration code</label>
+            <div id={`code-${c.contractId}`} className="hz-readonly hz-mono">{c.returnCode}</div>
+            <p className="hz-field__hint">Coming back: keeps its code</p>
+          </div>
+        ) : (
+          <RegistrationCodeField id={`code-${c.contractId}`} value={form.registrationCode}
+                                 onChange={(v) => setForm((f) => ({ ...f, registrationCode: v }))}
+                                 error={errors.registrationCode} autoSuggest />
+        )}
         {/* V60: free stalls from the stable plan; the first one is filled in. */}
         <StallField id={`stall-${c.contractId}`} value={form.stallNo}
                     onChange={(v) => setForm((f) => ({ ...f, stallNo: v }))}

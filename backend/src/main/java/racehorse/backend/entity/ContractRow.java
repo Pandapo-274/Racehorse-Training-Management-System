@@ -41,7 +41,9 @@ public record ContractRow(
         // V61: a change-of-owner contract continues the stay of takesOverContractId, signed by
         // previousOwnerName. Clause 8 contacts live on the contract (copied on renewal).
         Integer takesOverContractId, String previousOwnerName,
-        String insurerName, String insurerPhone, String emergencyName, String emergencyPhone
+        String insurerName, String insurerPhone, String emergencyName, String emergencyPhone,
+        // V64: the contract of a horse coming back (it keeps its code)
+        Integer returnOfHorseId, String returnCode
 ) {
     /** The buyer's contract for the rest of a stay the seller paid for (V61). */
     public boolean isTakeover() {

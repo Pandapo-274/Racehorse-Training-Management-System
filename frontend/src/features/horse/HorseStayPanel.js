@@ -107,6 +107,11 @@ export default function HorseStayPanel({ horse, user, intake }) {
             Changed owner. No new training plan or race entry until the new owner signs.
           </p>
         </>
+      ) : contracts.length > 0 ? (
+        // Re-admitted after leaving, or a stay that was closed: say so, not "registered before stays".
+        <p className="hz-muted hz-note">
+          No stay contract running. The last one closed{contracts[0].closedNote ? `: ${contracts[0].closedNote}` : ""}.
+        </p>
       ) : (
         <p className="hz-muted hz-note">
           No contract on record: this horse was registered before stays had a term.

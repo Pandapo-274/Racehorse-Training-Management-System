@@ -104,6 +104,9 @@ function PendingRow({ row, pricing, onDone }) {
           {!pedigreeOnly && <HorsePhoto horse={row} />}
           <div>
             <strong>{row.horseName}</strong>
+            {row.returnOfHorseId && (
+              <p><StatusChip tone="neutral" label={`Coming back · ${row.returnCode}`} /> Left the club earlier; same horse, same code</p>
+            )}
             <p>
               {[toGender(row.horseGender) === "—" ? null : toGender(row.horseGender), row.breed, row.color,
                 row.dateOfBirth ? `${formatDate(row.dateOfBirth)}${age ? ` (${age})` : ""}` : null]

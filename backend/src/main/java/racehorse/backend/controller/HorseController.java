@@ -75,14 +75,6 @@ public class HorseController {
                 user, http.getRemoteAddr());
     }
 
-    /** Club Manager nhận lại ngựa đã rút, xếp chuồng mới. */
-    @PutMapping("/{id}/readmit")
-    @RequireRole({"CLUB_MANAGER"})
-    public HorseResponse readmit(@PathVariable int id, @Valid @RequestBody ReadmitRequest request,
-                                 @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
-                                 HttpServletRequest http) {
-        return adminService.readmit(id, request.stallNo(), user, http.getRemoteAddr());
-    }
 
     // Body của PUT /{id}/owner. Annotation viết đầy đủ tên package vì file không import chúng.
     public record TransferRequest(
@@ -95,11 +87,6 @@ public class HorseController {
             @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String insurerPhone,
             @jakarta.validation.constraints.Size(max = 100, message = "At most 100 characters") String emergencyName,
             @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String emergencyPhone) {}
-
-    public record ReadmitRequest(
-            @jakarta.validation.constraints.NotBlank(message = "Stall is required")
-            @jakarta.validation.constraints.Size(max = 20, message = "Stall must be at most 20 characters")
-            String stallNo) {}
 
     /*
      * KHÔNG còn POST /api/horses.

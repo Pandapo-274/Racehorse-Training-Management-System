@@ -110,5 +110,6 @@ export function isTakeover(c) {
 export function contractKind(c) {
   if (c?.renewsContractId) return " · renewal";
   if (isTakeover(c)) return " · change of owner";
+  if (c?.returnOfHorseId) return " · coming back";
   return "";
 }

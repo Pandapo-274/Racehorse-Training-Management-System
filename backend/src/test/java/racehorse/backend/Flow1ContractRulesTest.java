@@ -182,6 +182,87 @@ class Flow1ContractRulesTest {
         assertEquals("A-08", free.stall());
     }
 
+    // ------------------------------------------------------------ coming back to the club (V64)
+
+    private static HorseResponse awayHorse(int id, int ownerId) {
+        return new HorseResponse(id, ownerId, "Owner " + ownerId, null, null, "Sakura", "TM-0751", "Thoroughbred",
+                "COLT", LocalDate.now().minusYears(2), "Bay", new BigDecimal("450"), null, "HEALTHY",
+                LocalDateTime.now(), LocalDateTime.now(), "ACADEMY", null, "WITHDRAWN", LocalDateTime.now());
+    }
+
+    @Test
+    void returnRequestTakesTheIdentityFromTheHorse() {
+        HorseRequestRepository requests = mock(HorseRequestRepository.class);
+        HorseService horses = mock(HorseService.class);
+        when(horses.getOrThrow(10)).thenReturn(awayHorse(10, 7));
+        racehorse.backend.repository.ContactRepository book = mock(racehorse.backend.repository.ContactRepository.class);
+        when(book.isListedInsurer(anyString(), anyString())).thenReturn(true);
+        when(book.isOwnersPerson(anyInt(), anyString(), anyString())).thenReturn(true);
+        when(requests.insert(eq(7), any())).thenReturn(55);
+        when(requests.findById(55)).thenReturn(Optional.of(request(55, "ACADEMY", null, 1, null, 10)));
+        HorseRequestService service = new HorseRequestService(requests, horses, mock(UserRepository.class),
+                mock(NotificationService.class), mock(ContractService.class), book);
+
+        service.submitReturn(10, new SubmitRequest("Something else", "Arabian", "MARE",
+                LocalDate.now().minusYears(9), "Grey", null, "ACADEMY", null, null,
+                new BigDecimal("470"), new BigDecimal("158"), "TURF", "MEDIUM", "STALKER",
+                LocalDate.now().plusDays(3), null, 1, null, LocalDate.now().plusDays(3), LocalDate.now().plusDays(31),
+                "Bao Viet Insurance", "1900 558899", "Tran Van An", "0912345678"), OWNER_7, "ip");
+
+        ArgumentCaptor<SubmitRequest> saved = ArgumentCaptor.forClass(SubmitRequest.class);
+        verify(requests).insert(eq(7), saved.capture());
+        assertEquals("Sakura", saved.getValue().horseName());
+        assertEquals("Thoroughbred", saved.getValue().breed());
+        assertEquals(new BigDecimal("470"), saved.getValue().weight());
+        verify(requests).setReturnOf(55, 10);
+    }
+
+    @Test
+    void horseStillAtTheClubCannotBeBroughtBack() {
+        HorseService horses = mock(HorseService.class);
+        when(horses.getOrThrow(10)).thenReturn(horse(10, 7));
+        HorseRequestRepository requests = mock(HorseRequestRepository.class);
+        HorseRequestService service = requestService(requests, horses, mock(ContractService.class));
+
+        expect(409, () -> service.submitReturn(10, new SubmitRequest("Sakura", null, null, null, null, null,
+                "ACADEMY", null, null), OWNER_7, "ip"));
+        verify(requests, never()).insert(anyInt(), any());
+    }
+
+    @Test
+    void receivingAReturnBringsTheSameHorseBack() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findById(40)).thenReturn(Optional.of(contract(40, "PAID", 1000)));
+        when(contracts.markActive(eq(40), eq(10), any(), any(), any())).thenReturn(1);
+        HorseRequestRepository requests = mock(HorseRequestRepository.class);
+        when(requests.findById(5)).thenReturn(Optional.of(request(5, "ACADEMY", "/p.webp", 1, null, 10)));
+        HorseService horseService = mock(HorseService.class);
+        when(horseService.getOrThrow(10)).thenReturn(awayHorse(10, 7));
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.readmit(10, "A-08")).thenReturn(1);
+        ContractService service = new ContractService(contracts, requests, horseService, horses,
+                mock(HorsePhotoService.class), mock(UserRepository.class), mock(NotificationService.class),
+                new ContractTerms(100_000, "3:5", 7, 5_000_000, "Tracen Club"), mock(PaymentGateway.class),
+                mock(racehorse.backend.service.CostPaymentService.class), "http://localhost:3000");
+
+        service.receive(40, new ReceiveRequest(null, "A-08", null, 5, null, null, null), MANAGER, "ip");
+
+        verify(horses).readmit(10, "A-08");
+        verify(horseService, never()).create(any(), any(), any());
+        verify(contracts).markActive(eq(40), eq(10), any(), any(), eq(1));
+        verify(requests).setHorse(5, 10);
+    }
+
+    @Test
+    void returnContractKeepsTheRegistrationCode() {
+        ContractTerms terms = new ContractTerms(2000, "3:5", 7, 5_000_000, "Tracen Club");
+        String text = terms.text(new ContractTerms.Parties("Owner", "Sakura", "Thoroughbred", "COLT",
+                        LocalDate.now().minusYears(2), "Bay", null, null, 4, LocalDate.now(), "Manager", false, null,
+                        null, null, "PVI", "1900", "Le Thi Hoa", "0913", "TM-0751", null),
+                terms.priceFor(1), LocalDate.now().plusDays(7));
+        assertTrue(text.contains("Returning to the club as TM-0751."), text);
+    }
+
     // ------------------------------------------------------------ clause 8 contacts from lists (V63)
 
     @Test
@@ -843,13 +924,19 @@ class Flow1ContractRulesTest {
     }
 
     private static HorseRequestRow request(int id, String type, String photoUrl, Integer months, Integer trainerId) {
+        return request(id, type, photoUrl, months, trainerId, null);
+    }
+
+    private static HorseRequestRow request(int id, String type, String photoUrl, Integer months, Integer trainerId,
+                                           Integer returnOf) {
         return new HorseRequestRow(id, 7, "Owner 7", "Sakura", "Thoroughbred", "COLT", type,
                 LocalDate.now().minusYears(2), "Bay", null, "PENDING", LocalDateTime.now(),
                 null, null, null, null, null, null, null, null, null,
                 photoUrl, new BigDecimal("450"), new BigDecimal("155"), "TURF", "MEDIUM", "MIDDLE",
                 null, 4, months, trainerId, null, null, null, 0, null, null, null,
                 LocalDate.now().plusDays(3), LocalDate.now().plusDays(31),
-                "Bao Viet", "0901234567", "Tran Van An", "0912345678");
+                "Bao Viet", "0901234567", "Tran Van An", "0912345678",
+                returnOf, returnOf == null ? null : "TM-0751");
     }
 
     private static ContractRow contract(int id, String status, long total) {
@@ -861,7 +948,7 @@ class Flow1ContractRulesTest {
                 null, null, null, status, "Manager", LocalDateTime.now(), LocalDate.now().plusDays(7),
                 null, null, null, null, null, null, null, null, null, null,
                 terms, ContractTerms.sha256(terms), null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     /** A stay of horse 10 from request 5; takesOver set for a change-of-owner contract. */
@@ -883,7 +970,7 @@ class Flow1ContractRulesTest {
                 null, null, null, null, null, null, null, null, "TM-0751", "A-08",
                 terms, ContractTerms.sha256(terms), null, null, null, null,
                 takesOver, takesOver == null ? null : "Tran Duc Minh",
-                "Bao Viet", "0901234567", "Tran Van An", "0912345678");
+                "Bao Viet", "0901234567", "Tran Van An", "0912345678", null, null);
     }
 
     private static HorseResponse horse(int id, int ownerId) {
