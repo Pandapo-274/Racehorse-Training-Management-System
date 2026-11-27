@@ -48,6 +48,18 @@ export function checkRegistrationCode(code, horseId, signal) {
   return authFetch(`${API}/registration-code/check?${q}`, { signal });
 }
 
+/** V60: chuồng trống theo sơ đồ chuồng, đúng thứ tự dãy / số; chuồng đầu tiên là gợi ý. */
+export function listFreeStalls(signal) {
+  return authFetch(`${API}/stalls/free`, { signal });
+}
+
+/** Kiểm chuồng khi đang gõ: { stall, available, message }. */
+export function checkStall(stall, horseId, signal) {
+  const q = new URLSearchParams({ stall });
+  if (horseId) q.set("horseId", horseId);
+  return authFetch(`${API}/stalls/check?${q}`, { signal });
+}
+
 /** V48: chiều cao, BCS và năng khiếu ghi lúc nhận ngựa. */
 export function getIntake(id, signal) {
   return authFetch(`${API}/${id}/intake`, { signal });

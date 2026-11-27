@@ -134,6 +134,39 @@ class Flow1ContractRulesTest {
         assertTrue(ex.getFieldErrors().containsKey("registrationCode"), ex.getFieldErrors().toString());
     }
 
+    // ------------------------------------------------------------ stalls: the stable plan (V60)
+
+    @Test
+    void stallOffThePlanIsRefusedWhenAHorseIsCreated() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.isHorseOwner(7)).thenReturn(true);
+        when(horses.isStallOffPlan("B-300")).thenReturn(true);
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        ApiException ex = expect(400, () -> service.create(new HorseRequest(7, null, null, "Sakura", "TM-0751",
+                "Thoroughbred", "COLT", LocalDate.now().minusYears(2), "Bay", null, "B-300", "ACADEMY"),
+                MANAGER, "ip"));
+        assertEquals("Stall B-300 is not on the stable plan", ex.getFieldErrors().get("stallNo"));
+        verify(horses, never()).insert(any());
+    }
+
+    @Test
+    void stallCheckNamesTheHorseInItOrSaysItIsFree() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.existsByStallNo("Z-02", 0)).thenReturn(true);
+        when(horses.findNameByStallNo("Z-02")).thenReturn(Optional.of("River Song"));
+        when(horses.isStallOffPlan("Z-99")).thenReturn(true);
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        HorseService.StallCheck taken = service.checkStall("z-02 ", null);
+        assertFalse(taken.available());
+        assertEquals("Taken by River Song", taken.message());
+        assertEquals("Stall Z-99 is not on the stable plan", service.checkStall("Z-99", null).message());
+        HorseService.StallCheck free = service.checkStall("A-08", null);
+        assertTrue(free.available());
+        assertEquals("A-08", free.stall());
+    }
+
     // ------------------------------------------------------------ 4. how long the horse stays
 
     @Test

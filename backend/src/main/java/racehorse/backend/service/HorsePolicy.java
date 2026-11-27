@@ -124,6 +124,11 @@ public final class HorsePolicy {
     public static final java.util.regex.Pattern CODE_PATTERN =
             java.util.regex.Pattern.compile("^[A-Z]{2,5}-[A-Z]?\\d{3,6}$");
 
+    /** V60: the message for a stall the stable plan does not list. */
+    public static String stallOffPlan(String stall) {
+        return "Stall " + stall.trim().toUpperCase(java.util.Locale.ROOT) + " is not on the stable plan";
+    }
+
     public static String codeProblem(String code) {
         if (code == null || code.isBlank()) return "Enter the code the club assigns";
         if (!CODE_PATTERN.matcher(code).matches()) {

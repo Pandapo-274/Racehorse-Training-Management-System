@@ -130,6 +130,21 @@ public class HorseController {
         return horseService.checkRegistrationCode(code, horseId);
     }
 
+    /** V60: empty stalls on the stable plan, in plan order; the first one is the suggestion. */
+    @GetMapping("/stalls/free")
+    @RequireRole({"CLUB_MANAGER"})
+    public java.util.List<String> freeStalls() {
+        return horseService.freeStalls();
+    }
+
+    /** Checked while the manager types: taken by which horse, not on the plan, or free. */
+    @GetMapping("/stalls/check")
+    @RequireRole({"CLUB_MANAGER"})
+    public HorseService.StallCheck checkStall(@RequestParam String stall,
+                                              @RequestParam(required = false) Integer horseId) {
+        return horseService.checkStall(stall, horseId);
+    }
+
     /** Chỉ chủ ngựa, và chỉ ngựa của chính mình (service kiểm quyền sở hữu). */
     @PutMapping("/{id}")
     @RequireRole({"HORSE_OWNER"})

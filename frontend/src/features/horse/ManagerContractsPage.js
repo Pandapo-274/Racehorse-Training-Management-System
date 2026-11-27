@@ -18,6 +18,7 @@ import { formatDate, formatDateTime, listAvailableTrainers, toBcsGroup, BCS_GROU
 import { formatVnd } from "./horseRequestApi";
 import { listContracts, receiveHorse, cancelContract, toContractStatus, stayLine } from "./contractApi";
 import RegistrationCodeField from "./RegistrationCodeField";
+import StallField from "./StallField";
 
 const BCS_TEXT = {
   1: "Poor", 2: "Very thin", 3: "Thin", 4: "Moderately thin", 5: "Moderate",
@@ -67,12 +68,10 @@ function ReceiveForm({ c, trainers, onDone }) {
         <RegistrationCodeField id={`code-${c.contractId}`} value={form.registrationCode}
                                onChange={(v) => setForm((f) => ({ ...f, registrationCode: v }))}
                                error={errors.registrationCode} autoSuggest />
-        <div className="hz-field">
-          <label htmlFor={`stall-${c.contractId}`}>Stall</label>
-          <input id={`stall-${c.contractId}`} className="hz-mono" value={form.stallNo} maxLength={20}
-                 onChange={set("stallNo")} />
-          {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-        </div>
+        {/* V60: free stalls from the stable plan; the first one is filled in. */}
+        <StallField id={`stall-${c.contractId}`} value={form.stallNo}
+                    onChange={(v) => setForm((f) => ({ ...f, stallNo: v }))}
+                    error={errors.stallNo} autoSuggest />
         <div className="hz-field">
           <label htmlFor={`trainer-${c.contractId}`}>Head Trainer</label>
           {/* Review feedback 5: only trainers who can take another horse are listed. */}

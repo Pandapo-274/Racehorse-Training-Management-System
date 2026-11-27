@@ -111,6 +111,10 @@ public class HorseAdminService {
         if (stall == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "A club horse needs a stall", Map.of("stallNo", "Assign a stall"));
         }
+        if (horses.isStallOffPlan(stall)) {
+            String offPlan = HorsePolicy.stallOffPlan(stall);
+            throw new ApiException(HttpStatus.BAD_REQUEST, offPlan, Map.of("stallNo", offPlan));
+        }
         if (horses.existsByStallNo(stall, horseId)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Another horse is already in this stall",
                     Map.of("stallNo", "Another horse is already in this stall"));

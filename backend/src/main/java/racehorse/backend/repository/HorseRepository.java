@@ -231,6 +231,31 @@ public class HorseRepository {
                 .query(Integer.class).single() > 0;
     }
 
+    /** V60: a stall the stable plan does not list (a typo, or a barn the club does not have). */
+    public boolean isStallOffPlan(String stallNo) {
+        return jdbc.sql("SELECT COUNT(*) FROM STALL WHERE stall_no = :v")
+                .param("v", stallNo)
+                .query(Integer.class).single() == 0;
+    }
+
+    /** V60: stalls on the plan that no horse is in, barn by barn, in number order. */
+    public List<String> findFreeStalls() {
+        return jdbc.sql("""
+                SELECT s.stall_no FROM STALL s
+                WHERE NOT EXISTS (SELECT 1 FROM HORSE h WHERE h.stall_no = s.stall_no)
+                ORDER BY s.barn, s.stall_number, s.stall_no
+                """)
+                .query(String.class)
+                .list();
+    }
+
+    public Optional<String> findNameByStallNo(String stallNo) {
+        return jdbc.sql("SELECT horse_name FROM HORSE WHERE stall_no = :v")
+                .param("v", stallNo)
+                .query(String.class)
+                .optional();
+    }
+
     public boolean existsById(int horseId) {
         return jdbc.sql("SELECT COUNT(*) FROM HORSE WHERE horse_id = :id")
                 .param("id", horseId).query(Integer.class).single() > 0;

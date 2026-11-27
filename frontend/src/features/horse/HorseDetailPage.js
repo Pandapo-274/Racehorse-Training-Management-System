@@ -24,6 +24,7 @@ import { SURFACES, DISTANCES, RUNNING_STYLES } from "./horseRequestApi";
 import { listStaff } from "../manager/staffApi";
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
+import StallField from "./StallField";
 
 // Bốn tab của trang chi tiết; ?tab=medical-history trên URL mở thẳng một tab (link từ thông báo, từ trang khác).
 const TABS = [
@@ -111,12 +112,8 @@ function IdentityForm({ horse, onSaved }) {
           </div>
           {stallAllowed && (
             <>
-              <div className="hz-field">
-                <label htmlFor="identity-stall">Stall</label>
-                <input id="identity-stall" className="hz-mono" maxLength={20} value={stall}
-                       onChange={(e) => setStall(e.target.value)} />
-                {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-              </div>
+              <StallField id="identity-stall" value={stall} onChange={setStall}
+                          error={errors.stallNo} horseId={horse.horseId} current={horse.stallNo} />
               <div className="hz-field">
                 <label htmlFor="identity-trainer">Assigned Head Trainer</label>
                 <select
@@ -226,12 +223,8 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
         {dialog.element}
         <form onSubmit={readmit} noValidate>
           <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-            <div className="hz-field">
-              <label htmlFor="readmit-stall">Stall</label>
-              <input id="readmit-stall" className="hz-mono" maxLength={20} value={stall}
-                     onChange={(e) => setStall(e.target.value)} />
-              {errors.stallNo && <p className="hz-field__error">{errors.stallNo}</p>}
-            </div>
+            <StallField id="readmit-stall" value={stall} onChange={setStall}
+                        error={errors.stallNo} horseId={horse.horseId} autoSuggest />
           </div>
           <div className="hz-form-footer">
             <button type="submit" className="hz-btn" disabled={busy || !stall.trim()}>{busy ? "Saving…" : "Re-admit"}</button>
