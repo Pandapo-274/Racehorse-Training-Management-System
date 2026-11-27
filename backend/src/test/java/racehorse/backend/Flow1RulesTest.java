@@ -36,6 +36,7 @@ import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.security.JwtService;
 import racehorse.backend.security.TokenBlacklist;
 import racehorse.backend.service.AuthService;
+import racehorse.backend.service.ContractService;
 import racehorse.backend.service.HorseAdminService;
 import racehorse.backend.service.HorseService;
 import racehorse.backend.service.NotificationService;
@@ -55,6 +56,9 @@ import racehorse.backend.service.StaffService;
  * test behind each refusal it shows.
  */
 class Flow1RulesTest {
+
+    /** A horse registered before V49 has no contract, so no contacts are needed for its transfer. */
+    private static final ContractService.Contacts NO_CONTACTS = ContractService.Contacts.of(null, null, null, null);
 
     private static final AuthenticatedUser MANAGER =
             new AuthenticatedUser(1, "manager", "CLUB_MANAGER", "jti", Instant.now().plusSeconds(3600), Instant.now());
@@ -386,8 +390,8 @@ class Flow1RulesTest {
         when(horses.isActiveHorseOwner(8)).thenReturn(true);
         when(horses.pendingOnOwner(10)).thenReturn(new HorseRepository.PendingOnOwner(1, 0, 0));
 
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class));
-        ApiException ex = expect(409, () -> service.transferOwner(10, 8, "Sold", MANAGER, "ip"));
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
+        ApiException ex = expect(409, () -> service.transferOwner(10, 8, "Sold", NO_CONTACTS, MANAGER, "ip"));
         assertTrue(ex.getMessage().contains("training plan"), ex.getMessage());
         verify(horses, never()).updateOwner(anyInt(), anyInt());
     }
@@ -398,8 +402,8 @@ class Flow1RulesTest {
         when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, null)));
         when(horses.isActiveHorseOwner(8)).thenReturn(false);
 
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class));
-        expect(400, () -> service.transferOwner(10, 8, "Sold", MANAGER, "ip"));
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
+        expect(400, () -> service.transferOwner(10, 8, "Sold", NO_CONTACTS, MANAGER, "ip"));
         verify(horses, never()).updateOwner(anyInt(), anyInt());
     }
 
@@ -411,8 +415,8 @@ class Flow1RulesTest {
         when(horses.isActiveHorseOwner(8)).thenReturn(true);
         when(horses.pendingOnOwner(10)).thenReturn(new HorseRepository.PendingOnOwner(0, 0, 0));
 
-        new HorseAdminService(horses, mock(UserRepository.class), notifications)
-                .transferOwner(10, 8, "Sold", MANAGER, "ip");
+        new HorseAdminService(horses, mock(UserRepository.class), notifications, mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class))
+                .transferOwner(10, 8, "Sold", NO_CONTACTS, MANAGER, "ip");
         verify(horses).updateOwner(10, 8);
         verify(notifications).notifyUser(eq(7), any());
         verify(notifications).notifyUser(eq(8), any());
@@ -425,7 +429,7 @@ class Flow1RulesTest {
         when(horses.isActiveHorseOwner(7)).thenReturn(true);
         when(horses.existsByStallNo("A-01", 10)).thenReturn(true);
 
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class));
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
         expect(400, () -> service.readmit(10, "A-01", MANAGER, "ip"));
         verify(horses, never()).readmit(anyInt(), any());
     }
@@ -435,7 +439,7 @@ class Flow1RulesTest {
         HorseRepository horses = mock(HorseRepository.class);
         when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, null)));
 
-        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class));
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
         expect(409, () -> service.readmit(10, "A-01", MANAGER, "ip"));
     }
 

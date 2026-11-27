@@ -25,6 +25,8 @@ import { listStaff } from "../manager/staffApi";
 import { useAppDialog } from "../common/AppDialog";
 import ResultLine, { ok, fail } from "../common/ResultLine";
 import StallField from "./StallField";
+import { contractsForHorse } from "./contractApi";
+import ContactPicker from "./ContactPicker";
 
 // Bốn tab của trang chi tiết; ?tab=medical-history trên URL mở thẳng một tab (link từ thông báo, từ trang khác).
 const TABS = [
@@ -46,7 +48,7 @@ function Row({ label, children }) {
   );
 }
 
-/** Club Manager sửa mã đăng ký, số chuồng và điều phối Head Trainer phụ trách (V37). */
+/** Club Manager đổi chuồng và Head Trainer phụ trách (V37). Mã đăng ký cố định sau khi cấp. */
 function IdentityForm({ horse, onSaved }) {
   const navigate = useNavigate();
   const [code, setCode] = useState(horse.registrationCode || "");
@@ -106,8 +108,16 @@ function IdentityForm({ horse, onSaved }) {
         <div className="hz-form-grid hz-allocation-grid">
           <div className="hz-field">
             <label htmlFor="identity-code">Registration code</label>
-            <input id="identity-code" className="hz-mono" maxLength={30} value={code}
-                   onChange={(e) => setCode(e.target.value)} />
+            {/* Permanent once assigned: papers, race entries, invoices and the audit log carry it. */}
+            {horse.registrationCode ? (
+              <>
+                <div id="identity-code" className="hz-readonly hz-mono" aria-readonly="true">{horse.registrationCode}</div>
+                <p className="hz-field__hint">Permanent once assigned</p>
+              </>
+            ) : (
+              <input id="identity-code" className="hz-mono" maxLength={30} value={code}
+                     onChange={(e) => setCode(e.target.value.toUpperCase())} />
+            )}
             {errors.registrationCode && <p className="hz-field__error">{errors.registrationCode}</p>}
           </div>
           {stallAllowed && (
@@ -167,8 +177,22 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
   const [stall, setStall] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  // V61: the new owner's insurer and second contact (clause 8 of the contract they sign).
+  const [contacts, setContacts] = useState({ insurerName: "", insurerPhone: "", emergencyName: "", emergencyPhone: "" });
+  const [stay, setStay] = useState(null);
   const withdrawn = isWithdrawn(horse);
   const pedigree = isPedigreeOnly(horse);
+
+  // The stay the new owner would take over: the running one, or a change-of-owner contract not signed yet.
+  useEffect(() => {
+    if (withdrawn) return undefined;
+    const ctrl = new AbortController();
+    contractsForHorse(horse.horseId, ctrl.signal)
+      .then((cs) => setStay((cs || []).find((c) => c.status === "ACTIVE" || c.status === "EXPIRED"
+        || (c.status === "SENT" && c.takesOverContractId)) || null))
+      .catch(() => setStay(null));
+    return () => ctrl.abort();
+  }, [withdrawn, horse.horseId, horse.ownerId]);
 
   // Danh sách chủ ngựa để chuyển: lấy nhóm HORSE_OWNER từ GET /api/staff, bỏ người bị khoá và chủ hiện tại.
   // Biến alive tránh setState sau khi component đã bị gỡ (thay cho AbortController vì listStaff không nhận signal).
@@ -242,16 +266,22 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
     const targetName = target ? `${target.fullName} (@${target.username})` : "the chosen owner";
     const confirmed = await dialog.confirm({
       title: `Transfer ${horse.horseName}?`,
-      message: `${horse.horseName} moves from ${horse.ownerName} to ${targetName}. Both owners are told. Reason: ${reason.trim()}`,
+      message: `${horse.horseName} moves from ${horse.ownerName} to ${targetName}. Both owners are told. Reason: ${reason.trim()}`
+        + (stay ? ` ${horse.ownerName}'s contract closes; ${targetName} signs a contract for the rest of the stay `
+          + `(until ${formatDate(stay.endDate)}), nothing to pay.` : ""),
       confirmLabel: "Transfer",
     });
     if (!confirmed) return;
     const done = await run(
-      () => transferHorseOwner(horse.horseId, Number(ownerId), reason),
+      () => transferHorseOwner(horse.horseId, Number(ownerId), reason, stay ? contacts : {}),
       () => `Transferred ${horse.horseName} from ${horse.ownerName} to ${targetName}. Both owners have been notified.`,
       `Could not transfer ${horse.horseName} to ${targetName}`,
     );
-    if (done) { setOwnerId(""); setReason(""); }
+    if (done) {
+      setOwnerId("");
+      setReason("");
+      setContacts({ insurerName: "", insurerPhone: "", emergencyName: "", emergencyPhone: "" });
+    }
   };
 
   return (
@@ -261,7 +291,11 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
         <div className="hz-form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <div className="hz-field">
             <label htmlFor="transfer-owner">New owner</label>
-            <select id="transfer-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            <select id="transfer-owner" value={ownerId} onChange={(e) => {
+              setOwnerId(e.target.value);
+              // the second person comes from the chosen owner's own list
+              setContacts((c) => ({ ...c, emergencyName: "", emergencyPhone: "" }));
+            }}>
               <option value="">Choose an owner…</option>
               {owners.map((o) => <option key={o.userId} value={o.userId}>{o.fullName} (@{o.username})</option>)}
             </select>
@@ -274,6 +308,19 @@ function OwnershipForm({ horse, onSaved, result, setResult }) {
             {errors.reason && <p className="hz-field__error">{errors.reason}</p>}
           </div>
         </div>
+        {stay && (
+          <>
+            <p className="hz-muted hz-note">
+              {horse.horseName} has a stay until {formatDate(stay.endDate)}. The contract does not move with the horse:
+              {" "}{horse.ownerName}'s contract closes, and the new owner signs one for the rest of the stay, with nothing
+              to pay. Clause 8 needs the new owner's insurer and a second person to call.
+            </p>
+            {/* V63: chosen from the club's insurers and the new owner's own people. */}
+            <ContactPicker idPrefix="transfer" ownerId={ownerId ? Number(ownerId) : undefined}
+                           disabled={!ownerId} value={contacts} errors={errors} onChange={setContacts} />
+            {!ownerId && <p className="hz-field__hint">Choose the new owner first: the second person comes from their list.</p>}
+          </>
+        )}
         <div className="hz-form-footer">
           <button type="submit" className="hz-btn" disabled={busy || !ownerId || !reason.trim()}>{busy ? "Saving…" : "Transfer"}</button>
         </div>

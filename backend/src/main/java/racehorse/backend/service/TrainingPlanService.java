@@ -688,6 +688,9 @@ public class TrainingPlanService {
         if (horseRepository.hasExpiredContract(horse.horseId())) {
             throw new ApiException(HttpStatus.CONFLICT, HorsePolicy.stayEndedProblem(horse));
         }
+        if (horseRepository.isWaitingForTakeover(horse.horseId())) {
+            throw new ApiException(HttpStatus.CONFLICT, HorsePolicy.takeoverProblem(horse));
+        }
         String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
         if (tooYoung != null) {
             throw new ApiException(HttpStatus.CONFLICT, tooYoung);
@@ -730,6 +733,9 @@ public class TrainingPlanService {
             } else if (horseRepository.hasExpiredContract(horse.horseId())) {
                 // V49: the stay ran out and was not renewed.
                 errors.put("horseId", HorsePolicy.stayEndedProblem(horse));
+            } else if (horseRepository.isWaitingForTakeover(horse.horseId())) {
+                // V61: sold, the new owner has not signed yet.
+                errors.put("horseId", HorsePolicy.takeoverProblem(horse));
             } else {
                 String tooYoung = HorseStandards.trainingAgeProblem(horse.horseName(), horse.dateOfBirth(), LocalDate.now());
                 if (tooYoung != null) {

@@ -17,5 +17,9 @@ public record WithdrawalSubmitRequest(
 
         @NotBlank(message = "Say why the horse is leaving the club")
         @Size(max = 500, message = "Reason must be at most 500 characters")
-        String reason
+        String reason,
+
+        // V62: the day the owner collects the horse (contract clause 9: 15 days' notice).
+        @NotNull(message = "Choose the day you collect the horse")
+        java.time.LocalDate leaveOn
 ) {}

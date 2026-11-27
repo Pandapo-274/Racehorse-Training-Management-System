@@ -35,6 +35,7 @@ import racehorse.backend.security.AuthenticatedUser;
 @Service
 public class HorseRequestService {
 
+    private final racehorse.backend.repository.ContactRepository contactBook;
     private final HorseRequestRepository requests;
     private final HorseService horseService;
     private final UserRepository users;
@@ -43,7 +44,8 @@ public class HorseRequestService {
 
     public HorseRequestService(HorseRequestRepository requests, HorseService horseService,
                                UserRepository users, NotificationService notifications,
-                               ContractService contracts) {
+                               ContractService contracts, racehorse.backend.repository.ContactRepository contactBook) {
+        this.contactBook = contactBook;
         this.requests = requests;
         this.horseService = horseService;
         this.users = users;
@@ -72,7 +74,7 @@ public class HorseRequestService {
         }
         boolean club = HorsePolicy.ACADEMY.equals(type);
         if (club) {
-            checkClubHorseFields(raw);
+            checkClubHorseFields(raw, me.userId());
         }
         horseService.checkDeclaredParents(raw.sireId(), raw.damId(), raw.dateOfBirth(), me.userId());
 
@@ -103,7 +105,7 @@ public class HorseRequestService {
     }
 
     /** What a club horse must carry for the manager to have a basis to approve it. */
-    private void checkClubHorseFields(SubmitRequest raw) {
+    private void checkClubHorseFields(SubmitRequest raw, int ownerId) {
         Map<String, String> errors = new LinkedHashMap<>();
         if (raw.weight() == null) errors.put("weight", "Weight is required for a club horse");
         if (raw.heightCm() == null) errors.put("heightCm", "Height is required for a club horse");
@@ -112,6 +114,15 @@ public class HorseRequestService {
         if (blankToNull(raw.insurerPhone()) == null) errors.put("insurerPhone", "Give the insurer's emergency number");
         if (blankToNull(raw.emergencyName()) == null) errors.put("emergencyName", "Name a second person to call");
         if (blankToNull(raw.emergencyPhone()) == null) errors.put("emergencyPhone", "Give that person's phone number");
+        // V63: both are picked from lists, so the numbers are the ones on record.
+        if (!errors.containsKey("insurerName") && !errors.containsKey("insurerPhone")
+                && !contactBook.isListedInsurer(raw.insurerName().trim(), raw.insurerPhone().trim())) {
+            errors.put("insurerName", "Choose the insurer from the list");
+        }
+        if (!errors.containsKey("emergencyName") && !errors.containsKey("emergencyPhone")
+                && !contactBook.isOwnersPerson(ownerId, raw.emergencyName().trim(), raw.emergencyPhone().trim())) {
+            errors.put("emergencyName", "Choose a person from your contacts");
+        }
         // V50: arrival day, training window (>= 3 weeks, inside the stay) and length of stay.
         errors.putAll(HorsePolicy.stayProblems(raw.preferredStart(), raw.trainingStart(), raw.trainingEnd(),
                 raw.contractMonths(), LocalDate.now()));

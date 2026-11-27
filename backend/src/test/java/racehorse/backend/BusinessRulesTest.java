@@ -1085,7 +1085,7 @@ class BusinessRulesTest {
         HorseRepository horseRepo = mock(HorseRepository.class);
         HorseResponse horse = horse(105, "ELIGIBLE", TODAY.minusYears(4), "COLT");
         when(horseRepo.findById(105)).thenReturn(Optional.of(horse));
-        when(horseRepo.existsByRegistrationCode("RC-999", 105)).thenReturn(false);
+        when(horseRepo.existsByRegistrationCode("TM-105", 105)).thenReturn(false);
         when(horseRepo.existsByStallNo("B-01", 105)).thenReturn(false);
         when(horseRepo.findActiveTrainer(2)).thenReturn(Optional.of(
                 new HorseRepository.TrainerSummary(2, "trainer2", "Trainer 2", 5, 5)));
@@ -1094,7 +1094,7 @@ class BusinessRulesTest {
         HorseService service = new HorseService(horseRepo, mock(HorseVitalsRepository.class), mock(UserRepository.class));
 
         ApiException ex = expect(ApiException.class, 400, () -> service.updateIdentity(
-                105, new HorseIdentityRequest("RC-999", "B-01", 2), MANAGER, "ip"));
+                105, new HorseIdentityRequest("TM-105", "B-01", 2), MANAGER, "ip"));
         assertTrue(ex.getFieldErrors().containsKey("trainerId"), ex.getFieldErrors().toString());
         assertTrue(ex.getFieldErrors().get("trainerId").contains("maximum limit of 5 horses"), ex.getFieldErrors().toString());
     }
@@ -1135,7 +1135,7 @@ class BusinessRulesTest {
         HorseService service = new HorseService(horseRepo, mock(HorseVitalsRepository.class), mock(UserRepository.class));
 
         ApiException ex = expect(ApiException.class, 403, () -> service.updateIdentity(
-                105, new HorseIdentityRequest("RC-999", "B-01", 2), TRAINER, "ip"));
+                105, new HorseIdentityRequest("TM-105", "B-01", 2), TRAINER, "ip"));
         assertTrue(ex.getMessage().contains("Only Club Manager can update horse identity"), ex.getMessage());
         verify(horseRepo, never()).updateIdentity(anyInt(), any(), any());
     }
@@ -1357,7 +1357,7 @@ class BusinessRulesTest {
         HorseResponse horseBefore = horseWithTrainer(105, "ELIGIBLE", TODAY.minusYears(4), "COLT", null, null);
         HorseResponse horseAfter = horseWithTrainer(105, "ELIGIBLE", TODAY.minusYears(4), "COLT", 2, "Trainer 2");
         when(horseRepo.findById(105)).thenReturn(Optional.of(horseBefore), Optional.of(horseAfter));
-        when(horseRepo.existsByRegistrationCode("RC-999", 105)).thenReturn(false);
+        when(horseRepo.existsByRegistrationCode("TM-105", 105)).thenReturn(false);
         when(horseRepo.existsByStallNo("B-01", 105)).thenReturn(false);
         when(horseRepo.findActiveTrainer(2)).thenReturn(Optional.of(
                 new HorseRepository.TrainerSummary(2, "trainer2", "Trainer 2", 1, 10)));
@@ -1366,8 +1366,8 @@ class BusinessRulesTest {
         HorseService service = new HorseService(horseRepo, mock(HorseVitalsRepository.class),
                 mock(UserRepository.class), notifications);
 
-        service.updateIdentity(105, new HorseIdentityRequest("RC-999", "B-01", 2), MANAGER, "ip");
-        verify(horseRepo).updateIdentity(105, "RC-999", "B-01");
+        service.updateIdentity(105, new HorseIdentityRequest("TM-105", "B-01", 2), MANAGER, "ip");
+        verify(horseRepo).updateIdentity(105, "TM-105", "B-01");
         verify(horseRepo).updateTrainer(105, 2);
         verify(notifications).notifyUser(eq(2), argThat(n ->
                 "HORSE_ASSIGNED_TO_TRAINER".equals(n.type()) && "HORSE".equals(n.targetEntity()) && Integer.valueOf(105).equals(n.targetId())));

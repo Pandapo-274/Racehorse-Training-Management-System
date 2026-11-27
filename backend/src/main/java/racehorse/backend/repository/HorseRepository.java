@@ -200,14 +200,10 @@ public class HorseRepository {
 
     /** Chuyển chủ (Club Manager). */
     public int updateOwner(int horseId, int ownerId) {
-        int changed = jdbc.sql("UPDATE HORSE SET owner_id = :o, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
+        // V61: the contract does NOT move with the horse. The seller's contract is ended and
+        // the buyer signs their own (ContractService.handOver), in the same transaction.
+        return jdbc.sql("UPDATE HORSE SET owner_id = :o, updated_at = SYSUTCDATETIME() WHERE horse_id = :id")
                 .param("o", ownerId).param("id", horseId).update();
-        // V49: the running stay goes with the horse; the new owner is the one who renews it.
-        jdbc.sql("""
-                UPDATE HORSE_CONTRACT SET owner_id = :o, updated_at = SYSUTCDATETIME()
-                WHERE horse_id = :id AND status IN ('ACTIVE', 'EXPIRED')
-                """).param("o", ownerId).param("id", horseId).update();
-        return changed;
     }
 
     /** Nhận lại ngựa đã rút: về ACTIVE, xếp chuồng. Điều kiện WITHDRAWN trong câu UPDATE. */
@@ -447,6 +443,15 @@ public class HorseRepository {
                         updated_at = SYSUTCDATETIME()
                     WHERE horse_id = :id AND status IN ('ACTIVE', 'EXPIRED')
                     """).param("id", horseId).update();
+            // V61/V62: nothing still waiting may start later for a horse that left: a change-of-owner
+            // contract nobody signed, or a renewal not signed or not paid yet.
+            jdbc.sql("""
+                    UPDATE HORSE_CONTRACT
+                    SET status = 'VOID', closed_note = N'Horse withdrawn from the club',
+                        updated_at = SYSUTCDATETIME()
+                    WHERE horse_id = :id AND status IN ('SENT', 'SIGNED')
+                      AND (takes_over_contract_id IS NOT NULL OR renews_contract_id IS NOT NULL)
+                    """).param("id", horseId).update();
         }
         return changed;
     }
@@ -577,6 +582,17 @@ public class HorseRepository {
      * V49: the stay ran out and was not renewed. Horses registered before
      * contracts existed have no row at all and are never blocked.
      */
+    /** V61: sold, and the new owner has not signed the change-of-owner contract yet. */
+    public boolean isWaitingForTakeover(int horseId) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM HORSE_CONTRACT
+                WHERE horse_id = :id AND status = 'SENT' AND takes_over_contract_id IS NOT NULL
+                """)
+                .param("id", horseId)
+                .query(Integer.class)
+                .single() > 0;
+    }
+
     public boolean hasExpiredContract(int horseId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM HORSE_CONTRACT WHERE horse_id = :id AND status = 'EXPIRED'

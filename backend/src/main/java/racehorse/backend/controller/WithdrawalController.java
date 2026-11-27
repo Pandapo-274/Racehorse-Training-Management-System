@@ -58,6 +58,37 @@ public class WithdrawalController {
         return service.list(horseId, user);
     }
 
+    /** V62: what leaving on leaveOn would mean, before the owner asks (refund, notice, costs, races). */
+    @GetMapping("/basis")
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER"})
+    public WithdrawalService.Basis preview(
+            @RequestParam int horseId,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate leaveOn,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.preview(horseId, leaveOn, user);
+    }
+
+    /** V62: the basis the manager approves on. */
+    @GetMapping("/{id}/basis")
+    @RequireRole({"HORSE_OWNER", "CLUB_MANAGER"})
+    public WithdrawalService.Basis basis(
+            @PathVariable int id,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user) {
+        return service.basisOf(id, user);
+    }
+
+    /** V62: the club withdraws a horse whose stay ended without renewal. */
+    @PostMapping("/by-club")
+    @RequireRole({"CLUB_MANAGER"})
+    public ResponseEntity<WithdrawalRow> withdrawByClub(
+            @Valid @RequestBody racehorse.backend.dto.WithdrawalByClubRequest request,
+            @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
+            HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.withdrawByClub(request, user, http.getRemoteAddr()));
+    }
+
     @PutMapping("/{id}/cancel")
     @RequireRole({"HORSE_OWNER"})
     public WithdrawalRow cancel(

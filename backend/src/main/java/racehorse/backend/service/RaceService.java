@@ -841,6 +841,9 @@ public class RaceService {
         if (horses.hasExpiredContract(h.horseId())) {
             problems.add(h.horseName() + "'s stay at the club has ended. Renew it before entering a race");
         }
+        if (horses.isWaitingForTakeover(h.horseId())) {
+            problems.add(h.horseName() + " has a new owner who must sign the stay contract before entering a race");
+        }
         if (h.dateOfBirth() == null) {
             problems.add(h.horseName() + " has no date of birth on record");
         } else {

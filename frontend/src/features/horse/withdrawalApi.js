@@ -17,8 +17,29 @@ export function listWithdrawals({ horseId, signal } = {}) {
   return authFetch(`${API}${qs}`, { signal });
 }
 
-export function submitWithdrawal(horseId, reason) {
+/** V62: leaveOn = the day the owner collects the horse (ISO date). */
+export function submitWithdrawal(horseId, reason, leaveOn) {
   return authFetch(API, {
+    method: "POST",
+    body: JSON.stringify({ horseId, reason: reason.trim(), leaveOn }),
+  });
+}
+
+/** V62: what leaving on leaveOn would mean: notice, refund, costs, vet lock, races. */
+export function previewWithdrawal(horseId, leaveOn, signal) {
+  const q = new URLSearchParams({ horseId });
+  if (leaveOn) q.set("leaveOn", leaveOn);
+  return authFetch(`${API}/basis?${q}`, { signal });
+}
+
+/** V62: the same, for a request already sent (what approving it today would do). */
+export function getWithdrawalBasis(id, signal) {
+  return authFetch(`${API}/${id}/basis`, { signal });
+}
+
+/** V62: the club withdraws a horse whose stay ended without renewal. */
+export function withdrawByClub(horseId, reason) {
+  return authFetch(`${API}/by-club`, {
     method: "POST",
     body: JSON.stringify({ horseId, reason: reason.trim() }),
   });
@@ -52,6 +73,10 @@ const STATUS = {
   REJECTED:  { label: "Turned down", tone: "critical" },
   CANCELLED: { label: "Cancelled by owner", tone: "neutral" },
 };
+
+/** Contract clause 9: the stay ends with 15 days' notice. */
+export const NOTICE_DAYS = 15;
+export const MAX_LEAVE_AHEAD_DAYS = 90;
 
 export function toWithdrawalStatus(status) {
   return STATUS[status] || { label: status || "Unknown", tone: "neutral" };

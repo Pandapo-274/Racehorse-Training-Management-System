@@ -100,3 +100,15 @@ export function stayLine(c, formatDate) {
 }
 
 export const REMINDER_DAYS = 14;
+
+/** V61: the buyer's contract for the rest of a stay the seller paid for. */
+export function isTakeover(c) {
+  return !!c?.takesOverContractId;
+}
+
+/** " · renewal" / " · change of owner" after the horse name. */
+export function contractKind(c) {
+  if (c?.renewsContractId) return " · renewal";
+  if (isTakeover(c)) return " · change of owner";
+  return "";
+}

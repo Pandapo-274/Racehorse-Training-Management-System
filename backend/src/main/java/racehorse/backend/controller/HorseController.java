@@ -69,7 +69,10 @@ public class HorseController {
     public HorseResponse transferOwner(@PathVariable int id, @Valid @RequestBody TransferRequest request,
                                        @RequestAttribute(AuthInterceptor.USER_ATTR) AuthenticatedUser user,
                                        HttpServletRequest http) {
-        return adminService.transferOwner(id, request.ownerId(), request.reason(), user, http.getRemoteAddr());
+        return adminService.transferOwner(id, request.ownerId(), request.reason(),
+                racehorse.backend.service.ContractService.Contacts.of(request.insurerName(), request.insurerPhone(),
+                        request.emergencyName(), request.emergencyPhone()),
+                user, http.getRemoteAddr());
     }
 
     /** Club Manager nhận lại ngựa đã rút, xếp chuồng mới. */
@@ -86,7 +89,12 @@ public class HorseController {
             @jakarta.validation.constraints.NotNull(message = "New owner is required") Integer ownerId,
             @jakarta.validation.constraints.NotBlank(message = "Reason is required")
             @jakarta.validation.constraints.Size(max = 255, message = "Reason must be at most 255 characters")
-            String reason) {}
+            String reason,
+            // V61: the new owner's clause 8 contacts; required by the service when the horse has a stay.
+            @jakarta.validation.constraints.Size(max = 100, message = "At most 100 characters") String insurerName,
+            @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String insurerPhone,
+            @jakarta.validation.constraints.Size(max = 100, message = "At most 100 characters") String emergencyName,
+            @jakarta.validation.constraints.Size(max = 20, message = "At most 20 characters") String emergencyPhone) {}
 
     public record ReadmitRequest(
             @jakarta.validation.constraints.NotBlank(message = "Stall is required")

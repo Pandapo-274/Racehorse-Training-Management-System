@@ -16,7 +16,10 @@ import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import { formatDate, formatDateTime, listAvailableTrainers, toBcsGroup, BCS_GROUPS } from "./horseApi";
 import { formatVnd } from "./horseRequestApi";
-import { listContracts, receiveHorse, cancelContract, toContractStatus, stayLine } from "./contractApi";
+import {
+  listContracts, receiveHorse, cancelContract, toContractStatus, stayLine, contractKind, isTakeover,
+} from "./contractApi";
+import { withdrawByClub } from "./withdrawalApi";
 import RegistrationCodeField from "./RegistrationCodeField";
 import StallField from "./StallField";
 
@@ -131,7 +134,7 @@ function ReceiveForm({ c, trainers, onDone }) {
   );
 }
 
-function ContractItem({ c, trainers, openId, onDone, onCancel }) {
+function ContractItem({ c, trainers, openId, onDone, onCancel, onWithdraw }) {
   const [showText, setShowText] = useState(openId === c.contractId);
   const st = toContractStatus(c.status);
   const receivable = c.status === "PAID" && !c.renewsContractId;
@@ -141,8 +144,9 @@ function ContractItem({ c, trainers, openId, onDone, onCancel }) {
         <div className="hz-review__head">
           <HorsePhoto horse={c} className="hz-photo--sm" />
           <div>
-            <strong>{c.horseName}{c.renewsContractId ? " · renewal" : ""}</strong>
-            <p>{c.ownerName} · contract #{c.contractId}</p>
+            <strong>{c.horseName}{contractKind(c)}</strong>
+            <p>{c.ownerName} · contract #{c.contractId}
+              {isTakeover(c) && c.previousOwnerName ? ` · takes over from ${c.previousOwnerName}` : ""}</p>
             <p>{c.months} month{c.months === 1 ? "" : "s"} · {formatVnd(c.totalAmount)}
               {c.trainingStart && c.trainingEnd
                 ? ` · training ${formatDate(c.trainingStart)} - ${formatDate(c.trainingEnd)}`
@@ -160,7 +164,15 @@ function ContractItem({ c, trainers, openId, onDone, onCancel }) {
         {showText && <pre className="hz-contract-text">{c.termsSnapshot}</pre>}
       </div>
       {receivable && <ReceiveForm c={c} trainers={trainers} onDone={onDone} />}
-      {(c.status === "SENT" || c.status === "SIGNED") && (
+      {/* V62: a stay that ended without renewal; the owner did not ask, so the club withdraws the horse. */}
+      {c.status === "EXPIRED" && c.horseId && (
+        <div className="hz-review__form">
+          <button type="button" className="hz-btn hz-btn--ghost" onClick={() => onWithdraw(c)}>
+            Withdraw the horse
+          </button>
+        </div>
+      )}
+      {(c.status === "SENT" || c.status === "SIGNED") && !isTakeover(c) && (
         <div className="hz-review__form">
           <button type="button" className="hz-btn hz-btn--ghost" onClick={() => onCancel(c)}>
             Withdraw the offer
@@ -208,6 +220,18 @@ export default function ManagerContractsPage() {
     if (reason !== null) load();
   };
 
+  const withdrawHorse = async (c) => {
+    const reason = await dialog.prompt({
+      title: `Withdraw ${c.horseName} from the club?`,
+      label: `Reason for ${c.ownerName}`,
+      defaultValue: `The stay ended on ${formatDate(c.endDate)} and was not renewed.`,
+      confirmLabel: "Withdraw the horse",
+      validate: (v) => (v && v.trim() ? null : "Say why"),
+      onSubmit: async (v) => { await withdrawByClub(c.horseId, v); },
+    });
+    if (reason !== null) load();
+  };
+
   const group = (statuses, extra = () => true) => (rows || []).filter((c) => statuses.includes(c.status) && extra(c));
   const sections = [
     { title: "Paid - receive the horse", hint: "Assign code, stall, Head Trainer and BCS", items: group(["PAID"], (c) => !c.renewsContractId) },
@@ -229,7 +253,7 @@ export default function ManagerContractsPage() {
             <ul className="hz-list">
               {s.items.map((c) => (
                 <ContractItem key={c.contractId} c={c} trainers={trainers} openId={openId}
-                              onDone={load} onCancel={withdraw} />
+                              onDone={load} onCancel={withdraw} onWithdraw={withdrawHorse} />
               ))}
             </ul>
           )}

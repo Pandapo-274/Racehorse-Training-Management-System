@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import racehorse.backend.dto.HorseRequest;
+import racehorse.backend.dto.HorseResponse;
 import racehorse.backend.dto.ReceiveRequest;
 import racehorse.backend.dto.ReviewRequest;
 import racehorse.backend.dto.SignContractRequest;
@@ -41,6 +42,7 @@ import racehorse.backend.repository.UserRepository;
 import racehorse.backend.security.AuthenticatedUser;
 import racehorse.backend.service.ContractService;
 import racehorse.backend.service.ContractTerms;
+import racehorse.backend.service.HorseAdminService;
 import racehorse.backend.service.HorsePhotoService;
 import racehorse.backend.service.HorsePolicy;
 import racehorse.backend.service.HorseRequestService;
@@ -134,6 +136,19 @@ class Flow1ContractRulesTest {
         assertTrue(ex.getFieldErrors().containsKey("registrationCode"), ex.getFieldErrors().toString());
     }
 
+    @Test
+    void registrationCodeCannotBeChangedOnceAssigned() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7)));
+        HorseService service = new HorseService(horses, mock(HorseVitalsRepository.class), mock(UserRepository.class));
+
+        ApiException ex = expect(400, () -> service.updateIdentity(10,
+                new racehorse.backend.dto.HorseIdentityRequest("TM-0999", "A-08", null), MANAGER, "ip"));
+        assertEquals("The registration code cannot be changed once assigned",
+                ex.getFieldErrors().get("registrationCode"));
+        verify(horses, never()).updateIdentity(anyInt(), any(), any());
+    }
+
     // ------------------------------------------------------------ stalls: the stable plan (V60)
 
     @Test
@@ -165,6 +180,253 @@ class Flow1ContractRulesTest {
         HorseService.StallCheck free = service.checkStall("A-08", null);
         assertTrue(free.available());
         assertEquals("A-08", free.stall());
+    }
+
+    // ------------------------------------------------------------ clause 8 contacts from lists (V63)
+
+    @Test
+    void typedInsurerOrStrangerIsRefusedOnARegistration() {
+        HorseRequestRepository requests = mock(HorseRequestRepository.class);
+        racehorse.backend.repository.ContactRepository book = mock(racehorse.backend.repository.ContactRepository.class);
+        when(book.isListedInsurer("Bao Viet Insurance", "1900 558899")).thenReturn(true);
+        HorseRequestService service = new HorseRequestService(requests, mock(HorseService.class),
+                mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), book);
+
+        ApiException ex = expect(400, () -> service.submit(new SubmitRequest("Sakura", "Thoroughbred", "COLT",
+                LocalDate.now().minusYears(2), "Bay", null, "ACADEMY", null, null,
+                new BigDecimal("450"), new BigDecimal("155"), "TURF", "MEDIUM", "STALKER",
+                LocalDate.now().plusDays(3), null, 1, null,
+                LocalDate.now().plusDays(3), LocalDate.now().plusDays(31),
+                "rdhdfh", "342534543", "Tran Van An", "0912345678"), OWNER_7, "ip"));
+        assertEquals("Choose the insurer from the list", ex.getFieldErrors().get("insurerName"));
+        assertEquals("Choose a person from your contacts", ex.getFieldErrors().get("emergencyName"));
+        verify(requests, never()).insert(anyInt(), any());
+    }
+
+    // ------------------------------------------------------------ change of owner (V61)
+
+    private static final AuthenticatedUser OWNER_8 =
+            new AuthenticatedUser(8, "owner8", "HORSE_OWNER", "jti", Instant.now().plusSeconds(3600), Instant.now());
+    private static final ContractService.Contacts BUYER_CONTACTS =
+            ContractService.Contacts.of("PVI Insurance", "1900 545458", "Le Thi Hoa", "0913000111");
+
+    @Test
+    void horseWhoseStayEndedCannotBeTransferred() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findRunning(10)).thenReturn(Optional.of(stay(40, 7, "Tran Duc Minh", "EXPIRED",
+                LocalDate.now().minusDays(2), null)));
+        ContractService service = contractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), mock(PaymentGateway.class), mock(UserRepository.class));
+
+        ApiException ex = expect(409, () -> service.transferSource(10, "Sakura"));
+        assertTrue(ex.getMessage().contains("stay ended"), ex.getMessage());
+    }
+
+    @Test
+    void openRenewalMustBeSettledBeforeATransfer() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findOpenRenewal(10)).thenReturn(Optional.of(stay(41, 7, "Tran Duc Minh", "SENT", null, null)));
+        ContractService service = contractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), mock(PaymentGateway.class), mock(UserRepository.class));
+
+        ApiException ex = expect(409, () -> service.transferSource(10, "Sakura"));
+        assertTrue(ex.getMessage().contains("Cancel it before the transfer"), ex.getMessage());
+    }
+
+    @Test
+    void transferOfAHorseWithAStayNeedsTheBuyersContacts() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7)));
+        when(horses.isActiveHorseOwner(8)).thenReturn(true);
+        when(horses.pendingOnOwner(10)).thenReturn(new HorseRepository.PendingOnOwner(0, 0, 0));
+        ContractService contracts = mock(ContractService.class);
+        when(contracts.transferSource(10, "Sakura")).thenReturn(stay(40, 7, "Tran Duc Minh", "ACTIVE",
+                LocalDate.now().plusDays(20), null));
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class),
+                mock(NotificationService.class), contracts, mock(racehorse.backend.repository.ContactRepository.class));
+
+        ApiException ex = expect(400, () -> service.transferOwner(10, 8, "Sold",
+                ContractService.Contacts.of(null, null, " ", null), MANAGER, "ip"));
+        assertTrue(ex.getFieldErrors().containsKey("insurerName"), ex.getFieldErrors().toString());
+        assertTrue(ex.getFieldErrors().containsKey("emergencyName"), ex.getFieldErrors().toString());
+        verify(horses, never()).updateOwner(anyInt(), anyInt());
+    }
+
+    @Test
+    void handOverClosesTheSellersContractAndSendsTheBuyerTheirOwn() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        LocalDate end = LocalDate.now().plusDays(20);
+        ContractRow seller = stay(40, 7, "Tran Duc Minh", "ACTIVE", end, null);
+        when(contracts.markEnded(eq(40), anyString())).thenReturn(1);
+        HorseRequestRepository requests = mock(HorseRequestRepository.class);
+        when(requests.findById(5)).thenReturn(Optional.of(request(5, "ACADEMY", "/p.webp", 1, null)));
+        ContractService service = contractService(contracts, requests,
+                mock(HorseService.class), mock(PaymentGateway.class), mock(UserRepository.class));
+
+        service.handOver(seller, horse(10, 8), 8, "Le Van Binh", BUYER_CONTACTS, MANAGER, "ip");
+
+        ArgumentCaptor<ContractRepository.NewContract> sent = ArgumentCaptor.forClass(ContractRepository.NewContract.class);
+        verify(contracts).insert(sent.capture());
+        ContractRepository.NewContract c = sent.getValue();
+        assertEquals(8, c.ownerId());
+        assertEquals(0L, c.totalAmount());
+        assertEquals(Integer.valueOf(40), c.takesOverContractId());
+        assertEquals(end, c.plannedEnd());
+        assertTrue(c.terms().contains("CHANGE OF OWNER"));
+        assertTrue(c.terms().contains("Second contact: Le Thi Hoa, 0913000111"), c.terms());
+        assertFalse(c.terms().contains("Tran Van An"), "the seller's second contact must not carry over");
+    }
+
+    @Test
+    void signingAChangeOfOwnerContractStartsTheStayWithoutPayment() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        LocalDate end = LocalDate.now().plusDays(20);
+        ContractRow takeover = stay(41, 8, "Le Van Binh", "SENT", end, 40);
+        when(contracts.findById(41)).thenReturn(Optional.of(takeover));
+        when(contracts.markSigned(eq(41), eq(8), anyString(), anyString(), anyString())).thenReturn(1);
+        when(contracts.activateTakeover(41, takeover.plannedStart(), end, false)).thenReturn(1);
+        UserRepository users = mock(UserRepository.class);
+        when(users.findById(8)).thenReturn(Optional.of(new UserRecord(8, "owner8", "$2a$hash", "Le Van Binh",
+                "binh@club.test", "ACTIVE", "HORSE_OWNER", null, false, null)));
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        ContractService service = contractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), gateway, users);
+
+        service.sign(41, new SignContractRequest("Le Van Binh", true, ContractTerms.sha256("terms")), OWNER_8, "ip");
+        verify(contracts).activateTakeover(41, takeover.plannedStart(), end, false);
+        verify(gateway, never()).createLink(anyLong(), anyLong(), any(), any(), any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void changeOfOwnerContractCannotBeDeclined() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findById(41)).thenReturn(Optional.of(stay(41, 8, "Le Van Binh", "SENT",
+                LocalDate.now().plusDays(20), 40)));
+        ContractService service = contractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), mock(PaymentGateway.class), mock(UserRepository.class));
+
+        expect(409, () -> service.cancel(41, "Changed my mind", OWNER_8, "ip"));
+        verify(contracts, never()).markVoid(anyInt(), any());
+    }
+
+    // ------------------------------------------------------------ leaving the club (V62, clause 9)
+
+    @Test
+    void monthsThatStartAfterTheNoticeAreRefunded() {
+        LocalDate start = LocalDate.of(2026, 1, 10);
+        // Asked on 20 Jan to leave on 25 Jan: notice runs to 4 Feb, so February and March are refunded.
+        LocalDate notice = HorsePolicy.noticeUntil(LocalDate.of(2026, 1, 20), LocalDate.of(2026, 1, 25));
+        assertEquals(LocalDate.of(2026, 2, 4), notice);
+        HorsePolicy.Refund early = HorsePolicy.refundFor(start, 3, 3000, notice);
+        assertEquals(2, early.monthsNotStarted());
+        assertEquals(2000L, early.amount());
+        // Leaving on 20 Feb: February has started, only March is refunded.
+        HorsePolicy.Refund later = HorsePolicy.refundFor(start, 3, 3000,
+                HorsePolicy.noticeUntil(LocalDate.of(2026, 1, 20), LocalDate.of(2026, 2, 20)));
+        assertEquals(1, later.monthsNotStarted());
+        assertEquals(1000L, later.amount());
+        assertEquals("Choose today or a later day",
+                HorsePolicy.leaveOnProblem(LocalDate.now().minusDays(1), LocalDate.now()));
+    }
+
+    @Test
+    void withdrawalIsNotApprovedBeforeTheCollectionDay() {
+        WithdrawalMocks m = new WithdrawalMocks();
+        m.pending(30, LocalDate.now().plusDays(5));
+
+        ApiException ex = expect(409, () -> m.service().approve(30, null, MANAGER, "ip"));
+        assertTrue(ex.getMessage().contains("keeps training"), ex.getMessage());
+        verify(m.horses, never()).markWithdrawn(anyInt());
+    }
+
+    @Test
+    void approvedWithdrawalRecordsTheRefundAndCancelsAnOpenRaceFee() {
+        WithdrawalMocks m = new WithdrawalMocks();
+        m.pending(30, LocalDate.now());
+        // 3-month stay that started 10 days ago, 3,000 VND paid. Asked yesterday, so the notice runs to
+        // today + 14: the 2nd and 3rd months start after it and are refunded.
+        when(m.contracts.findRunning(10)).thenReturn(Optional.of(
+                stay(40, 7, "Tran Duc Minh", "ACTIVE", LocalDate.now().plusMonths(3), null, null, 3, 3000)));
+        when(m.withdrawals.findUpcomingEntries(eq(10), any())).thenReturn(List.of(
+                new racehorse.backend.repository.WithdrawalRepository.UpcomingEntry(1, "Autumn Mile",
+                        LocalDate.now().plusDays(21), LocalDate.now().plusDays(14), 99, false)));
+        when(m.expenses.cancel(eq(99), eq(1), anyString())).thenReturn(1);
+
+        m.service().approve(30, null, MANAGER, "ip");
+
+        verify(m.expenses).cancel(eq(99), eq(1), anyString());
+        verify(m.withdrawals).markApproved(eq(30), eq(1), any(), any(), anyInt(), anyInt(),
+                eq(LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(14)), eq(2), eq(2000L), eq(40));
+    }
+
+    @Test
+    void clubWithdrawsAHorseItselfOnlyWhenItsStayEnded() {
+        WithdrawalMocks m = new WithdrawalMocks();
+        when(m.horses.findById(10)).thenReturn(Optional.of(horse(10, 7)));
+        when(m.horses.hasExpiredContract(10)).thenReturn(false);
+
+        expect(409, () -> m.service().withdrawByClub(
+                new racehorse.backend.dto.WithdrawalByClubRequest(10, "Owner unreachable"), MANAGER, "ip"));
+        verify(m.withdrawals, never()).insert(anyInt(), anyInt(), any(), any(), any(Boolean.class));
+    }
+
+    @Test
+    void renewalPaidAfterTheHorseLeftDoesNotStart() {
+        ContractRepository contracts = mock(ContractRepository.class);
+        when(contracts.findIdByOrderCode(4_100_123L)).thenReturn(Optional.of(41));
+        when(contracts.findById(41)).thenReturn(Optional.of(
+                stay(41, 7, "Tran Duc Minh", "VOID", null, null, 40, 1, 1000)));
+        when(contracts.markPaid(41, 1000, "FT9")).thenReturn(1);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyWebhook("{late}")).thenReturn(new PaymentGateway.Payment(4_100_123L, 1000, "FT9", true, null));
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(10)).thenReturn(Optional.of(new HorseResponse(10, 7, "Owner 7", null, null, "Sakura",
+                "TM-0751", "Thoroughbred", "COLT", LocalDate.now().minusYears(2), "Bay", null, null, "HEALTHY",
+                LocalDateTime.now(), LocalDateTime.now(), "ACADEMY", null, "WITHDRAWN", LocalDateTime.now())));
+        ContractService service = new ContractService(contracts, mock(HorseRequestRepository.class),
+                mock(HorseService.class), horses, mock(HorsePhotoService.class), mock(UserRepository.class),
+                mock(NotificationService.class), new ContractTerms(100_000, "3:5", 7, 5_000_000, "Tracen Club"),
+                gateway, mock(racehorse.backend.service.CostPaymentService.class), "http://localhost:3000");
+
+        assertTrue(service.handleWebhook("{late}"));
+        verify(contracts).markPaid(41, 1000, "FT9");
+        verify(contracts, never()).markActive(anyInt(), anyInt(), any(), any(), any());
+        verify(contracts, never()).markEnded(anyInt(), any());
+    }
+
+    /** WithdrawalService with every collaborator mocked; horse 10 belongs to owner 7. */
+    private static final class WithdrawalMocks {
+        final racehorse.backend.repository.WithdrawalRepository withdrawals =
+                mock(racehorse.backend.repository.WithdrawalRepository.class);
+        final HorseRepository horses = mock(HorseRepository.class);
+        final racehorse.backend.repository.TrainingSessionRepository sessions =
+                mock(racehorse.backend.repository.TrainingSessionRepository.class);
+        final ContractRepository contracts = mock(ContractRepository.class);
+        final racehorse.backend.repository.ExpenseRepository expenses =
+                mock(racehorse.backend.repository.ExpenseRepository.class);
+
+        WithdrawalMocks() {
+            when(withdrawals.unpaidCosts(anyInt())).thenReturn(new racehorse.backend.repository.WithdrawalRepository.Costs(0, 0, 0));
+            when(withdrawals.activity(anyInt())).thenReturn(new racehorse.backend.repository.WithdrawalRepository.Activity(0, 0));
+            when(horses.markWithdrawn(10)).thenReturn(1);
+        }
+
+        /** A request sent yesterday by owner 7 to collect horse 10 on leaveOn. */
+        void pending(int id, LocalDate leaveOn) {
+            when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7)));
+            when(withdrawals.findById(id)).thenReturn(Optional.of(new racehorse.backend.entity.WithdrawalRow(
+                    id, 10, "Sakura", "TM-0751", "A-08", "ACTIVE", 7, "Tran Duc Minh", "Moving to another stable",
+                    "PENDING", LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(1), null, null, null, null,
+                    null, null, null, 0, 0, leaveOn, null, null, null, null, false)));
+            when(withdrawals.markApproved(anyInt(), anyInt(), any(), any(), anyInt(), anyInt(), any(), anyInt(),
+                    anyLong(), any())).thenReturn(1);
+        }
+
+        racehorse.backend.service.WithdrawalService service() {
+            return new racehorse.backend.service.WithdrawalService(withdrawals, horses, sessions,
+                    mock(racehorse.backend.repository.TrainingPlanRepository.class), mock(UserRepository.class),
+                    mock(NotificationService.class), contracts, expenses);
+        }
     }
 
     // ------------------------------------------------------------ 4. how long the horse stays
@@ -354,12 +616,23 @@ class Flow1ContractRulesTest {
     }
 
     @Test
+    void renewalSaysTheHorseIsAlreadyAtTheClub() {
+        ContractTerms terms = new ContractTerms(2000, "3:5", 7, 5_000_000, "Tracen Club");
+        String text = terms.text(new ContractTerms.Parties("Owner", "Sakura", "Thoroughbred", "FILLY",
+                        LocalDate.now().minusYears(2), "Bay", null, null, null, null, "Manager", true, LocalDate.now(),
+                        null, null, "PVI", "1900", "Le Thi Hoa", "0913", "TM-0751", "Z-07"),
+                terms.priceFor(1), LocalDate.now().plusDays(7));
+        assertTrue(text.contains("Already at the club as TM-0751, stall Z-07."), text);
+        assertFalse(text.contains("when the horse arrives"));
+    }
+
+    @Test
     void contractStatesTheCommitmentAndTheContacts() {
         ContractTerms terms = new ContractTerms(2000, "3:5", 7, 5_000_000, "Tracen Club");
         String text = terms.text(new ContractTerms.Parties("Owner", "Sakura", "Thoroughbred", "COLT",
                         LocalDate.now().minusYears(2), "Bay", null, null, 4, LocalDate.now(), "Manager", false, null,
                         LocalDate.now(), LocalDate.now().plusDays(28),
-                        "Bao Viet", "0901234567", "Tran Van An", "0912345678"),
+                        "Bao Viet", "0901234567", "Tran Van An", "0912345678", null, null),
                 terms.priceFor(1), LocalDate.now().plusDays(7));
         assertTrue(text.contains(ContractTerms.COMMITMENT_HEADING));
         assertTrue(text.contains("does not promise a race result"));
@@ -554,7 +827,7 @@ class Flow1ContractRulesTest {
     private static HorseRequestService requestService(HorseRequestRepository requests, HorseService horses,
                                                       ContractService contracts) {
         return new HorseRequestService(requests, horses, mock(UserRepository.class),
-                mock(NotificationService.class), contracts);
+                mock(NotificationService.class), contracts, mock(racehorse.backend.repository.ContactRepository.class));
     }
 
     private static ContractService contractService(ContractRepository contracts, HorseRequestRepository requests,
@@ -587,7 +860,36 @@ class Flow1ContractRulesTest {
                 1, 4, total, BigDecimal.ZERO, total,
                 null, null, null, status, "Manager", LocalDateTime.now(), LocalDate.now().plusDays(7),
                 null, null, null, null, null, null, null, null, null, null,
-                terms, ContractTerms.sha256(terms), null, null, null, null);
+                terms, ContractTerms.sha256(terms), null, null, null, null,
+                null, null, null, null, null, null);
+    }
+
+    /** A stay of horse 10 from request 5; takesOver set for a change-of-owner contract. */
+    private static ContractRow stay(int id, int ownerId, String ownerName, String status, LocalDate end,
+                                    Integer takesOver) {
+        return stay(id, ownerId, ownerName, status, end, takesOver, null, 1, 1000);
+    }
+
+    private static ContractRow stay(int id, int ownerId, String ownerName, String status, LocalDate end,
+                                    Integer takesOver, Integer renews, int months, long total) {
+        String terms = "terms";
+        LocalDate start = LocalDate.now().minusDays(10);
+        return new ContractRow(id, 5, 10, ownerId, ownerName, renews,
+                "Sakura", "ACADEMY", "Thoroughbred", "COLT", LocalDate.now().minusYears(2), "Bay", null,
+                new BigDecimal("450"), new BigDecimal("155"), "TURF", "MEDIUM", "STALKER", null, null,
+                months, 4, total / months, BigDecimal.ZERO, takesOver == null ? total : 0,
+                takesOver == null ? start : LocalDate.now(), takesOver == null ? start : null, end, status,
+                "Manager", LocalDateTime.now(), end == null ? LocalDate.now().plusDays(7) : end,
+                null, null, null, null, null, null, null, null, "TM-0751", "A-08",
+                terms, ContractTerms.sha256(terms), null, null, null, null,
+                takesOver, takesOver == null ? null : "Tran Duc Minh",
+                "Bao Viet", "0901234567", "Tran Van An", "0912345678");
+    }
+
+    private static HorseResponse horse(int id, int ownerId) {
+        return new HorseResponse(id, ownerId, "Owner " + ownerId, null, null, "Sakura", "TM-0751", "Thoroughbred",
+                "COLT", LocalDate.now().minusYears(2), "Bay", new BigDecimal("450"), "A-08", "HEALTHY",
+                LocalDateTime.now(), LocalDateTime.now(), "ACADEMY", null, "ACTIVE", null);
     }
 
     private static ApiException expect(int status, org.junit.jupiter.api.function.Executable run) {

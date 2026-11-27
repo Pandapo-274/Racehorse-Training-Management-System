@@ -100,13 +100,15 @@ public class ContractService {
                         req.ownerName(), req.horseName(), req.breed(), req.horseGender(), req.dateOfBirth(),
                         req.color(), req.sireName(), req.damName(), req.trainingWeeks(), req.preferredStart(),
                         managerName, false, null, req.trainingStart(), req.trainingEnd(),
-                        req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone()),
+                        req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone(),
+                        null, null),
                 price, respondBy);
         return contracts.insert(new ContractRepository.NewContract(
                 req.requestId(), null, req.ownerId(), null, price.months(), req.trainingWeeks(),
-                price.monthlyFee(), price.discountPct(), price.total(), req.preferredStart(),
+                price.monthlyFee(), price.discountPct(), price.total(), req.preferredStart(), null,
                 text, ContractTerms.sha256(text), manager.userId(), respondBy,
-                req.trainingStart(), req.trainingEnd()));
+                req.trainingStart(), req.trainingEnd(), null,
+                req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone()));
     }
 
     /* ==================================================================
@@ -131,7 +133,8 @@ public class ContractService {
         if (isOwner(user) && horse.ownerId() != user.userId()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only view your own horses");
         }
-        return contracts.findByHorse(horseId);
+        // V61: after a sale the previous owner's contracts (their name, contacts, payment) stay theirs.
+        return isOwner(user) ? contracts.findByHorseAndOwner(horseId, user.userId()) : contracts.findByHorse(horseId);
     }
 
     public record Pricing(long monthlyFee, Map<Integer, java.math.BigDecimal> discounts, int offerDays,
@@ -188,7 +191,7 @@ public class ContractService {
             throw new ApiException(HttpStatus.CONFLICT, "This contract is " + c.status().toLowerCase(Locale.ROOT)
                     + " and cannot be signed");
         }
-        if (c.respondBy().isBefore(today())) {
+        if (!c.isTakeover() && c.respondBy().isBefore(today())) {
             throw new ApiException(HttpStatus.CONFLICT, "This offer lapsed on " + c.respondBy());
         }
         Map<String, String> errors = new HashMap<>();
@@ -213,6 +216,9 @@ public class ContractService {
         }
         users.writeAudit(owner.userId(), "CONTRACT_SIGN", "HORSE_CONTRACT", contractId, "SUCCESS", ip,
                 "Signed as \"" + r.fullName().trim() + "\", SHA-256 " + stored);
+        if (c.isTakeover()) {
+            return activateTakeover(c);
+        }
         notifications.notifyRole("CLUB_MANAGER", owner, new Notice("CONTRACT_SIGNED",
                 "Contract signed",
                 c.ownerName() + " signed the contract for " + c.horseName() + ". Waiting for payment.",
@@ -331,6 +337,20 @@ public class ContractService {
                 ContractTerms.vnd(p.amount()) + " via payOS, order " + p.orderCode()
                         + (p.reference() == null ? "" : ", bank ref " + p.reference()));
         if (c.renewsContractId() != null && c.horseId() != null) {
+            if (horses.findById(c.horseId()).map(HorseResponse::isWithdrawn).orElse(false)) {
+                // V62: money for a horse that has left. Record it (it is real), start nothing,
+                // and tell the club to send it back.
+                notifications.notifyRole("CLUB_MANAGER", null, new Notice("CONTRACT_PAID",
+                        "Renewal paid for a horse that left - refund it",
+                        c.ownerName() + " paid " + ContractTerms.vnd(p.amount()) + " to renew " + c.horseName()
+                                + ", which has already left the club. Refund it to the owner.",
+                        Notice.HORSE, c.horseId()));
+                notifications.notifyUser(c.ownerId(), new Notice("CONTRACT_PAID", "Payment received - to be refunded",
+                        "We received " + ContractTerms.vnd(p.amount()) + " to renew " + c.horseName()
+                                + ", but it has left the club. The club refunds this payment.",
+                        Notice.HORSE_REQUEST, c.requestId()));
+                return;
+            }
             startRenewal(c);
             return;
         }
@@ -462,16 +482,26 @@ public class ContractService {
         LocalDate respondBy = today().plusDays(terms.offerDays());
         LocalDate renewalStart = running.endDate() != null && running.endDate().isAfter(today())
                 ? running.endDate() : today();
+        // V61: clause 8 contacts come from the running contract - after a sale they are the new
+        // owner's, not those of the request the previous owner filed.
+        Contacts contacts = running.insurerName() != null || running.emergencyName() != null
+                ? new Contacts(running.insurerName(), running.insurerPhone(),
+                               running.emergencyName(), running.emergencyPhone())
+                : new Contacts(req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone());
         String text = terms.text(new ContractTerms.Parties(
                         running.ownerName(), horse.horseName(), horse.breed(), horse.horseGender(),
                         horse.dateOfBirth(), horse.color(), req.sireName(), req.damName(), null, null,
                         "the Club Manager", true, renewalStart, null, null,
-                        req.insurerName(), req.insurerPhone(), req.emergencyName(), req.emergencyPhone()),
+                        contacts.insurerName(), contacts.insurerPhone(),
+                        contacts.emergencyName(), contacts.emergencyPhone(),
+                        horse.registrationCode(), horse.stallNo()),
                 price, respondBy);
         int id = contracts.insert(new ContractRepository.NewContract(
                 running.requestId(), horseId, owner.userId(), running.contractId(), months, null,
-                price.monthlyFee(), price.discountPct(), price.total(), renewalStart,
-                text, ContractTerms.sha256(text), owner.userId(), respondBy, null, null));
+                price.monthlyFee(), price.discountPct(), price.total(), renewalStart, null,
+                text, ContractTerms.sha256(text), owner.userId(), respondBy, null, null, null,
+                contacts.insurerName(), contacts.insurerPhone(),
+                contacts.emergencyName(), contacts.emergencyPhone()));
         users.writeAudit(owner.userId(), "CONTRACT_RENEW_REQUEST", "HORSE_CONTRACT", id, "SUCCESS", ip,
                 months + " month(s) after contract #" + running.contractId());
         notifications.notifyRole("CLUB_MANAGER", owner, new Notice("CONTRACT_RENEW_REQUEST",
@@ -484,6 +514,11 @@ public class ContractService {
     @Transactional
     public ContractRow cancel(int contractId, String reason, AuthenticatedUser user, String ip) {
         ContractRow c = get(contractId, user);
+        if (c.isTakeover()) {
+            // The horse is already the new owner's; dropping this contract would leave it with no stay.
+            throw new ApiException(HttpStatus.CONFLICT, "A change-of-owner contract cannot be declined or "
+                    + "withdrawn. If the sale did not happen, the club transfers the horse back");
+        }
         if (!"SENT".equals(c.status()) && !"SIGNED".equals(c.status())) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "Only a contract that is not paid yet can be cancelled");
@@ -566,6 +601,123 @@ public class ContractService {
                     Notice.HORSE, c.horseId()));
         }
         return n;
+    }
+
+    /* ==================================================================
+     * 8. Change of owner (V61): the buyer signs their own contract.
+     * ================================================================== */
+
+    /** Clause 8 contacts of the new owner, handed to the club at the sale. */
+    public record Contacts(String insurerName, String insurerPhone, String emergencyName, String emergencyPhone) {
+
+        public static Contacts of(String insurerName, String insurerPhone, String emergencyName, String emergencyPhone) {
+            return new Contacts(trim(insurerName), trim(insurerPhone), trim(emergencyName), trim(emergencyPhone));
+        }
+
+        /** Same messages as the registration form (V54). */
+        public Map<String, String> problems() {
+            Map<String, String> errors = new java.util.LinkedHashMap<>();
+            if (insurerName == null) errors.put("insurerName", "Name the new owner's insurer");
+            if (insurerPhone == null) errors.put("insurerPhone", "Give the insurer's emergency number");
+            if (emergencyName == null) errors.put("emergencyName", "Name a second person to call");
+            if (emergencyPhone == null) errors.put("emergencyPhone", "Give that person's phone number");
+            return errors;
+        }
+
+        private static String trim(String s) {
+            return s == null || s.isBlank() ? null : s.trim();
+        }
+    }
+
+    /**
+     * Checked BEFORE a transfer changes anything. Returns the contract whose stay the new owner
+     * takes over: the running stay, or a change-of-owner contract still unsigned when the horse
+     * is sold on. Null when the horse has no contract (registered before stays had a term).
+     */
+    public ContractRow transferSource(int horseId, String horseName) {
+        var open = contracts.findOpenRenewal(horseId);
+        if (open.isPresent()) {
+            ContractRow r = open.get();
+            throw new ApiException(HttpStatus.CONFLICT, "PAID".equals(r.status())
+                    ? r.ownerName() + " has already paid a renewal of " + horseName
+                            + "'s stay. Settle it with them before the transfer"
+                    : "A renewal of " + horseName + "'s stay is waiting for " + r.ownerName()
+                            + ". Cancel it before the transfer");
+        }
+        var waiting = contracts.findWaitingTakeover(horseId);
+        if (waiting.isPresent()) {
+            return waiting.get();
+        }
+        var running = contracts.findRunning(horseId);
+        if (running.isEmpty()) {
+            return null;
+        }
+        ContractRow c = running.get();
+        if ("EXPIRED".equals(c.status()) || !c.endDate().isAfter(today())) {
+            throw new ApiException(HttpStatus.CONFLICT, horseName + "'s stay ended on " + c.endDate() + ". "
+                    + c.ownerName() + " renews it, or the horse leaves the club, before the transfer");
+        }
+        return c;
+    }
+
+    /**
+     * Runs inside HorseAdminService.transferOwner's transaction, after the horse changed owner.
+     * The seller's contract ENDS and stays in the seller's account; the buyer gets a contract
+     * for the rest of the same stay, nothing to pay, with the buyer's own clause 8 contacts.
+     * @return the new contract id.
+     */
+    public int handOver(ContractRow source, HorseResponse horse, int newOwnerId, String newOwnerName,
+                        Contacts contacts, AuthenticatedUser manager, String ip) {
+        LocalDate from = today();
+        LocalDate until = source.endDate();
+        String note = "Horse passed to " + newOwnerName + " on " + from;
+        int closed = source.isTakeover() && "SENT".equals(source.status())
+                ? contracts.markVoid(source.contractId(), note + ", before " + source.ownerName() + " signed")
+                : contracts.markEnded(source.contractId(), note);
+        if (closed == 0) {
+            throw alreadyHandled();
+        }
+        HorseRequestRow req = requests.findById(source.requestId()).orElseThrow();
+        String managerName = users.findById(manager.userId()).map(u -> u.fullName()).orElse("the Club Manager");
+        String text = terms.takeoverText(new ContractTerms.Parties(
+                        newOwnerName, horse.horseName(), horse.breed(), horse.horseGender(), horse.dateOfBirth(),
+                        horse.color(), req.sireName(), req.damName(), source.trainingWeeks(), from,
+                        managerName, false, null, source.trainingStart(), source.trainingEnd(),
+                        contacts.insurerName(), contacts.insurerPhone(),
+                        contacts.emergencyName(), contacts.emergencyPhone(),
+                        horse.registrationCode(), horse.stallNo()),
+                source.ownerName(), from, until, horse.registrationCode(), horse.stallNo(), until);
+        int id = contracts.insert(new ContractRepository.NewContract(
+                source.requestId(), horse.horseId(), newOwnerId, null, source.months(), source.trainingWeeks(),
+                0, java.math.BigDecimal.ZERO, 0, from, until,
+                text, ContractTerms.sha256(text), manager.userId(), until,
+                source.trainingStart(), source.trainingEnd(), source.contractId(),
+                contacts.insurerName(), contacts.insurerPhone(),
+                contacts.emergencyName(), contacts.emergencyPhone()));
+        users.writeAudit(manager.userId(), "CONTRACT_TAKEOVER_SENT", "HORSE_CONTRACT", id, "SUCCESS", ip,
+                "Contract #" + source.contractId() + " (" + source.ownerName() + ") closed; "
+                        + newOwnerName + " takes over the stay until " + until);
+        notifications.notifyUser(newOwnerId, new Notice("CONTRACT_TAKEOVER",
+                "Sign to take over " + horse.horseName() + "'s stay",
+                horse.horseName() + " is now yours. Sign the change-of-owner contract to take over its stay "
+                        + "until " + until + ". Nothing to pay. Until you sign, it takes no new training plan "
+                        + "or race entry.",
+                Notice.HORSE_REQUEST, source.requestId()));
+        return id;
+    }
+
+    /** The buyer signed: the stay runs on at once, no payment, no arrival. */
+    private ContractRow activateTakeover(ContractRow c) {
+        boolean expired = !c.endDate().isAfter(today());
+        if (contracts.activateTakeover(c.contractId(), c.plannedStart(), c.endDate(), expired) == 0) {
+            throw alreadyHandled();
+        }
+        notifications.notifyRole("CLUB_MANAGER", null, new Notice("CONTRACT_SIGNED",
+                "Change of owner signed",
+                c.ownerName() + " signed the contract for " + c.horseName() + " and takes over its stay until "
+                        + c.endDate() + ".",
+                Notice.HORSE, c.horseId()));
+        return getOrThrow(c.contractId());
     }
 
     /* ---------------- helpers ---------------- */

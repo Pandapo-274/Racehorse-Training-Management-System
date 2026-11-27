@@ -16,10 +16,10 @@ import { useAppDialog } from "../common/AppDialog";
 import HorseShell, { Card, StateBlock, StatusChip } from "./HorseShell";
 import HorsePhoto from "./HorsePhoto";
 import { formatDate, formatDateTime } from "./horseApi";
-import { formatVnd, getPricing, CONTRACT_MONTH_OPTIONS } from "./horseRequestApi";
+import { formatVnd, getPricing, estimatePrice, CONTRACT_MONTH_OPTIONS } from "./horseRequestApi";
 import {
   listContracts, getContract, signContract, payContract, syncContract, cancelContract, renewContract,
-  toContractStatus, stayLine,
+  toContractStatus, stayLine, contractKind, isTakeover,
 } from "./contractApi";
 
 export default function OwnerContractsPage() {
@@ -58,8 +58,10 @@ function ContractList() {
                   <li key={c.contractId}>
                     <HorsePhoto horse={c} className="hz-photo--sm" />
                     <div>
-                      <strong>{c.horseName}{c.renewsContractId ? " · renewal" : ""}</strong>
-                      <p>{c.months} month{c.months === 1 ? "" : "s"} · {formatVnd(c.totalAmount)}</p>
+                      <strong>{c.horseName}{contractKind(c)}</strong>
+                      <p>{isTakeover(c)
+                        ? `Rest of ${c.previousOwnerName || "the previous owner"}'s stay · nothing to pay`
+                        : `${c.months} month${c.months === 1 ? "" : "s"} · ${formatVnd(c.totalAmount)}`}</p>
                       <p>{stayLine(c, formatDate) || `Contract #${c.contractId}`}</p>
                     </div>
                     <div className="hz-row-action">
@@ -97,6 +99,7 @@ function ContractDetail({ id }) {
   const [syncWarning, setSyncWarning] = useState("");
   // false = server chưa cài khóa payOS; null = chưa biết (vẫn hiện nút, backend báo lỗi nếu cần).
   const [onlinePayment, setOnlinePayment] = useState(null);
+  const [pricing, setPricing] = useState(null);
   const cameBackFromPayOS = search.has("orderCode") || search.has("status") || search.has("cancel");
 
   const load = useCallback(async () => {
@@ -124,7 +127,7 @@ function ContractDetail({ id }) {
 
   useEffect(() => {
     const ctrl = new AbortController();
-    getPricing(ctrl.signal).then((p) => setOnlinePayment(p?.onlinePayment !== false)).catch(() => {});
+    getPricing(ctrl.signal).then((p) => { setPricing(p); setOnlinePayment(p?.onlinePayment !== false); }).catch(() => {});
     return () => ctrl.abort();
   }, []);
 
@@ -191,7 +194,7 @@ function ContractDetail({ id }) {
   return (
     <HorseShell
       title={`Contract #${c.contractId}`}
-      subtitle={`${c.horseName}${c.renewsContractId ? " · renewal" : ""}`}
+      subtitle={`${c.horseName}${contractKind(c)}`}
       actions={
         <button type="button" className="hz-btn hz-btn--ghost" onClick={() => navigate("/horse-owner/contracts")}>
           All contracts
@@ -206,16 +209,29 @@ function ContractDetail({ id }) {
         </StateBlock>
       )}
 
+      {isTakeover(c) && c.status === "SENT" && (
+        <StateBlock title={`${c.horseName} is now yours - sign to take over its stay`}>
+          {c.previousOwnerName || "The previous owner"} paid for the stay until {formatDate(c.endDate)}; there is
+          nothing to pay. Until you sign, {c.horseName} takes no new training plan and no new race entry.
+        </StateBlock>
+      )}
+
       <Card title="Summary" actions={<StatusChip tone={st.tone} label={st.label} />}>
         <div className="hz-basis">
-          <div className="hz-basis__item"><span>Stay</span><strong>{c.months} month{c.months === 1 ? "" : "s"}</strong></div>
+          <div className="hz-basis__item"><span>Stay</span><strong>{isTakeover(c)
+            ? `Rest of the stay, until ${formatDate(c.endDate)}`
+            : `${c.months} month${c.months === 1 ? "" : "s"}`}</strong></div>
           <div className="hz-basis__item"><span>Training asked</span><strong>
             {c.trainingStart && c.trainingEnd
               ? `${formatDate(c.trainingStart)} - ${formatDate(c.trainingEnd)}${c.trainingWeeks ? ` (${c.trainingWeeks} weeks)` : ""}`
               : c.trainingWeeks ? `${c.trainingWeeks} weeks` : "—"}
           </strong></div>
-          <div className="hz-basis__item"><span>Total</span><strong>{formatVnd(c.totalAmount)}</strong></div>
-          <div className="hz-basis__item"><span>Sign and pay by</span><strong>{formatDate(c.respondBy)}</strong></div>
+          <div className="hz-basis__item"><span>Total</span><strong>{isTakeover(c)
+            ? `Nothing to pay (paid by ${c.previousOwnerName || "the previous owner"})` : formatVnd(c.totalAmount)}</strong></div>
+          {/* The deadline only matters while something is still to do. */}
+          {(c.status === "SENT" || c.status === "SIGNED") && (
+            <div className="hz-basis__item"><span>{isTakeover(c) ? "Sign by" : "Sign and pay by"}</span><strong>{formatDate(c.respondBy)}</strong></div>
+          )}
           {c.endDate && <div className="hz-basis__item"><span>Stay</span><strong>{stayLine(c, formatDate)}</strong></div>}
           {c.signedAt && <div className="hz-basis__item"><span>Signed</span><strong>{c.signedName} · {formatDateTime(c.signedAt)}</strong></div>}
           {c.paidAt && <div className="hz-basis__item"><span>Paid</span><strong>{formatVnd(c.paidAmount)} · {formatDateTime(c.paidAt)}{c.paymentRef ? ` · ref ${c.paymentRef}` : ""}</strong></div>}
@@ -245,7 +261,10 @@ function ContractDetail({ id }) {
           {actionError && !Object.keys(fieldErrors).length && <p className="hz-form-error" role="alert">{actionError}</p>}
           <div className="hz-form-footer">
             <button type="button" className="hz-btn" disabled={busy} onClick={sign}>Sign contract</button>
-            <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={decline}>Decline</button>
+            {/* V61: a change-of-owner contract cannot be declined; the horse is already yours. */}
+            {!isTakeover(c) && (
+              <button type="button" className="hz-btn hz-btn--ghost" disabled={busy} onClick={decline}>Decline</button>
+            )}
           </div>
         </Card>
       )}
@@ -288,13 +307,25 @@ function ContractDetail({ id }) {
       )}
 
       {canRenew && (
-        <Card title="Renew the stay" hint="A new contract following on from this one. Nothing renews by itself.">
+        <Card title="Renew the stay"
+              hint={`Extra months after ${formatDate(c.endDate)}: a new contract you sign and pay for. Nothing renews by itself.`}>
           <div className="hz-inline">
             <select value={renewMonths} onChange={(e) => setRenewMonths(e.target.value)} aria-label="Months">
               {CONTRACT_MONTH_OPTIONS.map((m) => <option key={m} value={m}>{m} month{m === 1 ? "" : "s"}</option>)}
             </select>
-            <button type="button" className="hz-btn" disabled={busy} onClick={renew}>Renew</button>
+            <button type="button" className="hz-btn" disabled={busy} onClick={renew}>
+              {(() => {
+                const est = estimatePrice(pricing, renewMonths);
+                return est ? `Renew · ${formatVnd(est.total)}` : "Renew";
+              })()}
+            </button>
           </div>
+          {isTakeover(c) && (
+            <p className="hz-field__hint">
+              The stay until {formatDate(c.endDate)} is already paid for by {c.previousOwnerName || "the previous owner"}.
+              Renew only if you want the horse to stay longer.
+            </p>
+          )}
           {actionError && <p className="hz-form-error" role="alert">{actionError}</p>}
         </Card>
       )}

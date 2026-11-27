@@ -50,6 +50,8 @@ export default function HorseStayPanel({ horse, user, intake }) {
 
   const running = contracts.find((c) => c.status === "ACTIVE" || c.status === "EXPIRED");
   const renewal = contracts.find((c) => c.renewsContractId && ["SENT", "SIGNED", "PAID"].includes(c.status));
+  // V61: sold during the stay, the new owner has not signed yet.
+  const takeover = contracts.find((c) => c.takesOverContractId && c.status === "SENT");
   const isOwner = user?.role === "HORSE_OWNER";
   const contractPath = (c) => (isOwner ? `/horse-owner/contracts/${c.contractId}` : `/manager/contracts?open=${c.contractId}`);
   const growth = intake ? toGrowth(intake.growth) : null;
@@ -95,6 +97,16 @@ export default function HorseStayPanel({ horse, user, intake }) {
             );
           })()}
         </>
+      ) : takeover ? (
+        <>
+          <Line label="Contract">
+            <StatusChip tone="warning" label={`Waiting for ${takeover.ownerName} to sign`} />
+          </Line>
+          <Line label="Stay">Until {formatDate(takeover.endDate)}, paid by {takeover.previousOwnerName || "the previous owner"}</Line>
+          <p className="hz-muted hz-note">
+            Changed owner. No new training plan or race entry until the new owner signs.
+          </p>
+        </>
       ) : (
         <p className="hz-muted hz-note">
           No contract on record: this horse was registered before stays had a term.
@@ -122,6 +134,12 @@ export default function HorseStayPanel({ horse, user, intake }) {
         {running && !renewal && isOwner && (
           <button type="button" className="hz-btn" onClick={() => navigate(contractPath(running))}>
             Renew the stay
+          </button>
+        )}
+        {takeover && (
+          <button type="button" className={isOwner ? "hz-btn" : "hz-btn hz-btn--ghost"}
+                  onClick={() => navigate(contractPath(takeover))}>
+            {isOwner ? "Read and sign" : "Open contract"}
           </button>
         )}
         {running && user?.role === "CLUB_MANAGER" && (

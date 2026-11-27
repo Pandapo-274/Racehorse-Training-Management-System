@@ -3,10 +3,11 @@
    the demo created with it), when Flow 1 is done.
 
    Removes:
-     - accounts lan.pn, minh.td, ha.vt, quang.hd, phuc.hv, khoa.lv, an.nv
+     - accounts lan.pn, minh.td, ha.vt, quang.hd, phuc.hv, khoa.lv, dung.nt, an.nv
        (and the "an.nv.old..." copies the demo script left behind);
      - horses DM-* and every horse owned by lan.pn / minh.td
-       (Morning Star DM-08 and anything else created during the demo);
+       (Morning Star, received with a TM- code, and anything else created during the demo);
+     - their boarding contracts, race entries, and the demo race "Tracen Autumn Mile";
      - their registration requests, withdrawals, training plans and phases,
        training sessions, care tasks, password-reset links, notifications and
        audit-log lines (also the manager's lines about them).
@@ -35,7 +36,7 @@ CREATE TABLE #u (id INT PRIMARY KEY);
 CREATE TABLE #h (id INT PRIMARY KEY);
 
 INSERT #u SELECT user_id FROM APP_USER
-          WHERE username IN ('lan.pn', 'minh.td', 'ha.vt', 'quang.hd', 'phuc.hv', 'khoa.lv', 'an.nv')
+          WHERE username IN ('lan.pn', 'minh.td', 'ha.vt', 'quang.hd', 'phuc.hv', 'khoa.lv', 'dung.nt', 'an.nv')
              OR username LIKE 'an.nv.old%';
 INSERT #h SELECT horse_id FROM HORSE
           WHERE registration_code LIKE 'DM-%' OR owner_id IN (SELECT id FROM #u);
@@ -59,6 +60,8 @@ SELECT @sql = @sql + N' UNION ALL SELECT N''' + t.name + N'.' + c.name + N''' AS
             + CASE
                 WHEN t.name IN ('TRAINING_SESSION', 'TRAINING_PLAN', 'DAILY_TASK', 'HORSE_WITHDRAWAL')
                     THEN N' AND horse_id NOT IN (SELECT id FROM #h)'
+                WHEN t.name IN ('RACE_REGISTRATION', 'PREVENTIVE_REMINDER_LOG')
+                    THEN N' AND horse_id NOT IN (SELECT id FROM #h)'
                 WHEN t.name = 'HORSE_REQUEST'
                     THEN N' AND owner_id NOT IN (SELECT id FROM #u) AND (horse_id IS NULL OR horse_id NOT IN (SELECT id FROM #h))'
                 ELSE N''
@@ -72,7 +75,8 @@ JOIN sys.tables rt  ON rt.object_id = fk.referenced_object_id
 WHERE rt.name IN ('APP_USER', 'HORSE')
   -- handled below: deleted with the demo, or the link is cleared
   AND t.name NOT IN ('AUDIT_LOG', 'NOTIFICATION', 'PASSWORD_RESET_TOKEN', 'HORSE', 'APP_USER',
-                     'HORSE_CONTRACT')   -- V49: contracts of the demo are deleted below
+                     'HORSE_CONTRACT',   -- V49: contracts of the demo are deleted below
+                     'OWNER_CONTACT')    -- V63: the demo owners' people, deleted below
   AND NOT (t.name = 'HORSE_REQUEST' AND c.name IN ('sire_id', 'dam_id', 'preferred_trainer_id'));
 
 IF LEN(@sql) > 0
@@ -147,12 +151,23 @@ IF OBJECT_ID('HORSE_CONTRACT', 'U') IS NOT NULL
 BEGIN
     -- Renewals point at the contract they extend: cut that link first, then delete them all.
     UPDATE HORSE_CONTRACT SET renews_contract_id = NULL WHERE contract_id IN (SELECT id FROM @con);
+    IF COL_LENGTH('HORSE_CONTRACT', 'takes_over_contract_id') IS NOT NULL
+        EXEC (N'UPDATE HORSE_CONTRACT SET takes_over_contract_id = NULL
+                WHERE takes_over_contract_id IS NOT NULL AND (owner_id IN (SELECT id FROM #u)
+                   OR horse_id IN (SELECT id FROM #h))');
     DELETE FROM HORSE_CONTRACT WHERE contract_id IN (SELECT id FROM @con);
     PRINT CONCAT('Contracts removed: ', @@ROWCOUNT);
     -- Contracts of other people that a demo manager sent or received: keep them, clear the name.
     UPDATE HORSE_CONTRACT SET sent_by = NULL WHERE sent_by IN (SELECT id FROM #u);
     UPDATE HORSE_CONTRACT SET received_by = NULL WHERE received_by IN (SELECT id FROM #u);
 END
+-- Race entries of the demo horses (point 14), then the demo race if nobody else entered it.
+DELETE FROM RACE_REGISTRATION WHERE horse_id IN (SELECT id FROM #h);
+PRINT CONCAT('Race entries removed: ', @@ROWCOUNT);
+-- Care-reminder log of the nightly job (V17): only says which reminders were sent.
+DELETE FROM PREVENTIVE_REMINDER_LOG WHERE horse_id IN (SELECT id FROM #h);
+DELETE FROM RACE WHERE race_name = N'Tracen Autumn Mile'
+  AND NOT EXISTS (SELECT 1 FROM RACE_REGISTRATION rr WHERE rr.race_id = RACE.race_id);
 DELETE FROM HORSE_REQUEST    WHERE request_id IN (SELECT id FROM @req);
 UPDATE HORSE_REQUEST SET preferred_trainer_id = NULL WHERE preferred_trainer_id IN (SELECT id FROM #u);
 
@@ -169,8 +184,15 @@ UPDATE APP_USER SET trainer_id = NULL WHERE trainer_id IN (SELECT id FROM #u);
 UPDATE HORSE SET sire_id = NULL, dam_id = NULL WHERE horse_id IN (SELECT id FROM #h);
 DELETE FROM HORSE    WHERE horse_id IN (SELECT id FROM #h);
 PRINT CONCAT('Horses removed: ', @@ROWCOUNT);
+IF OBJECT_ID('OWNER_CONTACT', 'U') IS NOT NULL
+    DELETE FROM OWNER_CONTACT WHERE owner_id IN (SELECT id FROM #u);
 DELETE FROM APP_USER WHERE user_id IN (SELECT id FROM #u);
 PRINT CONCAT('Accounts removed: ', @@ROWCOUNT);
+
+-- The demo barn Z on the stable plan (V60), once no horse is left in it.
+IF OBJECT_ID('STALL', 'U') IS NOT NULL
+    DELETE FROM STALL WHERE barn = 'Z'
+      AND NOT EXISTS (SELECT 1 FROM HORSE h WHERE h.stall_no = STALL.stall_no);
 
 COMMIT;
 
@@ -179,6 +201,6 @@ DROP TABLE #h;
 
 -- Should all be 0.
 SELECT (SELECT COUNT(*) FROM APP_USER
-        WHERE username IN ('lan.pn', 'minh.td', 'ha.vt', 'quang.hd', 'phuc.hv', 'khoa.lv', 'an.nv')
+        WHERE username IN ('lan.pn', 'minh.td', 'ha.vt', 'quang.hd', 'phuc.hv', 'khoa.lv', 'dung.nt', 'an.nv')
            OR username LIKE 'an.nv.old%')                              AS demo_accounts_left,
        (SELECT COUNT(*) FROM HORSE WHERE registration_code LIKE 'DM-%') AS demo_horses_left;

@@ -97,9 +97,14 @@ public class HorseService {
         Integer trainerId = raw.trainerId();
 
         Map<String, String> errors = new HashMap<>();
+        // The code is permanent once assigned: papers, race entries, invoices and the audit log
+        // all carry it. Only a record that never had one may be given one here.
+        boolean hasCode = current.registrationCode() != null && !current.registrationCode().isBlank();
         // Format only for a NEW code: older records keep whatever shape they were given.
         String format = code.equals(current.registrationCode()) ? null : HorsePolicy.codeProblem(code);
-        if (format != null) {
+        if (hasCode && !code.equalsIgnoreCase(current.registrationCode().trim())) {
+            errors.put("registrationCode", "The registration code cannot be changed once assigned");
+        } else if (format != null) {
             errors.put("registrationCode", format);
         } else if (horseRepository.existsByRegistrationCode(code, horseId)) {
             errors.put("registrationCode", "This registration code is already in use");

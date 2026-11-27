@@ -19,10 +19,11 @@ import {
 } from "./horseApi";
 import {
   listRequests, submitRequest, cancelRequest, toRequestStatus, uploadRequestPhoto, listTrainerOptions,
-  getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES, PHONE_PATTERN,
+  getPricing, estimatePrice, formatVnd, stayProblems, BREED_PRESETS, SURFACES, DISTANCES, RUNNING_STYLES,
   CONTRACT_MONTH_OPTIONS, STAY_RULES, isoAddDays, isoAddMonths, trainingWeeksOf,
 } from "./horseRequestApi";
 import HorsePhoto from "./HorsePhoto";
+import ContactPicker from "./ContactPicker";
 
 // Giá trị ban đầu của form. recordType mặc định ACADEMY (ngựa vào CLB huấn luyện); PEDIGREE = chỉ khai báo
 // để làm cha mẹ trong phả hệ.
@@ -75,12 +76,9 @@ function validate(form, photo) {
     else if (h < 60 || h > 200) e.heightCm = "Between 60 and 200 cm";
     if (!photo) e.photo = "Add a photo: the club cannot approve a horse it has not seen";
     Object.assign(e, stayProblems(form, todayIso()));
-    if (!form.insurerName.trim()) e.insurerName = "Name the horse's insurer";
-    if (!form.insurerPhone.trim()) e.insurerPhone = "Give the insurer's emergency number";
-    else if (!PHONE_PATTERN.test(form.insurerPhone.trim())) e.insurerPhone = "Enter a valid phone number";
-    if (!form.emergencyName.trim()) e.emergencyName = "Name a second person to call";
-    if (!form.emergencyPhone.trim()) e.emergencyPhone = "Give that person's phone number";
-    else if (!PHONE_PATTERN.test(form.emergencyPhone.trim())) e.emergencyPhone = "Enter a valid phone number";
+    // V63: both are picked from lists; the phone comes with the choice.
+    if (!form.insurerName.trim() || !form.insurerPhone.trim()) e.insurerName = "Choose the horse's insurer";
+    if (!form.emergencyName.trim() || !form.emergencyPhone.trim()) e.emergencyName = "Choose a second person to call";
   }
   return e;
 }
@@ -515,25 +513,14 @@ export default function HorseRequestPage() {
                 </Field>
               </div>
               <h3 className="hz-subhead">Insurance and emergency contact</h3>
-              <div className="hz-form-grid">
-                <Field id="insurerName" label="Insurer" error={errors.insurerName}>
-                  <input id="insurerName" name="insurerName" value={form.insurerName} onChange={change}
-                         maxLength={100} aria-invalid={!!errors.insurerName} />
-                </Field>
-                <Field id="insurerPhone" label="Insurer's emergency number" error={errors.insurerPhone}>
-                  <input id="insurerPhone" name="insurerPhone" type="tel" value={form.insurerPhone} onChange={change}
-                         maxLength={20} aria-invalid={!!errors.insurerPhone} />
-                </Field>
-                <Field id="emergencyName" label="Second person to call" error={errors.emergencyName}
-                       hint="Someone who can decide for the horse if the club cannot reach you.">
-                  <input id="emergencyName" name="emergencyName" value={form.emergencyName} onChange={change}
-                         maxLength={100} aria-invalid={!!errors.emergencyName} />
-                </Field>
-                <Field id="emergencyPhone" label="Their phone number" error={errors.emergencyPhone}>
-                  <input id="emergencyPhone" name="emergencyPhone" type="tel" value={form.emergencyPhone} onChange={change}
-                         maxLength={20} aria-invalid={!!errors.emergencyPhone} />
-                </Field>
-              </div>
+              <ContactPicker idPrefix="req" errors={errors}
+                             value={{ insurerName: form.insurerName, insurerPhone: form.insurerPhone,
+                                      emergencyName: form.emergencyName, emergencyPhone: form.emergencyPhone }}
+                             onChange={(next) => {
+                               setForm((prev) => ({ ...prev, ...next }));
+                               setErrors((prev) => ({ ...prev, insurerName: undefined, insurerPhone: undefined,
+                                                      emergencyName: undefined, emergencyPhone: undefined }));
+                             }} />
               {estimate && (
                 <p className="hz-estimate">
                   Contract value: <strong>{formatVnd(estimate.total)}</strong>

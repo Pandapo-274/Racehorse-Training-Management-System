@@ -123,10 +123,19 @@ export function parentLabel(h) {
 }
 
 /** Chỉ CLUB_MANAGER: chuyển ngựa sang chủ khác. */
-export function transferHorseOwner(id, ownerId, reason) {
+/**
+ * V61: contacts = { insurerName, insurerPhone, emergencyName, emergencyPhone } of the NEW owner.
+ * Needed when the horse has a stay: the new owner signs a contract for the rest of it.
+ */
+export function transferHorseOwner(id, ownerId, reason, contacts = {}) {
+  const v = (s) => (s && s.trim() ? s.trim() : null);
   return authFetch(`${API}/${id}/owner`, {
     method: "PUT",
-    body: JSON.stringify({ ownerId, reason: reason.trim() }),
+    body: JSON.stringify({
+      ownerId, reason: reason.trim(),
+      insurerName: v(contacts.insurerName), insurerPhone: v(contacts.insurerPhone),
+      emergencyName: v(contacts.emergencyName), emergencyPhone: v(contacts.emergencyPhone),
+    }),
   });
 }
 

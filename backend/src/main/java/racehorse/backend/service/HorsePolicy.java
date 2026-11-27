@@ -98,6 +98,12 @@ public final class HorsePolicy {
                 + "It takes no new training plan until the owner renews the stay.";
     }
 
+    /** V61: sold during the stay, the buyer has not signed the change-of-owner contract. */
+    public static String takeoverProblem(HorseResponse horse) {
+        return horse.horseName() + " has a new owner who has not signed the stay contract yet. "
+                + "It takes no new training plan until they sign.";
+    }
+
     public static String ageProblem(String recordType, LocalDate dateOfBirth) {
         if (!ACADEMY.equals(normalizeType(recordType))) return null;
         if (dateOfBirth == null) {
@@ -253,6 +259,47 @@ public final class HorsePolicy {
      * horse was under a veterinary lock are excused and not counted.
      * ------------------------------------------------------------------ */
     public static final int COMMITMENT_PCT = 80;
+
+    /* ---------------- V62: leaving the club (contract clause 9) ---------------- */
+
+    /** "The owner may end the stay with 15 days' notice." */
+    public static final int NOTICE_DAYS = 15;
+    /** How far ahead an owner may book the collection day. */
+    public static final int MAX_LEAVE_AHEAD_DAYS = 90;
+
+    /** The stay is paid until the later of the collection day and the end of the notice. */
+    public static LocalDate noticeUntil(LocalDate requestedOn, LocalDate leaveOn) {
+        LocalDate notice = requestedOn.plusDays(NOTICE_DAYS);
+        return leaveOn == null || leaveOn.isBefore(notice) ? notice : leaveOn;
+    }
+
+    public record Refund(LocalDate noticeUntil, int monthsNotStarted, long amount) {}
+
+    /**
+     * "Months already started are not refunded; months not started are." Month k of the
+     * contract starts on start + k months; it is refunded when it starts after the notice
+     * ends. The refund is that share of what the owner paid (discount included).
+     */
+    public static Refund refundFor(LocalDate start, int months, long paid, LocalDate noticeUntil) {
+        if (start == null || months <= 0 || paid <= 0) {
+            return new Refund(noticeUntil, 0, 0);
+        }
+        int notStarted = 0;
+        for (int k = 0; k < months; k++) {
+            if (start.plusMonths(k).isAfter(noticeUntil)) notStarted++;
+        }
+        return new Refund(noticeUntil, notStarted, paid * notStarted / months);
+    }
+
+    /** Collection day an owner may choose: from today, at most 90 days ahead. */
+    public static String leaveOnProblem(LocalDate leaveOn, LocalDate today) {
+        if (leaveOn == null) return "Choose the day you collect the horse";
+        if (leaveOn.isBefore(today)) return "Choose today or a later day";
+        if (leaveOn.isAfter(today.plusDays(MAX_LEAVE_AHEAD_DAYS))) {
+            return "Choose a day within " + MAX_LEAVE_AHEAD_DAYS + " days";
+        }
+        return null;
+    }
 
     public record Delivery(int due, int delivered, int excused, int missed, Integer deliveredPct,
                            int targetPct, int sessionsShort, String status) {}
