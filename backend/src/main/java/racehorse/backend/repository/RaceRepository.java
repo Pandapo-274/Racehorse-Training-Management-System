@@ -25,7 +25,7 @@ public class RaceRepository {
 
     // SELECT dùng chung: một dòng đăng ký JOIN giải (RACE), ngựa, chủ, người đăng ký.
     private static final String SELECT = """
-            SELECT r.registration_id, r.horse_id, h.horse_name, h.stall_no, h.owner_id,
+            SELECT r.registration_id, r.horse_id, h.horse_name, h.stall_no, r.owner_id,
                    o.full_name AS owner_name, r.race_name, r.race_date, r.registered_by,
                    u.full_name AS registered_by_name, r.result, r.prize_money, r.note,
                    r.race_id, rc.distance_m, rc.venue, rc.status AS race_status,
@@ -36,7 +36,7 @@ public class RaceRepository {
             FROM RACE_REGISTRATION r
             JOIN RACE rc    ON rc.race_id = r.race_id
             JOIN HORSE h    ON h.horse_id = r.horse_id
-            JOIN APP_USER o ON o.user_id  = h.owner_id
+            JOIN APP_USER o ON o.user_id  = r.owner_id   -- V65: the owner who entered the horse
             JOIN APP_USER u ON u.user_id  = r.registered_by
             LEFT JOIN APP_USER wa ON wa.user_id = r.withdraw_advice_by
             """;
@@ -115,7 +115,10 @@ public class RaceRepository {
         return raceDate.isAfter(LocalDate.now()) ? "UPCOMING" : "AWAITING_RESULT";
     }
 
-    /** year null = mọi năm; ownerId khác null = chỉ ngựa của chủ đó. */
+    /**
+     * year null = mọi năm; ownerId khác null = chỉ suất của chủ đó (V65: chủ lúc đăng ký,
+     * nên ngựa đã bán vẫn để lại lịch sử và tiền thưởng cho người bán).
+     */
     public List<RaceModels.Entry> find(Integer year, Integer horseId, Integer ownerId) {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE 1 = 1");
         Map<String, Object> p = new HashMap<>();
@@ -128,7 +131,7 @@ public class RaceRepository {
             p.put("horseId", horseId);
         }
         if (ownerId != null) {
-            sql.append(" AND h.owner_id = :ownerId");
+            sql.append(" AND r.owner_id = :ownerId");
             p.put("ownerId", ownerId);
         }
         sql.append(" ORDER BY r.race_date DESC, r.race_name, h.horse_name");
@@ -174,17 +177,19 @@ public class RaceRepository {
      * `AND result = 'SCRATCHED'` is in the UPDATE itself, so two people
      * re-entering the same horse at once cannot both succeed.
      */
-    public int reinstate(int id, int by, String note) {
+    public int reinstate(int id, int ownerId, int by, String note) {
         return jdbc.sql("""
                 UPDATE RACE_REGISTRATION
                 SET result = NULL, prize_money = NULL, registered_by = :by, note = :note,
+                    owner_id = :owner,  -- V65: the horse may have been sold since the old row
+                    submitted_at = NULL, submitted_by = NULL, organizer_ref = NULL,  -- V59: not sent yet
                     scratch_reason = NULL, finish_position = NULL, finish_time_ms = NULL,
                     approval_status = 'PENDING_OWNER', reject_reason = NULL, owner_decision_at = NULL,
                     fee_expense_id = NULL,  -- V36: the old fee is settled; a new approval charges again
                     withdraw_advice = NULL, withdraw_advice_at = NULL, withdraw_advice_by = NULL  -- V55
                 WHERE registration_id = :id
                   AND (result = 'SCRATCHED' OR (result IS NULL AND approval_status = 'REJECTED'))
-                """).param("id", id).param("by", by).param("note", note).update();
+                """).param("id", id).param("owner", ownerId).param("by", by).param("note", note).update();
     }
 
     /**
@@ -214,12 +219,14 @@ public class RaceRepository {
                 """).param("id", id).param("status", status).param("reason", reason).update();
     }
 
-    public int insert(int horseId, RaceModels.RaceEvent race, int by, String note) {
+    /** V65: ownerId is the horse's owner now; results and prize money stay with them. */
+    public int insert(int horseId, int ownerId, RaceModels.RaceEvent race, int by, String note) {
         return jdbc.sql("""
-                INSERT INTO RACE_REGISTRATION (horse_id, race_id, race_name, race_date, registered_by, note, approval_status)
+                INSERT INTO RACE_REGISTRATION (horse_id, owner_id, race_id, race_name, race_date, registered_by,
+                                               note, approval_status)
                 OUTPUT INSERTED.registration_id
-                VALUES (:h, :race, :n, :d, :by, :note, 'PENDING_OWNER')
-                """).param("h", horseId).param("race", race.raceId()).param("n", race.raceName())
+                VALUES (:h, :owner, :race, :n, :d, :by, :note, 'PENDING_OWNER')
+                """).param("h", horseId).param("owner", ownerId).param("race", race.raceId()).param("n", race.raceName())
                 .param("d", race.raceDate()).param("by", by).param("note", note)
                 .query(Integer.class).single();
     }

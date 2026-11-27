@@ -397,6 +397,21 @@ class Flow1RulesTest {
     }
 
     @Test
+    void transferWaitsForAConfirmedRaceAndItsResult() {
+        HorseRepository horses = mock(HorseRepository.class);
+        when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, null)));
+        when(horses.isActiveHorseOwner(8)).thenReturn(true);
+        when(horses.pendingOnOwner(10)).thenReturn(new HorseRepository.PendingOnOwner(0, 0, 0));
+        when(horses.confirmedRaceWithoutResult(10)).thenReturn(Optional.of(
+                new HorseRepository.ConfirmedRace("Japan Cup", LocalDate.of(2026, 11, 29))));
+
+        HorseAdminService service = new HorseAdminService(horses, mock(UserRepository.class), mock(NotificationService.class), mock(ContractService.class), mock(racehorse.backend.repository.ContactRepository.class));
+        ApiException ex = expect(409, () -> service.transferOwner(10, 8, "Sold", NO_CONTACTS, MANAGER, "ip"));
+        assertTrue(ex.getMessage().contains("Japan Cup on 29 Nov 2026"), ex.getMessage());
+        verify(horses, never()).updateOwner(anyInt(), anyInt());
+    }
+
+    @Test
     void transferNeedsAnActiveHorseOwner() {
         HorseRepository horses = mock(HorseRepository.class);
         when(horses.findById(10)).thenReturn(Optional.of(horse(10, 7, "ACADEMY", "ACTIVE", null, null)));

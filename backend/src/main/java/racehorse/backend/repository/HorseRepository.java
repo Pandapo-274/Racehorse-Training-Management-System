@@ -593,6 +593,46 @@ public class HorseRepository {
                 .single() > 0;
     }
 
+    /** End of the running stay (ACTIVE contract); empty for a horse with no stay contract. */
+    public Optional<LocalDate> stayEnd(int horseId) {
+        return jdbc.sql("""
+                SELECT end_date FROM HORSE_CONTRACT WHERE horse_id = :id AND status = 'ACTIVE'
+                """)
+                .param("id", horseId)
+                .query((rs, n) -> rs.getObject("end_date", LocalDate.class))
+                .optional()
+                .filter(java.util.Objects::nonNull);
+    }
+
+    /** The day the horse leaves, when the owner has asked to withdraw it (V62) and it is still pending. */
+    public Optional<LocalDate> pendingLeaveOn(int horseId) {
+        return jdbc.sql("""
+                SELECT TOP 1 leave_on FROM HORSE_WITHDRAWAL
+                WHERE horse_id = :id AND status = 'PENDING' AND leave_on IS NOT NULL
+                """)
+                .param("id", horseId)
+                .query((rs, n) -> rs.getObject("leave_on", LocalDate.class))
+                .optional();
+    }
+
+    /**
+     * V65: an entry the owner confirmed that has no result yet (race ahead, or run and
+     * waiting for its result). A sale waits for it, so results and prize money stay with
+     * the owner who entered the horse.
+     */
+    public record ConfirmedRace(String raceName, LocalDate raceDate) {}
+
+    public Optional<ConfirmedRace> confirmedRaceWithoutResult(int horseId) {
+        return jdbc.sql("""
+                SELECT TOP 1 race_name, race_date FROM RACE_REGISTRATION
+                WHERE horse_id = :id AND approval_status = 'APPROVED' AND result IS NULL
+                ORDER BY race_date
+                """)
+                .param("id", horseId)
+                .query((rs, n) -> new ConfirmedRace(rs.getString("race_name"), rs.getObject("race_date", LocalDate.class)))
+                .optional();
+    }
+
     public boolean hasExpiredContract(int horseId) {
         return jdbc.sql("""
                 SELECT COUNT(*) FROM HORSE_CONTRACT WHERE horse_id = :id AND status = 'EXPIRED'

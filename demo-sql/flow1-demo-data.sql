@@ -60,7 +60,8 @@ IF COL_LENGTH('HORSE_REQUEST', 'photo_url') IS NULL OR OBJECT_ID('HORSE_CONTRACT
    OR COL_LENGTH('HORSE_WITHDRAWAL', 'leave_on') IS NULL
    OR OBJECT_ID('OWNER_CONTACT', 'U') IS NULL
    OR COL_LENGTH('HORSE_REQUEST', 'return_of_horse_id') IS NULL
-    THROW 50911, N'Migrations V48..V64 are missing: start the backend on main once, then run this script.', 1;
+   OR COL_LENGTH('RACE_REGISTRATION', 'owner_id') IS NULL
+    THROW 50911, N'Migrations V48..V65 are missing: start the backend on main once, then run this script.', 1;
 
 -- Stalls the demo uses (Z-02..Z-04, Z-06 now; Z-07, Z-08, Z-09 typed live).
 -- If another horse already stands in one of them, stop and say which, instead of
@@ -409,16 +410,17 @@ WHERE horse_id = @golden;
 
 /* ------------------------------------------- 7c. point 14: a confirmed race entry
    Lan entered River Song herself (the owner registers); Quang, her Head Trainer,
-   can only advise a withdrawal. No entry fee, so withdrawing it moves no money. */
+   can only advise a withdrawal. No entry fee, so withdrawing it moves no money.
+   The race is inside her stay (about 10 days left): a race after the stay ends is refused. */
 INSERT INTO RACE (race_name, race_date, distance_m, venue, entry_deadline, entry_fee, max_entries,
                   status, created_by, organizer)
-VALUES (N'Tracen Autumn Mile', DATEADD(DAY, 21, @today), 1600, N'Tracen Club track',
-        DATEADD(DAY, 14, @today), NULL, 12, 'OPEN', @manager, N'Tracen Club');
+VALUES (N'Tracen Autumn Mile', DATEADD(DAY, 8, @today), 1600, N'Tracen Club track',
+        DATEADD(DAY, 5, @today), NULL, 12, 'OPEN', @manager, N'Tracen Club');
 DECLARE @raceId INT = SCOPE_IDENTITY();
 
-INSERT INTO RACE_REGISTRATION (horse_id, race_name, race_date, registered_by, race_id,
+INSERT INTO RACE_REGISTRATION (horse_id, owner_id, race_name, race_date, registered_by, race_id,
                                approval_status, owner_decision_at)
-VALUES (@river, N'Tracen Autumn Mile', DATEADD(DAY, 21, @today), @lan, @raceId,
+VALUES (@river, @lan, N'Tracen Autumn Mile', DATEADD(DAY, 8, @today), @lan, @raceId,
         'APPROVED', DATEADD(DAY, -1, @utc));
 
 COMMIT;

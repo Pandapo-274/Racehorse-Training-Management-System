@@ -1943,13 +1943,13 @@ class BusinessRulesTest {
         when(races.hasRecentTrial(eq(100), anyInt())).thenReturn(true);
         when(races.findRace(50)).thenReturn(Optional.of(raceEvent("OPEN")));
         when(races.findEntry(100, 50)).thenReturn(Optional.of(new RaceRepository.ExistingEntry(9, null, "REJECTED")));
-        when(races.reinstate(9, 2, null)).thenReturn(1);
+        when(races.reinstate(9, 7, 2, null)).thenReturn(1);
         when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
         RaceService service = raceService(races, horses);
 
         service.register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip");
-        verify(races).reinstate(9, 2, null);
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races).reinstate(9, 7, 2, null);
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     @Test
@@ -1962,7 +1962,7 @@ class BusinessRulesTest {
         RaceService service = raceService(races, horses);
 
         expect(ApiException.class, 409, () -> service.register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip"));
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     @Test
@@ -1974,7 +1974,7 @@ class BusinessRulesTest {
         RaceService service = raceService(races, horses);
 
         expect(ApiException.class, 403, () -> service.register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip"));
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     @Test
@@ -2092,7 +2092,7 @@ class BusinessRulesTest {
         HorseRepository horses = mock(HorseRepository.class);
         ExpenseRepository expenses = mock(ExpenseRepository.class);
         openRaceFor(races, horses);
-        when(races.insert(eq(100), any(), eq(7), any())).thenReturn(9);
+        when(races.insert(eq(100), eq(7), any(), eq(7), any())).thenReturn(9);
         when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
         when(races.updateApproval(9, "APPROVED", null)).thenReturn(1);
 
@@ -2100,6 +2100,32 @@ class BusinessRulesTest {
 
         verify(races).updateApproval(9, "APPROVED", null);
         verify(expenses).insert(any(), anyInt());
+    }
+
+    @Test
+    void horseWhoseStayEndsBeforeTheRaceCannotBeEntered() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.stayEnd(100)).thenReturn(Optional.of(TODAY.plusDays(19)));   // race on day 20
+
+        ApiException ex = expect(ApiException.class, 409, () -> raceService(races, horses)
+                .ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip"));
+        assertTrue(ex.getMessage().contains("Renew the stay first"), ex.getMessage());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
+    }
+
+    @Test
+    void horseLeavingBeforeTheRaceCannotBeEntered() {
+        RaceRepository races = mock(RaceRepository.class);
+        HorseRepository horses = mock(HorseRepository.class);
+        openRaceFor(races, horses);
+        when(horses.stayEnd(100)).thenReturn(Optional.of(TODAY.plusDays(60)));
+        when(horses.pendingLeaveOn(100)).thenReturn(Optional.of(TODAY.plusDays(20)));   // leaves on race day
+
+        ApiException ex = expect(ApiException.class, 409, () -> raceService(races, horses)
+                .register(new RaceModels.RegisterRequest(100, 50, null), TRAINER, "ip"));
+        assertTrue(ex.getMessage().contains("leaves the club"), ex.getMessage());
     }
 
     @Test
@@ -2114,7 +2140,7 @@ class BusinessRulesTest {
         raceService(races, horses).ownerRegister(new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip");
 
         verify(races).updateApproval(9, "APPROVED", null);
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     @Test
@@ -2122,7 +2148,7 @@ class BusinessRulesTest {
         RaceRepository races = mock(RaceRepository.class);
         HorseRepository horses = mock(HorseRepository.class);
         openRaceFor(races, horses);
-        when(races.insert(eq(100), any(), eq(2), any())).thenReturn(9);
+        when(races.insert(eq(100), eq(7), any(), eq(2), any())).thenReturn(9);
         when(races.findById(9)).thenReturn(Optional.of(entry(9, "PENDING_APPROVAL", "PENDING_OWNER", TODAY.plusDays(20))));
 
         raceService(races, horses).register(new RaceModels.RegisterRequest(100, 50, "Good trial"), TRAINER, "ip");
@@ -2139,7 +2165,7 @@ class BusinessRulesTest {
 
         expect(ApiException.class, 403, () -> service.ownerRegister(
                 new RaceModels.RegisterRequest(100, 50, null), user(8, "HORSE_OWNER"), "ip"));
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     // ---- V55, committee point 14: the owner withdraws, the Head Trainer advises ----
@@ -2201,7 +2227,7 @@ class BusinessRulesTest {
 
         expect(ApiException.class, 409, () -> service.ownerRegister(
                 new RaceModels.RegisterRequest(100, 50, null), OWNER, "ip"));
-        verify(races, never()).insert(anyInt(), any(), anyInt(), any());
+        verify(races, never()).insert(anyInt(), anyInt(), any(), anyInt(), any());
     }
 
     // ---------------------------------------------------------------- V59: đơn vị tổ chức giải, nộp đơn

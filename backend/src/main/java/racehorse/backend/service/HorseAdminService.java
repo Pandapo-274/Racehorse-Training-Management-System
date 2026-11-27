@@ -52,7 +52,9 @@ public class HorseAdminService {
      * owner would inherit a decision they never saw, and the old one could still
      * answer it. Those must be settled first.
      *
-     * Costs and race results already recorded stay on the horse; the owner
+     * V65: race results and prize money stay with the owner who entered the horse
+     * (RACE_REGISTRATION.owner_id); a confirmed entry still without a result blocks
+     * the sale. Costs already recorded stay on the horse; the owner
      * dashboard shows costs by current owner, so a sale with an open bill is a
      * business question for the club, said in the reason.
      *
@@ -87,6 +89,12 @@ public class HorseAdminService {
             throw new ApiException(HttpStatus.CONFLICT, "The current owner still has " + String.join(", ", parts)
                     + " for " + horse.horseName() + ". Settle them before the transfer");
         }
+        // V65: the owner who entered a race keeps its result and prize money, so a sale waits for it.
+        horses.confirmedRaceWithoutResult(horseId).ifPresent(r -> {
+            throw new ApiException(HttpStatus.CONFLICT, horse.horseName() + " is entered in " + r.raceName() + " on "
+                    + r.raceDate().format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", java.util.Locale.ENGLISH))
+                    + ". Transfer it once the result is in, or the owner withdraws the entry first");
+        });
         // V61: what happens to the stay is checked before anything changes.
         ContractRow source = contracts.transferSource(horseId, horse.horseName());
         if (source != null) {

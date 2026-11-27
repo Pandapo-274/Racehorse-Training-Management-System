@@ -488,14 +488,14 @@ public class RaceService {
             /* The horse was scratched from (or declined for) this very race earlier.
                Re-entering it reuses that row - see RaceRepository.reinstate for why. */
             id = existing.get().id();
-            if (races.reinstate(id, user.userId(), blankToNull(note)) == 0) {
+            if (races.reinstate(id, h.ownerId(), user.userId(), blankToNull(note)) == 0) {
                 throw new ApiException(HttpStatus.CONFLICT, "This entry has just been updated by someone else");
             }
             users.writeAudit(user.userId(), "RACE_REINSTATE", "RACE_REGISTRATION", id, "SUCCESS", ip,
                     h.horseName() + " back in " + race.raceName() + " on " + race.raceDate());
         } else {
             try {
-                id = races.insert(h.horseId(), race, user.userId(), blankToNull(note));
+                id = races.insert(h.horseId(), h.ownerId(), race, user.userId(), blankToNull(note));
             } catch (DuplicateKeyException e) {
                 throw new ApiException(HttpStatus.CONFLICT, h.horseName() + " has just been registered for "
                         + race.raceName() + " by someone else");
@@ -838,11 +838,24 @@ public class RaceService {
             return new Check(problems, warnings);
         }
         // Hết hạn hợp đồng mà chưa gia hạn: không nhận giáo án mới, cũng không đăng ký giải mới.
+        // Còn hạn nhưng hết trước ngày đua, hoặc chủ đã xin rút ngựa trước ngày đua: xem bên dưới.
         if (horses.hasExpiredContract(h.horseId())) {
             problems.add(h.horseName() + "'s stay at the club has ended. Renew it before entering a race");
         }
         if (horses.isWaitingForTakeover(h.horseId())) {
             problems.add(h.horseName() + " has a new owner who must sign the stay contract before entering a race");
+        }
+        /* The horse must still be at the club on race day: its stay runs past it, and it is
+           not leaving before it. Checked again when the owner confirms (approveEntry). */
+        if (race != null) {
+            horses.stayEnd(h.horseId())
+                    .filter(end -> end.isBefore(race.raceDate()))
+                    .ifPresent(end -> problems.add(h.horseName() + "'s stay at the club ends on " + end.format(DAY)
+                            + ", before the race. Renew the stay first"));
+            horses.pendingLeaveOn(h.horseId())
+                    .filter(leave -> !leave.isAfter(race.raceDate()))
+                    .ifPresent(leave -> problems.add(h.horseName() + " leaves the club on " + leave.format(DAY)
+                            + " (withdrawal requested)"));
         }
         if (h.dateOfBirth() == null) {
             problems.add(h.horseName() + " has no date of birth on record");
